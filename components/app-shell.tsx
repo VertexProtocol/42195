@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
@@ -20,6 +20,15 @@ export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [goals, setGoals] = useState<Goal[]>(mockGoals)
+  const [isDarkMode, setIsDarkMode] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDarkMode)
+  }, [isDarkMode])
+
+  const handleToggleDarkMode = useCallback(() => {
+    setIsDarkMode((prev) => !prev)
+  }, [])
 
   const activeGoal = goals.find((g) => g.is_active) || null
 
@@ -91,6 +100,8 @@ export function AppShell() {
           <ProfileScreen
             user={mockUser}
             syncStatus={mockSyncStatus}
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={handleToggleDarkMode}
             onSync={handleSync}
             onSignOut={handleSignOut}
           />

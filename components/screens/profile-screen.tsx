@@ -1,12 +1,14 @@
 "use client"
 
-import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User } from "lucide-react"
+import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun } from "lucide-react"
 import { formatTimeAgo } from "@/lib/format"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 
 interface ProfileScreenProps {
   user: UserProfile
   syncStatus: SyncStatus
+  isDarkMode: boolean
+  onToggleDarkMode: () => void
   onSync: () => void
   onSignOut: () => void
 }
@@ -61,7 +63,7 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, onSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, syncStatus, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
   return (
     <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
       <header>
@@ -87,6 +89,42 @@ export function ProfileScreen({ user, syncStatus, onSync, onSignOut }: ProfileSc
             {user.display_name}
           </h2>
           <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+        </div>
+      </section>
+
+      {/* Appearance */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Appearance
+        </h3>
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
+                {isDarkMode ? (
+                  <Moon size={16} className="text-primary" />
+                ) : (
+                  <Sun size={16} className="text-muted-foreground" />
+                )}
+              </div>
+              <span className="text-sm font-medium text-card-foreground">Dark Mode</span>
+            </div>
+            <button
+              role="switch"
+              aria-checked={isDarkMode}
+              aria-label="Toggle dark mode"
+              onClick={onToggleDarkMode}
+              className={`relative inline-flex h-[30px] w-[52px] shrink-0 items-center rounded-full transition-colors duration-200 ${
+                isDarkMode ? "bg-primary" : "bg-border"
+              }`}
+            >
+              <span
+                className={`inline-block h-[26px] w-[26px] rounded-full bg-card shadow-sm transition-transform duration-200 ${
+                  isDarkMode ? "translate-x-[24px]" : "translate-x-[2px]"
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </section>
 
