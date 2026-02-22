@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+  .dark {
+    color-scheme: dark;
+  }
+}
+
 :root {
   --background: oklch(0.975 0.004 85);
   --foreground: oklch(0.145 0 0);
@@ -41,7 +47,7 @@
   --success-foreground: oklch(0.99 0 0);
 }
 
-.dark {
+.dark, :root.dark {
   --background: oklch(0.13 0 0);
   --foreground: oklch(0.94 0 0);
   --card: oklch(0.18 0.003 85);
