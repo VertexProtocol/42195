@@ -1,4 +1,4 @@
-import type { Activity, Goal, WeeklySummary, SyncStatus, UserProfile } from "./types"
+import type { Activity, Goal, WeeklyGoal, WeeklySummary, SyncStatus, UserProfile } from "./types"
 
 export const mockActivities: Activity[] = [
   {
@@ -114,6 +114,41 @@ export const mockGoals: Goal[] = [
     current_distance_km: 68.1,
     is_active: false,
     created_at: "2026-02-01T00:00:00Z",
+  },
+]
+
+export const mockWeeklyGoals: WeeklyGoal[] = [
+  {
+    id: "wg-1",
+    metric: "distance_km",
+    label: "Weekly Distance",
+    target: 40,
+    current: 28.2,
+    week_start: "2026-02-16T00:00:00Z",
+  },
+  {
+    id: "wg-2",
+    metric: "sessions",
+    label: "Training Sessions",
+    target: 5,
+    current: 3,
+    week_start: "2026-02-16T00:00:00Z",
+  },
+  {
+    id: "wg-3",
+    metric: "duration_minutes",
+    label: "Active Minutes",
+    target: 300,
+    current: 195,
+    week_start: "2026-02-16T00:00:00Z",
+  },
+  {
+    id: "wg-4",
+    metric: "elevation_m",
+    label: "Elevation Gain",
+    target: 500,
+    current: 312,
+    week_start: "2026-02-16T00:00:00Z",
   },
 ]
 

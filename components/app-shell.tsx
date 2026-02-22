@@ -7,15 +7,17 @@ import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
+import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ProfileScreen } from "@/components/screens/profile-screen"
 import {
   mockActivities,
   mockGoals,
+  mockWeeklyGoals,
   mockWeeklySummary,
   mockSyncStatus,
   mockUser,
 } from "@/lib/mock-data"
-import type { TabId, Activity, Goal } from "@/lib/types"
+import type { TabId, Activity, Goal, WeeklyGoal } from "@/lib/types"
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
@@ -25,6 +27,10 @@ export function AppShell() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [isNewGoal, setIsNewGoal] = useState(false)
+  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>(mockWeeklyGoals)
+  const [editingWeeklyGoal, setEditingWeeklyGoal] = useState<WeeklyGoal | null>(null)
+  const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
+  const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode)
@@ -90,6 +96,38 @@ export function AppShell() {
     setIsEditorOpen(false)
   }, [])
 
+  const handleEditWeeklyGoal = useCallback((goal: WeeklyGoal) => {
+    setEditingWeeklyGoal(goal)
+    setIsNewWeeklyGoal(false)
+    setIsWeeklyEditorOpen(true)
+  }, [])
+
+  const handleAddWeeklyGoal = useCallback(() => {
+    setEditingWeeklyGoal(null)
+    setIsNewWeeklyGoal(true)
+    setIsWeeklyEditorOpen(true)
+  }, [])
+
+  const handleSaveWeeklyGoal = useCallback((saved: WeeklyGoal) => {
+    setWeeklyGoals((prev) => {
+      const exists = prev.find((g) => g.id === saved.id)
+      if (exists) {
+        return prev.map((g) => (g.id === saved.id ? saved : g))
+      }
+      return [...prev, saved]
+    })
+    setIsWeeklyEditorOpen(false)
+  }, [])
+
+  const handleDeleteWeeklyGoal = useCallback((goalId: string) => {
+    setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId))
+    setIsWeeklyEditorOpen(false)
+  }, [])
+
+  const handleCloseWeeklyEditor = useCallback(() => {
+    setIsWeeklyEditorOpen(false)
+  }, [])
+
   const handleSync = useCallback(() => {
     // Placeholder: would trigger Supabase sync
   }, [])
@@ -128,9 +166,12 @@ export function AppShell() {
         {activeTab === "goals" && (
           <GoalsScreen
             goals={goals}
+            weeklyGoals={weeklyGoals}
             onSetActive={handleSetActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={handleAddGoal}
+            onEditWeeklyGoal={handleEditWeeklyGoal}
+            onAddWeeklyGoal={handleAddWeeklyGoal}
           />
         )}
 
@@ -154,6 +195,16 @@ export function AppShell() {
         onSave={handleSaveGoal}
         onDelete={handleDeleteGoal}
         onClose={handleCloseEditor}
+      />
+
+      {/* Weekly Goal Editor Sheet */}
+      <WeeklyGoalEditor
+        goal={editingWeeklyGoal}
+        isNew={isNewWeeklyGoal}
+        open={isWeeklyEditorOpen}
+        onSave={handleSaveWeeklyGoal}
+        onDelete={handleDeleteWeeklyGoal}
+        onClose={handleCloseWeeklyEditor}
       />
 
       {/* Bottom Tab Bar */}

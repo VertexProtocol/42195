@@ -23,6 +23,17 @@ export interface Goal {
   created_at: string
 }
 
+export type WeeklyGoalMetric = "distance_km" | "sessions" | "duration_minutes" | "elevation_m"
+
+export interface WeeklyGoal {
+  id: string
+  metric: WeeklyGoalMetric
+  label: string
+  target: number
+  current: number
+  week_start: string
+}
+
 export interface WeeklySummary {
   total_distance_km: number
   total_time_seconds: number

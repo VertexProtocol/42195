@@ -60,3 +60,33 @@ export function progressPercentage(current: number, target: number): number {
   if (target <= 0) return 0
   return Math.min(100, Math.round((current / target) * 100))
 }
+
+export function formatWeeklyMetric(value: number, metric: string): string {
+  switch (metric) {
+    case "distance_km":
+      return `${value % 1 === 0 ? value : value.toFixed(1)} km`
+    case "sessions":
+      return `${value}`
+    case "duration_minutes":
+      return `${value} min`
+    case "elevation_m":
+      return `${Math.round(value)} m`
+    default:
+      return `${value}`
+  }
+}
+
+export function weeklyMetricUnit(metric: string): string {
+  switch (metric) {
+    case "distance_km":
+      return "km"
+    case "sessions":
+      return "sessions"
+    case "duration_minutes":
+      return "min"
+    case "elevation_m":
+      return "m"
+    default:
+      return ""
+  }
+}
