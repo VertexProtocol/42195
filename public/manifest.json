@@ -1,0 +1,16 @@
+{
+  "name": "42195 - Training Tracker",
+  "short_name": "42195",
+  "description": "Track your running training progress toward your next goal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ef",
+  "theme_color": "#f5f3ef",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
