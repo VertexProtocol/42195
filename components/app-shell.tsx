@@ -6,6 +6,7 @@ import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
+import { GoalEditor } from "@/components/goal-editor"
 import { ProfileScreen } from "@/components/screens/profile-screen"
 import {
   mockActivities,
@@ -21,6 +22,9 @@ export function AppShell() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [goals, setGoals] = useState<Goal[]>(mockGoals)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [isNewGoal, setIsNewGoal] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode)
@@ -52,6 +56,38 @@ export function AppShell() {
         is_active: g.id === goalId,
       }))
     )
+  }, [])
+
+  const handleEditGoal = useCallback((goal: Goal) => {
+    setEditingGoal(goal)
+    setIsNewGoal(false)
+    setIsEditorOpen(true)
+  }, [])
+
+  const handleAddGoal = useCallback(() => {
+    setEditingGoal(null)
+    setIsNewGoal(true)
+    setIsEditorOpen(true)
+  }, [])
+
+  const handleSaveGoal = useCallback((saved: Goal) => {
+    setGoals((prev) => {
+      const exists = prev.find((g) => g.id === saved.id)
+      if (exists) {
+        return prev.map((g) => (g.id === saved.id ? saved : g))
+      }
+      return [...prev, saved]
+    })
+    setIsEditorOpen(false)
+  }, [])
+
+  const handleDeleteGoal = useCallback((goalId: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== goalId))
+    setIsEditorOpen(false)
+  }, [])
+
+  const handleCloseEditor = useCallback(() => {
+    setIsEditorOpen(false)
   }, [])
 
   const handleSync = useCallback(() => {
@@ -93,6 +129,8 @@ export function AppShell() {
           <GoalsScreen
             goals={goals}
             onSetActive={handleSetActiveGoal}
+            onEditGoal={handleEditGoal}
+            onAddGoal={handleAddGoal}
           />
         )}
 
@@ -107,6 +145,16 @@ export function AppShell() {
           />
         )}
       </main>
+
+      {/* Goal Editor Sheet */}
+      <GoalEditor
+        goal={editingGoal}
+        isNew={isNewGoal}
+        open={isEditorOpen}
+        onSave={handleSaveGoal}
+        onDelete={handleDeleteGoal}
+        onClose={handleCloseEditor}
+      />
 
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />

@@ -1,22 +1,33 @@
 "use client"
 
-import { Check, Calendar, Target } from "lucide-react"
+import { Check, Calendar, Target, Plus, Pencil } from "lucide-react"
 import { formatDistance, formatDate, daysUntil, progressPercentage } from "@/lib/format"
 import type { Goal } from "@/lib/types"
 
 interface GoalsScreenProps {
   goals: Goal[]
   onSetActive: (goalId: string) => void
+  onEditGoal: (goal: Goal) => void
+  onAddGoal: () => void
 }
 
-export function GoalsScreen({ goals, onSetActive }: GoalsScreenProps) {
+export function GoalsScreen({ goals, onSetActive, onEditGoal, onAddGoal }: GoalsScreenProps) {
   return (
     <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">Goals</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Track your training targets
-        </p>
+      <header className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Goals</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Track your training targets
+          </p>
+        </div>
+        <button
+          onClick={onAddGoal}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground active:opacity-80 transition-opacity"
+          aria-label="Add new goal"
+        >
+          <Plus size={20} />
+        </button>
       </header>
 
       {goals.length === 0 ? (
@@ -25,40 +36,50 @@ export function GoalsScreen({ goals, onSetActive }: GoalsScreenProps) {
             <Target size={28} className="text-muted-foreground" />
           </div>
           <p className="text-sm font-medium text-muted-foreground">No goals yet</p>
-          <p className="text-xs text-muted-foreground">Add a goal to track your progress</p>
+          <p className="text-xs text-muted-foreground">
+            Tap the + button to add your first goal
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           {goals.map((goal) => {
             const days = daysUntil(goal.target_date)
-            // Use a training volume target based on weeks remaining
             const weeksTotal = Math.ceil(
               (new Date(goal.target_date).getTime() - new Date(goal.created_at).getTime()) /
                 (1000 * 60 * 60 * 24 * 7)
             )
-            const targetVolume = weeksTotal * 40 // ~40km/week target
+            const targetVolume = weeksTotal * 40
             const progress = progressPercentage(goal.current_distance_km, targetVolume)
 
             return (
               <div
                 key={goal.id}
                 className={`relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 transition-all ${
-                  goal.is_active
-                    ? "ring-primary/40 ring-2"
-                    : "ring-border"
+                  goal.is_active ? "ring-primary/40 ring-2" : "ring-border"
                 }`}
               >
-                {/* Active badge */}
-                {goal.is_active && (
-                  <div className="mb-3 flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
-                      Active
-                    </span>
+                {/* Active badge + edit button */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    {goal.is_active && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                          Active
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <button
+                    onClick={() => onEditGoal(goal)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
+                    aria-label={`Edit ${goal.name}`}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
 
-                <h3 className="text-lg font-semibold text-card-foreground">
+                <h3 className="mt-1 text-lg font-semibold text-card-foreground">
                   {goal.name}
                 </h3>
 
@@ -89,7 +110,7 @@ export function GoalsScreen({ goals, onSetActive }: GoalsScreenProps) {
                   </div>
                 </div>
 
-                {/* Days remaining */}
+                {/* Days remaining + set active */}
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
                     {days} days remaining
