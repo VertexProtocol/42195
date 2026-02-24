@@ -1,28 +1,19 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useActionState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { loginAction, type LoginState } from "./actions"
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ message?: string }>
-}) {
-  async function login(formData: FormData) {
-    "use server"
+export default function LoginPage() {
+  const router = useRouter()
+  const [state, action, isPending] = useActionState<LoginState, FormData>(loginAction, null)
 
-    const supabase = await createClient()
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-    })
-
-    if (error) {
-      redirect(`/auth/error?message=${encodeURIComponent(error.message)}`)
+  useEffect(() => {
+    if (state && "success" in state) {
+      router.push("/")
     }
-
-    redirect("/")
-  }
+  }, [state, router])
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
@@ -32,7 +23,13 @@ export default function LoginPage({
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </div>
 
-        <form action={login} className="space-y-4">
+        {state && "error" in state && (
+          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
+            {state.error}
+          </p>
+        )}
+
+        <form action={action} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
               Email
@@ -65,9 +62,10 @@ export default function LoginPage({
 
           <button
             type="submit"
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            disabled={isPending}
+            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
-            Sign in
+            {isPending ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
