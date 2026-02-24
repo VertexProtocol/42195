@@ -13,7 +13,6 @@ import {
   mockActivities,
   mockGoals,
   mockWeeklyGoals,
-  mockWeeklySummary,
   mockSyncStatus,
   mockUser,
 } from "@/lib/mock-data"
@@ -40,7 +39,26 @@ export function AppShell() {
     setIsDarkMode((prev) => !prev)
   }, [])
 
-  const activeGoal = goals.find((g) => g.is_active) || null
+  const activeGoals = goals.filter((g) => g.is_active)
+
+  // Compute weekly summary from activities
+  const weeklySummary = (() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const monday = new Date(now)
+    monday.setDate(now.getDate() + diff)
+    monday.setHours(0, 0, 0, 0)
+
+    const weekActivities = mockActivities.filter(
+      (a) => new Date(a.date) >= monday
+    )
+    return {
+      total_distance_km: weekActivities.reduce((s, a) => s + a.distance_km, 0),
+      total_time_seconds: weekActivities.reduce((s, a) => s + a.duration_seconds, 0),
+      run_count: weekActivities.length,
+    }
+  })()
 
   const handleTabChange = useCallback((tab: TabId) => {
     setActiveTab(tab)
@@ -55,12 +73,11 @@ export function AppShell() {
     setSelectedActivity(null)
   }, [])
 
-  const handleSetActiveGoal = useCallback((goalId: string) => {
+  const handleToggleActiveGoal = useCallback((goalId: string) => {
     setGoals((prev) =>
-      prev.map((g) => ({
-        ...g,
-        is_active: g.id === goalId,
-      }))
+      prev.map((g) =>
+        g.id === goalId ? { ...g, is_active: !g.is_active } : g
+      )
     )
   }, [])
 
@@ -142,8 +159,9 @@ export function AppShell() {
       <main className="relative">
         {activeTab === "home" && (
           <HomeScreen
-            activeGoal={activeGoal}
-            weeklySummary={mockWeeklySummary}
+            activeGoals={activeGoals}
+            weeklySummary={weeklySummary}
+            weeklyGoals={weeklyGoals}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
           />
@@ -167,7 +185,7 @@ export function AppShell() {
           <GoalsScreen
             goals={goals}
             weeklyGoals={weeklyGoals}
-            onSetActive={handleSetActiveGoal}
+            onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={handleAddGoal}
             onEditWeeklyGoal={handleEditWeeklyGoal}

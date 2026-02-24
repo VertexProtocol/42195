@@ -17,7 +17,7 @@ const METRIC_ICONS: Record<string, typeof Flame> = {
 interface GoalsScreenProps {
   goals: Goal[]
   weeklyGoals: WeeklyGoal[]
-  onSetActive: (goalId: string) => void
+  onToggleActive: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
@@ -27,7 +27,7 @@ interface GoalsScreenProps {
 export function GoalsScreen({
   goals,
   weeklyGoals,
-  onSetActive,
+  onToggleActive,
   onEditGoal,
   onAddGoal,
   onEditWeeklyGoal,
@@ -161,15 +161,17 @@ export function GoalsScreen({
                     <span className="text-xs text-muted-foreground">
                       {days} days remaining
                     </span>
-                    {!goal.is_active && (
-                      <button
-                        onClick={() => onSetActive(goal.id)}
-                        className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground active:bg-accent transition-colors"
-                      >
-                        <Check size={14} />
-                        Set active
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onToggleActive(goal.id)}
+                      className={`flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        goal.is_active
+                          ? "bg-primary/10 text-primary active:bg-primary/20"
+                          : "bg-secondary text-secondary-foreground active:bg-accent"
+                      }`}
+                    >
+                      <Check size={14} />
+                      {goal.is_active ? "Active" : "Set active"}
+                    </button>
                   </div>
                 </div>
               )
