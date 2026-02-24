@@ -1,19 +1,29 @@
 "use client"
 
-import { useActionState, useEffect } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { loginAction, type LoginState } from "./actions"
+import { loginAction } from "./actions"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [state, action, isPending] = useActionState<LoginState, FormData>(loginAction, null)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
 
-  useEffect(() => {
-    if (state && "success" in state) {
-      router.push("/")
-    }
-  }, [state, router])
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    setError(null)
+
+    startTransition(async () => {
+      const result = await loginAction(null, formData)
+      if (result && "error" in result) {
+        setError(result.error)
+      } else {
+        router.push("/")
+      }
+    })
+  }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
@@ -23,13 +33,13 @@ export default function LoginPage() {
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </div>
 
-        {state && "error" in state && (
+        {error && (
           <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
-            {state.error}
+            {error}
           </p>
         )}
 
-        <form action={action} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
               Email
