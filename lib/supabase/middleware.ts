@@ -40,7 +40,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  if (user && isAuthRoute && pathname !== "/auth/sign-up-success") {
+  // Allow /auth/callback (code exchange) and /auth/sign-up-success through always
+  const isAuthPassthrough =
+    pathname === "/auth/sign-up-success" || pathname === "/auth/callback"
+
+  if (user && isAuthRoute && !isAuthPassthrough) {
     const homeUrl = request.nextUrl.clone()
     homeUrl.pathname = "/"
     return NextResponse.redirect(homeUrl)

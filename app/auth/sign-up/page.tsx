@@ -9,13 +9,19 @@ export default function SignUpPage() {
 
     const supabase = await createClient()
     const headersList = await headers()
-    const origin = headersList.get("origin") ?? ""
 
-    const { error } = await supabase.auth.signUp({
+    // Prefer an explicit site URL so email links work outside localhost
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      headersList.get("origin") ??
+      ""
+
+    const { data, error } = await supabase.auth.signUp({
       email: formData.get("email") as string,
       password: formData.get("password") as string,
       options: {
-        emailRedirectTo: `${origin}/auth/sign-up-success`,
+        // /auth/callback exchanges the PKCE code for a session, then redirects
+        emailRedirectTo: `${siteUrl}/auth/callback?next=/auth/sign-up-success`,
         data: {
           display_name: formData.get("display_name") as string,
         },
@@ -26,6 +32,13 @@ export default function SignUpPage() {
       redirect(`/auth/error?message=${encodeURIComponent(error.message)}`)
     }
 
+    // If email confirmation is disabled in Supabase, a session is returned
+    // immediately — send the user straight into the app.
+    if (data.session) {
+      redirect("/")
+    }
+
+    // Otherwise the user must confirm their email first.
     redirect("/auth/sign-up-success")
   }
 
