@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { loginAction } from "./actions"
+import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,15 +13,21 @@ export default function LoginPage() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    const email = formData.get("email") as string
+    const password = formData.get("password") as string
     setError(null)
 
     startTransition(async () => {
-      const result = await loginAction(null, formData)
-      if (result && "error" in result) {
-        setError(result.error)
-      } else {
-        router.push("/")
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+      if (error) {
+        setError(error.message)
+        return
       }
+
+      router.push("/")
+      router.refresh()
     })
   }
 
