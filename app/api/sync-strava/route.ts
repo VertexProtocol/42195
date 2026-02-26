@@ -129,7 +129,7 @@ export async function POST() {
 
   // 2. Mark sync as in-progress
   await service.from("sync_status").upsert(
-    { user_id: userId, state: "syncing", updated_at: new Date().toISOString() },
+    { user_id: userId, state: "syncing", error_message: null, updated_at: new Date().toISOString() },
     { onConflict: "user_id" },
   )
 
