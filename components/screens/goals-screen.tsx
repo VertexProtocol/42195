@@ -35,6 +35,7 @@ interface GoalsScreenProps {
   goals: Goal[]
   activities: Activity[]
   weeklyGoals: WeeklyGoal[]
+  currentWeekStart: string
   onToggleActive: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
@@ -46,6 +47,7 @@ export function GoalsScreen({
   goals,
   activities,
   weeklyGoals,
+  currentWeekStart,
   onToggleActive,
   onEditGoal,
   onAddGoal,
@@ -243,8 +245,9 @@ export function GoalsScreen({
             </div>
           ) : (
             weeklyGoals.map((wg) => {
-              // Compute progress live from activities — not the stale DB value
-              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
+              // Always compute against the actual current week Monday, not the stored
+              // week_start — this handles mid-week goal creation correctly.
+              const current = computeWeeklyProgress(activities, wg.metric, currentWeekStart)
               const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
               const isComplete = current >= wg.target
