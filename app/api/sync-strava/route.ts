@@ -274,8 +274,19 @@ export async function POST() {
       ok: true,
       synced: rows.length,
     })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown sync error"
+  } catch (err: unknown) {
+    console.error("[v0] Strava sync error:", err)
+
+    let message = "Unknown sync error"
+    if (err instanceof Error) {
+      message = err.message
+    } else if (typeof err === "object" && err !== null && "message" in err) {
+      message = String((err as { message: unknown }).message)
+    } else if (typeof err === "string") {
+      message = err
+    } else {
+      message = JSON.stringify(err)
+    }
 
     await service.from("sync_status").upsert(
       {
