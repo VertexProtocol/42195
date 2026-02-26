@@ -137,9 +137,18 @@ export function ProfileScreen({ user, syncStatus, isDarkMode, onToggleDarkMode, 
           <div className="p-4">
             <SyncStatusIndicator status={syncStatus} />
             {syncStatus.error_message && (
-              <p className="mt-2 rounded-lg bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                {syncStatus.error_message}
-              </p>
+              <div className="mt-2 rounded-lg bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <p>{syncStatus.error_message}</p>
+                {syncStatus.error_message.toLowerCase().includes("strava") &&
+                  syncStatus.error_message.toLowerCase().includes("connect") && (
+                    <a
+                      href="/api/auth/strava"
+                      className="mt-1 block font-medium underline underline-offset-2"
+                    >
+                      Connect Strava →
+                    </a>
+                  )}
+              </div>
             )}
           </div>
           <div className="border-t border-border px-4 py-3">
