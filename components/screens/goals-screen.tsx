@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain } from "lucide-react"
-import { formatDistance, formatDate, daysUntil, progressPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
+import { formatDistance, formatDate, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
 import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 
 type GoalTab = "long-term" | "weekly"
@@ -108,7 +108,7 @@ export function GoalsScreen({
             goals.map((goal) => {
               const days = daysUntil(goal.target_date)
               const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-              const progress = progressPercentage(logged, goal.target_distance_km)
+              const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
 
               return (
                 <div
@@ -169,12 +169,12 @@ export function GoalsScreen({
                       <span className="text-muted-foreground">
                         {formatDistance(logged)} logged
                       </span>
-                      <span className="font-medium text-foreground">{progress}%</span>
+                      <span className="font-medium text-foreground">{timeProgress}% of time elapsed</span>
                     </div>
                     <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
                       <div
                         className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${progress}%` }}
+                        style={{ width: `${timeProgress}%` }}
                       />
                     </div>
                   </div>

@@ -3,7 +3,7 @@
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
-import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
+import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
 
 /** Compute total distance from activities within a date range */
@@ -64,7 +64,7 @@ export function HomeScreen({
           </h3>
           {activeGoals.map((goal) => {
             const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-            const progress = progressPercentage(logged, goal.target_distance_km)
+            const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
             const days = daysUntil(goal.target_date)
 
             return (
@@ -99,12 +99,13 @@ export function HomeScreen({
                   </div>
                   <div className="relative flex shrink-0 items-center justify-center">
                     <ProgressRing
-                      percentage={progress}
+                      percentage={timeProgress}
                       size={72}
                       strokeWidth={5}
                     />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-bold text-foreground">{progress}%</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
+                      <span className="text-[8px] text-muted-foreground">time</span>
                     </div>
                   </div>
                 </div>

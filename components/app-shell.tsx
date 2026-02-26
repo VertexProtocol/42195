@@ -502,7 +502,7 @@ export function AppShell() {
   return (
     <div className="mx-auto h-dvh max-w-md bg-background flex flex-col">
       {/* Screen content */}
-      <main className="relative flex-1 overflow-y-auto">
+      <main className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {activeTab === "home" && (
           <HomeScreen
             activeGoals={activeGoals}
