@@ -173,11 +173,11 @@ export async function POST() {
       name: a.name,
       date: a.start_date,
       distance_km: a.distance / 1000,
-      duration_seconds: a.moving_time,
+      duration_seconds: Math.round(a.moving_time),
       pace_min_per_km: speedToPace(a.average_speed),
       elevation_gain_m: a.total_elevation_gain,
-      avg_heart_rate: a.average_heartrate ?? null,
-      calories: a.calories ?? null,
+      avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+      calories: a.calories != null ? Math.round(a.calories) : null,
     }))
 
     if (rows.length > 0) {
