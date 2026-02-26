@@ -85,14 +85,14 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       />
 
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
-        <div className="rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
+        <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
           {/* Handle */}
-          <div className="flex justify-center pt-3 pb-1">
+          <div className="flex shrink-0 justify-center pt-3 pb-1">
             <div className="h-1 w-10 rounded-full bg-border" />
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-5 pb-4 pt-2">
+          <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-2">
             <button
               onClick={onClose}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary active:bg-accent transition-colors"
@@ -116,7 +116,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             </button>
           </div>
 
-          {/* Form */}
+          {/* Form — scrollable */}
+          <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 px-5 pb-4">
             {/* Metric selector */}
             <div className="flex flex-col gap-2">
@@ -158,9 +159,11 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             </div>
           </div>
 
+          </div>{/* end scrollable form */}
+
           {/* Delete button */}
           {!isNew && (
-            <div className="border-t border-border px-5 py-4">
+            <div className="shrink-0 border-t border-border px-5 py-4">
               <button
                 onClick={handleDelete}
                 className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors ${
@@ -175,7 +178,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             </div>
           )}
 
-          <div className="h-8" />
+          <div className="h-8 shrink-0" />
         </div>
       </div>
     </>
