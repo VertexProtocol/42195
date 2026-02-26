@@ -24,9 +24,10 @@ export async function GET(request: NextRequest) {
 
   // Use NEXT_PUBLIC_APP_URL so the redirect_uri always matches the domain
   // configured in the Strava API Application settings.
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
-  const callbackUrl = new URL("/api/auth/strava/callback", baseUrl).toString()
-
+  const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  // Ensure no trailing slash and proper format
+  const baseUrl = rawBaseUrl.replace(/\/+$/, "")
+  const callbackUrl = `${baseUrl}/api/auth/strava/callback`
   const stravaAuthUrl = new URL("https://www.strava.com/oauth/authorize")
   stravaAuthUrl.searchParams.set("client_id", clientId)
   stravaAuthUrl.searchParams.set("redirect_uri", callbackUrl)

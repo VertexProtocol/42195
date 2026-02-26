@@ -173,11 +173,11 @@ export async function POST() {
       name: a.name,
       date: a.start_date,
       distance_km: a.distance / 1000,
-      duration_seconds: a.moving_time,
+      duration_seconds: Math.round(a.moving_time),
       pace_min_per_km: speedToPace(a.average_speed),
       elevation_gain_m: a.total_elevation_gain,
-      avg_heart_rate: a.average_heartrate ?? null,
-      calories: a.calories ?? null,
+      avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+      calories: a.calories != null ? Math.round(a.calories) : null,
     }))
 
     if (rows.length > 0) {
@@ -274,8 +274,19 @@ export async function POST() {
       ok: true,
       synced: rows.length,
     })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown sync error"
+  } catch (err: unknown) {
+    console.error("[v0] Strava sync error:", err)
+
+    let message = "Unknown sync error"
+    if (err instanceof Error) {
+      message = err.message
+    } else if (typeof err === "object" && err !== null && "message" in err) {
+      message = String((err as { message: unknown }).message)
+    } else if (typeof err === "string") {
+      message = err
+    } else {
+      message = JSON.stringify(err)
+    }
 
     await service.from("sync_status").upsert(
       {

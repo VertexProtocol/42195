@@ -3,8 +3,20 @@
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
-import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, formatWeeklyMetric } from "@/lib/format"
+import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
+
+/** Compute total distance from activities within a date range */
+function computeDistanceInRange(activities: Activity[], startDate: string | null, endDate: string): number {
+  const start = startDate ? new Date(startDate).getTime() : 0
+  const end = new Date(endDate).getTime()
+  return activities
+    .filter((a) => {
+      const d = new Date(a.date).getTime()
+      return d >= start && d <= end
+    })
+    .reduce((sum, a) => sum + a.distance_km, 0)
+}
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -15,6 +27,7 @@ const METRIC_ICONS: Record<string, typeof Flame> = {
 
 interface HomeScreenProps {
   activeGoals: Goal[]
+  activities: Activity[]
   weeklySummary: WeeklySummary
   weeklyGoals: WeeklyGoal[]
   recentActivities: Activity[]
@@ -24,6 +37,7 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   activeGoals,
+  activities,
   weeklySummary,
   weeklyGoals,
   recentActivities,
@@ -31,7 +45,7 @@ export function HomeScreen({
   onViewGoal,
 }: HomeScreenProps) {
   return (
-    <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       {/* Header */}
       <header className="flex items-baseline justify-between">
         <div>
@@ -58,12 +72,8 @@ export function HomeScreen({
           <Carousel opts={{ align: "start", dragFree: false }}>
             <CarouselContent className="-ml-3">
               {activeGoals.map((goal) => {
-                const weeksTotal = Math.ceil(
-                  (new Date(goal.target_date).getTime() - new Date(goal.created_at).getTime()) /
-                    (1000 * 60 * 60 * 24 * 7)
-                )
-                const targetVolume = weeksTotal * 40
-                const progress = progressPercentage(goal.current_distance_km, targetVolume)
+                const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
+                const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
                 const days = daysUntil(goal.target_date)
 
                 return (
@@ -83,23 +93,31 @@ export function HomeScreen({
                           <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance">
                             {goal.name}
                           </h2>
-                          <div className="mt-2.5 flex items-center gap-4">
-                            <span className="text-sm text-muted-foreground">
-                              {days} days left
-                            </span>
-                            <span className="text-sm font-medium text-primary">
-                              {formatDistance(goal.current_distance_km)} logged
-                            </span>
+                          <div className="mt-2.5 flex flex-col gap-1">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-muted-foreground">
+                                {days} days left
+                              </span>
+                              <span className="text-sm font-medium text-primary">
+                                {formatDistance(logged)} logged
+                              </span>
+                            </div>
+                            {goal.target_time_seconds && (
+                              <span className="text-xs text-muted-foreground">
+                                Target: {formatTargetTime(goal.target_time_seconds)}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="relative flex shrink-0 items-center justify-center">
                           <ProgressRing
-                            percentage={progress}
+                            percentage={timeProgress}
                             size={72}
                             strokeWidth={5}
                           />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-xs font-bold text-foreground">{progress}%</span>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
+                            <span className="text-[8px] text-muted-foreground">time</span>
                           </div>
                         </div>
                       </div>

@@ -61,6 +61,17 @@ export function progressPercentage(current: number, target: number): number {
   return Math.min(100, Math.round((current / target) * 100))
 }
 
+/** Returns percentage of the training period that has elapsed (0-100) */
+export function timeElapsedPercentage(startDate: string | null, targetDate: string): number {
+  const now = Date.now()
+  const end = new Date(targetDate).getTime()
+  const start = startDate ? new Date(startDate).getTime() : end - (end - now) * 2
+  const total = end - start
+  if (total <= 0) return 100
+  const elapsed = now - start
+  return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
+}
+
 export function formatWeeklyMetric(value: number, metric: string): string {
   switch (metric) {
     case "distance_km":
@@ -74,6 +85,16 @@ export function formatWeeklyMetric(value: number, metric: string): string {
     default:
       return `${value}`
   }
+}
+
+export function formatTargetTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+  return `${m}:${s.toString().padStart(2, "0")}`
 }
 
 export function weeklyMetricUnit(metric: string): string {

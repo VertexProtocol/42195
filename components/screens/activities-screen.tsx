@@ -24,7 +24,7 @@ function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
 
 export function ActivitiesScreen({ activities, onSelectActivity }: ActivitiesScreenProps) {
   return (
-    <div className="flex flex-col gap-4 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
       <header>
         <h1 className="text-2xl font-bold text-foreground">Activities</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
