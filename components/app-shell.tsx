@@ -500,10 +500,9 @@ export function AppShell() {
   }
 
   return (
-    <>
-    <div className="mx-auto h-dvh max-w-md bg-background flex flex-col">
+    <div className="mx-auto min-h-dvh max-w-md bg-background">
       {/* Screen content */}
-      <main className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain">
+      <main className="relative pb-20">
         {activeTab === "home" && (
           <HomeScreen
             activeGoals={activeGoals}
@@ -556,28 +555,28 @@ export function AppShell() {
         )}
       </main>
 
+      {/* Goal Editor Sheet */}
+      <GoalEditor
+        goal={editingGoal}
+        isNew={isNewGoal}
+        open={isEditorOpen}
+        onSave={handleSaveGoal}
+        onDelete={handleDeleteGoal}
+        onClose={handleCloseEditor}
+      />
+
+      {/* Weekly Goal Editor Sheet */}
+      <WeeklyGoalEditor
+        goal={editingWeeklyGoal}
+        isNew={isNewWeeklyGoal}
+        open={isWeeklyEditorOpen}
+        onSave={handleSaveWeeklyGoal}
+        onDelete={handleDeleteWeeklyGoal}
+        onClose={handleCloseWeeklyEditor}
+      />
+
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
-
-    {/* Editors rendered outside the flex container to avoid layout interference */}
-    <GoalEditor
-      goal={editingGoal}
-      isNew={isNewGoal}
-      open={isEditorOpen}
-      onSave={handleSaveGoal}
-      onDelete={handleDeleteGoal}
-      onClose={handleCloseEditor}
-    />
-
-    <WeeklyGoalEditor
-      goal={editingWeeklyGoal}
-      isNew={isNewWeeklyGoal}
-      open={isWeeklyEditorOpen}
-      onSave={handleSaveWeeklyGoal}
-      onDelete={handleDeleteWeeklyGoal}
-      onClose={handleCloseWeeklyEditor}
-    />
-    </>
   )
 }
