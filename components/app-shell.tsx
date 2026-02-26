@@ -113,6 +113,7 @@ export function AppShell() {
             user_id: g.user_id,
             name: g.name,
             target_distance_km: Number(g.target_distance_km),
+            start_date: g.start_date ?? null,
             target_date: g.target_date,
             current_distance_km: Number(g.current_distance_km),
             is_active: g.is_active,
@@ -266,6 +267,7 @@ export function AppShell() {
           .update({
             name: saved.name,
             target_distance_km: saved.target_distance_km,
+            start_date: saved.start_date,
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
@@ -283,6 +285,7 @@ export function AppShell() {
             name: saved.name,
             user_id: userId,
             target_distance_km: saved.target_distance_km,
+            start_date: saved.start_date,
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
@@ -297,6 +300,7 @@ export function AppShell() {
               user_id: data.user_id,
               name: data.name,
               target_distance_km: Number(data.target_distance_km),
+              start_date: data.start_date ?? null,
               target_date: data.target_date,
               current_distance_km: Number(data.current_distance_km),
               is_active: data.is_active,
@@ -519,6 +523,7 @@ export function AppShell() {
         {activeTab === "goals" && (
           <GoalsScreen
             goals={goals}
+            activities={activities}
             weeklyGoals={weeklyGoals}
             onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}

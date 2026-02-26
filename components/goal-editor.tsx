@@ -16,6 +16,7 @@ interface GoalEditorProps {
 export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: GoalEditorProps) {
   const [name, setName] = useState("")
   const [targetDistance, setTargetDistance] = useState("")
+  const [startDate, setStartDate] = useState("")
   const [targetDate, setTargetDate] = useState("")
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
 
@@ -23,11 +24,13 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
     if (open && goal && !isNew) {
       setName(goal.name)
       setTargetDistance(goal.target_distance_km.toString())
+      setStartDate(goal.start_date ? goal.start_date.split("T")[0] : "")
       setTargetDate(goal.target_date.split("T")[0])
       setShowConfirmDelete(false)
     } else if (open && isNew) {
       setName("")
       setTargetDistance("")
+      setStartDate("")
       setTargetDate("")
       setShowConfirmDelete(false)
     }
@@ -42,6 +45,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
       id: isNew ? `goal-${Date.now()}` : goal!.id,
       name: name.trim(),
       target_distance_km: parseFloat(targetDistance),
+      start_date: startDate ? startDate + "T00:00:00Z" : null,
       target_date: targetDate + "T00:00:00Z",
       current_distance_km: isNew ? 0 : goal!.current_distance_km,
       is_active: isNew ? false : goal!.is_active,
@@ -135,6 +139,22 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
                 min="0"
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
+            </div>
+
+            {/* Start date */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Training start date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+              <span className="text-xs text-muted-foreground">
+                Distance from this date counts towards your goal
+              </span>
             </div>
 
             {/* Target date */}

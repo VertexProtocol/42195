@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain } from "lucide-react"
 import { formatDistance, formatDate, daysUntil, progressPercentage, formatWeeklyMetric } from "@/lib/format"
-import type { Goal, WeeklyGoal } from "@/lib/types"
+import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 
 type GoalTab = "long-term" | "weekly"
 
@@ -14,8 +14,21 @@ const METRIC_ICONS: Record<string, typeof Flame> = {
   elevation_m: Mountain,
 }
 
+/** Compute total distance from activities within a date range */
+function computeDistanceInRange(activities: Activity[], startDate: string | null, endDate: string): number {
+  const start = startDate ? new Date(startDate).getTime() : 0
+  const end = new Date(endDate).getTime()
+  return activities
+    .filter((a) => {
+      const d = new Date(a.date).getTime()
+      return d >= start && d <= end
+    })
+    .reduce((sum, a) => sum + a.distance_km, 0)
+}
+
 interface GoalsScreenProps {
   goals: Goal[]
+  activities: Activity[]
   weeklyGoals: WeeklyGoal[]
   onToggleActive: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
@@ -26,6 +39,7 @@ interface GoalsScreenProps {
 
 export function GoalsScreen({
   goals,
+  activities,
   weeklyGoals,
   onToggleActive,
   onEditGoal,
@@ -93,12 +107,8 @@ export function GoalsScreen({
           ) : (
             goals.map((goal) => {
               const days = daysUntil(goal.target_date)
-              const weeksTotal = Math.ceil(
-                (new Date(goal.target_date).getTime() - new Date(goal.created_at).getTime()) /
-                  (1000 * 60 * 60 * 24 * 7)
-              )
-              const targetVolume = weeksTotal * 40
-              const progress = progressPercentage(goal.current_distance_km, targetVolume)
+              const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
+              const progress = progressPercentage(logged, goal.target_distance_km)
 
               return (
                 <div
@@ -131,11 +141,17 @@ export function GoalsScreen({
                     {goal.name}
                   </h3>
 
-                  <div className="mt-3 flex items-center gap-4">
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Target size={14} />
                       <span>{formatDistance(goal.target_distance_km)}</span>
                     </div>
+                    {goal.start_date && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar size={14} />
+                        <span>From {formatDate(goal.start_date)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Calendar size={14} />
                       <span>{formatDate(goal.target_date)}</span>
@@ -145,7 +161,7 @@ export function GoalsScreen({
                   <div className="mt-4">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
-                        {formatDistance(goal.current_distance_km)} logged
+                        {formatDistance(logged)} logged
                       </span>
                       <span className="font-medium text-foreground">{progress}%</span>
                     </div>
