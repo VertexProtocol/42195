@@ -2,8 +2,9 @@
 
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
-import { formatDistance, formatDuration, daysUntil, progressPercentage, formatWeeklyMetric } from "@/lib/format"
-import type { Goal, WeeklySummary, WeeklyGoal } from "@/lib/types"
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
+import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, formatWeeklyMetric } from "@/lib/format"
+import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -16,6 +17,7 @@ interface HomeScreenProps {
   activeGoals: Goal[]
   weeklySummary: WeeklySummary
   weeklyGoals: WeeklyGoal[]
+  recentActivities: Activity[]
   onViewActivities: () => void
   onViewGoal: () => void
 }
@@ -24,6 +26,7 @@ export function HomeScreen({
   activeGoals,
   weeklySummary,
   weeklyGoals,
+  recentActivities,
   onViewActivities,
   onViewGoal,
 }: HomeScreenProps) {
@@ -187,6 +190,50 @@ export function HomeScreen({
               )
             })}
           </div>
+        </section>
+      )}
+
+      {/* Recent Activities Carousel */}
+      {recentActivities.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Recent Activities
+            </h3>
+            <button
+              onClick={onViewActivities}
+              className="text-xs font-medium text-primary active:opacity-70"
+            >
+              See all
+            </button>
+          </div>
+          <Carousel opts={{ align: "start", dragFree: true }}>
+            <CarouselContent className="-ml-3">
+              {recentActivities.map((activity) => (
+                <CarouselItem key={activity.id} className="pl-3 basis-[72%]">
+                  <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      {activity.type}
+                    </p>
+                    <h4 className="mt-1 truncate text-sm font-semibold text-card-foreground">
+                      {activity.name}
+                    </h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatDateShort(activity.date)}
+                    </p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="font-mono text-sm font-bold text-card-foreground">
+                        {formatDistance(activity.distance_km)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDuration(activity.duration_seconds)}
+                      </span>
+                    </div>
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
         </section>
       )}
 
