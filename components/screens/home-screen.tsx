@@ -29,6 +29,7 @@ interface HomeScreenProps {
   activities: Activity[]
   weeklySummary: WeeklySummary
   weeklyGoals: WeeklyGoal[]
+  currentWeekStart: string
   recentActivities: Activity[]
   onViewActivities: () => void
   onViewGoal: () => void
@@ -39,6 +40,7 @@ export function HomeScreen({
   activities,
   weeklySummary,
   weeklyGoals,
+  currentWeekStart,
   recentActivities,
   onViewActivities,
   onViewGoal,
@@ -192,8 +194,9 @@ export function HomeScreen({
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {weeklyGoals.map((wg) => {
-              // Compute progress live from activities — not the stale DB value
-              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
+              // Always compute against the actual current week Monday, not the stored
+              // week_start — this handles mid-week goal creation correctly.
+              const current = computeWeeklyProgress(activities, wg.metric, currentWeekStart)
               const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
               const isComplete = current >= wg.target

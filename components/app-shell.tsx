@@ -522,6 +522,7 @@ export function AppShell() {
             activities={activities}
             weeklySummary={weeklySummary}
             weeklyGoals={currentWeekGoals}
+            currentWeekStart={currentWeekMonday.toISOString()}
             recentActivities={activities.slice(0, 5)}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
@@ -549,6 +550,7 @@ export function AppShell() {
             goals={goals}
             activities={activities}
             weeklyGoals={currentWeekGoals}
+            currentWeekStart={currentWeekMonday.toISOString()}
             onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={handleAddGoal}
