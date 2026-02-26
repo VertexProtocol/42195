@@ -1,12 +1,13 @@
 "use client"
 
-import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun } from "lucide-react"
+import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off } from "lucide-react"
 import { formatTimeAgo } from "@/lib/format"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 
 interface ProfileScreenProps {
   user: UserProfile
   syncStatus: SyncStatus
+  stravaConnected: boolean
   isDarkMode: boolean
   onToggleDarkMode: () => void
   onSync: () => void
@@ -63,7 +64,7 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
   return (
     <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
       <header>
@@ -134,27 +135,43 @@ export function ProfileScreen({ user, syncStatus, isDarkMode, onToggleDarkMode, 
           Strava Sync
         </h3>
         <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          {/* Strava connection indicator */}
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${stravaConnected ? "bg-success/10" : "bg-secondary"}`}>
+                {stravaConnected ? (
+                  <Link2 size={16} className="text-success" />
+                ) : (
+                  <Link2Off size={16} className="text-muted-foreground" />
+                )}
+              </div>
+              <span className={`text-sm font-medium ${stravaConnected ? "text-success" : "text-muted-foreground"}`}>
+                {stravaConnected ? "Strava connected" : "Strava not connected"}
+              </span>
+            </div>
+            {!stravaConnected && (
+              <a
+                href="/api/auth/strava"
+                className="text-xs font-semibold text-primary underline underline-offset-2 active:opacity-70"
+              >
+                Connect
+              </a>
+            )}
+          </div>
+
           <div className="p-4">
             <SyncStatusIndicator status={syncStatus} />
             {syncStatus.error_message && (
               <div className="mt-2 rounded-lg bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 <p>{syncStatus.error_message}</p>
-                {syncStatus.error_message.toLowerCase().includes("strava") &&
-                  syncStatus.error_message.toLowerCase().includes("connect") && (
-                    <a
-                      href="/api/auth/strava"
-                      className="mt-1 block font-medium underline underline-offset-2"
-                    >
-                      Connect Strava →
-                    </a>
-                  )}
               </div>
             )}
           </div>
           <div className="border-t border-border px-4 py-3">
             <button
               onClick={onSync}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-semibold text-secondary-foreground active:bg-accent transition-colors"
+              disabled={!stravaConnected}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-semibold text-secondary-foreground active:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw size={16} />
               Sync with Strava

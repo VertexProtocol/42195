@@ -147,7 +147,28 @@ export function AppShell() {
   }, [])
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(mockSyncStatus)
+  const [stravaConnected, setStravaConnected] = useState(false)
   const [, startTransition] = useTransition()
+
+  // Load real sync status and Strava connection state on mount
+  useEffect(() => {
+    fetch("/api/sync-status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return
+        setStravaConnected(data.strava_connected)
+        if (data.sync_status) {
+          setSyncStatus({
+            state: data.sync_status.state,
+            last_sync_at: data.sync_status.last_sync_at,
+            error_message: data.sync_status.error_message,
+          })
+        } else if (!data.strava_connected) {
+          setSyncStatus({ state: "never", last_sync_at: null, error_message: null })
+        }
+      })
+      .catch(() => {/* keep mock fallback on network error */})
+  }, [])
 
   const handleSync = useCallback(async () => {
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
@@ -186,6 +207,7 @@ export function AppShell() {
             activeGoals={activeGoals}
             weeklySummary={weeklySummary}
             weeklyGoals={weeklyGoals}
+            recentActivities={mockActivities.slice(0, 5)}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
           />
@@ -221,6 +243,7 @@ export function AppShell() {
           <ProfileScreen
             user={mockUser}
             syncStatus={syncStatus}
+            stravaConnected={stravaConnected}
             isDarkMode={isDarkMode}
             onToggleDarkMode={handleToggleDarkMode}
             onSync={handleSync}
