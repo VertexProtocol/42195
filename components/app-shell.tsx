@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useTransition } from "react"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
@@ -16,7 +16,8 @@ import {
   mockSyncStatus,
   mockUser,
 } from "@/lib/mock-data"
-import type { TabId, Activity, Goal, WeeklyGoal } from "@/lib/types"
+import { signOut } from "@/lib/actions/auth"
+import type { TabId, Activity, Goal, WeeklyGoal, SyncStatus } from "@/lib/types"
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
@@ -145,12 +146,35 @@ export function AppShell() {
     setIsWeeklyEditorOpen(false)
   }, [])
 
-  const handleSync = useCallback(() => {
-    // Placeholder: would trigger Supabase sync
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(mockSyncStatus)
+  const [, startTransition] = useTransition()
+
+  const handleSync = useCallback(async () => {
+    setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
+
+    try {
+      const res = await fetch("/api/sync-strava", { method: "POST" })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          state: "error",
+          error_message: data.error ?? "Sync failed",
+        }))
+        return
+      }
+
+      setSyncStatus({ state: "success", last_sync_at: new Date().toISOString(), error_message: null })
+    } catch {
+      setSyncStatus((prev) => ({ ...prev, state: "error", error_message: "Network error. Please try again." }))
+    }
   }, [])
 
   const handleSignOut = useCallback(() => {
-    // Placeholder: would trigger sign out
+    startTransition(async () => {
+      await signOut()
+    })
   }, [])
 
   return (
@@ -196,7 +220,7 @@ export function AppShell() {
         {activeTab === "profile" && (
           <ProfileScreen
             user={mockUser}
-            syncStatus={mockSyncStatus}
+            syncStatus={syncStatus}
             isDarkMode={isDarkMode}
             onToggleDarkMode={handleToggleDarkMode}
             onSync={handleSync}
