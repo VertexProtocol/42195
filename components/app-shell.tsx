@@ -148,7 +148,7 @@ export function AppShell() {
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(mockSyncStatus)
   const [stravaConnected, setStravaConnected] = useState(false)
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
 
   // Load real sync status and Strava connection state on mount
   useEffect(() => {
@@ -178,6 +178,11 @@ export function AppShell() {
       const data = await res.json()
 
       if (!res.ok) {
+        // If no Strava tokens exist, redirect to connect Strava
+        if (data.error?.includes("No Strava account connected") || data.error?.includes("connect Strava")) {
+          window.location.href = "/api/auth/strava"
+          return
+        }
         setSyncStatus((prev) => ({
           ...prev,
           state: "error",
@@ -186,9 +191,17 @@ export function AppShell() {
         return
       }
 
-      setSyncStatus({ state: "success", last_sync_at: new Date().toISOString(), error_message: null })
+      setSyncStatus({
+        state: "success",
+        last_sync_at: new Date().toISOString(),
+        error_message: null,
+      })
     } catch {
-      setSyncStatus((prev) => ({ ...prev, state: "error", error_message: "Network error. Please try again." }))
+      setSyncStatus((prev) => ({
+        ...prev,
+        state: "error",
+        error_message: "Network error. Please try again.",
+      }))
     }
   }, [])
 
