@@ -48,7 +48,10 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     const monday = new Date(now)
     monday.setDate(now.getDate() + mondayOffset)
-    monday.setHours(0, 0, 0, 0)
+    // Build a local YYYY-MM-DD string — toISOString() converts to UTC and can
+    // shift the date by a day for users east of UTC (e.g. Norway UTC+1).
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const mondayStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
 
     const saved: WeeklyGoal = {
       id: isNew ? `wg-${Date.now()}` : goal!.id,
@@ -59,7 +62,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
              "Elevation Gain",
       target: parseFloat(target),
       current: isNew ? 0 : goal!.current,
-      week_start: isNew ? monday.toISOString() : goal!.week_start,
+      week_start: isNew ? mondayStr : goal!.week_start,
     }
     onSave(saved)
   }
