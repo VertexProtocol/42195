@@ -24,6 +24,10 @@ interface StravaTokenResponse {
  * that tokens are never accessible from the browser.
  */
 export async function GET(request: NextRequest) {
+  // Use NEXT_PUBLIC_APP_URL for all redirects so they go to the correct domain
+  const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  const baseUrl = rawBaseUrl.replace(/\/+$/, "")
+
   const { searchParams } = request.nextUrl
   const code = searchParams.get("code")
   const errorParam = searchParams.get("error")
@@ -31,13 +35,13 @@ export async function GET(request: NextRequest) {
   // User denied access on Strava's side
   if (errorParam) {
     return NextResponse.redirect(
-      new URL(`/auth/error?message=${encodeURIComponent("Strava access was denied.")}`, request.url),
+      `${baseUrl}/auth/error?message=${encodeURIComponent("Strava access was denied.")}`,
     )
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL(`/auth/error?message=${encodeURIComponent("No authorization code received from Strava.")}`, request.url),
+      `${baseUrl}/auth/error?message=${encodeURIComponent("No authorization code received from Strava.")}`,
     )
   }
 
@@ -48,10 +52,11 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url))
+    return NextResponse.redirect(`${baseUrl}/auth/login`)
   }
 
   // Exchange authorization code for tokens
+  const callbackUrl = `${baseUrl}/api/auth/strava/callback`
   const tokenRes = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,16 +65,14 @@ export async function GET(request: NextRequest) {
       client_secret: process.env.STRAVA_CLIENT_SECRET,
       code,
       grant_type: "authorization_code",
+      redirect_uri: callbackUrl,
     }),
   })
 
   if (!tokenRes.ok) {
     const body = await tokenRes.text()
     return NextResponse.redirect(
-      new URL(
-        `/auth/error?message=${encodeURIComponent(`Strava token exchange failed: ${body}`)}`,
-        request.url,
-      ),
+      `${baseUrl}/auth/error?message=${encodeURIComponent(`Strava token exchange failed: ${body}`)}`,
     )
   }
 
@@ -91,13 +94,10 @@ export async function GET(request: NextRequest) {
 
   if (upsertError) {
     return NextResponse.redirect(
-      new URL(
-        `/auth/error?message=${encodeURIComponent("Failed to save Strava connection.")}`,
-        request.url,
-      ),
+      `${baseUrl}/auth/error?message=${encodeURIComponent("Failed to save Strava connection.")}`,
     )
   }
 
-  // Trigger an initial sync and send the user back to the app
-  return NextResponse.redirect(new URL("/", request.url))
+  // Send the user back to the app
+  return NextResponse.redirect(`${baseUrl}/`)
 }

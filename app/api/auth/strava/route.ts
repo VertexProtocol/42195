@@ -28,8 +28,6 @@ export async function GET(request: NextRequest) {
   // Ensure no trailing slash and proper format
   const baseUrl = rawBaseUrl.replace(/\/+$/, "")
   const callbackUrl = `${baseUrl}/api/auth/strava/callback`
-  console.log("[v0] Strava redirect_uri:", callbackUrl)
-
   const stravaAuthUrl = new URL("https://www.strava.com/oauth/authorize")
   stravaAuthUrl.searchParams.set("client_id", clientId)
   stravaAuthUrl.searchParams.set("redirect_uri", callbackUrl)
