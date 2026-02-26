@@ -44,7 +44,7 @@ function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
 
 export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
   return (
-    <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       {/* Back button */}
       <button
         onClick={onBack}

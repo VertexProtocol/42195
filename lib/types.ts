@@ -19,6 +19,7 @@ export interface Goal {
   target_distance_km: number
   target_date: string
   start_date: string | null
+  target_time_seconds: number | null
   current_distance_km: number
   is_active: boolean
   created_at: string

@@ -114,6 +114,7 @@ export function AppShell() {
             name: g.name,
             target_distance_km: Number(g.target_distance_km),
             start_date: g.start_date ?? null,
+            target_time_seconds: g.target_time_seconds ?? null,
             target_date: g.target_date,
             current_distance_km: Number(g.current_distance_km),
             is_active: g.is_active,
@@ -217,13 +218,17 @@ export function AppShell() {
 
   // ----- Goal CRUD (persisted to Supabase) -----
   const handleToggleActiveGoal = useCallback(async (goalId: string) => {
-    const goal = goals.find((g) => g.id === goalId)
-    if (!goal) return
-    const newActive = !goal.is_active
+    let newActive = false
 
-    // Optimistic update
+    // Optimistic update using functional setter to avoid stale closure
     setGoals((prev) =>
-      prev.map((g) => (g.id === goalId ? { ...g, is_active: newActive } : g))
+      prev.map((g) => {
+        if (g.id === goalId) {
+          newActive = !g.is_active
+          return { ...g, is_active: newActive }
+        }
+        return g
+      })
     )
 
     const { error } = await supabase
@@ -239,7 +244,7 @@ export function AppShell() {
         )
       )
     }
-  }, [goals])
+  }, [])
 
   const handleEditGoal = useCallback((goal: Goal) => {
     setEditingGoal(goal)
@@ -268,6 +273,7 @@ export function AppShell() {
             name: saved.name,
             target_distance_km: saved.target_distance_km,
             start_date: saved.start_date,
+            target_time_seconds: saved.target_time_seconds,
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
@@ -286,6 +292,7 @@ export function AppShell() {
             user_id: userId,
             target_distance_km: saved.target_distance_km,
             start_date: saved.start_date,
+            target_time_seconds: saved.target_time_seconds,
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
@@ -301,6 +308,7 @@ export function AppShell() {
               name: data.name,
               target_distance_km: Number(data.target_distance_km),
               start_date: data.start_date ?? null,
+              target_time_seconds: data.target_time_seconds ?? null,
               target_date: data.target_date,
               current_distance_km: Number(data.current_distance_km),
               is_active: data.is_active,
@@ -492,12 +500,13 @@ export function AppShell() {
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-background">
+    <div className="mx-auto h-dvh max-w-md bg-background flex flex-col">
       {/* Screen content */}
-      <main className="relative">
+      <main className="relative flex-1 overflow-y-auto">
         {activeTab === "home" && (
           <HomeScreen
             activeGoals={activeGoals}
+            activities={activities}
             weeklySummary={weeklySummary}
             weeklyGoals={weeklyGoals}
             recentActivities={activities.slice(0, 5)}

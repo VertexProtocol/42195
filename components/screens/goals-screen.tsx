@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain } from "lucide-react"
-import { formatDistance, formatDate, daysUntil, progressPercentage, formatWeeklyMetric } from "@/lib/format"
+import { formatDistance, formatDate, daysUntil, progressPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
 import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 
 type GoalTab = "long-term" | "weekly"
@@ -50,7 +50,7 @@ export function GoalsScreen({
   const [tab, setTab] = useState<GoalTab>("long-term")
 
   return (
-    <div className="flex flex-col gap-5 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
       <header>
         <h1 className="text-2xl font-bold text-foreground">Goals</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -156,6 +156,12 @@ export function GoalsScreen({
                       <Calendar size={14} />
                       <span>{formatDate(goal.target_date)}</span>
                     </div>
+                    {goal.target_time_seconds && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock size={14} />
+                        <span>{formatTargetTime(goal.target_time_seconds)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4">
