@@ -40,6 +40,9 @@ interface StravaActivity {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Strava sport_type values that are running activities. */
+const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill"])
+
 /**
  * Maps a Strava sport_type / workout_type to our constrained ActivityType.
  */
@@ -51,9 +54,10 @@ function mapActivityType(sport_type: string, workout_type?: number): string {
 
 /**
  * Converts Strava average_speed (m/s) to pace in min/km.
+ * Returns null when speed is zero or missing (e.g. manual entries).
  */
-function speedToPace(averageSpeedMs: number): number {
-  if (averageSpeedMs <= 0) return 0
+function speedToPace(averageSpeedMs: number): number | null {
+  if (averageSpeedMs <= 0) return null
   return 1000 / averageSpeedMs / 60
 }
 
@@ -165,8 +169,12 @@ export async function POST() {
     // 5. Fetch activities from Strava
     const stravaActivities = await fetchStravaActivities(accessToken)
 
-    // 6. Map and upsert activities
-    const rows = stravaActivities.map((a) => ({
+    // 6. Map and upsert activities — only running sport types
+    const runningActivities = stravaActivities.filter((a) =>
+      RUNNING_SPORT_TYPES.has(a.sport_type)
+    )
+
+    const rows = runningActivities.map((a) => ({
       user_id: userId,
       strava_id: a.id,
       type: mapActivityType(a.sport_type, a.workout_type),
@@ -273,6 +281,7 @@ export async function POST() {
     return NextResponse.json({
       ok: true,
       synced: rows.length,
+      skipped: stravaActivities.length - runningActivities.length,
     })
   } catch (err: unknown) {
     console.error("[v0] Strava sync error:", err)

@@ -1,3 +1,5 @@
+import type { Activity, WeeklyGoalMetric } from "@/lib/types"
+
 export function formatDistance(km: number): string {
   return km.toFixed(1) + " km"
 }
@@ -13,7 +15,8 @@ export function formatDuration(seconds: number): string {
   return `${mins}m ${secs.toString().padStart(2, "0")}s`
 }
 
-export function formatPace(minPerKm: number): string {
+export function formatPace(minPerKm: number | null): string {
+  if (minPerKm === null || minPerKm <= 0) return "—"
   const mins = Math.floor(minPerKm)
   const secs = Math.round((minPerKm - mins) * 60)
   return `${mins}:${secs.toString().padStart(2, "0")} /km`
@@ -95,6 +98,61 @@ export function formatTargetTime(seconds: number): string {
     return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
   return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+/**
+ * Compute total distance (km) from activities whose date falls within [startDate, endDate].
+ * When startDate is null, falls back to fallbackStart (e.g. goal.created_at) so that
+ * only activity logged since the goal was created counts, rather than all history.
+ */
+export function computeDistanceInRange(
+  activities: Activity[],
+  startDate: string | null,
+  endDate: string,
+  fallbackStart?: string,
+): number {
+  const start = startDate
+    ? new Date(startDate).getTime()
+    : fallbackStart
+      ? new Date(fallbackStart).getTime()
+      : 0
+  const end = new Date(endDate).getTime()
+  return activities
+    .filter((a) => {
+      const d = new Date(a.date).getTime()
+      return d >= start && d <= end
+    })
+    .reduce((sum, a) => sum + a.distance_km, 0)
+}
+
+/**
+ * Compute the current value of a weekly goal metric directly from the activities
+ * array, using the goal's week_start as the Monday boundary.
+ * This avoids relying on the stale `current` field stored in the DB.
+ */
+export function computeWeeklyProgress(
+  activities: Activity[],
+  metric: WeeklyGoalMetric,
+  weekStart: string,
+): number {
+  const start = new Date(weekStart).getTime()
+  const end = start + 7 * 24 * 60 * 60 * 1000
+  const weekActivities = activities.filter((a) => {
+    const d = new Date(a.date).getTime()
+    return d >= start && d < end
+  })
+  switch (metric) {
+    case "distance_km":
+      return weekActivities.reduce((s, a) => s + a.distance_km, 0)
+    case "sessions":
+      return weekActivities.length
+    case "duration_minutes":
+      return weekActivities.reduce((s, a) => s + a.duration_seconds / 60, 0)
+    case "elevation_m":
+      return weekActivities.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0)
+    default:
+      return 0
+  }
 }
 
 export function weeklyMetricUnit(metric: string): string {

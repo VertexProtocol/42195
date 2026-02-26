@@ -2,8 +2,18 @@
 
 import { useState } from "react"
 import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain } from "lucide-react"
-import { formatDistance, formatDate, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
-import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
+import {
+  formatDistance,
+  formatDate,
+  daysUntil,
+  progressPercentage,
+  timeElapsedPercentage,
+  formatWeeklyMetric,
+  formatTargetTime,
+  computeDistanceInRange,
+  computeWeeklyProgress,
+} from "@/lib/format"
+import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 
 type GoalTab = "long-term" | "weekly"
 
@@ -14,16 +24,11 @@ const METRIC_ICONS: Record<string, typeof Flame> = {
   elevation_m: Mountain,
 }
 
-/** Compute total distance from activities within a date range */
-function computeDistanceInRange(activities: Activity[], startDate: string | null, endDate: string): number {
-  const start = startDate ? new Date(startDate).getTime() : 0
-  const end = new Date(endDate).getTime()
-  return activities
-    .filter((a) => {
-      const d = new Date(a.date).getTime()
-      return d >= start && d <= end
-    })
-    .reduce((sum, a) => sum + a.distance_km, 0)
+const METRIC_LABELS: Record<WeeklyGoalMetric, string> = {
+  distance_km: "Weekly Distance",
+  sessions: "Training Sessions",
+  duration_minutes: "Active Minutes",
+  elevation_m: "Elevation Gain",
 }
 
 interface GoalsScreenProps {
@@ -107,8 +112,15 @@ export function GoalsScreen({
           ) : (
             goals.map((goal) => {
               const days = daysUntil(goal.target_date)
-              const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-              const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
+              // Use created_at as start fallback — only count activity since goal creation
+              const logged = computeDistanceInRange(
+                activities,
+                goal.start_date,
+                goal.target_date,
+                goal.created_at,
+              )
+              const effectiveStart = goal.start_date ?? goal.created_at
+              const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
 
               return (
                 <div
@@ -169,7 +181,7 @@ export function GoalsScreen({
                       <span className="text-muted-foreground">
                         {formatDistance(logged)} logged
                       </span>
-                      <span className="font-medium text-foreground">{timeProgress}% of time elapsed</span>
+                      <span className="font-medium text-foreground">{timeProgress}% elapsed</span>
                     </div>
                     <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
                       <div
@@ -231,9 +243,13 @@ export function GoalsScreen({
             </div>
           ) : (
             weeklyGoals.map((wg) => {
-              const progress = progressPercentage(wg.current, wg.target)
+              // Compute progress live from activities — not the stale DB value
+              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
+              const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
-              const isComplete = wg.current >= wg.target
+              const isComplete = current >= wg.target
+              // Derive label from metric rather than trusting the stored string
+              const label = METRIC_LABELS[wg.metric] ?? wg.label
 
               return (
                 <div
@@ -254,12 +270,12 @@ export function GoalsScreen({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-card-foreground">
-                          {wg.label}
+                          {label}
                         </h4>
                         <button
                           onClick={() => onEditWeeklyGoal(wg)}
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
-                          aria-label={`Edit ${wg.label}`}
+                          aria-label={`Edit ${label}`}
                         >
                           <Pencil size={12} />
                         </button>
@@ -268,7 +284,7 @@ export function GoalsScreen({
                       {/* Value display */}
                       <div className="mt-1 flex items-baseline gap-1">
                         <span className="text-xl font-bold font-mono text-foreground">
-                          {formatWeeklyMetric(wg.current, wg.metric)}
+                          {formatWeeklyMetric(current, wg.metric)}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           / {formatWeeklyMetric(wg.target, wg.metric)}

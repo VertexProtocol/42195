@@ -181,7 +181,7 @@ export function AppShell() {
   // ----- Derived data -----
   const activeGoals = goals.filter((g) => g.is_active)
 
-  const weeklySummary = useMemo(() => {
+  const { currentWeekMonday, weeklySummary } = useMemo(() => {
     const now = new Date()
     const day = now.getDay()
     const diff = day === 0 ? -6 : 1 - day
@@ -193,14 +193,27 @@ export function AppShell() {
       (a) => new Date(a.date) >= monday
     )
     return {
-      total_distance_km: weekActivities.reduce((s, a) => s + a.distance_km, 0),
-      total_time_seconds: weekActivities.reduce(
-        (s, a) => s + a.duration_seconds,
-        0
-      ),
-      run_count: weekActivities.length,
+      currentWeekMonday: monday,
+      weeklySummary: {
+        total_distance_km: weekActivities.reduce((s, a) => s + a.distance_km, 0),
+        total_time_seconds: weekActivities.reduce(
+          (s, a) => s + a.duration_seconds,
+          0
+        ),
+        run_count: weekActivities.length,
+      },
     }
   }, [activities])
+
+  // Only show weekly goals that belong to the current week
+  const currentWeekGoals = useMemo(() => {
+    const mondayTs = currentWeekMonday.getTime()
+    const sundayEnd = mondayTs + 7 * 24 * 60 * 60 * 1000
+    return weeklyGoals.filter((wg) => {
+      const ws = new Date(wg.week_start).getTime()
+      return ws >= mondayTs && ws < sundayEnd
+    })
+  }, [weeklyGoals, currentWeekMonday])
 
   // ----- Navigation -----
   const handleTabChange = useCallback((tab: TabId) => {
@@ -508,7 +521,7 @@ export function AppShell() {
             activeGoals={activeGoals}
             activities={activities}
             weeklySummary={weeklySummary}
-            weeklyGoals={weeklyGoals}
+            weeklyGoals={currentWeekGoals}
             recentActivities={activities.slice(0, 5)}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
@@ -518,7 +531,9 @@ export function AppShell() {
         {activeTab === "activities" && !selectedActivity && (
           <ActivitiesScreen
             activities={activities}
+            stravaConnected={stravaConnected}
             onSelectActivity={handleSelectActivity}
+            onSync={handleSync}
           />
         )}
 
@@ -533,7 +548,7 @@ export function AppShell() {
           <GoalsScreen
             goals={goals}
             activities={activities}
-            weeklyGoals={weeklyGoals}
+            weeklyGoals={currentWeekGoals}
             onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={handleAddGoal}

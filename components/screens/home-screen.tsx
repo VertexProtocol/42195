@@ -3,20 +3,19 @@
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
-import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
+import {
+  formatDistance,
+  formatDuration,
+  formatDateShort,
+  daysUntil,
+  progressPercentage,
+  timeElapsedPercentage,
+  formatWeeklyMetric,
+  formatTargetTime,
+  computeDistanceInRange,
+  computeWeeklyProgress,
+} from "@/lib/format"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
-
-/** Compute total distance from activities within a date range */
-function computeDistanceInRange(activities: Activity[], startDate: string | null, endDate: string): number {
-  const start = startDate ? new Date(startDate).getTime() : 0
-  const end = new Date(endDate).getTime()
-  return activities
-    .filter((a) => {
-      const d = new Date(a.date).getTime()
-      return d >= start && d <= end
-    })
-    .reduce((sum, a) => sum + a.distance_km, 0)
-}
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -58,61 +57,84 @@ export function HomeScreen({
 
       {/* Active Goals */}
       {activeGoals.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Active Goals
-          </h3>
-          {activeGoals.map((goal) => {
-            const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-            const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
-            const days = daysUntil(goal.target_date)
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Active Goals
+            </h3>
+            {activeGoals.length > 1 && (
+              <span className="text-xs text-muted-foreground">
+                {activeGoals.length} goals
+              </span>
+            )}
+          </div>
+          <Carousel opts={{ align: "start", dragFree: false }}>
+            <CarouselContent className="-ml-3">
+              {activeGoals.map((goal) => {
+                // Use created_at as the fallback start so only post-creation
+                // activities count when no explicit start date is set.
+                const logged = computeDistanceInRange(
+                  activities,
+                  goal.start_date,
+                  goal.target_date,
+                  goal.created_at,
+                )
+                const effectiveStart = goal.start_date ?? goal.created_at
+                const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
+                const days = daysUntil(goal.target_date)
 
-            return (
-              <button
-                key={goal.id}
-                onClick={onViewGoal}
-                className="relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 pr-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-primary">
-                      Active Goal
-                    </p>
-                    <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance">
-                      {goal.name}
-                    </h2>
-                    <div className="mt-2.5 flex flex-col gap-1">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-muted-foreground">
-                          {days} days left
-                        </span>
-                        <span className="text-sm font-medium text-primary">
-                          {formatDistance(logged)} logged
-                        </span>
+                return (
+                  <CarouselItem
+                    key={goal.id}
+                    className={`pl-3 ${activeGoals.length > 1 ? "basis-[88%]" : "basis-full"}`}
+                  >
+                    <button
+                      onClick={onViewGoal}
+                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 pr-4">
+                          <p className="text-xs font-medium uppercase tracking-wider text-primary">
+                            Active Goal
+                          </p>
+                          <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance">
+                            {goal.name}
+                          </h2>
+                          <div className="mt-2.5 flex flex-col gap-1">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-muted-foreground">
+                                {days} days left
+                              </span>
+                              <span className="text-sm font-medium text-primary">
+                                {formatDistance(logged)} logged
+                              </span>
+                            </div>
+                            {goal.target_time_seconds && (
+                              <span className="text-xs text-muted-foreground">
+                                Target: {formatTargetTime(goal.target_time_seconds)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="relative flex shrink-0 items-center justify-center">
+                          <ProgressRing
+                            percentage={timeProgress}
+                            size={72}
+                            strokeWidth={5}
+                          />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
+                            <span className="text-[8px] text-muted-foreground">elapsed</span>
+                          </div>
+                        </div>
                       </div>
-                      {goal.target_time_seconds && (
-                        <span className="text-xs text-muted-foreground">
-                          Target: {formatTargetTime(goal.target_time_seconds)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="relative flex shrink-0 items-center justify-center">
-                    <ProgressRing
-                      percentage={timeProgress}
-                      size={72}
-                      strokeWidth={5}
-                    />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
-                      <span className="text-[8px] text-muted-foreground">time</span>
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-              </button>
-            )
-          })}
+                      <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                    </button>
+                  </CarouselItem>
+                )
+              })}
+            </CarouselContent>
+          </Carousel>
         </section>
       ) : (
         <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
@@ -170,9 +192,11 @@ export function HomeScreen({
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {weeklyGoals.map((wg) => {
-              const progress = progressPercentage(wg.current, wg.target)
+              // Compute progress live from activities — not the stale DB value
+              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
+              const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
-              const isComplete = wg.current >= wg.target
+              const isComplete = current >= wg.target
 
               return (
                 <button
@@ -189,7 +213,7 @@ export function HomeScreen({
                     <p className="text-[11px] text-muted-foreground">{wg.label}</p>
                     <div className="mt-0.5 flex items-baseline gap-1">
                       <span className="text-sm font-bold font-mono text-card-foreground">
-                        {formatWeeklyMetric(wg.current, wg.metric)}
+                        {formatWeeklyMetric(current, wg.metric)}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
                         / {formatWeeklyMetric(wg.target, wg.metric)}
@@ -255,21 +279,6 @@ export function HomeScreen({
         </section>
       )}
 
-      {/* CTA Buttons */}
-      <div className="flex flex-col gap-3">
-        <button
-          onClick={onViewActivities}
-          className="flex min-h-[48px] items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm active:opacity-90 transition-opacity"
-        >
-          View Activities
-        </button>
-        <button
-          onClick={onViewGoal}
-          className="flex min-h-[48px] items-center justify-center rounded-xl bg-secondary px-6 py-3 text-sm font-semibold text-secondary-foreground ring-1 ring-border active:bg-accent transition-colors"
-        >
-          View Goals
-        </button>
-      </div>
     </div>
   )
 }

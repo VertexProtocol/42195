@@ -7,7 +7,7 @@ export interface Activity {
   date: string
   distance_km: number
   duration_seconds: number
-  pace_min_per_km: number
+  pace_min_per_km: number | null
   elevation_gain_m: number | null
   avg_heart_rate: number | null
   calories: number | null
