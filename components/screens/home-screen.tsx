@@ -3,20 +3,19 @@
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
-import { formatDistance, formatDuration, formatDateShort, daysUntil, progressPercentage, timeElapsedPercentage, formatWeeklyMetric, formatTargetTime } from "@/lib/format"
+import {
+  formatDistance,
+  formatDuration,
+  formatDateShort,
+  daysUntil,
+  progressPercentage,
+  timeElapsedPercentage,
+  formatWeeklyMetric,
+  formatTargetTime,
+  computeDistanceInRange,
+  computeWeeklyProgress,
+} from "@/lib/format"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
-
-/** Compute total distance from activities within a date range */
-function computeDistanceInRange(activities: Activity[], startDate: string | null, endDate: string): number {
-  const start = startDate ? new Date(startDate).getTime() : 0
-  const end = new Date(endDate).getTime()
-  return activities
-    .filter((a) => {
-      const d = new Date(a.date).getTime()
-      return d >= start && d <= end
-    })
-    .reduce((sum, a) => sum + a.distance_km, 0)
-}
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -72,8 +71,16 @@ export function HomeScreen({
           <Carousel opts={{ align: "start", dragFree: false }}>
             <CarouselContent className="-ml-3">
               {activeGoals.map((goal) => {
-                const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-                const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
+                // Use created_at as the fallback start so only post-creation
+                // activities count when no explicit start date is set.
+                const logged = computeDistanceInRange(
+                  activities,
+                  goal.start_date,
+                  goal.target_date,
+                  goal.created_at,
+                )
+                const effectiveStart = goal.start_date ?? goal.created_at
+                const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
                 const days = daysUntil(goal.target_date)
 
                 return (
@@ -117,7 +124,7 @@ export function HomeScreen({
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
                             <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
-                            <span className="text-[8px] text-muted-foreground">time</span>
+                            <span className="text-[8px] text-muted-foreground">elapsed</span>
                           </div>
                         </div>
                       </div>
@@ -185,9 +192,11 @@ export function HomeScreen({
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {weeklyGoals.map((wg) => {
-              const progress = progressPercentage(wg.current, wg.target)
+              // Compute progress live from activities — not the stale DB value
+              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
+              const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
-              const isComplete = wg.current >= wg.target
+              const isComplete = current >= wg.target
 
               return (
                 <button
@@ -204,7 +213,7 @@ export function HomeScreen({
                     <p className="text-[11px] text-muted-foreground">{wg.label}</p>
                     <div className="mt-0.5 flex items-baseline gap-1">
                       <span className="text-sm font-bold font-mono text-card-foreground">
-                        {formatWeeklyMetric(wg.current, wg.metric)}
+                        {formatWeeklyMetric(current, wg.metric)}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
                         / {formatWeeklyMetric(wg.target, wg.metric)}

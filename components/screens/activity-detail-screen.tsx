@@ -71,10 +71,12 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
       {/* Primary Stats */}
       <section>
         <h2 className="sr-only">Key metrics</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`grid gap-3 ${activity.pace_min_per_km !== null ? "grid-cols-3" : "grid-cols-2"}`}>
           <StatCard icon={TrendingUp} label="Distance" value={formatDistance(activity.distance_km)} />
           <StatCard icon={Clock} label="Duration" value={formatDuration(activity.duration_seconds)} />
-          <StatCard icon={Gauge} label="Pace" value={formatPace(activity.pace_min_per_km)} />
+          {activity.pace_min_per_km !== null && (
+            <StatCard icon={Gauge} label="Pace" value={formatPace(activity.pace_min_per_km)} />
+          )}
         </div>
       </section>
 
