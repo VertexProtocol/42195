@@ -67,13 +67,15 @@ function calcWeekTargets(avgWeeklyKm: number, pct: number, blockWeeks: number): 
   const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
   const multiplier = 1 + pct / 100
   const targets: number[] = []
+  // Keep full float precision internally so rounding doesn't compound across weeks.
+  // Only round when writing to the output array.
   let current = base
   for (let i = 0; i < blockWeeks - 1; i++) {
-    current = Math.round(current * multiplier)
-    targets.push(current)
+    current = current * multiplier
+    targets.push(Math.round(current))
   }
   // Last week is always recovery at 80% of peak
-  targets.push(Math.round(targets[targets.length - 1] * 0.8))
+  targets.push(Math.round(current * 0.8))
   return targets
 }
 
@@ -144,6 +146,15 @@ ${weekSummaryText}
 ## Weekly Volume Targets (use these exact numbers — pre-calculated at ${increasePct}% progressive overload)
 ${weekTargetLines}
 The targetKm field for each week MUST match these numbers exactly.
+
+## Session Distribution Rules
+Distribute each week's km across sessions with meaningful variety — never assign the same distance to every session:
+- Long run: ~40% of weekly total (e.g. 9 km week → long run 4 km, not 3 km)
+- Easy runs: split the remaining km roughly equally
+- The long run MUST always be at least 1 km longer than any easy run in the same week
+- Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
+- Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
+- If focus is "volume" only (no session types required), you may omit run types but still vary distances
 
 ## Your Task
 Generate a ${blockWeeks}-week training block starting from today. The block should:
@@ -246,10 +257,13 @@ export async function POST(req: NextRequest) {
   const weeklySummaries = groupActivitiesByWeek(activities ?? [])
 
   // Compute derived metrics
+  // Always divide by 4 so that rest weeks (weeks with no runs) are included in
+  // the rolling average. Dividing only by active weeks inflates the baseline and
+  // causes the plan to start too high after a period of inconsistent training.
   const recent4Weeks = weeklySummaries.slice(0, 4)
   const currentAvgWeeklyKm =
     recent4Weeks.length > 0
-      ? recent4Weeks.reduce((s, w) => s + w.totalKm, 0) / recent4Weeks.length
+      ? recent4Weeks.reduce((s, w) => s + w.totalKm, 0) / 4
       : 0
 
   const longestRecentRun =
