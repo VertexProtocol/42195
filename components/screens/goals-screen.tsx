@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain } from "lucide-react"
+import { Check, Calendar, Target, Plus, Pencil, Flame, TrendingUp, Clock, Mountain, ChevronLeft, ChevronRight } from "lucide-react"
 import {
   formatDistance,
   formatDate,
@@ -35,7 +35,6 @@ interface GoalsScreenProps {
   goals: Goal[]
   activities: Activity[]
   weeklyGoals: WeeklyGoal[]
-  currentWeekStart: string
   onToggleActive: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
@@ -43,11 +42,40 @@ interface GoalsScreenProps {
   onAddWeeklyGoal: () => void
 }
 
+// ---- helpers ----
+
+function localMondayStr(date: Date): string {
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const mon = new Date(date)
+  mon.setDate(date.getDate() + diff)
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
+}
+
+function shiftWeek(weekStr: string, delta: number): string {
+  // Parse at noon to avoid DST edge-cases
+  const d = new Date(weekStr + "T12:00:00")
+  d.setDate(d.getDate() + delta * 7)
+  return localMondayStr(d)
+}
+
+function weekLabel(weekStr: string, currentStr: string): string {
+  if (weekStr === currentStr) return "Denne uken"
+  const start = new Date(weekStr + "T12:00:00")
+  const end = new Date(weekStr + "T12:00:00")
+  end.setDate(end.getDate() + 6)
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" })
+  return `${fmt(start)} – ${fmt(end)}`
+}
+
+// ---- component ----
+
 export function GoalsScreen({
   goals,
   activities,
   weeklyGoals,
-  currentWeekStart,
   onToggleActive,
   onEditGoal,
   onAddGoal,
@@ -55,6 +83,16 @@ export function GoalsScreen({
   onAddWeeklyGoal,
 }: GoalsScreenProps) {
   const [tab, setTab] = useState<GoalTab>("long-term")
+
+  const todayMondayStr = localMondayStr(new Date())
+  const [selectedWeekStart, setSelectedWeekStart] = useState(todayMondayStr)
+
+  const isCurrentWeek = selectedWeekStart === todayMondayStr
+  const canGoForward = selectedWeekStart < todayMondayStr
+
+  const selectedWeekGoals = weeklyGoals.filter(
+    (wg) => wg.week_start === selectedWeekStart
+  )
 
   return (
     <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
@@ -114,7 +152,6 @@ export function GoalsScreen({
           ) : (
             goals.map((goal) => {
               const days = daysUntil(goal.target_date)
-              // Use created_at as start fallback — only count activity since goal creation
               const logged = computeDistanceInRange(
                 activities,
                 goal.start_date,
@@ -219,39 +256,64 @@ export function GoalsScreen({
       {/* Weekly goals tab */}
       {tab === "weekly" && (
         <div className="flex flex-col gap-4">
-          {/* Week label */}
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Week of {formatDate(getWeekStart())}
-          </p>
 
-          {/* Add button */}
-          <button
-            onClick={onAddWeeklyGoal}
-            className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
-          >
-            <Plus size={18} />
-            Add weekly goal
-          </button>
+          {/* Week navigator */}
+          <div className="flex items-center justify-between rounded-xl bg-secondary px-2 py-1">
+            <button
+              onClick={() => setSelectedWeekStart(shiftWeek(selectedWeekStart, -1))}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground active:bg-accent transition-colors"
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-semibold text-foreground">
+              {weekLabel(selectedWeekStart, todayMondayStr)}
+            </span>
+            <button
+              onClick={() => setSelectedWeekStart(shiftWeek(selectedWeekStart, 1))}
+              disabled={!canGoForward}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                canGoForward
+                  ? "text-muted-foreground active:bg-accent"
+                  : "text-border"
+              }`}
+              aria-label="Next week"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
 
-          {weeklyGoals.length === 0 ? (
+          {/* Add button — only for current week */}
+          {isCurrentWeek && (
+            <button
+              onClick={onAddWeeklyGoal}
+              className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+            >
+              <Plus size={18} />
+              Add weekly goal
+            </button>
+          )}
+
+          {selectedWeekGoals.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
                 <Flame size={28} className="text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-muted-foreground">No weekly goals</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                {isCurrentWeek ? "No weekly goals" : "No goals this week"}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Set targets for distance, sessions, or more
+                {isCurrentWeek
+                  ? "Set targets for distance, sessions, or more"
+                  : "No goals were set for this week"}
               </p>
             </div>
           ) : (
-            weeklyGoals.map((wg) => {
-              // Always compute against the actual current week Monday, not the stored
-              // week_start — this handles mid-week goal creation correctly.
-              const current = computeWeeklyProgress(activities, wg.metric, currentWeekStart)
+            selectedWeekGoals.map((wg) => {
+              const current = computeWeeklyProgress(activities, wg.metric, wg.week_start)
               const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
               const isComplete = current >= wg.target
-              // Derive label from metric rather than trusting the stored string
               const label = METRIC_LABELS[wg.metric] ?? wg.label
 
               return (
@@ -325,14 +387,4 @@ export function GoalsScreen({
       )}
     </div>
   )
-}
-
-function getWeekStart(): string {
-  const now = new Date()
-  const day = now.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const monday = new Date(now)
-  monday.setDate(now.getDate() + diff)
-  monday.setHours(0, 0, 0, 0)
-  return monday.toISOString()
 }
