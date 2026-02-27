@@ -43,15 +43,33 @@ export async function GET(
   }
 
   const service = createServiceClient()
+
+  // Verify the activity belongs to this user and get strava_id
   const { data: activity, error: activityError } = await service
     .from("activities")
-    .select("strava_id")
+    .select("id, strava_id")
     .eq("id", id)
     .eq("user_id", user.id)
-    .single<{ strava_id: number }>()
+    .single<{ id: string; strava_id: number | null }>()
 
-  if (activityError || !activity?.strava_id) {
+  if (activityError || !activity) {
     return NextResponse.json({ error: "Activity not found" }, { status: 404 })
+  }
+
+  // 1. Return cached streams if available
+  const { data: cached } = await service
+    .from("activity_streams")
+    .select("points")
+    .eq("activity_id", id)
+    .single<{ points: StreamPoint[] }>()
+
+  if (cached) {
+    return NextResponse.json({ points: cached.points })
+  }
+
+  // 2. No cache — need to fetch from Strava
+  if (!activity.strava_id) {
+    return NextResponse.json({ points: [] })
   }
 
   let accessToken: string
@@ -85,6 +103,11 @@ export async function GET(
   }))
 
   const points = downsample(rawPoints, 200)
+
+  // 3. Persist to DB so subsequent loads are instant
+  await service
+    .from("activity_streams")
+    .upsert({ activity_id: id, points, fetched_at: new Date().toISOString() })
 
   return NextResponse.json({ points })
 }
