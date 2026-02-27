@@ -4,18 +4,18 @@ import { useState } from "react"
 import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
-  ChevronLeft, ChevronRight, RefreshCw, Timer,
+  ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
 } from "lucide-react"
 import {
   formatDistance,
   formatDate,
+  formatDateShort,
   daysUntil,
   progressPercentage,
-  timeElapsedPercentage,
   formatWeeklyMetric,
   formatTargetTime,
-  computeDistanceInRange,
   computeWeeklyProgress,
+  evaluatePerformanceGoal,
 } from "@/lib/format"
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 
@@ -292,33 +292,42 @@ export function GoalsScreen({
             </div>
           ) : (
             performanceGoals.map((goal) => {
-              const logged = computeDistanceInRange(
+              const status = evaluatePerformanceGoal(
                 activities,
-                goal.start_date,
-                goal.target_date,
-                goal.created_at,
+                goal.target_distance_km,
+                goal.target_time_seconds,
               )
-              const effectiveStart = goal.start_date ?? goal.created_at
-              const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
               const days = daysUntil(goal.target_date)
 
               return (
                 <div
                   key={goal.id}
-                  className={`relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 transition-all ${
-                    goal.is_active ? "ring-primary/40 ring-2" : "ring-border"
+                  className={`overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 transition-all ${
+                    status.reached
+                      ? "ring-success/40 ring-2"
+                      : goal.is_active
+                        ? "ring-primary/40 ring-2"
+                        : "ring-border"
                   }`}
                 >
+                  {/* Header */}
                   <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      {goal.is_active && (
+                    <div className="flex flex-col gap-1 min-w-0 pr-3">
+                      {status.reached ? (
+                        <div className="flex items-center gap-1.5">
+                          <Trophy size={12} className="text-success" />
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-success">
+                            Goal reached
+                          </span>
+                        </div>
+                      ) : goal.is_active ? (
                         <div className="flex items-center gap-1.5">
                           <div className="h-2 w-2 rounded-full bg-primary" />
                           <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
                             Active
                           </span>
                         </div>
-                      )}
+                      ) : null}
                       <h3 className="text-lg font-semibold text-card-foreground">
                         {goal.name}
                       </h3>
@@ -332,7 +341,7 @@ export function GoalsScreen({
                     </button>
                   </div>
 
-                  {/* Metrics row */}
+                  {/* Goal details */}
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Target size={14} />
@@ -350,25 +359,47 @@ export function GoalsScreen({
                     </div>
                   </div>
 
-                  {/* Training logged */}
+                  {/* Progress toward goal */}
                   <div className="mt-4">
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="text-muted-foreground">
-                        {formatDistance(logged)} logged
+                        {goal.target_time_seconds
+                          ? (status.bestActivity ? "Best time" : "No qualifying runs yet")
+                          : (status.bestActivity ? "Longest run" : "No runs yet")}
                       </span>
-                      <span className="font-medium text-foreground">{timeProgress}% elapsed</span>
+                      {status.bestActivity && (
+                        <span className={`font-semibold tabular-nums ${status.reached ? "text-success" : "text-foreground"}`}>
+                          {goal.target_time_seconds
+                            ? formatTargetTime(status.bestTimeSeconds!)
+                            : formatDistance(status.bestActivity.distance_km)}
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
                       <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${timeProgress}%` }}
+                        className={`h-full rounded-full transition-all duration-500 ${status.reached ? "bg-success" : "bg-primary"}`}
+                        style={{ width: `${status.progress}%` }}
                       />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">
+                        {"Target: "}
+                        {goal.target_time_seconds
+                          ? formatTargetTime(goal.target_time_seconds)
+                          : formatDistance(goal.target_distance_km)}
+                      </span>
+                      {status.reached && status.bestActivity && (
+                        <span className="font-medium text-success">
+                          {formatDateShort(status.bestActivity.date)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
+                  {/* Footer */}
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
-                      {days > 0 ? `${days} days remaining` : "Date passed"}
+                      {days > 0 ? `${days} days remaining` : "Target date passed"}
                     </span>
                     <button
                       onClick={() => onToggleActive(goal.id)}

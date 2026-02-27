@@ -1,11 +1,12 @@
 "use client"
 
-import { Plus, Pencil, CalendarCheck, TrendingUp, Footprints, Clock, MapPin, Check } from "lucide-react"
+import { Plus, Pencil, CalendarCheck, TrendingUp, Footprints, Clock, MapPin, Check, Trophy } from "lucide-react"
 import {
   formatDistance,
   formatDate,
   formatDuration,
   daysUntil,
+  isDatePast,
   timeElapsedPercentage,
   computeDistanceInRange,
 } from "@/lib/format"
@@ -99,8 +100,9 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
       ) : (
         sorted.map((goal) => {
           const days = daysUntil(goal.target_date)
+          const past = isDatePast(goal.target_date)
           const effectiveStart = goal.start_date ?? goal.created_at
-          const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
+          const timeProgress = past ? 100 : timeElapsedPercentage(effectiveStart, goal.target_date)
           const logged = computeDistanceInRange(
             activities,
             goal.start_date,
@@ -115,21 +117,32 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
             <div
               key={goal.id}
               className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
-                goal.is_active ? "ring-primary/40 ring-2" : "ring-border"
+                past
+                  ? "ring-success/40 ring-2"
+                  : goal.is_active
+                    ? "ring-primary/40 ring-2"
+                    : "ring-border"
               }`}
             >
               {/* Card header */}
               <div className="px-5 pt-5 pb-4">
                 <div className="flex items-start justify-between">
                   <div className="flex flex-col gap-1 min-w-0 pr-3">
-                    {goal.is_active && (
+                    {past ? (
+                      <div className="flex items-center gap-1.5">
+                        <Trophy size={12} className="text-success" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-success">
+                          Race complete
+                        </span>
+                      </div>
+                    ) : goal.is_active ? (
                       <div className="flex items-center gap-1.5">
                         <div className="h-2 w-2 rounded-full bg-primary" />
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
                           Active plan
                         </span>
                       </div>
-                    )}
+                    ) : null}
                     <h3 className="text-xl font-bold text-card-foreground leading-tight">
                       {goal.name}
                     </h3>
@@ -153,20 +166,20 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                     <CalendarCheck size={13} />
                     <span>{formatDate(goal.target_date)}</span>
                   </div>
-                  {days > 0 && (
+                  {!past && days > 0 && (
                     <div className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-foreground">
                       {days} days to go
                     </div>
                   )}
-                  {days === 0 && (
+                  {!past && days === 0 && (
                     <div className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                       Race day!
                     </div>
                   )}
                 </div>
 
-                {/* Training phase */}
-                {goal.start_date && days > 0 && (
+                {/* Training phase — only while still preparing */}
+                {goal.start_date && !past && days > 0 && (
                   <div className={`mt-2 text-xs font-semibold ${phase.color}`}>
                     {phase.label}
                   </div>
@@ -177,13 +190,19 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
               <div className="px-5 pb-4">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-muted-foreground">
-                    {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
+                    {past
+                      ? "Training completed"
+                      : goal.start_date
+                        ? `Training from ${formatDate(goal.start_date)}`
+                        : "Training progress"}
                   </span>
-                  <span className="font-medium text-foreground">{timeProgress}%</span>
+                  <span className={`font-medium ${past ? "text-success" : "text-foreground"}`}>
+                    {timeProgress}%
+                  </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-secondary">
                   <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    className={`h-full rounded-full transition-all duration-500 ${past ? "bg-success" : "bg-primary"}`}
                     style={{ width: `${timeProgress}%` }}
                   />
                 </div>
@@ -214,7 +233,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                 </div>
               </div>
 
-              {/* Set active / done button */}
+              {/* Active toggle */}
               <div className="border-t border-border px-5 py-3 flex justify-end">
                 <button
                   onClick={() => onToggleActive(goal.id)}
