@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, Activity, Target, User } from "lucide-react"
+import { Home, Activity, Target, BookOpen, User } from "lucide-react"
 import type { TabId } from "@/lib/types"
 
 interface TabBarProps {
@@ -12,6 +12,7 @@ const tabs: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "activities", label: "Activities", icon: Activity },
   { id: "goals", label: "Goals", icon: Target },
+  { id: "plan", label: "Plan", icon: BookOpen },
   { id: "profile", label: "Profile", icon: User },
 ]
 
@@ -23,7 +24,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
       role="tablist"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1">
+      <div className="mx-auto flex max-w-md items-center justify-around px-1 py-1">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -33,7 +34,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               role="tab"
               aria-selected={isActive}
               aria-label={tab.label}
-              className={`flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-4 py-1 transition-colors ${
+              className={`flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1 transition-colors ${
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground active:text-foreground"

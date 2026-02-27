@@ -1,19 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Trash2 } from "lucide-react"
-import type { Goal } from "@/lib/types"
+import { X, Trash2, Timer, CalendarCheck } from "lucide-react"
+import type { Goal, GoalCategory } from "@/lib/types"
 
 interface GoalEditorProps {
   goal: Goal | null
   isNew: boolean
+  /** Pre-select category when opening from a specific context (e.g. Plan tab) */
+  defaultCategory?: GoalCategory
   open: boolean
   onSave: (goal: Goal) => void
   onDelete?: (goalId: string) => void
   onClose: () => void
 }
 
-export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: GoalEditorProps) {
+export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelete, onClose }: GoalEditorProps) {
+  const [category, setCategory] = useState<GoalCategory>("performance")
   const [name, setName] = useState("")
   const [targetDistance, setTargetDistance] = useState("")
   const [targetTimeH, setTargetTimeH] = useState("")
@@ -25,6 +28,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
 
   useEffect(() => {
     if (open && goal && !isNew) {
+      setCategory(goal.goal_category)
       setName(goal.name)
       setTargetDistance(goal.target_distance_km.toString().replace(".", ","))
       if (goal.target_time_seconds) {
@@ -43,6 +47,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
       setTargetDate(goal.target_date.split("T")[0])
       setShowConfirmDelete(false)
     } else if (open && isNew) {
+      setCategory(defaultCategory ?? "performance")
       setName("")
       setTargetDistance("")
       setTargetTimeH("")
@@ -52,7 +57,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
       setTargetDate("")
       setShowConfirmDelete(false)
     }
-  }, [open, goal, isNew])
+  }, [open, goal, isNew, defaultCategory])
 
   /** Parse distance string accepting both , and . as decimal separator */
   const parseDistance = (value: string): number => {
@@ -71,6 +76,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
 
     const saved: Goal = {
       id: isNew ? `goal-${Date.now()}` : goal!.id,
+      goal_category: category,
       name: name.trim(),
       target_distance_km: parseDistance(targetDistance),
       start_date: startDate ? startDate + "T00:00:00Z" : null,
@@ -137,19 +143,60 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
             </button>
           </div>
 
-          {/* Form — scrollable so all fields are reachable on small screens */}
+          {/* Form - scrollable */}
           <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 px-5 pb-4">
+
+            {/* Goal category */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Goal type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setCategory("performance")}
+                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    category === "performance"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground active:bg-accent"
+                  }`}
+                >
+                  <Timer size={16} />
+                  Performance
+                </button>
+                <button
+                  onClick={() => setCategory("event_training")}
+                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    category === "event_training"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground active:bg-accent"
+                  }`}
+                >
+                  <CalendarCheck size={16} />
+                  Event training
+                </button>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {category === "performance"
+                  ? "A timed benchmark, e.g. run 10 km in under 50 min"
+                  : "Preparing for a race or event, e.g. a marathon in September"}
+              </span>
+            </div>
+
             {/* Name */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Goal name
+                {category === "event_training" ? "Event name" : "Goal name"}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Marathon - October"
+                placeholder={
+                  category === "event_training"
+                    ? "e.g. Oslo Marathon"
+                    : "e.g. Sub-50 10 km"
+                }
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
@@ -157,7 +204,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
             {/* Target distance */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Target distance (km)
+                {category === "event_training" ? "Race distance (km)" : "Target distance (km)"}
               </label>
               <input
                 type="text"
@@ -172,7 +219,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
             {/* Target time */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Target time (optional)
+                {category === "performance" ? "Target time (required)" : "Target finish time (optional)"}
               </label>
               <div className="flex items-center gap-2">
                 <div className="flex flex-1 items-center gap-1">
@@ -210,14 +257,16 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
                 </div>
               </div>
               <span className="text-xs text-muted-foreground">
-                e.g. 3h 30m 00s for a marathon target
+                {category === "performance"
+                  ? "e.g. 0h 50m 00s to target sub-50 for a 10 km"
+                  : "e.g. 3h 30m 00s for a marathon target"}
               </span>
             </div>
 
-            {/* Start date */}
+            {/* Training start date */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Training start date
+                {category === "event_training" ? "Training start date" : "Start counting from (optional)"}
               </label>
               <input
                 type="date"
@@ -226,14 +275,16 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
               <span className="text-xs text-muted-foreground">
-                Distance from this date counts towards your goal
+                {category === "event_training"
+                  ? "Distance logged from this date counts toward race prep"
+                  : "Distance from this date counts towards your goal"}
               </span>
             </div>
 
-            {/* Target date */}
+            {/* Target / event date */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Target date
+                {category === "event_training" ? "Race / event date" : "Target date"}
               </label>
               <input
                 type="date"
@@ -242,6 +293,7 @@ export function GoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: Goa
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
+
           </div>
           </div>{/* end scrollable form */}
 

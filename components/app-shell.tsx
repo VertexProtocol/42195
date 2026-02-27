@@ -6,12 +6,13 @@ import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
+import { PlanScreen } from "@/components/screens/plan-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ProfileScreen } from "@/components/screens/profile-screen"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
-import type { TabId, Activity, Goal, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
+import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
 
 const supabase = createClient()
 
@@ -37,6 +38,7 @@ export function AppShell() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [isNewGoal, setIsNewGoal] = useState(false)
+  const [defaultGoalCategory, setDefaultGoalCategory] = useState<GoalCategory>("performance")
   const [editingWeeklyGoal, setEditingWeeklyGoal] = useState<WeeklyGoal | null>(null)
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
@@ -110,7 +112,7 @@ export function AppShell() {
         setGoals(
           goalsRes.data.map((g) => ({
             id: g.id,
-            user_id: g.user_id,
+            goal_category: (g.goal_category ?? "performance") as GoalCategory,
             name: g.name,
             target_distance_km: Number(g.target_distance_km),
             start_date: g.start_date ?? null,
@@ -127,12 +129,12 @@ export function AppShell() {
         setWeeklyGoals(
           weeklyGoalsRes.data.map((wg) => ({
             id: wg.id,
-            user_id: wg.user_id,
             metric: wg.metric,
             label: wg.label,
             target: Number(wg.target),
             current: Number(wg.current),
             week_start: wg.week_start,
+            is_recurring: wg.is_recurring ?? false,
           }))
         )
       }
@@ -205,11 +207,11 @@ export function AppShell() {
     }
   }, [activities])
 
-  // Only show weekly goals that belong to the current week (for HomeScreen)
+  // Weekly goals for HomeScreen: recurring goals + this week's one-off goals
   const currentWeekGoals = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, "0")
     const mondayStr = `${currentWeekMonday.getFullYear()}-${p(currentWeekMonday.getMonth() + 1)}-${p(currentWeekMonday.getDate())}`
-    return weeklyGoals.filter((wg) => wg.week_start === mondayStr)
+    return weeklyGoals.filter((wg) => wg.is_recurring || wg.week_start === mondayStr)
   }, [weeklyGoals, currentWeekMonday])
 
   // ----- Navigation -----
@@ -262,7 +264,8 @@ export function AppShell() {
     setIsEditorOpen(true)
   }, [])
 
-  const handleAddGoal = useCallback(() => {
+  const handleAddGoal = useCallback((category: GoalCategory = "performance") => {
+    setDefaultGoalCategory(category)
     setEditingGoal(null)
     setIsNewGoal(true)
     setIsEditorOpen(true)
@@ -280,6 +283,7 @@ export function AppShell() {
         await supabase
           .from("goals")
           .update({
+            goal_category: saved.goal_category,
             name: saved.name,
             target_distance_km: saved.target_distance_km,
             start_date: saved.start_date,
@@ -298,6 +302,7 @@ export function AppShell() {
         const { data, error } = await supabase
           .from("goals")
           .insert({
+            goal_category: saved.goal_category,
             name: saved.name,
             user_id: userId,
             target_distance_km: saved.target_distance_km,
@@ -314,7 +319,7 @@ export function AppShell() {
           setGoals((prev) => [
             {
               id: data.id,
-              user_id: data.user_id,
+              goal_category: (data.goal_category ?? "performance") as GoalCategory,
               name: data.name,
               target_distance_km: Number(data.target_distance_km),
               start_date: data.start_date ?? null,
@@ -374,6 +379,7 @@ export function AppShell() {
             target: saved.target,
             current: saved.current,
             week_start: saved.week_start,
+            is_recurring: saved.is_recurring,
           })
           .eq("id", saved.id)
         if (error) {
@@ -401,6 +407,7 @@ export function AppShell() {
             target: saved.target,
             current: 0,
             week_start: saved.week_start,
+            is_recurring: saved.is_recurring,
           })
           .select()
           .single()
@@ -419,6 +426,7 @@ export function AppShell() {
               target: Number(data.target),
               current: Number(data.current),
               week_start: data.week_start,
+              is_recurring: data.is_recurring ?? false,
             },
             ...prev,
           ])
@@ -564,9 +572,19 @@ export function AppShell() {
             weeklyGoals={weeklyGoals}
             onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}
-            onAddGoal={handleAddGoal}
+            onAddGoal={() => handleAddGoal("performance")}
             onEditWeeklyGoal={handleEditWeeklyGoal}
             onAddWeeklyGoal={handleAddWeeklyGoal}
+          />
+        )}
+
+        {activeTab === "plan" && (
+          <PlanScreen
+            goals={goals}
+            activities={activities}
+            onEditGoal={handleEditGoal}
+            onAddGoal={() => handleAddGoal("event_training")}
+            onToggleActive={handleToggleActiveGoal}
           />
         )}
 
@@ -587,6 +605,7 @@ export function AppShell() {
       <GoalEditor
         goal={editingGoal}
         isNew={isNewGoal}
+        defaultCategory={defaultGoalCategory}
         open={isEditorOpen}
         onSave={handleSaveGoal}
         onDelete={handleDeleteGoal}
