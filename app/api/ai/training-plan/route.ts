@@ -63,13 +63,18 @@ function formatPace(minPerKm: number | null): string {
   return `${min}:${String(sec).padStart(2, "0")} min/km`
 }
 
-function calcWeekTargets(avgWeeklyKm: number): [number, number, number, number] {
+function calcWeekTargets(avgWeeklyKm: number, pct: number, blockWeeks: number): number[] {
   const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
-  const w1 = Math.round(base * 1.1)
-  const w2 = Math.round(w1 * 1.1)
-  const w3 = Math.round(w2 * 1.1)
-  const w4 = Math.round(w3 * 0.8)
-  return [w1, w2, w3, w4]
+  const multiplier = 1 + pct / 100
+  const targets: number[] = []
+  let current = base
+  for (let i = 0; i < blockWeeks - 1; i++) {
+    current = Math.round(current * multiplier)
+    targets.push(current)
+  }
+  // Last week is always recovery at 80% of peak
+  targets.push(Math.round(targets[targets.length - 1] * 0.8))
+  return targets
 }
 
 function buildPrompt(
@@ -106,9 +111,18 @@ function buildPrompt(
     ? `\n## Adjustment Request\nThe runner wants to adjust the plan with this note:\n"${adjustNote}"\nPlease take this into account when generating the new plan.\n`
     : ""
 
-  const [w1, w2, w3, w4] = calcWeekTargets(currentAvgWeeklyKm)
+  const blockWeeks = prefs.block_weeks ?? 4
+  const increasePct = prefs.weekly_increase_pct ?? 10
+  const weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks)
+  const weekTargetLines = weekTargets
+    .map((km, i) =>
+      i === blockWeeks - 1
+        ? `- Week ${i + 1}: ${km} km (recovery — ~80% of previous week)`
+        : `- Week ${i + 1}: ${km} km${i === blockWeeks - 2 ? " (peak week)" : ""}`
+    )
+    .join("\n")
 
-  return `You are an expert running coach creating a personalised 4-week training block for a runner preparing for an upcoming race.
+  return `You are an expert running coach creating a personalised ${blockWeeks}-week training block for a runner preparing for an upcoming race.
 
 ## The Runner's Goal
 - Race: ${goal.name} (${goal.target_distance_km} km)
@@ -127,15 +141,12 @@ ${weekSummaryText}
 - Avg weekly km (last 4 weeks): ${currentAvgWeeklyKm.toFixed(1)} km
 - Longest recent run: ${longestRecentRun.toFixed(1)} km
 
-## Weekly Volume Targets (use these exact numbers — pre-calculated at 10% progressive overload)
-- Week 1: ${w1} km
-- Week 2: ${w2} km
-- Week 3: ${w3} km (peak week)
-- Week 4: ${w4} km (recovery — 80% of week 3)
+## Weekly Volume Targets (use these exact numbers — pre-calculated at ${increasePct}% progressive overload)
+${weekTargetLines}
 The targetKm field for each week MUST match these numbers exactly.
 
 ## Your Task
-Generate a 4-week training block starting from today. The block should:
+Generate a ${blockWeeks}-week training block starting from today. The block should:
 - Use the exact weekly volume targets listed above
 - Match the runner's stated preferences (sessions/week and focus)
 - NOT assign sessions to specific days — just describe what sessions to do each week
@@ -143,7 +154,7 @@ Generate a 4-week training block starting from today. The block should:
 
 IMPORTANT: Do not specify which day of the week to run. Sessions should be described as "do these runs this week, on days that suit you."
 
-Respond with ONLY a valid JSON object — no explanation text before or after. Use this exact structure:
+Respond with ONLY a valid JSON object — no explanation text before or after. The "weeks" array must have exactly ${blockWeeks} entries. Use this exact structure:
 {
   "summary": "2-3 sentence overview of this training block and its purpose, personalised to the runner",
   "weeks": [
@@ -216,6 +227,9 @@ export async function POST(req: NextRequest) {
     sessions_per_week: prefsRow?.sessions_per_week ?? 3,
     focus: prefsRow?.focus ?? "balanced",
     notes: prefsRow?.notes ?? null,
+    weekly_increase_pct: prefsRow?.weekly_increase_pct ?? 10,
+    block_weeks: prefsRow?.block_weeks ?? 4,
+    regenerate_every_weeks: prefsRow?.regenerate_every_weeks ?? 4,
   }
 
   // Fetch last 12 weeks of activities
@@ -347,7 +361,7 @@ export async function PUT(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const { goalId, sessions_per_week, focus, notes } = body
+  const { goalId, sessions_per_week, focus, notes, weekly_increase_pct, block_weeks, regenerate_every_weeks } = body
 
   if (!goalId) return NextResponse.json({ error: "goalId is required" }, { status: 400 })
 
@@ -358,6 +372,9 @@ export async function PUT(req: NextRequest) {
       sessions_per_week,
       focus,
       notes: notes || null,
+      weekly_increase_pct: weekly_increase_pct ?? 10,
+      block_weeks: block_weeks ?? 4,
+      regenerate_every_weeks: regenerate_every_weeks ?? 4,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "goal_id" }

@@ -72,6 +72,9 @@ function PreferencesForm({
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
+  const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
+  const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
+  const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -79,10 +82,26 @@ function PreferencesForm({
     await fetch("/api/ai/training-plan", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ goalId, sessions_per_week: sessions, focus, notes }),
+      body: JSON.stringify({
+        goalId,
+        sessions_per_week: sessions,
+        focus,
+        notes,
+        weekly_increase_pct: increasePct,
+        block_weeks: blockWeeks,
+        regenerate_every_weeks: regenEvery,
+      }),
     })
     setSaving(false)
-    onSaved({ goal_id: goalId, sessions_per_week: sessions, focus, notes: notes || null })
+    onSaved({
+      goal_id: goalId,
+      sessions_per_week: sessions,
+      focus,
+      notes: notes || null,
+      weekly_increase_pct: increasePct,
+      block_weeks: blockWeeks,
+      regenerate_every_weeks: regenEvery,
+    })
   }
 
   return (
@@ -140,15 +159,93 @@ function PreferencesForm({
         </div>
       </div>
 
+      {/* Weekly volume increase */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Weekly volume increase
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          How much to increase your weekly km each build week. 10% is the standard guideline for injury prevention.
+        </p>
+        <div className="flex gap-2">
+          {[5, 8, 10, 15, 20].map((n) => (
+            <button
+              key={n}
+              onClick={() => setIncreasePct(n)}
+              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+                increasePct === n
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {n}%
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Block length */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Training block length
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          The last week is always a recovery week (~80% volume). Standard is 4 weeks (3 build + 1 recovery), which works well for most runners.
+        </p>
+        <div className="flex gap-2">
+          {([2, 3, 4, 6] as const).map((n) => (
+            <button
+              key={n}
+              onClick={() => setBlockWeeks(n)}
+              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+                blockWeeks === n
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {n}w
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Regenerate frequency */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Regenerate plan every
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          How often you want to generate a new plan. You'll see a reminder when it's due.
+        </p>
+        <div className="flex gap-2">
+          {([2, 4, 6, 8] as const).map((n) => (
+            <button
+              key={n}
+              onClick={() => setRegenEvery(n)}
+              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+                regenEvery === n
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {n}w
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Notes */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-muted-foreground">
-          Anything else? (optional)
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Coach notes (optional)
         </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          Any context for the AI coach — injuries, schedule constraints, experience level, etc.
+        </p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g. only available Wed + weekends, recovering from a knee niggle..."
+          placeholder="e.g. only available Wed + weekends, recovering from a knee niggle, experienced ultra runner..."
           className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={3}
         />
@@ -233,6 +330,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     sessions_per_week: 3,
     focus: "balanced",
     notes: null,
+    weekly_increase_pct: 10,
+    block_weeks: 4,
+    regenerate_every_weeks: 4,
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
   const [showPrefsForm, setShowPrefsForm] = useState(false)
@@ -327,6 +427,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const generatedAgo = aiPlan
     ? Math.floor((Date.now() - new Date(aiPlan.generated_at).getTime()) / (1000 * 60 * 60 * 24))
     : null
+
+  const isDueForRefresh = aiPlan && prefs.regenerate_every_weeks
+    ? generatedAgo !== null && generatedAgo >= prefs.regenerate_every_weeks * 7
+    : false
 
   return (
     <div className="flex flex-col gap-6 px-5 pb-8 pt-4">
@@ -425,9 +529,16 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             AI Training Plan
           </h2>
           {aiPlan && (
-            <span className="text-[10px] text-muted-foreground">
-              {generatedAgo === 0 ? "Generated today" : `Generated ${generatedAgo}d ago`}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {isDueForRefresh && (
+                <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                  Due for refresh
+                </span>
+              )}
+              <span className="text-[10px] text-muted-foreground">
+                {generatedAgo === 0 ? "Generated today" : `Generated ${generatedAgo}d ago`}
+              </span>
+            </div>
           )}
         </div>
 
