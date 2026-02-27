@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame } from "lucide-react"
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts"
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate } from "@/lib/format"
 import type { Activity, StreamPoint, Lap } from "@/lib/types"
 
@@ -47,8 +47,8 @@ function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`
-  return `${m}m`
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`
+  return `${m} min`
 }
 
 export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
@@ -161,8 +161,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
             {hasPace && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">Pace</p>
-                <ResponsiveContainer width="100%" height={96}>
-                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={130}>
+                  <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}
@@ -170,16 +170,21 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                    />
+                    >
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
+                      width={42}
                       tickFormatter={(v: number) =>
                         `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`
                       }
-                    />
+                    >
+                      <Label value="min/km" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </YAxis>
                     <Tooltip
                       formatter={(v) => [formatPace(v as number), "Pace"]}
                       labelFormatter={(l) => formatElapsed(l as number)}
@@ -202,8 +207,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
             {hasHr && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">Heart Rate</p>
-                <ResponsiveContainer width="100%" height={96}>
-                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={130}>
+                  <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}
@@ -211,13 +216,18 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                    />
+                    >
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
-                    />
+                      width={42}
+                    >
+                      <Label value="bpm" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </YAxis>
                     <Tooltip
                       formatter={(v) => [`${v} bpm`, "Heart Rate"]}
                       labelFormatter={(l) => formatElapsed(l as number)}
@@ -240,8 +250,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
             {hasAltitude && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">Elevation</p>
-                <ResponsiveContainer width="100%" height={96}>
-                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={130}>
+                  <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}
@@ -249,13 +259,18 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                    />
+                    >
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
-                    />
+                      width={42}
+                    >
+                      <Label value="m" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                    </YAxis>
                     <Tooltip
                       formatter={(v) => [`${Math.round(v as number)} m`, "Altitude"]}
                       labelFormatter={(l) => formatElapsed(l as number)}
