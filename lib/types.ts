@@ -84,3 +84,43 @@ export interface Lap {
   pace_min_per_km: number
   avg_heart_rate: number | null
 }
+
+// ---- AI Training Plan types ----
+
+export type TrainingFocus = "volume" | "workouts" | "balanced"
+
+export interface GoalPreferences {
+  goal_id: string
+  sessions_per_week: number
+  focus: TrainingFocus
+  notes: string | null
+}
+
+export interface TrainingSession {
+  type: string        // e.g. "Long run", "Tempo run", "Easy run(s)"
+  distance: string    // e.g. "20 km"
+  effort: string      // e.g. "Easy — conversational pace"
+  purpose: string     // e.g. "Build endurance base"
+}
+
+export interface TrainingWeek {
+  weekNumber: number
+  theme: string
+  targetKm: number
+  sessions: TrainingSession[]
+  coachNote: string | null
+}
+
+export interface TrainingPlan {
+  summary: string
+  weeks: TrainingWeek[]
+  keyPrinciples: string[]
+  watchOut: string | null
+}
+
+export interface AiTrainingPlan {
+  goal_id: string
+  plan: TrainingPlan
+  block_start_date: string
+  generated_at: string
+}
