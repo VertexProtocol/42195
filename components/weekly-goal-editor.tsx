@@ -25,6 +25,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
   const [target, setTarget] = useState("")
   const [isRecurring, setIsRecurring] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [sessionMinDuration, setSessionMinDuration] = useState("")
+  const [sessionMinDistance, setSessionMinDistance] = useState("")
 
   useEffect(() => {
     if (open && goal && !isNew) {
@@ -32,11 +34,15 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       setTarget(goal.target.toString())
       setIsRecurring(goal.is_recurring)
       setShowConfirmDelete(false)
+      setSessionMinDuration(goal.session_min_duration_minutes?.toString() ?? "")
+      setSessionMinDistance(goal.session_min_distance_km?.toString() ?? "")
     } else if (open && isNew) {
       setMetric("distance_km")
       setTarget("")
       setIsRecurring(false)
       setShowConfirmDelete(false)
+      setSessionMinDuration("")
+      setSessionMinDistance("")
     }
   }, [open, goal, isNew])
 
@@ -67,6 +73,12 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       current: isNew ? 0 : goal!.current,
       week_start: isNew ? mondayStr : goal!.week_start,
       is_recurring: isRecurring,
+      session_min_duration_minutes: metric === "sessions" && sessionMinDuration
+        ? parseInt(sessionMinDuration, 10)
+        : null,
+      session_min_distance_km: metric === "sessions" && sessionMinDistance
+        ? parseFloat(sessionMinDistance)
+        : null,
     }
     onSave(saved)
   }
@@ -201,6 +213,52 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
+
+            {/* Per-session requirements (sessions metric only) */}
+            {metric === "sessions" && (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Per-session requirement (optional)
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Only count sessions that meet these thresholds. Leave blank to count all sessions.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 text-sm text-foreground">Min. duration</span>
+                    <div className="flex flex-1 items-center gap-2">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={sessionMinDuration}
+                        onChange={(e) => setSessionMinDuration(e.target.value)}
+                        placeholder="e.g. 30"
+                        min="0"
+                        step="1"
+                        className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <span className="shrink-0 text-sm text-muted-foreground">min</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 text-sm text-foreground">Min. distance</span>
+                    <div className="flex flex-1 items-center gap-2">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={sessionMinDistance}
+                        onChange={(e) => setSessionMinDistance(e.target.value)}
+                        placeholder="e.g. 10"
+                        min="0"
+                        step="0.1"
+                        className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <span className="shrink-0 text-sm text-muted-foreground">km</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
           </div>{/* end scrollable form */}

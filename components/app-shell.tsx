@@ -135,6 +135,8 @@ export function AppShell() {
             current: Number(wg.current),
             week_start: wg.week_start,
             is_recurring: wg.is_recurring ?? false,
+            session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
+            session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
           }))
         )
       }
@@ -387,6 +389,8 @@ export function AppShell() {
             current: saved.current,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
+            session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
+            session_min_distance_km: saved.session_min_distance_km ?? null,
           })
           .eq("id", saved.id)
         if (error) {
@@ -415,6 +419,8 @@ export function AppShell() {
             current: 0,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
+            session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
+            session_min_distance_km: saved.session_min_distance_km ?? null,
           })
           .select()
           .single()
@@ -434,6 +440,8 @@ export function AppShell() {
               current: Number(data.current),
               week_start: data.week_start,
               is_recurring: data.is_recurring ?? false,
+              session_min_duration_minutes: data.session_min_duration_minutes ?? null,
+              session_min_distance_km: data.session_min_distance_km ? Number(data.session_min_distance_km) : null,
             },
             ...prev,
           ])
