@@ -256,9 +256,10 @@ export async function POST(req: NextRequest) {
 
     plan = JSON.parse(jsonMatch[0]) as TrainingPlan
   } catch (err) {
-    console.error("Claude API error:", err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.error("Claude API error:", message, err)
     return NextResponse.json(
-      { error: "Failed to generate training plan. Please try again." },
+      { error: `Failed to generate training plan: ${message}` },
       { status: 500 }
     )
   }
