@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useMemo } from "react"
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -45,6 +46,18 @@ export function HomeScreen({
   onViewActivities,
   onViewGoal,
 }: HomeScreenProps) {
+  const [loadWindow, setLoadWindow] = useState<7 | 30>(7)
+
+  const loadStats = useMemo(() => {
+    const cutoff = Date.now() - loadWindow * 24 * 60 * 60 * 1000
+    const relevant = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
+    return {
+      total_distance_km: relevant.reduce((s, a) => s + a.distance_km, 0),
+      total_time_seconds: relevant.reduce((s, a) => s + a.duration_seconds, 0),
+      run_count: relevant.length,
+    }
+  }, [activities, loadWindow])
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       {/* Header */}
@@ -180,6 +193,60 @@ export function HomeScreen({
             </div>
             <span className="text-lg font-bold text-card-foreground">
               {weeklySummary.run_count}
+            </span>
+            <span className="text-xs text-muted-foreground">runs</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Training Load */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Training Load
+          </h3>
+          <div className="flex items-center gap-0.5 rounded-full bg-secondary p-0.5">
+            <button
+              onClick={() => setLoadWindow(7)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                loadWindow === 7
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              7 days
+            </button>
+            <button
+              onClick={() => setLoadWindow(30)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                loadWindow === 30
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              30 days
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <div className="flex flex-col items-center gap-1.5 p-4">
+            <TrendingUp size={16} className="text-muted-foreground" />
+            <span className="text-lg font-bold font-mono text-card-foreground">
+              {loadStats.total_distance_km.toFixed(1)}
+            </span>
+            <span className="text-xs text-muted-foreground">km</span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5 p-4">
+            <Clock size={16} className="text-muted-foreground" />
+            <span className="text-lg font-bold font-mono text-card-foreground">
+              {formatDuration(loadStats.total_time_seconds)}
+            </span>
+            <span className="text-xs text-muted-foreground">time</span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5 p-4">
+            <Footprints size={16} className="text-muted-foreground" />
+            <span className="text-lg font-bold font-mono text-card-foreground">
+              {loadStats.run_count}
             </span>
             <span className="text-xs text-muted-foreground">runs</span>
           </div>
