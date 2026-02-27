@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Pencil, CalendarCheck, TrendingUp, Footprints, Clock, MapPin, Check, Trophy } from "lucide-react"
+import { Plus, Pencil, CalendarCheck, TrendingUp, Footprints, Clock, MapPin, Check, Trophy, Sparkles, ChevronRight } from "lucide-react"
 import {
   formatDistance,
   formatDate,
@@ -18,6 +18,7 @@ interface PlanScreenProps {
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
   onToggleActive: (goalId: string) => void
+  onSelectGoal: (goal: Goal) => void
 }
 
 /**
@@ -60,7 +61,7 @@ function longestRun(activities: Activity[], startDate: string | null, created_at
   return relevant.reduce((best, a) => a.distance_km > best.distance_km ? a : best)
 }
 
-export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleActive }: PlanScreenProps) {
+export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleActive, onSelectGoal }: PlanScreenProps) {
   const eventGoals = goals.filter((g) => g.goal_category === "event_training")
 
   // Sort: active first, then by target date ascending
@@ -124,6 +125,12 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                     : "ring-border"
               }`}
             >
+              {/* Tappable card body */}
+              <button
+                onClick={() => onSelectGoal(goal)}
+                className="w-full text-left active:bg-secondary/50 transition-colors"
+                aria-label={`Open training plan for ${goal.name}`}
+              >
               {/* Card header */}
               <div className="px-5 pt-5 pb-4">
                 <div className="flex items-start justify-between">
@@ -148,7 +155,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                     </h3>
                   </div>
                   <button
-                    onClick={() => onEditGoal(goal)}
+                    onClick={(e) => { e.stopPropagation(); onEditGoal(goal) }}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
                     aria-label={`Edit ${goal.name}`}
                   >
@@ -233,7 +240,15 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                 </div>
               </div>
 
-              {/* Active toggle */}
+              {/* AI plan hint row */}
+              <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+                <Sparkles size={13} className="text-primary" />
+                <span>Tap to view AI training plan</span>
+                <ChevronRight size={13} className="ml-auto" />
+              </div>
+              </button>{/* end tappable button */}
+
+              {/* Active toggle — outside the tappable area */}
               <div className="border-t border-border px-5 py-3 flex justify-end">
                 <button
                   onClick={() => onToggleActive(goal.id)}
