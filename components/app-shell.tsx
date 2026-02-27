@@ -230,42 +230,27 @@ export function AppShell() {
 
   // ----- Goal CRUD (persisted to Supabase) -----
   const handleToggleActiveGoal = useCallback(async (goalId: string) => {
-    // Read current value directly from captured goals (not from setState updater,
-    // which in React 18 runs asynchronously and cannot safely set a let variable
-    // before the following await).
     const target = goals.find((g) => g.id === goalId)
     if (!target) return
 
     const newActive = !target.is_active
 
-    if (newActive) {
-      // Activate this goal and deactivate all others (DB has a unique-active constraint)
-      setGoals((prev) => prev.map((g) => ({ ...g, is_active: g.id === goalId })))
-      await supabase.from("goals").update({ is_active: false }).neq("id", goalId)
-      const { error } = await supabase
-        .from("goals")
-        .update({ is_active: true })
-        .eq("id", goalId)
-      if (error) {
-        console.error("Failed to activate goal:", error)
-        setGoals((prev) =>
-          prev.map((g) => (g.id === goalId ? { ...g, is_active: false } : g))
-        )
-      }
-    } else {
+    // Optimistic update — just toggle this one goal
+    setGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, is_active: newActive } : g))
+    )
+
+    const { error } = await supabase
+      .from("goals")
+      .update({ is_active: newActive })
+      .eq("id", goalId)
+
+    if (error) {
+      console.error("Failed to toggle goal active state:", error)
+      // Revert optimistic update
       setGoals((prev) =>
-        prev.map((g) => (g.id === goalId ? { ...g, is_active: false } : g))
+        prev.map((g) => (g.id === goalId ? { ...g, is_active: target.is_active } : g))
       )
-      const { error } = await supabase
-        .from("goals")
-        .update({ is_active: false })
-        .eq("id", goalId)
-      if (error) {
-        console.error("Failed to deactivate goal:", error)
-        setGoals((prev) =>
-          prev.map((g) => (g.id === goalId ? { ...g, is_active: true } : g))
-        )
-      }
     }
   }, [goals])
 

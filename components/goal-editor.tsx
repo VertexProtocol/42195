@@ -245,6 +245,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     type="text"
                     inputMode="numeric"
                     value={targetTimeM}
+                    maxLength={2}
                     onChange={(e) => setTargetTimeM(clampTime(e.target.value, 59))}
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -256,6 +257,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     type="text"
                     inputMode="numeric"
                     value={targetTimeS}
+                    maxLength={2}
                     onChange={(e) => setTargetTimeS(clampTime(e.target.value, 59))}
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
