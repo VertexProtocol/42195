@@ -256,52 +256,69 @@ export function HomeScreen({
       {/* Weekly Goals Progress */}
       {weeklyGoals.length > 0 && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Weekly Goals
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            {weeklyGoals.map((wg) => {
-              // Always compute against the actual current week Monday, not the stored
-              // week_start — this handles mid-week goal creation correctly.
-              const current = computeWeeklyProgress(activities, wg.metric, currentWeekStart)
-              const progress = progressPercentage(current, wg.target)
-              const Icon = METRIC_ICONS[wg.metric] || Target
-              const isComplete = current >= wg.target
-
-              return (
-                <button
-                  key={wg.id}
-                  onClick={onViewGoal}
-                  className="flex flex-col items-start gap-2.5 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
-                >
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                    isComplete ? "bg-success/15" : "bg-primary/10"
-                  }`}>
-                    <Icon size={16} className={isComplete ? "text-success" : "text-primary"} />
-                  </div>
-                  <div className="w-full">
-                    <p className="text-[11px] text-muted-foreground">{wg.label}</p>
-                    <div className="mt-0.5 flex items-baseline gap-1">
-                      <span className="text-sm font-bold font-mono text-card-foreground">
-                        {formatWeeklyMetric(current, wg.metric)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        / {formatWeeklyMetric(wg.target, wg.metric)}
-                      </span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          isComplete ? "bg-success" : "bg-primary"
-                        }`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Weekly Goals
+            </h3>
+            <button
+              onClick={onViewGoal}
+              className="text-xs font-medium text-primary active:opacity-70"
+            >
+              See all
+            </button>
           </div>
+          <Carousel opts={{ align: "start", dragFree: true }}>
+            <CarouselContent className="-ml-3">
+              {weeklyGoals.map((wg) => {
+                // Always compute against the actual current week Monday, not the stored
+                // week_start — this handles mid-week goal creation correctly.
+                const current = computeWeeklyProgress(
+                  activities,
+                  wg.metric,
+                  currentWeekStart,
+                  wg.session_min_duration_minutes,
+                  wg.session_min_distance_km,
+                )
+                const progress = progressPercentage(current, wg.target)
+                const Icon = METRIC_ICONS[wg.metric] || Target
+                const isComplete = current >= wg.target
+
+                return (
+                  <CarouselItem key={wg.id} className="pl-3 basis-[46%]">
+                    <button
+                      onClick={onViewGoal}
+                      className="flex w-full flex-col items-start gap-2.5 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+                    >
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        isComplete ? "bg-success/15" : "bg-primary/10"
+                      }`}>
+                        <Icon size={16} className={isComplete ? "text-success" : "text-primary"} />
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] text-muted-foreground">{wg.label}</p>
+                        <div className="mt-0.5 flex items-baseline gap-1">
+                          <span className="text-sm font-bold font-mono text-card-foreground">
+                            {formatWeeklyMetric(current, wg.metric)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            / {formatWeeklyMetric(wg.target, wg.metric)}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isComplete ? "bg-success" : "bg-primary"
+                            }`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  </CarouselItem>
+                )
+              })}
+            </CarouselContent>
+          </Carousel>
         </section>
       )}
 

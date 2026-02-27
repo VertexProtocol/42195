@@ -189,7 +189,13 @@ export function GoalsScreen({
             </div>
           ) : (
             selectedWeekGoals.map((wg) => {
-              const current = computeWeeklyProgress(activities, wg.metric, selectedWeekStart)
+              const current = computeWeeklyProgress(
+                activities,
+                wg.metric,
+                selectedWeekStart,
+                wg.session_min_duration_minutes,
+                wg.session_min_distance_km,
+              )
               const progress = progressPercentage(current, wg.target)
               const Icon = METRIC_ICONS[wg.metric] || Target
               const isComplete = current >= wg.target
@@ -230,6 +236,16 @@ export function GoalsScreen({
                           <Pencil size={12} />
                         </button>
                       </div>
+
+                      {/* Per-session requirement hint */}
+                      {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {[
+                            wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
+                            wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
+                          ].filter(Boolean).join(" · ")} per session
+                        </p>
+                      )}
 
                       <div className="mt-1 flex items-baseline gap-1">
                         <span className="text-xl font-bold font-mono text-foreground">

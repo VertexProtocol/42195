@@ -82,7 +82,7 @@ export function formatWeeklyMetric(value: number, metric: string): string {
     case "sessions":
       return `${value}`
     case "duration_minutes":
-      return `${value} min`
+      return `${Math.round(value)} min`
     case "elevation_m":
       return `${Math.round(value)} m`
     default:
@@ -129,11 +129,18 @@ export function computeDistanceInRange(
  * Compute the current value of a weekly goal metric directly from the activities
  * array, using the goal's week_start as the Monday boundary.
  * This avoids relying on the stale `current` field stored in the DB.
+ *
+ * For metric="sessions", optional thresholds filter which activities qualify:
+ *   - sessionMinDurationMinutes: session must be >= this many minutes
+ *   - sessionMinDistanceKm: session must be >= this many km
+ * If both are provided, a session must satisfy both (AND logic).
  */
 export function computeWeeklyProgress(
   activities: Activity[],
   metric: WeeklyGoalMetric,
   weekStart: string,
+  sessionMinDurationMinutes?: number | null,
+  sessionMinDistanceKm?: number | null,
 ): number {
   const start = new Date(weekStart).getTime()
   const end = start + 7 * 24 * 60 * 60 * 1000
@@ -144,8 +151,14 @@ export function computeWeeklyProgress(
   switch (metric) {
     case "distance_km":
       return weekActivities.reduce((s, a) => s + a.distance_km, 0)
-    case "sessions":
-      return weekActivities.length
+    case "sessions": {
+      const qualifying = weekActivities.filter((a) => {
+        if (sessionMinDurationMinutes && a.duration_seconds / 60 < sessionMinDurationMinutes) return false
+        if (sessionMinDistanceKm && a.distance_km < sessionMinDistanceKm) return false
+        return true
+      })
+      return qualifying.length
+    }
     case "duration_minutes":
       return weekActivities.reduce((s, a) => s + a.duration_seconds / 60, 0)
     case "elevation_m":

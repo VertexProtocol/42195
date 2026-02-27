@@ -43,6 +43,10 @@ export interface WeeklyGoal {
   week_start: string
   /** Recurring goals appear in every week; one-off goals are tied to week_start */
   is_recurring: boolean
+  /** For metric="sessions": only count sessions >= this many minutes (null = no requirement) */
+  session_min_duration_minutes?: number | null
+  /** For metric="sessions": only count sessions >= this many km (null = no requirement) */
+  session_min_distance_km?: number | null
 }
 
 export interface WeeklySummary {
