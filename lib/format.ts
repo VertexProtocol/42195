@@ -155,6 +155,84 @@ export function computeWeeklyProgress(
   }
 }
 
+/**
+ * Returns true if the date string represents a calendar day before today
+ * (in local time). Uses noon to avoid timezone edge-cases with date-only strings.
+ */
+export function isDatePast(dateStr: string): boolean {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = new Date(dateStr.split("T")[0] + "T12:00:00")
+  return d < today
+}
+
+export interface PerformanceGoalStatus {
+  reached: boolean
+  /** The best qualifying activity (or best attempt if not yet reached) */
+  bestActivity: Activity | null
+  /**
+   * Pace-adjusted time in seconds for exactly target_distance_km.
+   * Only set when the goal has a target_time_seconds.
+   */
+  bestTimeSeconds: number | null
+  /** 0–100 progress toward the goal */
+  progress: number
+}
+
+/**
+ * Evaluates a performance goal against the user's activity history.
+ *
+ * Timed goal (target_time_seconds set):
+ *   - Finds all runs with distance >= target_distance_km
+ *   - Computes pace-adjusted time for exactly the target distance
+ *   - reached = adjusted time <= target_time_seconds
+ *   - progress = min(100, targetTime / bestAdjustedTime * 100)
+ *
+ * Distance-only goal (target_time_seconds null, e.g. "First 20 km"):
+ *   - reached = any single run with distance >= target_distance_km
+ *   - progress = min(100, longestRun / targetDistance * 100)
+ */
+export function evaluatePerformanceGoal(
+  activities: Activity[],
+  targetDistanceKm: number,
+  targetTimeSeconds: number | null,
+): PerformanceGoalStatus {
+  if (targetTimeSeconds !== null) {
+    const qualifying = activities.filter(
+      (a) => a.distance_km >= targetDistanceKm && a.duration_seconds > 0,
+    )
+    if (qualifying.length === 0) {
+      return { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 }
+    }
+    // Best = smallest pace-adjusted time for exactly target_distance_km
+    const best = qualifying.reduce((b, a) => {
+      const tA = (targetDistanceKm / a.distance_km) * a.duration_seconds
+      const tB = (targetDistanceKm / b.distance_km) * b.duration_seconds
+      return tA < tB ? a : b
+    })
+    const bestTimeSeconds = Math.round(
+      (targetDistanceKm / best.distance_km) * best.duration_seconds,
+    )
+    const reached = bestTimeSeconds <= targetTimeSeconds
+    // Progress: how close best time is to target (higher = closer)
+    const progress = Math.min(100, Math.round((targetTimeSeconds / bestTimeSeconds) * 100))
+    return { reached, bestActivity: best, bestTimeSeconds, progress }
+  } else {
+    // Distance-only goal
+    const allRuns = activities.filter((a) => a.distance_km > 0)
+    if (allRuns.length === 0) {
+      return { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 }
+    }
+    const longest = allRuns.reduce((b, a) => (a.distance_km > b.distance_km ? a : b))
+    const reached = longest.distance_km >= targetDistanceKm
+    const progress = Math.min(
+      100,
+      Math.round((longest.distance_km / targetDistanceKm) * 100),
+    )
+    return { reached, bestActivity: longest, bestTimeSeconds: null, progress }
+  }
+}
+
 export function weeklyMetricUnit(metric: string): string {
   switch (metric) {
     case "distance_km":
