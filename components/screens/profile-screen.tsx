@@ -66,7 +66,7 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
 
 export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
   return (
-    <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       <header>
         <h1 className="text-2xl font-bold text-foreground">Profile</h1>
       </header>

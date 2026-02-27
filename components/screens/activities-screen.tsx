@@ -1,12 +1,14 @@
 "use client"
 
-import { ChevronRight, Inbox } from "lucide-react"
+import { ChevronRight, Inbox, RefreshCw, Link } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import type { Activity } from "@/lib/types"
 
 interface ActivitiesScreenProps {
   activities: Activity[]
+  stravaConnected: boolean
   onSelectActivity: (activity: Activity) => void
+  onSync: () => void
 }
 
 function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
@@ -22,9 +24,9 @@ function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
   )
 }
 
-export function ActivitiesScreen({ activities, onSelectActivity }: ActivitiesScreenProps) {
+export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync }: ActivitiesScreenProps) {
   return (
-    <div className="flex flex-col gap-4 px-5 pb-28 pt-4">
+    <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
       <header>
         <h1 className="text-2xl font-bold text-foreground">Activities</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -38,7 +40,29 @@ export function ActivitiesScreen({ activities, onSelectActivity }: ActivitiesScr
             <Inbox size={28} className="text-muted-foreground" />
           </div>
           <p className="text-sm font-medium text-muted-foreground">No activities yet</p>
-          <p className="text-xs text-muted-foreground">Activities from Strava will appear here</p>
+          {stravaConnected ? (
+            <>
+              <p className="text-xs text-muted-foreground">Sync your Strava runs to get started</p>
+              <button
+                onClick={onSync}
+                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
+              >
+                <RefreshCw size={15} />
+                Sync from Strava
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">Connect Strava to import your runs</p>
+              <a
+                href="/api/auth/strava"
+                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
+              >
+                <Link size={15} />
+                Connect Strava
+              </a>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -65,9 +89,11 @@ export function ActivitiesScreen({ activities, onSelectActivity }: ActivitiesScr
                   <span className="text-xs text-muted-foreground">
                     {formatDuration(activity.duration_seconds)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatPace(activity.pace_min_per_km)}
-                  </span>
+                  {activity.pace_min_per_km !== null && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatPace(activity.pace_min_per_km)}
+                    </span>
+                  )}
                 </div>
               </div>
               <ChevronRight size={18} className="shrink-0 text-muted-foreground" />

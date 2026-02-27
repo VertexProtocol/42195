@@ -8,6 +8,7 @@ interface StravaTokenResponse {
   expires_in: number
   refresh_token: string
   access_token: string
+  scope: string
   athlete: {
     id: number
     firstname: string
@@ -19,26 +20,45 @@ interface StravaTokenResponse {
  * GET /api/auth/strava/callback
  *
  * Handles the OAuth redirect from Strava.
- * Exchanges the authorization code for tokens and stores them in strava_tokens.
- * The strava_tokens table is managed via the service client (bypasses RLS) so
- * that tokens are never accessible from the browser.
+ * 1. Verifies the CSRF state cookie matches the `state` query parameter.
+ * 2. Exchanges the authorization code for tokens.
+ * 3. Stores tokens in strava_tokens via the service client (bypasses RLS).
+ *
+ * Strava API error details are logged server-side only — the browser only
+ * receives a generic message to avoid leaking internal error text.
  */
 export async function GET(request: NextRequest) {
+  const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  const baseUrl = rawBaseUrl.replace(/\/+$/, "")
+
+  // Helper: redirect to error page and always clear the state cookie
+  const errorRedirect = (message: string): NextResponse => {
+    const res = NextResponse.redirect(
+      `${baseUrl}/auth/error?message=${encodeURIComponent(message)}`,
+    )
+    res.cookies.delete("strava_oauth_state")
+    return res
+  }
+
   const { searchParams } = request.nextUrl
   const code = searchParams.get("code")
   const errorParam = searchParams.get("error")
+  const stateParam = searchParams.get("state")
 
-  // User denied access on Strava's side
+  // --- CSRF check ---
+  // Must happen before anything else. The state cookie was set by /api/auth/strava.
+  const storedState = request.cookies.get("strava_oauth_state")?.value
+  if (!storedState || stateParam !== storedState) {
+    return errorRedirect("Invalid OAuth state. Please try connecting again.")
+  }
+
+  // User explicitly denied access on Strava's side
   if (errorParam) {
-    return NextResponse.redirect(
-      new URL(`/auth/error?message=${encodeURIComponent("Strava access was denied.")}`, request.url),
-    )
+    return errorRedirect("Strava access was denied.")
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL(`/auth/error?message=${encodeURIComponent("No authorization code received from Strava.")}`, request.url),
-    )
+    return errorRedirect("No authorization code received from Strava.")
   }
 
   // Verify the user is still authenticated with Supabase
@@ -48,10 +68,13 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url))
+    const res = NextResponse.redirect(`${baseUrl}/auth/login`)
+    res.cookies.delete("strava_oauth_state")
+    return res
   }
 
   // Exchange authorization code for tokens
+  const callbackUrl = `${baseUrl}/api/auth/strava/callback`
   const tokenRes = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,22 +83,20 @@ export async function GET(request: NextRequest) {
       client_secret: process.env.STRAVA_CLIENT_SECRET,
       code,
       grant_type: "authorization_code",
+      redirect_uri: callbackUrl,
     }),
   })
 
   if (!tokenRes.ok) {
+    // Log the detail server-side; don't expose Strava's error body to the browser
     const body = await tokenRes.text()
-    return NextResponse.redirect(
-      new URL(
-        `/auth/error?message=${encodeURIComponent(`Strava token exchange failed: ${body}`)}`,
-        request.url,
-      ),
-    )
+    console.error(`Strava token exchange failed (${tokenRes.status}):`, body)
+    return errorRedirect("Failed to connect Strava. Please try again.")
   }
 
   const tokens = (await tokenRes.json()) as StravaTokenResponse
 
-  // Store tokens using the service client so they stay server-side only
+  // Store tokens using the service client — never accessible from the browser
   const service = createServiceClient()
   const { error: upsertError } = await service.from("strava_tokens").upsert(
     {
@@ -84,20 +105,19 @@ export async function GET(request: NextRequest) {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: new Date(tokens.expires_at * 1000).toISOString(),
+      scope: tokens.scope,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
   )
 
   if (upsertError) {
-    return NextResponse.redirect(
-      new URL(
-        `/auth/error?message=${encodeURIComponent("Failed to save Strava connection.")}`,
-        request.url,
-      ),
-    )
+    console.error("Failed to save Strava tokens:", upsertError)
+    return errorRedirect("Failed to save Strava connection.")
   }
 
-  // Trigger an initial sync and send the user back to the app
-  return NextResponse.redirect(new URL("/", request.url))
+  // Success — clear state cookie and send the user back to the app
+  const res = NextResponse.redirect(`${baseUrl}/`)
+  res.cookies.delete("strava_oauth_state")
+  return res
 }
