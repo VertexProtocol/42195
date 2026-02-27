@@ -54,3 +54,18 @@ export interface UserProfile {
 }
 
 export type TabId = "home" | "activities" | "goals" | "profile"
+
+export interface StreamPoint {
+  time: number
+  hr: number | null
+  pace: number | null
+  altitude: number | null
+}
+
+export interface Lap {
+  index: number
+  distance_km: number
+  duration_seconds: number
+  pace_min_per_km: number
+  avg_heart_rate: number | null
+}

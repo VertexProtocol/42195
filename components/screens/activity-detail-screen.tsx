@@ -1,8 +1,10 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame } from "lucide-react"
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate } from "@/lib/format"
-import type { Activity } from "@/lib/types"
+import type { Activity, StreamPoint, Lap } from "@/lib/types"
 
 interface ActivityDetailScreenProps {
   activity: Activity
@@ -42,7 +44,34 @@ function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
   )
 }
 
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`
+  return `${m}m`
+}
+
 export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
+  const [streams, setStreams] = useState<StreamPoint[] | null>(null)
+  const [laps, setLaps] = useState<Lap[] | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/activities/${activity.id}/streams`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.points) setStreams(data.points) })
+      .catch(() => {})
+
+    fetch(`/api/activities/${activity.id}/laps`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.laps) setLaps(data.laps) })
+      .catch(() => {})
+  }, [activity.id])
+
+  const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
+  const hasPace = streams?.some((p) => p.pace !== null) ?? false
+  const hasHr = streams?.some((p) => p.hr !== null) ?? false
+  const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr)
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-28 pt-4">
       {/* Back button */}
@@ -119,6 +148,167 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
           )}
         </div>
       </section>
+
+      {/* Performance Charts */}
+      {showCharts && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Performance
+          </h3>
+          <div className="flex flex-col gap-3">
+            {hasPace && (
+              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <p className="mb-3 text-xs font-medium text-card-foreground">Pace</p>
+                <ResponsiveContainer width="100%" height={96}>
+                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis
+                      dataKey="time"
+                      tickFormatter={formatElapsed}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      domain={["auto", "auto"]}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v: number) =>
+                        `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`
+                      }
+                    />
+                    <Tooltip
+                      formatter={(v) => [formatPace(v as number), "Pace"]}
+                      labelFormatter={(l) => formatElapsed(l as number)}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="pace"
+                      stroke="#6366f1"
+                      fill="#6366f1"
+                      fillOpacity={0.15}
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {hasHr && (
+              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <p className="mb-3 text-xs font-medium text-card-foreground">Heart Rate</p>
+                <ResponsiveContainer width="100%" height={96}>
+                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis
+                      dataKey="time"
+                      tickFormatter={formatElapsed}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      domain={["auto", "auto"]}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      formatter={(v) => [`${v} bpm`, "Heart Rate"]}
+                      labelFormatter={(l) => formatElapsed(l as number)}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="hr"
+                      stroke="#ef4444"
+                      fill="#ef4444"
+                      fillOpacity={0.15}
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {hasAltitude && (
+              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <p className="mb-3 text-xs font-medium text-card-foreground">Elevation</p>
+                <ResponsiveContainer width="100%" height={96}>
+                  <AreaChart data={streams} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis
+                      dataKey="time"
+                      tickFormatter={formatElapsed}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      domain={["auto", "auto"]}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      formatter={(v) => [`${Math.round(v as number)} m`, "Altitude"]}
+                      labelFormatter={(l) => formatElapsed(l as number)}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="altitude"
+                      stroke="#64748b"
+                      fill="#64748b"
+                      fillOpacity={0.15}
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Laps */}
+      {laps !== null && laps.length > 1 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Laps
+          </h3>
+          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+            <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
+              <span className="text-[11px] font-medium text-muted-foreground">#</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">Dist</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">Pace</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">HR</span>
+            </div>
+            {laps.map((lap, i) => (
+              <div
+                key={lap.index}
+                className={`grid grid-cols-4 gap-2 px-4 py-3 ${i < laps.length - 1 ? "border-b border-border" : ""}`}
+              >
+                <span className="text-sm font-medium text-card-foreground">{lap.index}</span>
+                <span className="text-right text-sm text-card-foreground">
+                  {formatDistance(lap.distance_km)}
+                </span>
+                <span className="text-right text-sm text-card-foreground">
+                  {formatPace(lap.pace_min_per_km)}
+                </span>
+                <span className="text-right text-sm text-card-foreground">
+                  {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
