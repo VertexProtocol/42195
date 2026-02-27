@@ -230,33 +230,44 @@ export function AppShell() {
 
   // ----- Goal CRUD (persisted to Supabase) -----
   const handleToggleActiveGoal = useCallback(async (goalId: string) => {
-    let newActive = false
+    // Read current value directly from captured goals (not from setState updater,
+    // which in React 18 runs asynchronously and cannot safely set a let variable
+    // before the following await).
+    const target = goals.find((g) => g.id === goalId)
+    if (!target) return
 
-    // Optimistic update using functional setter to avoid stale closure
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id === goalId) {
-          newActive = !g.is_active
-          return { ...g, is_active: newActive }
-        }
-        return g
-      })
-    )
+    const newActive = !target.is_active
 
-    const { error } = await supabase
-      .from("goals")
-      .update({ is_active: newActive })
-      .eq("id", goalId)
-
-    if (error) {
-      // Revert on failure
-      setGoals((prev) =>
-        prev.map((g) =>
-          g.id === goalId ? { ...g, is_active: !newActive } : g
+    if (newActive) {
+      // Activate this goal and deactivate all others (DB has a unique-active constraint)
+      setGoals((prev) => prev.map((g) => ({ ...g, is_active: g.id === goalId })))
+      await supabase.from("goals").update({ is_active: false }).neq("id", goalId)
+      const { error } = await supabase
+        .from("goals")
+        .update({ is_active: true })
+        .eq("id", goalId)
+      if (error) {
+        console.error("Failed to activate goal:", error)
+        setGoals((prev) =>
+          prev.map((g) => (g.id === goalId ? { ...g, is_active: false } : g))
         )
+      }
+    } else {
+      setGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? { ...g, is_active: false } : g))
       )
+      const { error } = await supabase
+        .from("goals")
+        .update({ is_active: false })
+        .eq("id", goalId)
+      if (error) {
+        console.error("Failed to deactivate goal:", error)
+        setGoals((prev) =>
+          prev.map((g) => (g.id === goalId ? { ...g, is_active: true } : g))
+        )
+      }
     }
-  }, [])
+  }, [goals])
 
   const handleEditGoal = useCallback((goal: Goal) => {
     setEditingGoal(goal)
@@ -276,11 +287,9 @@ export function AppShell() {
       const exists = goals.find((g) => g.id === saved.id)
 
       if (exists) {
-        // Update existing goal
-        setGoals((prev) =>
-          prev.map((g) => (g.id === saved.id ? saved : g))
-        )
-        await supabase
+        // Update existing goal — optimistic, revert on error
+        setGoals((prev) => prev.map((g) => (g.id === saved.id ? saved : g)))
+        const { error } = await supabase
           .from("goals")
           .update({
             goal_category: saved.goal_category,
@@ -293,11 +302,19 @@ export function AppShell() {
             is_active: saved.is_active,
           })
           .eq("id", saved.id)
+        if (error) {
+          console.error("Failed to update goal:", error)
+          setGoals((prev) => prev.map((g) => (g.id === saved.id ? exists : g)))
+          return // keep editor open
+        }
       } else {
         // Insert new goal
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
-        if (!userId) return
+        if (!userId) {
+          console.error("No authenticated user — cannot save goal")
+          return
+        }
 
         const { data, error } = await supabase
           .from("goals")
@@ -315,7 +332,12 @@ export function AppShell() {
           .select()
           .single()
 
-        if (!error && data) {
+        if (error) {
+          console.error("Failed to create goal:", error)
+          return // keep editor open
+        }
+
+        if (data) {
           setGoals((prev) => [
             {
               id: data.id,
@@ -334,7 +356,7 @@ export function AppShell() {
         }
       }
 
-      setIsEditorOpen(false)
+      setIsEditorOpen(false) // only reached on success
     },
     [goals]
   )

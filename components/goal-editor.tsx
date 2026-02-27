@@ -64,6 +64,13 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
     return parseFloat(value.replace(",", "."))
   }
 
+  /** Clamp a time component string to [0, max], returns empty string for empty input */
+  const clampTime = (raw: string, max: number): string => {
+    const digits = raw.replace(/\D/g, "")
+    if (digits === "") return ""
+    return String(Math.min(max, Math.max(0, parseInt(digits, 10))))
+  }
+
   const canSave = name.trim().length > 0 && parseDistance(targetDistance) > 0 && targetDate.length > 0
 
   const handleSave = () => {
@@ -227,7 +234,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     type="text"
                     inputMode="numeric"
                     value={targetTimeH}
-                    onChange={(e) => setTargetTimeH(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    onChange={(e) => setTargetTimeH(clampTime(e.target.value, 99))}
                     placeholder="0"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
@@ -238,7 +245,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     type="text"
                     inputMode="numeric"
                     value={targetTimeM}
-                    onChange={(e) => setTargetTimeM(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    onChange={(e) => setTargetTimeM(clampTime(e.target.value, 59))}
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
@@ -249,7 +256,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     type="text"
                     inputMode="numeric"
                     value={targetTimeS}
-                    onChange={(e) => setTargetTimeS(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    onChange={(e) => setTargetTimeS(clampTime(e.target.value, 59))}
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
