@@ -11,11 +11,17 @@ function mapRow(row: Record<string, unknown>): WeeklyGoal {
     target: Number(row.target),
     current: Number(row.current),
     week_start: row.week_start as string,
+    is_recurring: (row.is_recurring as boolean | null) ?? false,
   }
 }
 
+const WEEKLY_GOAL_FIELDS = "id, metric, label, target, current, week_start, is_recurring"
+
 /**
- * Returns weekly goals for a user for a specific week.
+ * Returns weekly goals visible for a given week:
+ * - one-off goals whose week_start matches exactly, plus
+ * - all recurring goals (they appear in every week regardless of week_start)
+ *
  * @param weekStart ISO date string for the Monday of the week (e.g. "2026-02-23")
  */
 export async function getWeeklyGoals(userId: string, weekStart: string): Promise<WeeklyGoal[]> {
@@ -23,9 +29,9 @@ export async function getWeeklyGoals(userId: string, weekStart: string): Promise
 
   const { data, error } = await supabase
     .from("weekly_goals")
-    .select("id, metric, label, target, current, week_start")
+    .select(WEEKLY_GOAL_FIELDS)
     .eq("user_id", userId)
-    .eq("week_start", weekStart)
+    .or(`week_start.eq.${weekStart},is_recurring.eq.true`)
     .order("created_at", { ascending: true })
 
   if (error) throw error
@@ -40,6 +46,7 @@ export async function createWeeklyGoal(
     label: string
     target: number
     week_start: string
+    is_recurring: boolean
   },
 ): Promise<WeeklyGoal> {
   const supabase = await createClient()
@@ -53,8 +60,9 @@ export async function createWeeklyGoal(
       target: data.target,
       current: 0,
       week_start: data.week_start,
+      is_recurring: data.is_recurring,
     })
-    .select("id, metric, label, target, current, week_start")
+    .select(WEEKLY_GOAL_FIELDS)
     .single()
 
   if (error) throw error
@@ -64,7 +72,12 @@ export async function createWeeklyGoal(
 
 export async function updateWeeklyGoal(
   goalId: string,
-  data: Partial<{ label: string; target: number; current: number }>,
+  data: Partial<{
+    label: string
+    target: number
+    current: number
+    is_recurring: boolean
+  }>,
 ): Promise<WeeklyGoal> {
   const supabase = await createClient()
 
@@ -72,7 +85,7 @@ export async function updateWeeklyGoal(
     .from("weekly_goals")
     .update(data)
     .eq("id", goalId)
-    .select("id, metric, label, target, current, week_start")
+    .select(WEEKLY_GOAL_FIELDS)
     .single()
 
   if (error) throw error

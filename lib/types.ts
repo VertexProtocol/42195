@@ -7,17 +7,26 @@ export interface Activity {
   date: string
   distance_km: number
   duration_seconds: number
-  pace_min_per_km: number
+  pace_min_per_km: number | null
   elevation_gain_m: number | null
   avg_heart_rate: number | null
   calories: number | null
 }
 
+/**
+ * 'performance'    – a timed/benchmark goal, e.g. "run 10 km in under 50 min"
+ * 'event_training' – training toward a race/event, e.g. "marathon in September"
+ */
+export type GoalCategory = "performance" | "event_training"
+
 export interface Goal {
   id: string
   name: string
+  goal_category: GoalCategory
   target_distance_km: number
   target_date: string
+  start_date: string | null
+  target_time_seconds: number | null
   current_distance_km: number
   is_active: boolean
   created_at: string
@@ -32,6 +41,12 @@ export interface WeeklyGoal {
   target: number
   current: number
   week_start: string
+  /** Recurring goals appear in every week; one-off goals are tied to week_start */
+  is_recurring: boolean
+  /** For metric="sessions": only count sessions >= this many minutes (null = no requirement) */
+  session_min_duration_minutes?: number | null
+  /** For metric="sessions": only count sessions >= this many km (null = no requirement) */
+  session_min_distance_km?: number | null
 }
 
 export interface WeeklySummary {
@@ -53,19 +68,4 @@ export interface UserProfile {
   avatar_url: string | null
 }
 
-export type TabId = "home" | "activities" | "goals" | "profile"
-
-export interface StreamPoint {
-  time: number
-  hr: number | null
-  pace: number | null
-  altitude: number | null
-}
-
-export interface Lap {
-  index: number
-  distance_km: number
-  duration_seconds: number
-  pace_min_per_km: number
-  avg_heart_rate: number | null
-}
+export type TabId = "home" | "activities" | "goals" | "plan" | "profile"
