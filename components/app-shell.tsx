@@ -205,14 +205,11 @@ export function AppShell() {
     }
   }, [activities])
 
-  // Only show weekly goals that belong to the current week
+  // Only show weekly goals that belong to the current week (for HomeScreen)
   const currentWeekGoals = useMemo(() => {
-    const mondayTs = currentWeekMonday.getTime()
-    const sundayEnd = mondayTs + 7 * 24 * 60 * 60 * 1000
-    return weeklyGoals.filter((wg) => {
-      const ws = new Date(wg.week_start).getTime()
-      return ws >= mondayTs && ws < sundayEnd
-    })
+    const p = (n: number) => String(n).padStart(2, "0")
+    const mondayStr = `${currentWeekMonday.getFullYear()}-${p(currentWeekMonday.getMonth() + 1)}-${p(currentWeekMonday.getDate())}`
+    return weeklyGoals.filter((wg) => wg.week_start === mondayStr)
   }, [weeklyGoals, currentWeekMonday])
 
   // ----- Navigation -----
@@ -369,7 +366,7 @@ export function AppShell() {
         setWeeklyGoals((prev) =>
           prev.map((g) => (g.id === saved.id ? saved : g))
         )
-        await supabase
+        const { error } = await supabase
           .from("weekly_goals")
           .update({
             metric: saved.metric,
@@ -379,10 +376,21 @@ export function AppShell() {
             week_start: saved.week_start,
           })
           .eq("id", saved.id)
+        if (error) {
+          console.error("Failed to update weekly goal:", error)
+          // revert optimistic update
+          setWeeklyGoals((prev) =>
+            prev.map((g) => (g.id === saved.id ? exists : g))
+          )
+          return // keep editor open so user knows something went wrong
+        }
       } else {
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
-        if (!userId) return
+        if (!userId) {
+          console.error("No authenticated user found — cannot save weekly goal")
+          return
+        }
 
         const { data, error } = await supabase
           .from("weekly_goals")
@@ -391,17 +399,21 @@ export function AppShell() {
             metric: saved.metric,
             label: saved.label,
             target: saved.target,
-            current: saved.current,
+            current: 0,
             week_start: saved.week_start,
           })
           .select()
           .single()
 
-        if (!error && data) {
+        if (error) {
+          console.error("Failed to create weekly goal:", error)
+          return // keep editor open
+        }
+
+        if (data) {
           setWeeklyGoals((prev) => [
             {
               id: data.id,
-              user_id: data.user_id,
               metric: data.metric,
               label: data.label,
               target: Number(data.target),
@@ -549,8 +561,7 @@ export function AppShell() {
           <GoalsScreen
             goals={goals}
             activities={activities}
-            weeklyGoals={currentWeekGoals}
-            currentWeekStart={currentWeekMonday.toISOString()}
+            weeklyGoals={weeklyGoals}
             onToggleActive={handleToggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={handleAddGoal}
