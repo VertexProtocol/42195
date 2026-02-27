@@ -63,6 +63,15 @@ function formatPace(minPerKm: number | null): string {
   return `${min}:${String(sec).padStart(2, "0")} min/km`
 }
 
+function calcWeekTargets(avgWeeklyKm: number): [number, number, number, number] {
+  const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
+  const w1 = Math.round(base * 1.1)
+  const w2 = Math.round(w1 * 1.1)
+  const w3 = Math.round(w2 * 1.1)
+  const w4 = Math.round(w3 * 0.8)
+  return [w1, w2, w3, w4]
+}
+
 function buildPrompt(
   goal: {
     name: string
@@ -97,6 +106,8 @@ function buildPrompt(
     ? `\n## Adjustment Request\nThe runner wants to adjust the plan with this note:\n"${adjustNote}"\nPlease take this into account when generating the new plan.\n`
     : ""
 
+  const [w1, w2, w3, w4] = calcWeekTargets(currentAvgWeeklyKm)
+
   return `You are an expert running coach creating a personalised 4-week training block for a runner preparing for an upcoming race.
 
 ## The Runner's Goal
@@ -116,12 +127,18 @@ ${weekSummaryText}
 - Avg weekly km (last 4 weeks): ${currentAvgWeeklyKm.toFixed(1)} km
 - Longest recent run: ${longestRecentRun.toFixed(1)} km
 
+## Weekly Volume Targets (use these exact numbers — pre-calculated at 10% progressive overload)
+- Week 1: ${w1} km
+- Week 2: ${w2} km
+- Week 3: ${w3} km (peak week)
+- Week 4: ${w4} km (recovery — 80% of week 3)
+The targetKm field for each week MUST match these numbers exactly.
+
 ## Your Task
 Generate a 4-week training block starting from today. The block should:
-- Be realistic and progressive (don't jump more than ~10% per week)
+- Use the exact weekly volume targets listed above
 - Match the runner's stated preferences (sessions/week and focus)
 - NOT assign sessions to specific days — just describe what sessions to do each week
-- Use week 4 as a recovery/step-back week (~80% of week 3 volume)
 - Be appropriate for ${daysUntilRace} days out from race day
 
 IMPORTANT: Do not specify which day of the week to run. Sessions should be described as "do these runs this week, on days that suit you."

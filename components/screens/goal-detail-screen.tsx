@@ -238,6 +238,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showPrefsForm, setShowPrefsForm] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
+  const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -266,6 +267,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         const p = await prefsData.json()
         if (p.preferences) setPrefs(p.preferences)
       }
+      setPrefsLoaded(true)
     }
     load()
   }, [goal.id])
@@ -435,8 +437,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           className="mb-3 flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
         >
           <span className="font-medium text-foreground">
-            Preferences · {prefs.sessions_per_week}x/week ·{" "}
-            {{ volume: "km focus", workouts: "structured", balanced: "balanced" }[prefs.focus]}
+            {prefsLoaded
+              ? `Preferences · ${prefs.sessions_per_week}x/week · ${{ volume: "km focus", workouts: "structured", balanced: "balanced" }[prefs.focus]}`
+              : "Preferences"}
           </span>
           {showPrefsForm ? (
             <ChevronUp size={16} className="text-muted-foreground" />
