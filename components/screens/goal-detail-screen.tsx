@@ -25,6 +25,7 @@ import {
   computeDistanceInRange,
   formatDuration,
 } from "@/lib/format"
+import { Skeleton } from "@/components/ui/skeleton"
 import type {
   Goal,
   Activity,
@@ -258,6 +259,52 @@ function PreferencesForm({
       >
         {saving ? "Saving..." : "Save preferences"}
       </button>
+    </div>
+  )
+}
+
+// ---- Loading skeletons ----
+function WeekCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-border shadow-sm">
+      <div className="flex w-full items-center justify-between px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="h-3 w-14" />
+          </div>
+        </div>
+        <Skeleton className="h-4 w-4 shrink-0 rounded" />
+      </div>
+    </div>
+  )
+}
+
+function PlanSkeleton({ blockWeeks }: { blockWeeks: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-center text-sm text-muted-foreground">Analysing your training history…</p>
+      {/* Summary */}
+      <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </div>
+      {/* Week cards */}
+      {Array.from({ length: blockWeeks }).map((_, i) => (
+        <WeekCardSkeleton key={i} />
+      ))}
+      {/* Key principles */}
+      <div className="rounded-2xl bg-card px-4 py-4 shadow-sm ring-1 ring-border">
+        <Skeleton className="mb-2.5 h-3 w-24" />
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-5/6" />
+          <Skeleton className="h-3.5 w-4/5" />
+          <Skeleton className="h-3.5 w-full" />
+        </div>
+      </div>
     </div>
   )
 }
@@ -602,13 +649,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           </div>
         )}
 
-        {/* Generating spinner */}
-        {isGenerating && (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-card px-6 py-10 shadow-sm ring-1 ring-border">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-            <p className="text-sm text-muted-foreground">Analysing your training history…</p>
-          </div>
-        )}
+        {/* Generating skeleton */}
+        {isGenerating && <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} />}
 
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
