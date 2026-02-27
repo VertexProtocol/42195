@@ -13,9 +13,16 @@ export interface Activity {
   calories: number | null
 }
 
+/**
+ * 'performance'    – a timed/benchmark goal, e.g. "run 10 km in under 50 min"
+ * 'event_training' – training toward a race/event, e.g. "marathon in September"
+ */
+export type GoalCategory = "performance" | "event_training"
+
 export interface Goal {
   id: string
   name: string
+  goal_category: GoalCategory
   target_distance_km: number
   target_date: string
   start_date: string | null
@@ -34,6 +41,8 @@ export interface WeeklyGoal {
   target: number
   current: number
   week_start: string
+  /** Recurring goals appear in every week; one-off goals are tied to week_start */
+  is_recurring: boolean
 }
 
 export interface WeeklySummary {
@@ -55,4 +64,4 @@ export interface UserProfile {
   avatar_url: string | null
 }
 
-export type TabId = "home" | "activities" | "goals" | "profile"
+export type TabId = "home" | "activities" | "goals" | "plan" | "profile"

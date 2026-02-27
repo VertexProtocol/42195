@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Trash2 } from "lucide-react"
+import { X, Trash2, RefreshCw, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 
 const METRIC_OPTIONS: { value: WeeklyGoalMetric; label: string; placeholder: string; unit: string }[] = [
@@ -23,16 +23,19 @@ interface WeeklyGoalEditorProps {
 export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: WeeklyGoalEditorProps) {
   const [metric, setMetric] = useState<WeeklyGoalMetric>("distance_km")
   const [target, setTarget] = useState("")
+  const [isRecurring, setIsRecurring] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
 
   useEffect(() => {
     if (open && goal && !isNew) {
       setMetric(goal.metric)
       setTarget(goal.target.toString())
+      setIsRecurring(goal.is_recurring)
       setShowConfirmDelete(false)
     } else if (open && isNew) {
       setMetric("distance_km")
       setTarget("")
+      setIsRecurring(false)
       setShowConfirmDelete(false)
     }
   }, [open, goal, isNew])
@@ -63,6 +66,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       target: parseFloat(target),
       current: isNew ? 0 : goal!.current,
       week_start: isNew ? mondayStr : goal!.week_start,
+      is_recurring: isRecurring,
     }
     onSave(saved)
   }
@@ -122,6 +126,43 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
           {/* Form — scrollable */}
           <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 px-5 pb-4">
+
+            {/* Recurring / One-off toggle */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Frequency
+              </label>
+              <div className="flex rounded-xl bg-secondary p-1">
+                <button
+                  onClick={() => setIsRecurring(false)}
+                  className={`flex flex-1 min-h-[40px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all ${
+                    !isRecurring
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground active:text-foreground"
+                  }`}
+                >
+                  <Calendar size={14} />
+                  This week only
+                </button>
+                <button
+                  onClick={() => setIsRecurring(true)}
+                  className={`flex flex-1 min-h-[40px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all ${
+                    isRecurring
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground active:text-foreground"
+                  }`}
+                >
+                  <RefreshCw size={14} />
+                  Every week
+                </button>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {isRecurring
+                  ? "This goal will appear every week as a standing target"
+                  : "This goal is set for this week only"}
+              </span>
+            </div>
+
             {/* Metric selector */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -160,8 +201,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
-          </div>
 
+          </div>
           </div>{/* end scrollable form */}
 
           {/* Delete button */}
