@@ -35,6 +35,7 @@ import type {
   TrainingFocus,
   AiTrainingPlan,
   TrainingWeek,
+  PlanSnapshot,
 } from "@/lib/types"
 
 interface GoalDetailScreenProps {
@@ -274,10 +275,12 @@ function WeekCardSkeleton() {
   )
 }
 
-function PlanSkeleton({ blockWeeks }: { blockWeeks: number }) {
+function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusText?: string | null }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-center text-sm text-muted-foreground">Analysing your training history…</p>
+      <p className="text-center text-sm text-muted-foreground animate-pulse">
+        {statusText ?? "Analysing your training history…"}
+      </p>
       {/* Summary */}
       <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
         <Skeleton className="h-3.5 w-full" />
@@ -303,8 +306,23 @@ function PlanSkeleton({ blockWeeks }: { blockWeeks: number }) {
 }
 
 // ---- Training week card ----
-function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean }) {
+function WeekCard({
+  week,
+  isCurrent,
+  actualKm,
+  isPast,
+}: {
+  week: TrainingWeek
+  isCurrent: boolean
+  actualKm: number | null
+  isPast: boolean
+}) {
   const [expanded, setExpanded] = useState(isCurrent)
+
+  const deltaKm = actualKm !== null ? actualKm - week.targetKm : null
+  const deltaPct = actualKm !== null && week.targetKm > 0
+    ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
+    : null
 
   return (
     <div
@@ -326,7 +344,20 @@ function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean 
           </div>
           <div className="text-left">
             <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
-            <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
+              {(isPast || isCurrent) && actualKm !== null && (
+                <span
+                  className={`text-xs font-semibold ${
+                    deltaPct !== null && deltaPct >= 0
+                      ? "text-primary"
+                      : "text-warning"
+                  }`}
+                >
+                  {actualKm.toFixed(1)} km ({deltaPct !== null && deltaPct >= 0 ? "+" : ""}{deltaPct}%)
+                </span>
+              )}
+            </div>
           </div>
         </div>
         {expanded ? (
@@ -338,6 +369,24 @@ function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean 
 
       {expanded && (
         <div className="border-t border-border px-4 pb-4 pt-3">
+          {/* Planned vs actual bar */}
+          {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                <span>Planned {week.targetKm} km</span>
+                <span>Actual {actualKm.toFixed(1)} km</span>
+              </div>
+              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+                    (deltaKm ?? 0) >= 0 ? "bg-primary" : "bg-warning"
+                  }`}
+                  style={{ width: `${Math.min(100, (actualKm / week.targetKm) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-3">
             {week.sessions.map((session, i) => (
               <div key={i} className="flex flex-col gap-0.5">
@@ -378,8 +427,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showPrefsForm, setShowPrefsForm] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
+  const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Load existing plan + preferences on mount
@@ -398,6 +449,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             plan: data.plan,
             block_start_date: data.block_start_date,
             generated_at: data.generated_at,
+            previous_plans: data.previous_plans ?? [],
           })
         }
       }
@@ -414,6 +466,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const handleGenerate = useCallback(
     async (note?: string) => {
       setIsGenerating(true)
+      setGenerateStatus("Analysing your training history…")
       setError(null)
       setShowAdjustForm(false)
 
@@ -424,24 +477,61 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           body: JSON.stringify({ goalId: goal.id, adjustNote: note || null }),
         })
 
-        const data = await res.json()
-
         if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
           setError(data.error ?? "Failed to generate plan")
           return
         }
 
-        setAiPlan({
-          goal_id: goal.id,
-          plan: data.plan,
-          block_start_date: data.block_start_date,
-          generated_at: data.generated_at,
-        })
-        setAdjustNote("")
+        const reader = res.body?.getReader()
+        if (!reader) {
+          setError("Streaming not supported")
+          return
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+            const event = JSON.parse(line.slice(6))
+
+            if (event.status === "thinking") {
+              setGenerateStatus("Coach is thinking…")
+            } else if (event.status === "generating") {
+              setGenerateStatus("Writing your plan…")
+            } else if (event.status === "done") {
+              setAiPlan((prev) => ({
+                goal_id: goal.id,
+                plan: event.plan,
+                block_start_date: event.block_start_date,
+                generated_at: event.generated_at,
+                previous_plans: prev?.plan
+                  ? [
+                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      ...(prev.previous_plans ?? []),
+                    ].slice(0, 5)
+                  : prev?.previous_plans ?? [],
+              }))
+              setAdjustNote("")
+            } else if (event.status === "error") {
+              setError(event.error ?? "Failed to generate plan")
+            }
+          }
+        }
       } catch {
         setError("Network error. Please try again.")
       } finally {
         setIsGenerating(false)
+        setGenerateStatus(null)
       }
     },
     [goal.id]
@@ -642,7 +732,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         )}
 
         {/* Generating skeleton */}
-        {isGenerating && <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} />}
+        {isGenerating && <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText={generateStatus} />}
 
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
@@ -653,13 +743,31 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             </div>
 
             {/* Weekly blocks */}
-            {aiPlan.plan.weeks.map((week, i) => (
-              <WeekCard
-                key={week.weekNumber}
-                week={week}
-                isCurrent={i === currentWeekIndex}
-              />
-            ))}
+            {aiPlan.plan.weeks.map((week, i) => {
+              const weekStart = new Date(aiPlan.block_start_date)
+              weekStart.setDate(weekStart.getDate() + i * 7)
+              const weekEnd = new Date(weekStart)
+              weekEnd.setDate(weekEnd.getDate() + 7)
+              const now = new Date()
+
+              const weekActivities = activities.filter((a) => {
+                const d = new Date(a.date)
+                return d >= weekStart && d < weekEnd
+              })
+              const actualKm = (i < currentWeekIndex || (i === currentWeekIndex))
+                ? weekActivities.reduce((sum, a) => sum + a.distance_km, 0)
+                : null
+
+              return (
+                <WeekCard
+                  key={week.weekNumber}
+                  week={week}
+                  isCurrent={i === currentWeekIndex}
+                  actualKm={actualKm}
+                  isPast={weekEnd <= now && i !== currentWeekIndex}
+                />
+              )
+            })}
 
             {/* Key principles */}
             {aiPlan.plan.keyPrinciples?.length > 0 && (
@@ -726,6 +834,72 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 Regenerate (fresh start)
               </button>
             </div>
+
+            {/* Previous plans */}
+            {aiPlan.previous_plans.length > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowPreviousPlans((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
+                >
+                  <span className="font-medium text-foreground">
+                    Previous plans ({aiPlan.previous_plans.length})
+                  </span>
+                  {showPreviousPlans ? (
+                    <ChevronUp size={16} className="text-muted-foreground" />
+                  ) : (
+                    <ChevronDown size={16} className="text-muted-foreground" />
+                  )}
+                </button>
+
+                {showPreviousPlans && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {aiPlan.previous_plans.map((prev, i) => {
+                      const genDate = new Date(prev.generated_at)
+                      const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      const totalKm = prev.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-medium text-card-foreground">{label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {prev.plan.weeks.length}w · {totalKm} km total
+                              {prev.adjust_note ? " · adjusted" : ""}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setAiPlan((current) => {
+                                if (!current) return current
+                                // Swap: current → previous, selected previous → current
+                                const newPrevious = [
+                                  { plan: current.plan, generated_at: current.generated_at, adjust_note: null, block_start_date: current.block_start_date },
+                                  ...current.previous_plans.filter((_, j) => j !== i),
+                                ].slice(0, 5)
+                                return {
+                                  ...current,
+                                  plan: prev.plan,
+                                  generated_at: prev.generated_at,
+                                  block_start_date: prev.block_start_date,
+                                  previous_plans: newPrevious,
+                                }
+                              })
+                              setShowPreviousPlans(false)
+                            }}
+                            className="text-xs font-semibold text-primary active:opacity-70"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>

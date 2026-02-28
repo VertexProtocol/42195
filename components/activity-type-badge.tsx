@@ -4,6 +4,7 @@ const colors: Record<Activity["type"], string> = {
   Run: "bg-primary/10 text-primary",
   "Trail Run": "bg-accent text-accent-foreground",
   Race: "bg-chart-1/15 text-chart-1",
+  Walk: "bg-muted text-muted-foreground",
 }
 
 export function ActivityTypeBadge({

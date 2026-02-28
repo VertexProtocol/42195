@@ -11,6 +11,7 @@ interface ProfileScreenProps {
   syncStatus: SyncStatus
   stravaConnected: boolean
   onSync: () => void
+  onFullSync: () => void
   onSignOut: () => void
 }
 
@@ -64,7 +65,7 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
   const { theme, setTheme } = useTheme()
   const isDarkMode = theme === "dark"
 
@@ -172,7 +173,7 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onSig
               </div>
             )}
           </div>
-          <div className="border-t border-border px-4 py-3">
+          <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
             <button
               onClick={onSync}
               disabled={!stravaConnected}
@@ -180,6 +181,13 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onSig
             >
               <RefreshCw size={16} />
               Sync with Strava
+            </button>
+            <button
+              onClick={onFullSync}
+              disabled={!stravaConnected}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-medium text-muted-foreground active:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Full re-sync (re-fetch all activities)
             </button>
           </div>
         </div>

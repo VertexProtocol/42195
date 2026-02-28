@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { startOfWeek, endOfWeek } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
@@ -28,13 +28,14 @@ interface StravaActivity {
 // ---------------------------------------------------------------------------
 
 /** Strava sport_type values that are running activities. */
-const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill"])
+const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill", "Walk"])
 
 /**
  * Maps a Strava sport_type / workout_type to our constrained ActivityType.
  */
 function mapActivityType(sport_type: string, workout_type?: number): string {
   if (sport_type === "TrailRun") return "Trail Run"
+  if (sport_type === "Walk") return "Walk"
   if (sport_type === "Run" && workout_type === 1) return "Race"
   return "Run"
 }
@@ -95,7 +96,9 @@ async function fetchStravaActivities(
 // Main handler
 // ---------------------------------------------------------------------------
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const fullSync = request.nextUrl.searchParams.get("full") === "1"
+
   // 1. Authenticate the calling user
   const supabase = await createClient()
   const {
@@ -115,27 +118,30 @@ export async function POST() {
   //    If null (never synced), we perform a full fetch from Strava.
   const { data: prevSync } = await service
     .from("sync_status")
-    .select("last_sync_at, state")
+    .select("last_sync_at, state, updated_at")
     .eq("user_id", userId)
     .maybeSingle()
 
-  // Rate limit: prevent sync within 60 seconds of last sync
+  // Rate limit: prevent sync within 30 seconds of last sync
   if (prevSync?.last_sync_at) {
     const lastSync = new Date(prevSync.last_sync_at).getTime()
-    if (Date.now() - lastSync < 60_000) {
+    if (Date.now() - lastSync < 30_000) {
       return NextResponse.json(
-        { error: "Please wait at least 60 seconds before syncing again" },
+        { error: "Please wait at least 30 seconds before syncing again" },
         { status: 429 },
       )
     }
   }
 
-  // Prevent concurrent syncs
+  // Prevent concurrent syncs (allow recovery if stuck > 2 minutes)
   if (prevSync?.state === "syncing") {
-    return NextResponse.json(
-      { error: "A sync is already in progress" },
-      { status: 409 },
-    )
+    const stuckThreshold = 2 * 60 * 1000
+    if (prevSync.updated_at && Date.now() - new Date(prevSync.updated_at).getTime() < stuckThreshold) {
+      return NextResponse.json(
+        { error: "A sync is already in progress" },
+        { status: 409 },
+      )
+    }
   }
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
@@ -151,10 +157,10 @@ export async function POST() {
     const accessToken = await getStravaAccessToken(userId)
 
     // 6. Fetch activities from Strava.
-    //    - First sync (lastSyncAt = null): fetch all activities.
-    //    - Subsequent syncs: only fetch activities newer than last_sync_at,
+    //    - Full sync (fullSync=true or first sync): fetch all activities.
+    //    - Incremental sync: only fetch activities newer than last_sync_at,
     //      saving Strava API quota (100 req/15 min, 1000/day).
-    const afterTimestamp = lastSyncAt
+    const afterTimestamp = !fullSync && lastSyncAt
       ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
       : undefined
 
