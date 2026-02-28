@@ -246,6 +246,40 @@ export function evaluatePerformanceGoal(
   }
 }
 
+/** Best run at approximately the goal distance (±20%) by fastest time */
+export function bestRelevantRun(
+  activities: Activity[],
+  targetDistanceKm: number,
+): Activity | null {
+  const lo = targetDistanceKm * 0.8
+  const hi = targetDistanceKm * 1.2
+  const candidates = activities.filter(
+    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0,
+  )
+  if (candidates.length === 0) return null
+  return candidates.reduce((best, a) =>
+    a.duration_seconds < best.duration_seconds ? a : best,
+  )
+}
+
+/** Longest single run since a start date */
+export function longestRun(
+  activities: Activity[],
+  startDate: string | null,
+  createdAt: string,
+): Activity | null {
+  const from = startDate
+    ? new Date(startDate).getTime()
+    : new Date(createdAt).getTime()
+  const relevant = activities.filter(
+    (a) => new Date(a.date).getTime() >= from,
+  )
+  if (relevant.length === 0) return null
+  return relevant.reduce((best, a) =>
+    a.distance_km > best.distance_km ? a : best,
+  )
+}
+
 export function weeklyMetricUnit(metric: string): string {
   switch (metric) {
     case "distance_km":

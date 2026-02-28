@@ -21,7 +21,6 @@ export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
-  const [isDarkMode, setIsDarkMode] = useState(false)
 
   // Real data state (starts empty, loaded from Supabase)
   const [activities, setActivities] = useState<Activity[]>([])
@@ -62,7 +61,7 @@ export function AppShell() {
       }
 
       // Fetch everything in parallel
-      const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncStatusRes, stravaRes] =
+      const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncApiRes] =
         await Promise.all([
           supabase
             .from("activities")
@@ -77,16 +76,7 @@ export function AppShell() {
             .select("*")
             .order("created_at", { ascending: false }),
           supabase.from("profiles").select("*").eq("id", authUser.id).single(),
-          supabase
-            .from("sync_status")
-            .select("*")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
-          supabase
-            .from("strava_tokens")
-            .select("athlete_id")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
+          fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
 
       if (activitiesRes.data) {
@@ -160,28 +150,19 @@ export function AppShell() {
         })
       }
 
-      if (syncStatusRes.data) {
+      if (syncApiRes?.sync_status) {
         setSyncStatus({
-          state: syncStatusRes.data.state,
-          last_sync_at: syncStatusRes.data.last_sync_at,
-          error_message: syncStatusRes.data.error_message,
+          state: syncApiRes.sync_status.state,
+          last_sync_at: syncApiRes.sync_status.last_sync_at,
+          error_message: syncApiRes.sync_status.error_message,
         })
       }
 
-      setStravaConnected(!!stravaRes.data)
+      setStravaConnected(!!syncApiRes?.strava_connected)
       setIsLoading(false)
     }
 
     loadData()
-  }, [])
-
-  // ----- Dark mode -----
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDarkMode)
-  }, [isDarkMode])
-
-  const handleToggleDarkMode = useCallback(() => {
-    setIsDarkMode((prev) => !prev)
   }, [])
 
   // ----- Derived data -----
@@ -360,11 +341,16 @@ export function AppShell() {
   )
 
   const handleDeleteGoal = useCallback(async (goalId: string) => {
+    const snapshot = goals
     setGoals((prev) => prev.filter((g) => g.id !== goalId))
     setIsEditorOpen(false)
 
-    await supabase.from("goals").delete().eq("id", goalId)
-  }, [])
+    const { error } = await supabase.from("goals").delete().eq("id", goalId)
+    if (error) {
+      console.error("Failed to delete goal:", error)
+      setGoals(snapshot)
+    }
+  }, [goals])
 
   const handleCloseEditor = useCallback(() => {
     setIsEditorOpen(false)
@@ -465,11 +451,16 @@ export function AppShell() {
   )
 
   const handleDeleteWeeklyGoal = useCallback(async (goalId: string) => {
+    const snapshot = weeklyGoals
     setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId))
     setIsWeeklyEditorOpen(false)
 
-    await supabase.from("weekly_goals").delete().eq("id", goalId)
-  }, [])
+    const { error } = await supabase.from("weekly_goals").delete().eq("id", goalId)
+    if (error) {
+      console.error("Failed to delete weekly goal:", error)
+      setWeeklyGoals(snapshot)
+    }
+  }, [weeklyGoals])
 
   const handleCloseWeeklyEditor = useCallback(() => {
     setIsWeeklyEditorOpen(false)
@@ -629,8 +620,6 @@ export function AppShell() {
             user={user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
             syncStatus={syncStatus}
             stravaConnected={stravaConnected}
-            isDarkMode={isDarkMode}
-            onToggleDarkMode={handleToggleDarkMode}
             onSync={handleSync}
             onSignOut={handleSignOut}
           />

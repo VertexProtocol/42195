@@ -9,6 +9,8 @@ import {
   isDatePast,
   timeElapsedPercentage,
   computeDistanceInRange,
+  bestRelevantRun,
+  longestRun,
 } from "@/lib/format"
 import type { Activity, Goal } from "@/lib/types"
 
@@ -37,28 +39,6 @@ function trainingPhase(startDate: string | null, targetDate: string): {
   if (pct >= 85) return { label: "Tapering", color: "text-warning" }
   if (pct >= 70) return { label: "Peak training", color: "text-primary" }
   return { label: "Building base", color: "text-success" }
-}
-
-/** Best run at approximately the goal distance (±20%) */
-function bestRelevantRun(
-  activities: Activity[],
-  targetDistanceKm: number,
-): Activity | null {
-  const lo = targetDistanceKm * 0.8
-  const hi = targetDistanceKm * 1.2
-  const candidates = activities.filter(
-    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0
-  )
-  if (candidates.length === 0) return null
-  return candidates.reduce((best, a) => a.duration_seconds < best.duration_seconds ? a : best)
-}
-
-/** Longest single run since start_date */
-function longestRun(activities: Activity[], startDate: string | null, created_at: string): Activity | null {
-  const from = startDate ? new Date(startDate).getTime() : new Date(created_at).getTime()
-  const relevant = activities.filter((a) => new Date(a.date).getTime() >= from)
-  if (relevant.length === 0) return null
-  return relevant.reduce((best, a) => a.distance_km > best.distance_km ? a : best)
 }
 
 export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleActive, onSelectGoal }: PlanScreenProps) {

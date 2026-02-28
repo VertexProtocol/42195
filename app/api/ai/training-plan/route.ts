@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
+import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import type { GoalPreferences, TrainingPlan } from "@/lib/types"
+
+const TrainingPlanSchema = z.object({
+  summary: z.string(),
+  weeks: z.array(
+    z.object({
+      weekNumber: z.number(),
+      theme: z.string(),
+      targetKm: z.number(),
+      sessions: z.array(
+        z.object({
+          type: z.string(),
+          distance: z.string(),
+          effort: z.string(),
+          purpose: z.string(),
+        }),
+      ),
+      coachNote: z.string().nullable(),
+    }),
+  ),
+  keyPrinciples: z.array(z.string()),
+  watchOut: z.string().nullable(),
+})
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -223,13 +246,32 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     goalId = body.goalId
-    adjustNote = body.adjustNote ?? null
+    adjustNote = body.adjustNote
+      ? String(body.adjustNote).replace(/[^\w\s.,!?;:'"()\-–—/+%°#@]/g, "").slice(0, 500)
+      : null
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
 
   if (!goalId) {
     return NextResponse.json({ error: "goalId is required" }, { status: 400 })
+  }
+
+  // Rate limit: prevent regeneration within 60 seconds
+  const { data: existingPlan } = await supabase
+    .from("ai_training_plans")
+    .select("generated_at")
+    .eq("goal_id", goalId)
+    .maybeSingle()
+
+  if (existingPlan?.generated_at) {
+    const lastGen = new Date(existingPlan.generated_at).getTime()
+    if (Date.now() - lastGen < 60_000) {
+      return NextResponse.json(
+        { error: "Please wait at least 60 seconds before regenerating" },
+        { status: 429 },
+      )
+    }
   }
 
   // Fetch goal (verify ownership)
@@ -318,7 +360,12 @@ export async function POST(req: NextRequest) {
     const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error("No JSON found in Claude response")
 
-    plan = JSON.parse(jsonMatch[0]) as TrainingPlan
+    const parsed = TrainingPlanSchema.safeParse(JSON.parse(jsonMatch[0]))
+    if (!parsed.success) {
+      console.error("Invalid plan structure from Claude:", parsed.error.message)
+      throw new Error(`Invalid plan structure: ${parsed.error.message}`)
+    }
+    plan = parsed.data
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error("Claude API error:", message, err)

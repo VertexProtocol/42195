@@ -24,6 +24,8 @@ import {
   timeElapsedPercentage,
   computeDistanceInRange,
   formatDuration,
+  bestRelevantRun,
+  longestRun,
 } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
@@ -40,24 +42,6 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
-}
-
-// ---- Helper: best run at ±20% of target distance ----
-function bestRelevantRun(activities: Activity[], targetKm: number): Activity | null {
-  const lo = targetKm * 0.8
-  const hi = targetKm * 1.2
-  const candidates = activities.filter(
-    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0
-  )
-  if (candidates.length === 0) return null
-  return candidates.reduce((best, a) => (a.duration_seconds < best.duration_seconds ? a : best))
-}
-
-function longestRun(activities: Activity[], startDate: string | null, createdAt: string): Activity | null {
-  const from = startDate ? new Date(startDate).getTime() : new Date(createdAt).getTime()
-  const relevant = activities.filter((a) => new Date(a.date).getTime() >= from)
-  if (relevant.length === 0) return null
-  return relevant.reduce((best, a) => (a.distance_km > best.distance_km ? a : best))
 }
 
 // ---- Preferences form ----
@@ -80,29 +64,38 @@ function PreferencesForm({
 
   async function handleSave() {
     setSaving(true)
-    await fetch("/api/ai/training-plan", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        goalId,
+    try {
+      const res = await fetch("/api/ai/training-plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goalId,
+          sessions_per_week: sessions,
+          focus,
+          notes,
+          weekly_increase_pct: increasePct,
+          block_weeks: blockWeeks,
+          regenerate_every_weeks: regenEvery,
+        }),
+      })
+      if (!res.ok) {
+        console.error("Failed to save preferences:", res.status)
+        return
+      }
+      onSaved({
+        goal_id: goalId,
         sessions_per_week: sessions,
         focus,
-        notes,
+        notes: notes || null,
         weekly_increase_pct: increasePct,
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
-      }),
-    })
-    setSaving(false)
-    onSaved({
-      goal_id: goalId,
-      sessions_per_week: sessions,
-      focus,
-      notes: notes || null,
-      weekly_increase_pct: increasePct,
-      block_weeks: blockWeeks,
-      regenerate_every_weeks: regenEvery,
-    })
+      })
+    } catch (err) {
+      console.error("Failed to save preferences:", err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -404,7 +397,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     async function load() {
       const [planRes, prefsRes] = await Promise.all([
         fetch(`/api/ai/training-plan?goalId=${goal.id}`),
-        fetch(`/api/ai/training-plan?goalId=${goal.id}`), // preferences come via same GET
+        fetch(`/api/ai/training-plan/preferences?goalId=${goal.id}`),
       ])
       // Load plan
       if (planRes.ok) {
@@ -419,9 +412,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         }
       }
       // Load preferences
-      const prefsData = await fetch(`/api/ai/training-plan/preferences?goalId=${goal.id}`)
-      if (prefsData.ok) {
-        const p = await prefsData.json()
+      if (prefsRes.ok) {
+        const p = await prefsRes.json()
         if (p.preferences) setPrefs(p.preferences)
       }
       setPrefsLoaded(true)
