@@ -2,6 +2,8 @@ export type ActivityType = "Run" | "Trail Run" | "Race"
 
 export interface Activity {
   id: string
+  user_id: string
+  strava_id: number | null
   type: ActivityType
   name: string
   date: string
@@ -11,6 +13,8 @@ export interface Activity {
   elevation_gain_m: number | null
   avg_heart_rate: number | null
   calories: number | null
+  map_polyline: string | null
+  created_at: string
 }
 
 /**

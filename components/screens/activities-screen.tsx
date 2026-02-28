@@ -2,6 +2,7 @@
 
 import { ChevronRight, Inbox, RefreshCw, Link } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
+import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity } from "@/lib/types"
 
 interface ActivitiesScreenProps {
@@ -9,19 +10,6 @@ interface ActivitiesScreenProps {
   stravaConnected: boolean
   onSelectActivity: (activity: Activity) => void
   onSync: () => void
-}
-
-function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
-  const colors: Record<Activity["type"], string> = {
-    Run: "bg-primary/10 text-primary",
-    "Trail Run": "bg-accent text-accent-foreground",
-    Race: "bg-chart-1/15 text-chart-1",
-  }
-  return (
-    <span className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${colors[type]}`}>
-      {type}
-    </span>
-  )
 }
 
 export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync }: ActivitiesScreenProps) {

@@ -1,5 +1,7 @@
 "use client"
 
+import Image from "next/image"
+import { useTheme } from "next-themes"
 import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off } from "lucide-react"
 import { formatTimeAgo } from "@/lib/format"
 import type { SyncStatus, UserProfile } from "@/lib/types"
@@ -8,8 +10,6 @@ interface ProfileScreenProps {
   user: UserProfile
   syncStatus: SyncStatus
   stravaConnected: boolean
-  isDarkMode: boolean
-  onToggleDarkMode: () => void
   onSync: () => void
   onSignOut: () => void
 }
@@ -64,7 +64,10 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onSignOut }: ProfileScreenProps) {
+  const { theme, setTheme } = useTheme()
+  const isDarkMode = theme === "dark"
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       <header>
@@ -75,9 +78,11 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
       <section className="flex items-center gap-4 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
           {user.avatar_url ? (
-            <img
+            <Image
               src={user.avatar_url}
               alt={user.display_name}
+              width={56}
+              height={56}
               className="h-14 w-14 rounded-full object-cover"
               crossOrigin="anonymous"
             />
@@ -114,7 +119,7 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
               role="switch"
               aria-checked={isDarkMode}
               aria-label="Toggle dark mode"
-              onClick={onToggleDarkMode}
+              onClick={() => setTheme(isDarkMode ? "light" : "dark")}
               className={`relative inline-flex h-[30px] w-[52px] shrink-0 items-center rounded-full transition-colors duration-200 ${
                 isDarkMode ? "bg-primary" : "bg-border"
               }`}

@@ -82,7 +82,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
     const totalSeconds = h * 3600 + m * 60 + s
 
     const saved: Goal = {
-      id: isNew ? `goal-${Date.now()}` : goal!.id,
+      id: isNew ? crypto.randomUUID() : goal!.id,
       goal_category: category,
       name: name.trim(),
       target_distance_km: parseDistance(targetDistance),

@@ -64,12 +64,12 @@ function shiftWeek(weekStr: string, delta: number): string {
 }
 
 function weekLabel(weekStr: string, currentStr: string): string {
-  if (weekStr === currentStr) return "Denne uken"
+  if (weekStr === currentStr) return "This week"
   const start = new Date(weekStr + "T12:00:00")
   const end = new Date(weekStr + "T12:00:00")
   end.setDate(end.getDate() + 6)
   const fmt = (d: Date) =>
-    d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" })
+    d.toLocaleDateString("en-US", { day: "numeric", month: "short" })
   return `${fmt(start)} – ${fmt(end)}`
 }
 

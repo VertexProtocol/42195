@@ -63,7 +63,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
     const mondayStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
 
     const saved: WeeklyGoal = {
-      id: isNew ? `wg-${Date.now()}` : goal!.id,
+      id: isNew ? crypto.randomUUID() : goal!.id,
       metric,
       label: selectedOption.label === "Distance" ? "Weekly Distance" :
              selectedOption.label === "Sessions" ? "Training Sessions" :

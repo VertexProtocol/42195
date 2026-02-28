@@ -17,11 +17,30 @@ import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserP
 
 const supabase = createClient()
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapActivityRow(a: any): Activity {
+  return {
+    id: a.id,
+    user_id: a.user_id,
+    strava_id: a.strava_id,
+    type: a.type,
+    name: a.name,
+    date: a.date,
+    distance_km: Number(a.distance_km),
+    duration_seconds: a.duration_seconds,
+    pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+    elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
+    avg_heart_rate: a.avg_heart_rate,
+    calories: a.calories,
+    map_polyline: a.map_polyline,
+    created_at: a.created_at,
+  }
+}
+
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
-  const [isDarkMode, setIsDarkMode] = useState(false)
 
   // Real data state (starts empty, loaded from Supabase)
   const [activities, setActivities] = useState<Activity[]>([])
@@ -62,52 +81,26 @@ export function AppShell() {
       }
 
       // Fetch everything in parallel
-      const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncStatusRes, stravaRes] =
+      const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncApiRes] =
         await Promise.all([
           supabase
             .from("activities")
-            .select("*")
+            .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
             .order("date", { ascending: false }),
           supabase
             .from("goals")
-            .select("*")
+            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
             .order("created_at", { ascending: false }),
           supabase
             .from("weekly_goals")
-            .select("*")
+            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
             .order("created_at", { ascending: false }),
-          supabase.from("profiles").select("*").eq("id", authUser.id).single(),
-          supabase
-            .from("sync_status")
-            .select("*")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
-          supabase
-            .from("strava_tokens")
-            .select("athlete_id")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
+          supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
+          fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
 
       if (activitiesRes.data) {
-        setActivities(
-          activitiesRes.data.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
+        setActivities(activitiesRes.data.map(mapActivityRow))
       }
 
       if (goalsRes.data) {
@@ -160,32 +153,23 @@ export function AppShell() {
         })
       }
 
-      if (syncStatusRes.data) {
+      if (syncApiRes?.sync_status) {
         setSyncStatus({
-          state: syncStatusRes.data.state,
-          last_sync_at: syncStatusRes.data.last_sync_at,
-          error_message: syncStatusRes.data.error_message,
+          state: syncApiRes.sync_status.state,
+          last_sync_at: syncApiRes.sync_status.last_sync_at,
+          error_message: syncApiRes.sync_status.error_message,
         })
       }
 
-      setStravaConnected(!!stravaRes.data)
+      setStravaConnected(!!syncApiRes?.strava_connected)
       setIsLoading(false)
     }
 
     loadData()
   }, [])
 
-  // ----- Dark mode -----
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDarkMode)
-  }, [isDarkMode])
-
-  const handleToggleDarkMode = useCallback(() => {
-    setIsDarkMode((prev) => !prev)
-  }, [])
-
   // ----- Derived data -----
-  const activeGoals = goals.filter((g) => g.is_active)
+  const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
 
   const { currentWeekMonday, weeklySummary } = useMemo(() => {
     const now = new Date()
@@ -360,11 +344,16 @@ export function AppShell() {
   )
 
   const handleDeleteGoal = useCallback(async (goalId: string) => {
+    const snapshot = goals
     setGoals((prev) => prev.filter((g) => g.id !== goalId))
     setIsEditorOpen(false)
 
-    await supabase.from("goals").delete().eq("id", goalId)
-  }, [])
+    const { error } = await supabase.from("goals").delete().eq("id", goalId)
+    if (error) {
+      console.error("Failed to delete goal:", error)
+      setGoals(snapshot)
+    }
+  }, [goals])
 
   const handleCloseEditor = useCallback(() => {
     setIsEditorOpen(false)
@@ -465,11 +454,16 @@ export function AppShell() {
   )
 
   const handleDeleteWeeklyGoal = useCallback(async (goalId: string) => {
+    const snapshot = weeklyGoals
     setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId))
     setIsWeeklyEditorOpen(false)
 
-    await supabase.from("weekly_goals").delete().eq("id", goalId)
-  }, [])
+    const { error } = await supabase.from("weekly_goals").delete().eq("id", goalId)
+    if (error) {
+      console.error("Failed to delete weekly goal:", error)
+      setWeeklyGoals(snapshot)
+    }
+  }, [weeklyGoals])
 
   const handleCloseWeeklyEditor = useCallback(() => {
     setIsWeeklyEditorOpen(false)
@@ -508,28 +502,11 @@ export function AppShell() {
       // Refetch activities after successful sync
       const { data: freshActivities } = await supabase
         .from("activities")
-        .select("*")
+        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
         .order("date", { ascending: false })
 
       if (freshActivities) {
-        setActivities(
-          freshActivities.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
+        setActivities(freshActivities.map(mapActivityRow))
       }
     } catch {
       setSyncStatus((prev) => ({
@@ -629,8 +606,6 @@ export function AppShell() {
             user={user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
             syncStatus={syncStatus}
             stravaConnected={stravaConnected}
-            isDarkMode={isDarkMode}
-            onToggleDarkMode={handleToggleDarkMode}
             onSync={handleSync}
             onSignOut={handleSignOut}
           />

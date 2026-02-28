@@ -4,6 +4,13 @@ export function formatDistance(km: number): string {
   return km.toFixed(1) + " km"
 }
 
+export function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`
+  return `${m} min`
+}
+
 export function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const mins = Math.floor((seconds % 3600) / 60)
@@ -244,6 +251,40 @@ export function evaluatePerformanceGoal(
     )
     return { reached, bestActivity: longest, bestTimeSeconds: null, progress }
   }
+}
+
+/** Best run at approximately the goal distance (±20%) by fastest time */
+export function bestRelevantRun(
+  activities: Activity[],
+  targetDistanceKm: number,
+): Activity | null {
+  const lo = targetDistanceKm * 0.8
+  const hi = targetDistanceKm * 1.2
+  const candidates = activities.filter(
+    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0,
+  )
+  if (candidates.length === 0) return null
+  return candidates.reduce((best, a) =>
+    a.duration_seconds < best.duration_seconds ? a : best,
+  )
+}
+
+/** Longest single run since a start date */
+export function longestRun(
+  activities: Activity[],
+  startDate: string | null,
+  createdAt: string,
+): Activity | null {
+  const from = startDate
+    ? new Date(startDate).getTime()
+    : new Date(createdAt).getTime()
+  const relevant = activities.filter(
+    (a) => new Date(a.date).getTime() >= from,
+  )
+  if (relevant.length === 0) return null
+  return relevant.reduce((best, a) =>
+    a.distance_km > best.distance_km ? a : best,
+  )
 }
 
 export function weeklyMetricUnit(metric: string): string {

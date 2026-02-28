@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
-import { formatDistance, formatDuration, formatPace, formatDate } from "@/lib/format"
+import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
+import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, StreamPoint, Lap } from "@/lib/types"
 
 interface ActivityDetailScreenProps {
@@ -29,26 +30,6 @@ function StatCard({
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   )
-}
-
-function ActivityTypeBadge({ type }: { type: Activity["type"] }) {
-  const colors: Record<Activity["type"], string> = {
-    Run: "bg-primary/10 text-primary",
-    "Trail Run": "bg-accent text-accent-foreground",
-    Race: "bg-chart-1/15 text-chart-1",
-  }
-  return (
-    <span className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${colors[type]}`}>
-      {type}
-    </span>
-  )
-}
-
-function formatElapsed(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`
-  return `${m} min`
 }
 
 export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
@@ -87,7 +68,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
       {/* Header */}
       <header>
         <div className="flex items-center gap-2">
-          <ActivityTypeBadge type={activity.type} />
+          <ActivityTypeBadge type={activity.type} size="md" />
           <span className="text-xs text-muted-foreground">
             {formatDate(activity.date)}
           </span>
@@ -171,7 +152,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       axisLine={false}
                       interval="preserveStartEnd"
                     >
-                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
@@ -183,7 +164,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                         `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`
                       }
                     >
-                      <Label value="min/km" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="min/km" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </YAxis>
                     <Tooltip
                       formatter={(v) => [formatPace(v as number), "Pace"]}
@@ -192,8 +173,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                     <Area
                       type="monotone"
                       dataKey="pace"
-                      stroke="#6366f1"
-                      fill="#6366f1"
+                      stroke="var(--chart-1)"
+                      fill="var(--chart-1)"
                       fillOpacity={0.15}
                       dot={false}
                       strokeWidth={1.5}
@@ -217,7 +198,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       axisLine={false}
                       interval="preserveStartEnd"
                     >
-                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
@@ -226,7 +207,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       axisLine={false}
                       width={42}
                     >
-                      <Label value="bpm" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="bpm" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </YAxis>
                     <Tooltip
                       formatter={(v) => [`${v} bpm`, "Heart Rate"]}
@@ -235,8 +216,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                     <Area
                       type="monotone"
                       dataKey="hr"
-                      stroke="#ef4444"
-                      fill="#ef4444"
+                      stroke="var(--chart-5)"
+                      fill="var(--chart-5)"
                       fillOpacity={0.15}
                       dot={false}
                       strokeWidth={1.5}
@@ -260,7 +241,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       axisLine={false}
                       interval="preserveStartEnd"
                     >
-                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </XAxis>
                     <YAxis
                       domain={["auto", "auto"]}
@@ -269,7 +250,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                       axisLine={false}
                       width={42}
                     >
-                      <Label value="m" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "#94a3b8" }} />
+                      <Label value="m" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </YAxis>
                     <Tooltip
                       formatter={(v) => [`${Math.round(v as number)} m`, "Altitude"]}
@@ -278,8 +259,8 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                     <Area
                       type="monotone"
                       dataKey="altitude"
-                      stroke="#64748b"
-                      fill="#64748b"
+                      stroke="var(--chart-3)"
+                      fill="var(--chart-3)"
                       fillOpacity={0.15}
                       dot={false}
                       strokeWidth={1.5}
