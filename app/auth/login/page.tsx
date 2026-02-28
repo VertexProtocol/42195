@@ -1,12 +1,10 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -27,8 +25,10 @@ export default function LoginPage() {
           return
         }
 
-        router.push("/")
-        router.refresh()
+        // Hard navigation so the browser sends the freshly-set session cookies
+        // in a brand-new HTTP request. router.push() is a client-side navigation
+        // that can race with cookie writes and send the middleware an empty session.
+        window.location.href = "/"
       } catch (err) {
         setError(err instanceof Error ? err.message : "Login failed. Please try again.")
       }
