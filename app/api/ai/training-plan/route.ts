@@ -206,56 +206,6 @@ Respond with ONLY a valid JSON object — no explanation text before or after. T
 }`
 }
 
-async function reviewPlan(plan: TrainingPlan, blockWeeks: number): Promise<TrainingPlan> {
-  const reviewPrompt = `You are a running coach validator. Review this training plan JSON for logical errors and return a corrected version if needed.
-
-Rules to enforce:
-1. The long run must be the session with the highest distance in every week — no other session may match or exceed it
-2. The long run must be listed FIRST in the sessions array every week
-3. The "weeks" array must contain exactly ${blockWeeks} entries
-4. Session distances within a week must sum to approximately the week's targetKm (±10% tolerance)
-
-Plan to review:
-${JSON.stringify(plan, null, 2)}
-
-Respond ONLY with a valid JSON object using this exact structure:
-{
-  "valid": true | false,
-  "issues": ["list of issues found, empty array if valid"],
-  "fixedPlan": <the full corrected TrainingPlan object, or null if valid>
-}`
-
-  try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 3000,
-      messages: [{ role: "user", content: reviewPrompt }],
-    })
-
-    const content = message.content[0]
-    if (content.type !== "text") return plan
-
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return plan
-
-    const review = JSON.parse(jsonMatch[0]) as {
-      valid: boolean
-      issues: string[]
-      fixedPlan: TrainingPlan | null
-    }
-
-    if (!review.valid && review.fixedPlan) {
-      console.log("Plan review found issues — using corrected plan:", review.issues)
-      return review.fixedPlan
-    }
-
-    return plan
-  } catch (err) {
-    // Review is best-effort — if it fails, return the original plan
-    console.warn("Plan review failed, using original:", err instanceof Error ? err.message : err)
-    return plan
-  }
-}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -350,20 +300,22 @@ export async function POST(req: NextRequest) {
     adjustNote
   )
 
-  // Call Claude
+  // Call Claude with extended thinking so it reasons through coaching logic before writing JSON
   let plan: TrainingPlan
   try {
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
+      model: "claude-sonnet-4-6",
+      max_tokens: 10000,
+      thinking: { type: "enabled", budget_tokens: 5000 },
       messages: [{ role: "user", content: prompt }],
     })
 
-    const content = message.content[0]
-    if (content.type !== "text") throw new Error("Unexpected response type from Claude")
+    // With extended thinking the response contains thinking blocks before the text block
+    const textBlock = message.content.find((b) => b.type === "text")
+    if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
     // Extract JSON — Claude sometimes wraps in markdown code fences
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/)
+    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error("No JSON found in Claude response")
 
     plan = JSON.parse(jsonMatch[0]) as TrainingPlan
@@ -375,9 +327,6 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-
-  // Review the generated plan with a second Claude call to catch logical errors
-  plan = await reviewPlan(plan, prefs.block_weeks ?? 4)
 
   // Cache in DB (upsert — one active plan per goal)
   const blockStartDate = new Date().toISOString().split("T")[0]
