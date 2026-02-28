@@ -7,6 +7,7 @@ import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
 import { PlanScreen } from "@/components/screens/plan-screen"
+import { GoalDetailScreen } from "@/components/screens/goal-detail-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ProfileScreen } from "@/components/screens/profile-screen"
@@ -19,6 +20,7 @@ const supabase = createClient()
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   // Real data state (starts empty, loaded from Supabase)
@@ -220,6 +222,15 @@ export function AppShell() {
   const handleTabChange = useCallback((tab: TabId) => {
     setActiveTab(tab)
     setSelectedActivity(null)
+    setSelectedGoal(null)
+  }, [])
+
+  const handleSelectGoal = useCallback((goal: Goal) => {
+    setSelectedGoal(goal)
+  }, [])
+
+  const handleBackFromGoalDetail = useCallback(() => {
+    setSelectedGoal(null)
   }, [])
 
   const handleSelectActivity = useCallback((activity: Activity) => {
@@ -593,13 +604,23 @@ export function AppShell() {
           />
         )}
 
-        {activeTab === "plan" && (
+        {activeTab === "plan" && !selectedGoal && (
           <PlanScreen
             goals={goals}
             activities={activities}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("event_training")}
             onToggleActive={handleToggleActiveGoal}
+            onSelectGoal={handleSelectGoal}
+          />
+        )}
+
+        {activeTab === "plan" && selectedGoal && (
+          <GoalDetailScreen
+            goal={selectedGoal}
+            activities={activities}
+            onBack={handleBackFromGoalDetail}
+            onEditGoal={handleEditGoal}
           />
         )}
 
