@@ -67,13 +67,15 @@ function calcWeekTargets(avgWeeklyKm: number, pct: number, blockWeeks: number): 
   const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
   const multiplier = 1 + pct / 100
   const targets: number[] = []
+  // Keep full float precision internally so rounding doesn't compound across weeks.
+  // Only round when writing to the output array.
   let current = base
   for (let i = 0; i < blockWeeks - 1; i++) {
-    current = Math.round(current * multiplier)
-    targets.push(current)
+    current = current * multiplier
+    targets.push(Math.round(current))
   }
   // Last week is always recovery at 80% of peak
-  targets.push(Math.round(targets[targets.length - 1] * 0.8))
+  targets.push(Math.round(current * 0.8))
   return targets
 }
 
@@ -113,6 +115,7 @@ function buildPrompt(
 
   const blockWeeks = prefs.block_weeks ?? 4
   const increasePct = prefs.weekly_increase_pct ?? 10
+  const recentWindow = prefs.regenerate_every_weeks ?? 4
   const weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks)
   const weekTargetLines = weekTargets
     .map((km, i) =>
@@ -121,6 +124,20 @@ function buildPrompt(
         : `- Week ${i + 1}: ${km} km${i === blockWeeks - 2 ? " (peak week)" : ""}`
     )
     .join("\n")
+
+  // Compute volume trend: compare recent window vs the equal-length prior window
+  const priorWeeks = weeklySummaries.slice(recentWindow, recentWindow * 2)
+  let trendLine: string
+  if (priorWeeks.length === 0) {
+    trendLine = "not enough history yet (first training period)"
+  } else {
+    const priorAvg = priorWeeks.reduce((s, w) => s + w.totalKm, 0) / recentWindow
+    const pct = priorAvg > 0 ? Math.round(((currentAvgWeeklyKm - priorAvg) / priorAvg) * 100) : 0
+    const arrow = `${priorAvg.toFixed(1)} → ${currentAvgWeeklyKm.toFixed(1)} km/week`
+    if (pct > 10) trendLine = `upward — ${arrow} (+${pct}%)`
+    else if (pct < -10) trendLine = `downward — ${arrow} (${pct}%)`
+    else trendLine = `stable — ${arrow} (${pct > 0 ? "+" : ""}${pct}%)`
+  }
 
   return `You are an expert running coach creating a personalised ${blockWeeks}-week training block for a runner preparing for an upcoming race.
 
@@ -138,16 +155,26 @@ ${adjustSection}
 ${weekSummaryText}
 
 ## Current Fitness Snapshot
-- Avg weekly km (last 4 weeks): ${currentAvgWeeklyKm.toFixed(1)} km
+- Avg weekly km (last ${recentWindow} weeks): ${currentAvgWeeklyKm.toFixed(1)} km
+- Volume trend vs prior ${recentWindow} weeks: ${trendLine}
 - Longest recent run: ${longestRecentRun.toFixed(1)} km
 
-## Weekly Volume Targets (use these exact numbers — pre-calculated at ${increasePct}% progressive overload)
+## Suggested Weekly Volume Targets
+These are calculated from the runner's ${recentWindow}-week rolling average using ${increasePct}% progressive overload. Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
 ${weekTargetLines}
-The targetKm field for each week MUST match these numbers exactly.
+
+## Session Distribution Rules
+Distribute each week's km across sessions with meaningful variety — never assign the same distance to every session:
+- Long run: ~40% of weekly total (e.g. 9 km week → long run 4 km, not 3 km)
+- Easy runs: split the remaining km roughly equally
+- The long run MUST always be at least 1 km longer than any easy run in the same week
+- Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
+- Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
+- If focus is "volume" only (no session types required), you may omit run types but still vary distances
 
 ## Your Task
 Generate a ${blockWeeks}-week training block starting from today. The block should:
-- Use the exact weekly volume targets listed above
+- Follow the suggested weekly volume targets above, adjusting based on the runner's trend if needed
 - Match the runner's stated preferences (sessions/week and focus)
 - NOT assign sessions to specific days — just describe what sessions to do each week
 - Be appropriate for ${daysUntilRace} days out from race day
@@ -246,11 +273,13 @@ export async function POST(req: NextRequest) {
   const weeklySummaries = groupActivitiesByWeek(activities ?? [])
 
   // Compute derived metrics
-  const recent4Weeks = weeklySummaries.slice(0, 4)
+  // Use the same window as the plan regeneration cadence — if the user checks in
+  // every 2 weeks the plan should react to the last 2 weeks; every 8 weeks means
+  // a broader view. Empty weeks (no runs) are included by always dividing by the
+  // full window size, not just the count of active weeks.
+  const recentWindow = prefs.regenerate_every_weeks ?? 4
   const currentAvgWeeklyKm =
-    recent4Weeks.length > 0
-      ? recent4Weeks.reduce((s, w) => s + w.totalKm, 0) / recent4Weeks.length
-      : 0
+    weeklySummaries.slice(0, recentWindow).reduce((s, w) => s + w.totalKm, 0) / recentWindow
 
   const longestRecentRun =
     weeklySummaries.reduce((max, w) => Math.max(max, w.longestKm), 0)
