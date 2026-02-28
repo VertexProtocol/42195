@@ -1,19 +1,29 @@
 "use client"
 
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react"
+import { useState, useCallback, useEffect, useTransition, useMemo, lazy, Suspense } from "react"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
-import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
 import { PlanScreen } from "@/components/screens/plan-screen"
-import { GoalDetailScreen } from "@/components/screens/goal-detail-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
-import { ProfileScreen } from "@/components/screens/profile-screen"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
+
+// Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
+const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
+const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
+const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
+
+function ScreenFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    </div>
+  )
+}
 
 const supabase = createClient()
 
@@ -562,10 +572,12 @@ export function AppShell() {
         )}
 
         {activeTab === "activities" && selectedActivity && (
-          <ActivityDetailScreen
-            activity={selectedActivity}
-            onBack={handleBackFromDetail}
-          />
+          <Suspense fallback={<ScreenFallback />}>
+            <ActivityDetailScreen
+              activity={selectedActivity}
+              onBack={handleBackFromDetail}
+            />
+          </Suspense>
         )}
 
         {activeTab === "goals" && (
@@ -593,22 +605,26 @@ export function AppShell() {
         )}
 
         {activeTab === "plan" && selectedGoal && (
-          <GoalDetailScreen
-            goal={selectedGoal}
-            activities={activities}
-            onBack={handleBackFromGoalDetail}
-            onEditGoal={handleEditGoal}
-          />
+          <Suspense fallback={<ScreenFallback />}>
+            <GoalDetailScreen
+              goal={selectedGoal}
+              activities={activities}
+              onBack={handleBackFromGoalDetail}
+              onEditGoal={handleEditGoal}
+            />
+          </Suspense>
         )}
 
         {activeTab === "profile" && (
-          <ProfileScreen
-            user={user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
-            syncStatus={syncStatus}
-            stravaConnected={stravaConnected}
-            onSync={handleSync}
-            onSignOut={handleSignOut}
-          />
+          <Suspense fallback={<ScreenFallback />}>
+            <ProfileScreen
+              user={user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
+              syncStatus={syncStatus}
+              stravaConnected={stravaConnected}
+              onSync={handleSync}
+              onSignOut={handleSignOut}
+            />
+          </Suspense>
         )}
       </main>
 

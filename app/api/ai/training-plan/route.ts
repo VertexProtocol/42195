@@ -351,65 +351,88 @@ export async function POST(req: NextRequest) {
     adjustNote
   )
 
-  // Call Claude with extended thinking so it reasons through coaching logic before writing JSON
-  let plan: TrainingPlan
-  try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 10000,
-      thinking: { type: "enabled", budget_tokens: 5000 },
-      messages: [{ role: "user", content: prompt }],
-    })
+  // Stream Claude response via SSE to avoid timeouts and provide progress feedback
+  const encoder = new TextEncoder()
 
-    // With extended thinking the response contains thinking blocks before the text block
-    const textBlock = message.content.find((b) => b.type === "text")
-    if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
+  const readable = new ReadableStream({
+    async start(controller) {
+      const send = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      }
 
-    // Extract JSON — Claude sometimes wraps in markdown code fences
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error("No JSON found in Claude response")
+      try {
+        send({ status: "thinking" })
 
-    const parsed = TrainingPlanSchema.safeParse(JSON.parse(jsonMatch[0]))
-    if (!parsed.success) {
-      console.error("Invalid plan structure from Claude:", parsed.error.message)
-      throw new Error(`Invalid plan structure: ${parsed.error.message}`)
-    }
-    plan = parsed.data
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error("Claude API error:", message, err)
-    return NextResponse.json(
-      { error: `Failed to generate training plan: ${message}` },
-      { status: 500 }
-    )
-  }
+        const stream = anthropic.messages.stream({
+          model: "claude-sonnet-4-6",
+          max_tokens: 10000,
+          thinking: { type: "enabled", budget_tokens: 2000 },
+          messages: [{ role: "user", content: prompt }],
+        })
 
-  // Cache in DB (upsert — one active plan per goal)
-  const blockStartDate = new Date().toISOString().split("T")[0]
+        let sentGenerating = false
+        stream.on("text", () => {
+          if (!sentGenerating) {
+            sentGenerating = true
+            send({ status: "generating" })
+          }
+        })
 
-  const { error: upsertError } = await supabase
-    .from("ai_training_plans")
-    .upsert(
-      {
-        goal_id: goalId,
-        user_id: user.id,
-        plan,
-        adjust_note: adjustNote,
-        block_start_date: blockStartDate,
-        generated_at: new Date().toISOString(),
-      },
-      { onConflict: "goal_id" }
-    )
+        const message = await stream.finalMessage()
 
-  if (upsertError) {
-    console.error("Failed to cache training plan:", upsertError)
-    // Still return the plan even if caching fails
-  }
+        // Extract text block
+        const textBlock = message.content.find((b: { type: string }) => b.type === "text")
+        if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
-  return NextResponse.json({
-    plan,
-    block_start_date: blockStartDate,
-    generated_at: new Date().toISOString(),
+        const jsonMatch = (textBlock as { type: "text"; text: string }).text.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) throw new Error("No JSON found in Claude response")
+
+        const parsed = TrainingPlanSchema.safeParse(JSON.parse(jsonMatch[0]))
+        if (!parsed.success) {
+          console.error("Invalid plan structure from Claude:", parsed.error.message)
+          throw new Error(`Invalid plan structure: ${parsed.error.message}`)
+        }
+        const plan = parsed.data
+
+        // Cache in DB (upsert — one active plan per goal)
+        const blockStartDate = new Date().toISOString().split("T")[0]
+        const generatedAt = new Date().toISOString()
+
+        const { error: upsertError } = await supabase
+          .from("ai_training_plans")
+          .upsert(
+            {
+              goal_id: goalId,
+              user_id: user.id,
+              plan,
+              adjust_note: adjustNote,
+              block_start_date: blockStartDate,
+              generated_at: generatedAt,
+            },
+            { onConflict: "goal_id" }
+          )
+
+        if (upsertError) {
+          console.error("Failed to cache training plan:", upsertError)
+        }
+
+        send({ status: "done", plan, block_start_date: blockStartDate, generated_at: generatedAt })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error("Claude API error:", msg, err)
+        send({ status: "error", error: `Failed to generate training plan: ${msg}` })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   })
 }
 

@@ -1,4 +1,4 @@
-export type ActivityType = "Run" | "Trail Run" | "Race"
+export type ActivityType = "Run" | "Trail Run" | "Race" | "Walk"
 
 export interface Activity {
   id: string
