@@ -171,6 +171,7 @@ Distribute each week's km across sessions with meaningful variety — never assi
 - Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
 - Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
 - If focus is "volume" only (no session types required), you may omit run types but still vary distances
+- ORDERING: Always list the Long run FIRST in the sessions array, then tempo/intervals, then easy runs last
 
 ## Your Task
 Generate a ${blockWeeks}-week training block starting from today. The block should:
