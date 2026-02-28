@@ -171,6 +171,7 @@ Distribute each week's km across sessions with meaningful variety — never assi
 - Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
 - Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
 - If focus is "volume" only (no session types required), you may omit run types but still vary distances
+- ORDERING: Always list the Long run FIRST in the sessions array, then tempo/intervals, then easy runs last
 
 ## Your Task
 Generate a ${blockWeeks}-week training block starting from today. The block should:
@@ -204,6 +205,7 @@ Respond with ONLY a valid JSON object — no explanation text before or after. T
   "watchOut": "One specific thing to watch out for based on this runner's history, or null"
 }`
 }
+
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -298,20 +300,22 @@ export async function POST(req: NextRequest) {
     adjustNote
   )
 
-  // Call Claude
+  // Call Claude with extended thinking so it reasons through coaching logic before writing JSON
   let plan: TrainingPlan
   try {
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
+      model: "claude-sonnet-4-6",
+      max_tokens: 10000,
+      thinking: { type: "enabled", budget_tokens: 5000 },
       messages: [{ role: "user", content: prompt }],
     })
 
-    const content = message.content[0]
-    if (content.type !== "text") throw new Error("Unexpected response type from Claude")
+    // With extended thinking the response contains thinking blocks before the text block
+    const textBlock = message.content.find((b) => b.type === "text")
+    if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
     // Extract JSON — Claude sometimes wraps in markdown code fences
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/)
+    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error("No JSON found in Claude response")
 
     plan = JSON.parse(jsonMatch[0]) as TrainingPlan
