@@ -35,6 +35,7 @@ import type {
   TrainingFocus,
   AiTrainingPlan,
   TrainingWeek,
+  PlanSnapshot,
 } from "@/lib/types"
 
 interface GoalDetailScreenProps {
@@ -426,6 +427,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showPrefsForm, setShowPrefsForm] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
+  const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
@@ -447,6 +449,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             plan: data.plan,
             block_start_date: data.block_start_date,
             generated_at: data.generated_at,
+            previous_plans: data.previous_plans ?? [],
           })
         }
       }
@@ -506,12 +509,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             } else if (event.status === "generating") {
               setGenerateStatus("Writing your plan…")
             } else if (event.status === "done") {
-              setAiPlan({
+              setAiPlan((prev) => ({
                 goal_id: goal.id,
                 plan: event.plan,
                 block_start_date: event.block_start_date,
                 generated_at: event.generated_at,
-              })
+                previous_plans: prev?.plan
+                  ? [
+                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      ...(prev.previous_plans ?? []),
+                    ].slice(0, 5)
+                  : prev?.previous_plans ?? [],
+              }))
               setAdjustNote("")
             } else if (event.status === "error") {
               setError(event.error ?? "Failed to generate plan")
@@ -825,6 +834,72 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 Regenerate (fresh start)
               </button>
             </div>
+
+            {/* Previous plans */}
+            {aiPlan.previous_plans.length > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowPreviousPlans((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
+                >
+                  <span className="font-medium text-foreground">
+                    Previous plans ({aiPlan.previous_plans.length})
+                  </span>
+                  {showPreviousPlans ? (
+                    <ChevronUp size={16} className="text-muted-foreground" />
+                  ) : (
+                    <ChevronDown size={16} className="text-muted-foreground" />
+                  )}
+                </button>
+
+                {showPreviousPlans && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {aiPlan.previous_plans.map((prev, i) => {
+                      const genDate = new Date(prev.generated_at)
+                      const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      const totalKm = prev.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-medium text-card-foreground">{label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {prev.plan.weeks.length}w · {totalKm} km total
+                              {prev.adjust_note ? " · adjusted" : ""}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setAiPlan((current) => {
+                                if (!current) return current
+                                // Swap: current → previous, selected previous → current
+                                const newPrevious = [
+                                  { plan: current.plan, generated_at: current.generated_at, adjust_note: null, block_start_date: current.block_start_date },
+                                  ...current.previous_plans.filter((_, j) => j !== i),
+                                ].slice(0, 5)
+                                return {
+                                  ...current,
+                                  plan: prev.plan,
+                                  generated_at: prev.generated_at,
+                                  block_start_date: prev.block_start_date,
+                                  previous_plans: newPrevious,
+                                }
+                              })
+                              setShowPreviousPlans(false)
+                            }}
+                            className="text-xs font-semibold text-primary active:opacity-70"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>

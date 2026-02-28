@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
   // Rate limit: prevent regeneration within 60 seconds
   const { data: existingPlan } = await supabase
     .from("ai_training_plans")
-    .select("generated_at")
+    .select("generated_at, plan, adjust_note, block_start_date, previous_plans")
     .eq("goal_id", goalId)
     .maybeSingle()
 
@@ -395,8 +395,24 @@ export async function POST(req: NextRequest) {
         const plan = parsed.data
 
         // Cache in DB (upsert — one active plan per goal)
+        // Archive the previous plan if one exists
         const blockStartDate = new Date().toISOString().split("T")[0]
         const generatedAt = new Date().toISOString()
+
+        const previousPlans = Array.isArray(existingPlan?.previous_plans)
+          ? existingPlan.previous_plans
+          : []
+
+        if (existingPlan?.plan) {
+          previousPlans.unshift({
+            plan: existingPlan.plan,
+            generated_at: existingPlan.generated_at,
+            adjust_note: existingPlan.adjust_note ?? null,
+            block_start_date: existingPlan.block_start_date,
+          })
+          // Keep at most 5 previous plans
+          if (previousPlans.length > 5) previousPlans.length = 5
+        }
 
         const { error: upsertError } = await supabase
           .from("ai_training_plans")
@@ -408,6 +424,7 @@ export async function POST(req: NextRequest) {
               adjust_note: adjustNote,
               block_start_date: blockStartDate,
               generated_at: generatedAt,
+              previous_plans: previousPlans,
             },
             { onConflict: "goal_id" }
           )
@@ -450,7 +467,7 @@ export async function GET(req: NextRequest) {
 
   const { data: planRow } = await supabase
     .from("ai_training_plans")
-    .select("plan, block_start_date, generated_at")
+    .select("plan, block_start_date, generated_at, previous_plans")
     .eq("goal_id", goalId)
     .eq("user_id", user.id)
     .maybeSingle()
@@ -461,6 +478,7 @@ export async function GET(req: NextRequest) {
     plan: planRow.plan,
     block_start_date: planRow.block_start_date,
     generated_at: planRow.generated_at,
+    previous_plans: planRow.previous_plans ?? [],
   })
 }
 

@@ -125,9 +125,17 @@ export interface TrainingPlan {
   watchOut: string | null
 }
 
+export interface PlanSnapshot {
+  plan: TrainingPlan
+  generated_at: string
+  adjust_note: string | null
+  block_start_date: string
+}
+
 export interface AiTrainingPlan {
   goal_id: string
   plan: TrainingPlan
   block_start_date: string
   generated_at: string
+  previous_plans: PlanSnapshot[]
 }

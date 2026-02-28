@@ -480,11 +480,12 @@ export function AppShell() {
   }, [])
 
   // ----- Strava Sync -----
-  const handleSync = useCallback(async () => {
+  const doSync = useCallback(async (full = false) => {
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
 
     try {
-      const res = await fetch("/api/sync-strava", { method: "POST" })
+      const url = full ? "/api/sync-strava?full=1" : "/api/sync-strava"
+      const res = await fetch(url, { method: "POST" })
       const data = await res.json()
 
       if (!res.ok) {
@@ -526,6 +527,9 @@ export function AppShell() {
       }))
     }
   }, [])
+
+  const handleSync = useCallback(() => doSync(false), [doSync])
+  const handleFullSync = useCallback(() => doSync(true), [doSync])
 
   const handleSignOut = useCallback(() => {
     startTransition(async () => {
@@ -622,6 +626,7 @@ export function AppShell() {
               syncStatus={syncStatus}
               stravaConnected={stravaConnected}
               onSync={handleSync}
+              onFullSync={handleFullSync}
               onSignOut={handleSignOut}
             />
           </Suspense>

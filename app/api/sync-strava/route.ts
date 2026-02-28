@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { startOfWeek, endOfWeek } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
@@ -96,7 +96,9 @@ async function fetchStravaActivities(
 // Main handler
 // ---------------------------------------------------------------------------
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const fullSync = request.nextUrl.searchParams.get("full") === "1"
+
   // 1. Authenticate the calling user
   const supabase = await createClient()
   const {
@@ -155,10 +157,10 @@ export async function POST() {
     const accessToken = await getStravaAccessToken(userId)
 
     // 6. Fetch activities from Strava.
-    //    - First sync (lastSyncAt = null): fetch all activities.
-    //    - Subsequent syncs: only fetch activities newer than last_sync_at,
+    //    - Full sync (fullSync=true or first sync): fetch all activities.
+    //    - Incremental sync: only fetch activities newer than last_sync_at,
     //      saving Strava API quota (100 req/15 min, 1000/day).
-    const afterTimestamp = lastSyncAt
+    const afterTimestamp = !fullSync && lastSyncAt
       ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
       : undefined
 
