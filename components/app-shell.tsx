@@ -17,6 +17,26 @@ import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserP
 
 const supabase = createClient()
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapActivityRow(a: any): Activity {
+  return {
+    id: a.id,
+    user_id: a.user_id,
+    strava_id: a.strava_id,
+    type: a.type,
+    name: a.name,
+    date: a.date,
+    distance_km: Number(a.distance_km),
+    duration_seconds: a.duration_seconds,
+    pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+    elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
+    avg_heart_rate: a.avg_heart_rate,
+    calories: a.calories,
+    map_polyline: a.map_polyline,
+    created_at: a.created_at,
+  }
+}
+
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home")
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
@@ -65,39 +85,22 @@ export function AppShell() {
         await Promise.all([
           supabase
             .from("activities")
-            .select("*")
+            .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
             .order("date", { ascending: false }),
           supabase
             .from("goals")
-            .select("*")
+            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
             .order("created_at", { ascending: false }),
           supabase
             .from("weekly_goals")
-            .select("*")
+            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
             .order("created_at", { ascending: false }),
-          supabase.from("profiles").select("*").eq("id", authUser.id).single(),
+          supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
 
       if (activitiesRes.data) {
-        setActivities(
-          activitiesRes.data.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
+        setActivities(activitiesRes.data.map(mapActivityRow))
       }
 
       if (goalsRes.data) {
@@ -166,7 +169,7 @@ export function AppShell() {
   }, [])
 
   // ----- Derived data -----
-  const activeGoals = goals.filter((g) => g.is_active)
+  const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
 
   const { currentWeekMonday, weeklySummary } = useMemo(() => {
     const now = new Date()
@@ -499,28 +502,11 @@ export function AppShell() {
       // Refetch activities after successful sync
       const { data: freshActivities } = await supabase
         .from("activities")
-        .select("*")
+        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
         .order("date", { ascending: false })
 
       if (freshActivities) {
-        setActivities(
-          freshActivities.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
+        setActivities(freshActivities.map(mapActivityRow))
       }
     } catch {
       setSyncStatus((prev) => ({

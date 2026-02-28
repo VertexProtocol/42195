@@ -115,9 +115,28 @@ export async function POST() {
   //    If null (never synced), we perform a full fetch from Strava.
   const { data: prevSync } = await service
     .from("sync_status")
-    .select("last_sync_at")
+    .select("last_sync_at, state")
     .eq("user_id", userId)
     .maybeSingle()
+
+  // Rate limit: prevent sync within 60 seconds of last sync
+  if (prevSync?.last_sync_at) {
+    const lastSync = new Date(prevSync.last_sync_at).getTime()
+    if (Date.now() - lastSync < 60_000) {
+      return NextResponse.json(
+        { error: "Please wait at least 60 seconds before syncing again" },
+        { status: 429 },
+      )
+    }
+  }
+
+  // Prevent concurrent syncs
+  if (prevSync?.state === "syncing") {
+    return NextResponse.json(
+      { error: "A sync is already in progress" },
+      { status: 409 },
+    )
+  }
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 

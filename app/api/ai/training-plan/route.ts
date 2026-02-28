@@ -44,15 +44,14 @@ function groupActivitiesByWeek(
     pace_min_per_km: number | null
   }>
 ): WeeklySummary[] {
-  const weeks = new Map<string, WeeklySummary>()
+  const weeks = new Map<string, WeeklySummary & { totalDurationSec: number }>()
 
   for (const a of activities) {
     const d = new Date(a.date)
-    // Get Monday of this week
-    const day = d.getDay()
+    // Use UTC methods to avoid server timezone issues
+    const day = d.getUTCDay()
     const diff = day === 0 ? -6 : 1 - day
-    const monday = new Date(d)
-    monday.setDate(d.getDate() + diff)
+    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diff))
     const key = monday.toISOString().split("T")[0]
 
     const existing = weeks.get(key)
@@ -60,16 +59,25 @@ function groupActivitiesByWeek(
 
     if (existing) {
       existing.totalKm += km
+      existing.totalDurationSec += a.duration_seconds
       existing.runCount += 1
       if (km > existing.longestKm) existing.longestKm = km
     } else {
       weeks.set(key, {
         weekLabel: key,
         totalKm: km,
+        totalDurationSec: a.duration_seconds,
         runCount: 1,
         longestKm: km,
-        avgPaceMinPerKm: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+        avgPaceMinPerKm: null, // computed below
       })
+    }
+  }
+
+  // Compute avg pace from total distance and total duration per week
+  for (const w of weeks.values()) {
+    if (w.totalKm > 0 && w.totalDurationSec > 0) {
+      w.avgPaceMinPerKm = (w.totalDurationSec / 60) / w.totalKm
     }
   }
 
@@ -90,10 +98,11 @@ function calcWeekTargets(avgWeeklyKm: number, pct: number, blockWeeks: number): 
   const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
   const multiplier = 1 + pct / 100
   const targets: number[] = []
-  // Keep full float precision internally so rounding doesn't compound across weeks.
-  // Only round when writing to the output array.
+  // Week 1 starts at the runner's current baseline
   let current = base
-  for (let i = 0; i < blockWeeks - 1; i++) {
+  targets.push(Math.round(current))
+  // Progressive overload for weeks 2 through blockWeeks-1
+  for (let i = 1; i < blockWeeks - 1; i++) {
     current = current * multiplier
     targets.push(Math.round(current))
   }
@@ -385,6 +394,7 @@ export async function POST(req: NextRequest) {
         goal_id: goalId,
         user_id: user.id,
         plan,
+        adjust_note: adjustNote,
         block_start_date: blockStartDate,
         generated_at: new Date().toISOString(),
       },

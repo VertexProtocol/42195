@@ -339,17 +339,7 @@ function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean 
       {expanded && (
         <div className="border-t border-border px-4 pb-4 pt-3">
           <div className="flex flex-col gap-3">
-            {[...week.sessions]
-              .sort((a, b) => {
-                const order = (type: string) => {
-                  const t = type.toLowerCase()
-                  if (t.includes("long")) return 0
-                  if (t.includes("tempo") || t.includes("interval") || t.includes("fartlek") || t.includes("speed")) return 1
-                  return 2
-                }
-                return order(a.type) - order(b.type)
-              })
-              .map((session, i) => (
+            {week.sessions.map((session, i) => (
               <div key={i} className="flex flex-col gap-0.5">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold text-card-foreground">{session.type}</span>
