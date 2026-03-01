@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame } from "lucide-react"
+import { useEffect, useState, useMemo } from "react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
+import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, StreamPoint, Lap } from "@/lib/types"
 
@@ -28,6 +29,121 @@ function StatCard({
       </div>
       <span className="text-base font-bold text-card-foreground">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  )
+}
+
+/** Decode Google's encoded polyline format to [lat, lng] pairs */
+function decodePolyline(encoded: string): [number, number][] {
+  const points: [number, number][] = []
+  let index = 0
+  let lat = 0
+  let lng = 0
+
+  while (index < encoded.length) {
+    let shift = 0
+    let result = 0
+    let b: number
+    do {
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    lat += result & 1 ? ~(result >> 1) : result >> 1
+
+    shift = 0
+    result = 0
+    do {
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    lng += result & 1 ? ~(result >> 1) : result >> 1
+
+    points.push([lat / 1e5, lng / 1e5])
+  }
+  return points
+}
+
+/** Render a lightweight SVG map from polyline coordinates */
+function RouteMap({ polyline }: { polyline: string }) {
+  const points = useMemo(() => decodePolyline(polyline), [polyline])
+
+  if (points.length < 2) return null
+
+  const lats = points.map((p) => p[0])
+  const lngs = points.map((p) => p[1])
+  const minLat = Math.min(...lats)
+  const maxLat = Math.max(...lats)
+  const minLng = Math.min(...lngs)
+  const maxLng = Math.max(...lngs)
+
+  const padding = 10
+  const width = 400
+  const height = 250
+
+  // Scale points to SVG viewport
+  const latRange = maxLat - minLat || 0.001
+  const lngRange = maxLng - minLng || 0.001
+  const scale = Math.min(
+    (width - 2 * padding) / lngRange,
+    (height - 2 * padding) / latRange,
+  )
+
+  const cx = (minLng + maxLng) / 2
+  const cy = (minLat + maxLat) / 2
+
+  const svgPoints = points
+    .map((p) => {
+      const x = (p[1] - cx) * scale + width / 2
+      const y = -(p[0] - cy) * scale + height / 2
+      return `${x},${y}`
+    })
+    .join(" ")
+
+  return (
+    <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-3 flex items-center gap-2">
+        <MapPin size={14} className="text-muted-foreground" />
+        <p className="text-xs font-medium text-card-foreground">Route</p>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full rounded-xl bg-secondary/50"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <polyline
+          points={svgPoints}
+          fill="none"
+          stroke="var(--primary)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.8"
+        />
+        {/* Start marker */}
+        {points.length > 0 && (
+          <circle
+            cx={(points[0][1] - cx) * scale + width / 2}
+            cy={-(points[0][0] - cy) * scale + height / 2}
+            r="4"
+            fill="var(--chart-4)"
+            stroke="white"
+            strokeWidth="1.5"
+          />
+        )}
+        {/* End marker */}
+        {points.length > 1 && (
+          <circle
+            cx={(points[points.length - 1][1] - cx) * scale + width / 2}
+            cy={-(points[points.length - 1][0] - cy) * scale + height / 2}
+            r="4"
+            fill="var(--chart-5)"
+            stroke="white"
+            strokeWidth="1.5"
+          />
+        )}
+      </svg>
     </div>
   )
 }
@@ -59,6 +175,16 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
   const hasPace = streams?.some((p) => p.pace !== null) ?? false
   const hasHr = streams?.some((p) => p.hr !== null) ?? false
   const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr)
+
+  const hrZones = useMemo(
+    () => (streams ? analyzeHrZones(streams) : []),
+    [streams],
+  )
+
+  const paceZones = useMemo(
+    () => (streams ? analyzePaceZones(streams) : []),
+    [streams],
+  )
 
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
@@ -138,6 +264,81 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
           )}
         </div>
       </section>
+
+      {/* Route Map */}
+      {activity.map_polyline && (
+        <section>
+          <RouteMap polyline={activity.map_polyline} />
+        </section>
+      )}
+
+      {/* Heart Rate Zones */}
+      {hrZones.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Heart Rate Zones
+          </h3>
+          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="flex flex-col gap-2.5">
+              {hrZones.map((zone) => (
+                <div key={zone.zone} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-card-foreground">
+                      Z{zone.zone} {zone.label}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {zone.percentage}% · {formatElapsed(zone.seconds)}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${zone.percentage}%`,
+                        backgroundColor: zone.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Pace Zones */}
+      {paceZones.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Pace Distribution
+          </h3>
+          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="flex flex-col gap-2.5">
+              {paceZones.filter((z) => z.percentage > 0).map((zone) => (
+                <div key={zone.zone} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-card-foreground">
+                      {zone.label}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {zone.percentage}% · {formatElapsed(zone.seconds)}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${zone.percentage}%`,
+                        backgroundColor: zone.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Performance Charts */}
       {loadingCharts && (
@@ -318,7 +519,7 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
                   {formatPace(lap.pace_min_per_km)}
                 </span>
                 <span className="text-right text-sm text-card-foreground">
-                  {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "—"}
+                  {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "\u2014"}
                 </span>
               </div>
             ))}

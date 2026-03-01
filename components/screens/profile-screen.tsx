@@ -1,13 +1,16 @@
 "use client"
 
+import { useMemo } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
-import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off } from "lucide-react"
-import { formatTimeAgo } from "@/lib/format"
-import type { SyncStatus, UserProfile } from "@/lib/types"
+import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off, Trophy } from "lucide-react"
+import { formatTimeAgo, formatTargetTime, formatPace, formatDateShort } from "@/lib/format"
+import { detectPersonalRecords } from "@/lib/training-utils"
+import type { Activity, SyncStatus, UserProfile } from "@/lib/types"
 
 interface ProfileScreenProps {
   user: UserProfile
+  activities: Activity[]
   syncStatus: SyncStatus
   stravaConnected: boolean
   onSync: () => void
@@ -65,9 +68,11 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, activities, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
   const { theme, setTheme } = useTheme()
   const isDarkMode = theme === "dark"
+
+  const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
 
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
@@ -98,6 +103,36 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, onSync, onFul
           <p className="truncate text-sm text-muted-foreground">{user.email}</p>
         </div>
       </section>
+
+      {/* Personal Records */}
+      {personalRecords.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Personal Records
+          </h3>
+          <div className="flex flex-col gap-2">
+            {personalRecords.map((pr) => (
+              <div
+                key={pr.distance_label}
+                className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/10">
+                  <Trophy size={16} className="text-success" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-card-foreground">{pr.distance_label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateShort(pr.date)} · {formatPace(pr.pace_min_per_km)} pace
+                  </p>
+                </div>
+                <span className="text-base font-bold font-mono text-foreground">
+                  {formatTargetTime(pr.time_seconds)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Appearance */}
       <section>

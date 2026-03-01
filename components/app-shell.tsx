@@ -249,6 +249,7 @@ export function AppShell({ initialData }: AppShellProps) {
           <Suspense fallback={<ScreenFallback />}>
             <ProfileScreen
               user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
+              activities={data.activities}
               syncStatus={data.syncStatus}
               stravaConnected={data.stravaConnected}
               onSync={data.sync}
