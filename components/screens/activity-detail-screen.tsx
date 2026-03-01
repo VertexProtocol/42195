@@ -35,17 +35,24 @@ function StatCard({
 export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
+  const [loadingCharts, setLoadingCharts] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/activities/${activity.id}/streams`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.points) setStreams(data.points) })
-      .catch(() => {})
+    let cancelled = false
+    setLoadingCharts(true)
 
-    fetch(`/api/activities/${activity.id}/laps`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.laps) setLaps(data.laps) })
-      .catch(() => {})
+    Promise.all([
+      fetch(`/api/activities/${activity.id}/streams`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => { if (!cancelled && data?.points) setStreams(data.points) })
+        .catch(() => {}),
+      fetch(`/api/activities/${activity.id}/laps`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => { if (!cancelled && data?.laps) setLaps(data.laps) })
+        .catch(() => {}),
+    ]).finally(() => { if (!cancelled) setLoadingCharts(false) })
+
+    return () => { cancelled = true }
   }, [activity.id])
 
   const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
@@ -133,6 +140,17 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
       </section>
 
       {/* Performance Charts */}
+      {loadingCharts && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Performance
+          </h3>
+          <div className="flex flex-col gap-3">
+            <div className="h-[170px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+            <div className="h-[170px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+          </div>
+        </section>
+      )}
       {showCharts && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">

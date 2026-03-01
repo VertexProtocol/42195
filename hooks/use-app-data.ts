@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react"
+import { useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
 import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
@@ -49,6 +49,13 @@ export function useAppData(initialData?: InitialData | null) {
   )
   const [stravaConnected, setStravaConnected] = useState(initialData?.stravaConnected ?? false)
   const [isLoading, setIsLoading] = useState(!hasInitial)
+
+  // Refs to latest state — avoids stale closures in useCallback without
+  // putting mutable arrays in dependency lists (which would recreate every callback on each change).
+  const goalsRef = useRef(goals)
+  goalsRef.current = goals
+  const weeklyGoalsRef = useRef(weeklyGoals)
+  weeklyGoalsRef.current = weeklyGoals
 
   const [, startTransition] = useTransition()
 
@@ -196,7 +203,7 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Goal CRUD -----
   const toggleActiveGoal = useCallback(async (goalId: string) => {
-    const target = goals.find((g) => g.id === goalId)
+    const target = goalsRef.current.find((g) => g.id === goalId)
     if (!target) return
 
     const newActive = !target.is_active
@@ -212,14 +219,14 @@ export function useAppData(initialData?: InitialData | null) {
     if (error) {
       console.error("Failed to toggle goal active state:", error)
       setGoals((prev) =>
-        prev.map((g) => (g.id === goalId ? { ...g, is_active: target.is_active } : g))
+        prev.map((g) => (g.id === goalId ? { ...g, is_active: !newActive } : g))
       )
     }
-  }, [goals])
+  }, [])
 
   const saveGoal = useCallback(
     async (saved: Goal): Promise<boolean> => {
-      const exists = goals.find((g) => g.id === saved.id)
+      const exists = goalsRef.current.find((g) => g.id === saved.id)
 
       if (exists) {
         setGoals((prev) => prev.map((g) => (g.id === saved.id ? saved : g)))
@@ -291,11 +298,11 @@ export function useAppData(initialData?: InitialData | null) {
 
       return true
     },
-    [goals]
+    []
   )
 
   const deleteGoal = useCallback(async (goalId: string) => {
-    const snapshot = goals
+    const snapshot = goalsRef.current
     setGoals((prev) => prev.filter((g) => g.id !== goalId))
 
     const { error } = await supabase.from("goals").delete().eq("id", goalId)
@@ -303,12 +310,12 @@ export function useAppData(initialData?: InitialData | null) {
       console.error("Failed to delete goal:", error)
       setGoals(snapshot)
     }
-  }, [goals])
+  }, [])
 
   // ----- Weekly Goal CRUD -----
   const saveWeeklyGoal = useCallback(
     async (saved: WeeklyGoal): Promise<boolean> => {
-      const exists = weeklyGoals.find((g) => g.id === saved.id)
+      const exists = weeklyGoalsRef.current.find((g) => g.id === saved.id)
 
       if (exists) {
         setWeeklyGoals((prev) =>
@@ -383,11 +390,11 @@ export function useAppData(initialData?: InitialData | null) {
 
       return true
     },
-    [weeklyGoals]
+    []
   )
 
   const deleteWeeklyGoal = useCallback(async (goalId: string) => {
-    const snapshot = weeklyGoals
+    const snapshot = weeklyGoalsRef.current
     setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId))
 
     const { error } = await supabase.from("weekly_goals").delete().eq("id", goalId)
@@ -395,7 +402,7 @@ export function useAppData(initialData?: InitialData | null) {
       console.error("Failed to delete weekly goal:", error)
       setWeeklyGoals(snapshot)
     }
-  }, [weeklyGoals])
+  }, [])
 
   // ----- Strava Sync -----
   const doSync = useCallback(async (full = false) => {

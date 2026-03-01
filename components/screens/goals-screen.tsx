@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
@@ -100,6 +100,18 @@ export function GoalsScreen({
 
   // Performance goals only (event_training goals live in Plan tab)
   const performanceGoals = goals.filter((g) => g.goal_category === "performance")
+
+  // Pre-compute performance goal evaluations (avoids O(goals * activities) inside JSX)
+  const perfGoalStatuses = useMemo(
+    () =>
+      new Map(
+        performanceGoals.map((goal) => [
+          goal.id,
+          evaluatePerformanceGoal(activities, goal.target_distance_km, goal.target_time_seconds),
+        ]),
+      ),
+    [performanceGoals, activities],
+  )
 
   return (
     <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
@@ -308,11 +320,7 @@ export function GoalsScreen({
             </div>
           ) : (
             performanceGoals.map((goal) => {
-              const status = evaluatePerformanceGoal(
-                activities,
-                goal.target_distance_km,
-                goal.target_time_seconds,
-              )
+              const status = perfGoalStatuses.get(goal.id) ?? { reached: false, bestTime: null }
               const days = daysUntil(goal.target_date)
 
               return (
