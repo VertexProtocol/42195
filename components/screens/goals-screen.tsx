@@ -320,7 +320,7 @@ export function GoalsScreen({
             </div>
           ) : (
             performanceGoals.map((goal) => {
-              const status = perfGoalStatuses.get(goal.id) ?? { reached: false, bestTime: null }
+              const status = perfGoalStatuses.get(goal.id) ?? { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 }
               const days = daysUntil(goal.target_date)
 
               return (
