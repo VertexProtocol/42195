@@ -32,6 +32,8 @@ export interface InitialData {
   goals: Goal[]
   weeklyGoals: WeeklyGoal[]
   user: UserProfile
+  stravaConnected: boolean
+  syncStatus: SyncStatus | null
 }
 
 export function useAppData(initialData?: InitialData | null) {
@@ -42,12 +44,10 @@ export function useAppData(initialData?: InitialData | null) {
   const [goals, setGoals] = useState<Goal[]>(initialData?.goals ?? [])
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>(initialData?.weeklyGoals ?? [])
   const [user, setUser] = useState<UserProfile | null>(initialData?.user ?? null)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
-    state: "never",
-    last_sync_at: null,
-    error_message: null,
-  })
-  const [stravaConnected, setStravaConnected] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
+    initialData?.syncStatus ?? { state: "never", last_sync_at: null, error_message: null }
+  )
+  const [stravaConnected, setStravaConnected] = useState(initialData?.stravaConnected ?? false)
   const [isLoading, setIsLoading] = useState(!hasInitial)
 
   const [, startTransition] = useTransition()
@@ -58,20 +58,7 @@ export function useAppData(initialData?: InitialData | null) {
   useEffect(() => {
     async function loadData() {
       if (hasInitial) {
-        // Only fetch sync status client-side (requires cookies/session)
-        try {
-          const syncApiRes = await fetch("/api/sync-status").then((r) => r.json()).catch(() => null)
-          if (syncApiRes?.sync_status) {
-            setSyncStatus({
-              state: syncApiRes.sync_status.state,
-              last_sync_at: syncApiRes.sync_status.last_sync_at,
-              error_message: syncApiRes.sync_status.error_message,
-            })
-          }
-          setStravaConnected(!!syncApiRes?.strava_connected)
-        } catch {
-          // sync status fetch is non-critical
-        }
+        // SSR data already includes sync status — nothing to fetch
         return
       }
 

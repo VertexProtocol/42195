@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { AppShell } from "@/components/app-shell"
 import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalCategory } from "@/lib/types"
 
 export default async function Page() {
@@ -17,7 +18,9 @@ export default async function Page() {
     )
   }
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes] =
+  const service = createServiceClient()
+
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       supabase
         .from("activities")
@@ -32,6 +35,8 @@ export default async function Page() {
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
         .order("created_at", { ascending: false }),
       supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
+      service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
+      supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
 
   const initialData = {
@@ -87,6 +92,14 @@ export default async function Page() {
           email: authUser.email ?? "",
           avatar_url: null,
         },
+    stravaConnected: !!stravaTokenRes.data,
+    syncStatus: syncStatusRes.data
+      ? {
+          state: syncStatusRes.data.state as string,
+          last_sync_at: syncStatusRes.data.last_sync_at as string | null,
+          error_message: syncStatusRes.data.error_message as string | null,
+        }
+      : null,
   }
 
   return (

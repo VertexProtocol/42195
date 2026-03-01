@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useCallback, lazy, Suspense } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useState, useCallback, useSyncExternalStore, lazy, Suspense } from "react"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
@@ -19,6 +18,21 @@ const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-de
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
 const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
 
+// Lightweight URL sync — updates the URL bar without triggering Next.js server navigation
+function getSearchString() {
+  if (typeof window === "undefined") return ""
+  return window.location.search
+}
+
+function useLocationSearch() {
+  const subscribe = useCallback((cb: () => void) => {
+    window.addEventListener("popstate", cb)
+    return () => window.removeEventListener("popstate", cb)
+  }, [])
+  const search = useSyncExternalStore(subscribe, getSearchString, () => "")
+  return new URLSearchParams(search)
+}
+
 function ScreenFallback() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -33,8 +47,7 @@ interface AppShellProps {
 
 export function AppShell({ initialData }: AppShellProps) {
   const data = useAppData(initialData)
-  const searchParams = useSearchParams()
-  const router = useRouter()
+  const searchParams = useLocationSearch()
 
   // Read navigation state from URL
   const urlTab = searchParams.get("tab") as TabId | null
@@ -60,15 +73,19 @@ export function AppShell({ initialData }: AppShellProps) {
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
 
   // ----- URL navigation helpers -----
+  // Uses pushState directly to avoid Next.js server round-trips
   const navigate = useCallback((params: Record<string, string | null>) => {
-    const sp = new URLSearchParams(searchParams.toString())
+    const sp = new URLSearchParams(window.location.search)
     for (const [key, value] of Object.entries(params)) {
       if (value === null) sp.delete(key)
       else sp.set(key, value)
     }
     const qs = sp.toString()
-    router.push(qs ? `/?${qs}` : "/", { scroll: false })
-  }, [searchParams, router])
+    const url = qs ? `/?${qs}` : "/"
+    window.history.pushState(null, "", url)
+    // Trigger re-render via popstate listener
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  }, [])
 
   const handleTabChange = useCallback((tab: TabId) => {
     navigate(tab === "home"
