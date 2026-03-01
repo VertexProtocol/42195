@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { AppShell } from "@/components/app-shell"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import type { GoalCategory } from "@/lib/types"
+import type { GoalCategory, SyncStatus } from "@/lib/types"
 
 export default async function Page() {
   const supabase = await createClient()
@@ -95,7 +95,7 @@ export default async function Page() {
     stravaConnected: !!stravaTokenRes.data,
     syncStatus: syncStatusRes.data
       ? {
-          state: syncStatusRes.data.state as string,
+          state: syncStatusRes.data.state as SyncStatus["state"],
           last_sync_at: syncStatusRes.data.last_sync_at as string | null,
           error_message: syncStatusRes.data.error_message as string | null,
         }
