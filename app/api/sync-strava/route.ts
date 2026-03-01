@@ -296,7 +296,9 @@ export async function POST(request: NextRequest) {
         ? err.message
         : typeof err === "string"
           ? err
-          : "Unknown sync error"
+          : typeof err === "object" && err !== null && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Unknown sync error"
 
     await service.from("sync_status").upsert(
       {
