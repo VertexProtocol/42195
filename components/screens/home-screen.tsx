@@ -48,6 +48,47 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const [loadWindow, setLoadWindow] = useState<7 | 30>(7)
 
+  // Pre-compute goal metrics outside JSX so we don't run O(goals * activities) on every render
+  const goalMetrics = useMemo(
+    () =>
+      activeGoals.map((goal) => {
+        const logged = computeDistanceInRange(
+          activities,
+          goal.start_date,
+          goal.target_date,
+          goal.created_at,
+        )
+        const effectiveStart = goal.start_date ?? goal.created_at
+        return {
+          id: goal.id,
+          logged,
+          timeProgress: timeElapsedPercentage(effectiveStart, goal.target_date),
+          days: daysUntil(goal.target_date),
+        }
+      }),
+    [activeGoals, activities],
+  )
+
+  const weeklyMetrics = useMemo(
+    () =>
+      weeklyGoals.map((wg) => {
+        const current = computeWeeklyProgress(
+          activities,
+          wg.metric,
+          currentWeekStart,
+          wg.session_min_duration_minutes,
+          wg.session_min_distance_km,
+        )
+        return {
+          id: wg.id,
+          current,
+          progress: progressPercentage(current, wg.target),
+          isComplete: current >= wg.target,
+        }
+      }),
+    [weeklyGoals, activities, currentWeekStart],
+  )
+
   const loadStats = useMemo(() => {
     const cutoff = Date.now() - loadWindow * 24 * 60 * 60 * 1000
     const relevant = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
@@ -85,18 +126,8 @@ export function HomeScreen({
           </div>
           <Carousel opts={{ align: "start", dragFree: false }}>
             <CarouselContent className="-ml-3">
-              {activeGoals.map((goal) => {
-                // Use created_at as the fallback start so only post-creation
-                // activities count when no explicit start date is set.
-                const logged = computeDistanceInRange(
-                  activities,
-                  goal.start_date,
-                  goal.target_date,
-                  goal.created_at,
-                )
-                const effectiveStart = goal.start_date ?? goal.created_at
-                const timeProgress = timeElapsedPercentage(effectiveStart, goal.target_date)
-                const days = daysUntil(goal.target_date)
+              {activeGoals.map((goal, i) => {
+                const m = goalMetrics[i]
 
                 return (
                   <CarouselItem
@@ -118,10 +149,10 @@ export function HomeScreen({
                           <div className="mt-2.5 flex flex-col gap-1">
                             <div className="flex items-center gap-4">
                               <span className="text-sm text-muted-foreground">
-                                {days} days left
+                                {m.days} days left
                               </span>
                               <span className="text-sm font-medium text-primary">
-                                {formatDistance(logged)} logged
+                                {formatDistance(m.logged)} logged
                               </span>
                             </div>
                             {goal.target_time_seconds && (
@@ -133,12 +164,12 @@ export function HomeScreen({
                         </div>
                         <div className="relative flex shrink-0 items-center justify-center">
                           <ProgressRing
-                            percentage={timeProgress}
+                            percentage={m.timeProgress}
                             size={72}
                             strokeWidth={5}
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-[10px] font-bold text-foreground">{timeProgress}%</span>
+                            <span className="text-[10px] font-bold text-foreground">{m.timeProgress}%</span>
                             <span className="text-[8px] text-muted-foreground">elapsed</span>
                           </div>
                         </div>
@@ -269,19 +300,9 @@ export function HomeScreen({
           </div>
           <Carousel opts={{ align: "start", dragFree: true }}>
             <CarouselContent className="-ml-3">
-              {weeklyGoals.map((wg) => {
-                // Always compute against the actual current week Monday, not the stored
-                // week_start — this handles mid-week goal creation correctly.
-                const current = computeWeeklyProgress(
-                  activities,
-                  wg.metric,
-                  currentWeekStart,
-                  wg.session_min_duration_minutes,
-                  wg.session_min_distance_km,
-                )
-                const progress = progressPercentage(current, wg.target)
+              {weeklyGoals.map((wg, i) => {
+                const m = weeklyMetrics[i]
                 const Icon = METRIC_ICONS[wg.metric] || Target
-                const isComplete = current >= wg.target
 
                 return (
                   <CarouselItem key={wg.id} className="pl-3 basis-[46%]">
@@ -290,15 +311,15 @@ export function HomeScreen({
                       className="flex w-full flex-col items-start gap-2.5 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
                     >
                       <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        isComplete ? "bg-success/15" : "bg-primary/10"
+                        m.isComplete ? "bg-success/15" : "bg-primary/10"
                       }`}>
-                        <Icon size={16} className={isComplete ? "text-success" : "text-primary"} />
+                        <Icon size={16} className={m.isComplete ? "text-success" : "text-primary"} />
                       </div>
                       <div className="w-full">
                         <p className="text-[11px] text-muted-foreground">{wg.label}</p>
                         <div className="mt-0.5 flex items-baseline gap-1">
                           <span className="text-sm font-bold font-mono text-card-foreground">
-                            {formatWeeklyMetric(current, wg.metric)}
+                            {formatWeeklyMetric(m.current, wg.metric)}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             / {formatWeeklyMetric(wg.target, wg.metric)}
@@ -307,9 +328,9 @@ export function HomeScreen({
                         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${
-                              isComplete ? "bg-success" : "bg-primary"
+                              m.isComplete ? "bg-success" : "bg-primary"
                             }`}
-                            style={{ width: `${progress}%` }}
+                            style={{ width: `${m.progress}%` }}
                           />
                         </div>
                       </div>

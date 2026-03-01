@@ -194,33 +194,35 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Recalculate current_distance_km for every active goal.
-    //    Multiple goals can now be active simultaneously, so we iterate all.
-    //    Each goal's distance is scoped to its own [start_date, target_date]
-    //    window so activities before a goal was set up don't inflate the count.
+    //    Fetch activities once and compute distances in memory (avoids N+1).
     const { data: activeGoals } = await service
       .from("goals")
       .select("id, start_date, target_date")
       .eq("user_id", userId)
       .eq("is_active", true)
 
-    for (const goal of activeGoals ?? []) {
-      let query = service
+    if (activeGoals && activeGoals.length > 0) {
+      const { data: allActivities } = await service
         .from("activities")
-        .select("distance_km")
+        .select("date, distance_km")
         .eq("user_id", userId)
-        .lte("date", goal.target_date)
 
-      if (goal.start_date) {
-        query = query.gte("date", goal.start_date)
+      const acts = allActivities ?? []
+
+      for (const goal of activeGoals) {
+        const totalKm = acts
+          .filter((a) => {
+            if (a.date > goal.target_date) return false
+            if (goal.start_date && a.date < goal.start_date) return false
+            return true
+          })
+          .reduce((sum, a) => sum + Number(a.distance_km), 0)
+
+        await service
+          .from("goals")
+          .update({ current_distance_km: totalKm })
+          .eq("id", goal.id)
       }
-
-      const { data: distRows } = await query
-      const totalKm = (distRows ?? []).reduce((sum, r) => sum + Number(r.distance_km), 0)
-
-      await service
-        .from("goals")
-        .update({ current_distance_km: totalKm })
-        .eq("id", goal.id)
     }
 
     // 9. Recalculate weekly goals progress for the current week.
