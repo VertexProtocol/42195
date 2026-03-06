@@ -527,8 +527,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
-  // Session completion tracking: key = "W{weekNumber}-{sessionIndex}", value = status
-  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
