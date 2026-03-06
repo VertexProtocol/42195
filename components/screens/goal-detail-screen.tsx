@@ -630,6 +630,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     ? generatedAgo !== null && generatedAgo >= prefs.regenerate_every_weeks * 7
     : false
 
+  // Check if the training block has ended (all weeks are in the past)
+  const isBlockExpired = aiPlan
+    ? currentWeekIndex >= (aiPlan.plan.weeks.length)
+    : false
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-8 pt-4">
       {/* Back */}
@@ -806,6 +811,19 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
+            {/* Expired block warning */}
+            {isBlockExpired && (
+              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
+                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium text-foreground">Training block ended</p>
+                  <p className="text-xs text-muted-foreground">
+                    This {aiPlan.plan.weeks.length}-week block has finished. Regenerate to get a fresh plan based on your latest training.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Summary */}
             <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20">
               <p className="text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>

@@ -28,6 +28,11 @@ export default function LoginPage() {
         // Hard navigation so the browser sends the freshly-set session cookies
         // in a brand-new HTTP request. router.push() is a client-side navigation
         // that can race with cookie writes and send the middleware an empty session.
+        // Show a loading state during the redirect to avoid a blank screen.
+        const root = document.getElementById("login-root")
+        if (root) {
+          root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100dvh;flex-direction:column;gap:8px"><div style="width:24px;height:24px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite"></div><p style="font-size:14px;color:inherit;opacity:0.7">Loading your data…</p><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div>'
+        }
         window.location.href = "/"
       } catch (err) {
         setError(err instanceof Error ? err.message : "Login failed. Please try again.")
@@ -36,7 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
+    <div id="login-root" className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-bold tracking-tight">42195</h1>

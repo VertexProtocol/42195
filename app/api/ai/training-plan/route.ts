@@ -97,13 +97,15 @@ function formatPace(minPerKm: number | null): string {
 function calcWeekTargets(avgWeeklyKm: number, pct: number, blockWeeks: number): number[] {
   const base = avgWeeklyKm > 0 ? avgWeeklyKm : 20
   const multiplier = 1 + pct / 100
+  // Safety cap: no week should exceed 150% of baseline to prevent injury
+  const maxWeeklyKm = base * 1.5
   const targets: number[] = []
   // Week 1 starts at the runner's current baseline
   let current = base
   targets.push(Math.round(current))
   // Progressive overload for weeks 2 through blockWeeks-1
   for (let i = 1; i < blockWeeks - 1; i++) {
-    current = current * multiplier
+    current = Math.min(current * multiplier, maxWeeklyKm)
     targets.push(Math.round(current))
   }
   // Last week is always recovery at 80% of peak
@@ -124,7 +126,10 @@ function buildPrompt(
   longestRecentRun: number,
   currentAvgWeeklyKm: number,
   daysUntilRace: number,
-  adjustNote: string | null
+  adjustNote: string | null,
+  acwr?: { ratio: number; risk: string },
+  recentEasyPace?: number | null,
+  recentBestPace?: number | null,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -145,7 +150,9 @@ function buildPrompt(
     ? `\n## Adjustment Request\nThe runner wants to adjust the plan with this note:\n"${adjustNote}"\nPlease take this into account when generating the new plan.\n`
     : ""
 
-  const blockWeeks = prefs.block_weeks ?? 4
+  // Clamp block weeks so the plan doesn't extend past race day
+  const maxWeeksUntilRace = Math.max(1, Math.floor(daysUntilRace / 7))
+  const blockWeeks = Math.min(prefs.block_weeks ?? 4, maxWeeksUntilRace)
   const increasePct = prefs.weekly_increase_pct ?? 10
   const recentWindow = prefs.regenerate_every_weeks ?? 4
   const weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks)
@@ -171,12 +178,23 @@ function buildPrompt(
     else trendLine = `stable — ${arrow} (${pct > 0 ? "+" : ""}${pct}%)`
   }
 
+  // Determine training phase based on time to race
+  const phase = daysUntilRace > 84 ? "base-building"
+    : daysUntilRace > 42 ? "build"
+    : daysUntilRace > 21 ? "peak"
+    : "taper"
+
+  const taperNote = phase === "taper"
+    ? "\n\nIMPORTANT: The runner is in taper phase. Reduce volume by 30-50% compared to peak. Prioritize rest, short quality sessions, and race-day readiness. Do NOT increase volume."
+    : ""
+
   return `You are an expert running coach creating a personalised ${blockWeeks}-week training block for a runner preparing for an upcoming race.
 
 ## The Runner's Goal
 - Race: ${goal.name} (${goal.target_distance_km} km)
 - Race date: ${goal.target_date} (${daysUntilRace} days away)
-- Training start: ${goal.start_date ?? goal.created_at.split("T")[0]}
+- Training phase: ${phase}
+- Training start: ${goal.start_date ?? goal.created_at.split("T")[0]}${taperNote}
 
 ## Runner's Preferences
 - Sessions per week: ${prefs.sessions_per_week}
@@ -189,7 +207,7 @@ ${weekSummaryText}
 ## Current Fitness Snapshot
 - Avg weekly km (last ${recentWindow} weeks): ${currentAvgWeeklyKm.toFixed(1)} km
 - Volume trend vs prior ${recentWindow} weeks: ${trendLine}
-- Longest recent run: ${longestRecentRun.toFixed(1)} km
+- Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
 
 ## Suggested Weekly Volume Targets
 These are calculated from the runner's ${recentWindow}-week rolling average using ${increasePct}% progressive overload. Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
@@ -204,6 +222,11 @@ Distribute each week's km across sessions with meaningful variety — never assi
 - Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
 - If focus is "volume" only (no session types required), you may omit run types but still vary distances
 - ORDERING: Always list the Long run FIRST in the sessions array, then tempo/intervals, then easy runs last
+
+## Intensity Balance
+- At most 2 quality sessions (tempo, intervals, race pace) per week — the rest should be easy effort
+- Never schedule descriptions that imply hard efforts on back-to-back days
+- Follow the 80/20 rule: ~80% of weekly volume at easy/conversational effort, ~20% at moderate-to-hard effort
 
 ## Your Task
 Generate a ${blockWeeks}-week training block starting from today. The block should:
@@ -256,7 +279,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     goalId = body.goalId
     adjustNote = body.adjustNote
-      ? String(body.adjustNote).replace(/[^\w\s.,!?;:'"()\-–—/+%°#@]/g, "").slice(0, 500)
+      ? String(body.adjustNote).replace(/[^\p{L}\p{N}\s.,!?;:'"()\-–—/+%°#@]/gu, "").slice(0, 500)
       : null
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -322,6 +345,7 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .gte("date", twelveWeeksAgo.toISOString())
     .order("date", { ascending: false })
+    .limit(500)
 
   const weeklySummaries = groupActivitiesByWeek(activities ?? [])
 
@@ -341,6 +365,34 @@ export async function POST(req: NextRequest) {
     (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
+  // Compute ACWR for injury risk awareness in the prompt
+  const now = Date.now()
+  const day7 = now - 7 * 24 * 60 * 60 * 1000
+  const day28 = now - 28 * 24 * 60 * 60 * 1000
+  const acts = activities ?? []
+  const acuteLoad = acts
+    .filter((a) => new Date(a.date).getTime() >= day7)
+    .reduce((s, a) => s + Number(a.distance_km), 0)
+  const chronicTotal = acts
+    .filter((a) => new Date(a.date).getTime() >= day28)
+    .reduce((s, a) => s + Number(a.distance_km), 0)
+  const chronicLoad = chronicTotal / 4
+  const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
+  const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
+
+  // Compute pace stats for the prompt
+  const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+  const recentEasyPace = actsWithPace.length > 0
+    ? actsWithPace
+        .map((a) => Number(a.pace_min_per_km))
+        .sort((a, b) => b - a) // slowest first
+        .slice(0, Math.ceil(actsWithPace.length * 0.5)) // bottom 50% by speed = top 50% by pace value
+        .reduce((s, p, _, arr) => s + p / arr.length, 0)
+    : null
+  const recentBestPace = actsWithPace.length > 0
+    ? Math.min(...actsWithPace.map((a) => Number(a.pace_min_per_km)))
+    : null
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -348,7 +400,10 @@ export async function POST(req: NextRequest) {
     longestRecentRun,
     currentAvgWeeklyKm,
     daysUntilRace,
-    adjustNote
+    adjustNote,
+    { ratio: acwrRatio, risk: acwrRisk },
+    recentEasyPace,
+    recentBestPace,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
@@ -393,6 +448,24 @@ export async function POST(req: NextRequest) {
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
         const plan = parsed.data
+
+        // Post-generation validation logging
+        for (const week of plan.weeks) {
+          if (week.sessions.length !== prefs.sessions_per_week) {
+            console.warn(
+              `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${prefs.sessions_per_week}`
+            )
+          }
+          const sessionKmTotal = week.sessions.reduce((sum, s) => {
+            const match = s.distance.match(/([\d.]+)\s*km/i)
+            return sum + (match ? parseFloat(match[1]) : 0)
+          }, 0)
+          if (sessionKmTotal > 0 && Math.abs(sessionKmTotal - week.targetKm) > week.targetKm * 0.2) {
+            console.warn(
+              `[plan-validation] Week ${week.weekNumber}: session total ${sessionKmTotal.toFixed(1)} km vs target ${week.targetKm} km (>20% deviation)`
+            )
+          }
+        }
 
         // Cache in DB (upsert — one active plan per goal)
         // Archive the previous plan if one exists

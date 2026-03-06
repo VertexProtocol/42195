@@ -25,7 +25,8 @@ export default async function Page() {
       supabase
         .from("activities")
         .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
-        .order("date", { ascending: false }),
+        .order("date", { ascending: false })
+        .limit(200),
       supabase
         .from("goals")
         .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
