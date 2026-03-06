@@ -320,8 +320,10 @@ function parseSessionKm(distance: string): number | null {
 
 /**
  * Auto-match activities to planned sessions for a given week.
- * Uses greedy matching: sorts sessions by distance (descending) and
- * assigns the closest unmatched activity within ±40% distance tolerance.
+ * Uses optimal (closest-distance) matching: builds all valid
+ * (session, activity) pairs sorted by distance delta, then greedily
+ * assigns the closest pair first. Each activity matches at most one session.
+ * Tolerance: activity must be within ±30% of the session's planned distance.
  * Returns an array of booleans (one per session index) indicating auto-match.
  */
 function autoMatchSessions(
@@ -335,28 +337,30 @@ function autoMatchSessions(
   const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionKm(s.distance) }))
     .filter((s) => s.km !== null && s.km > 0) as { i: number; km: number }[]
 
-  // Sort by distance descending — match longest sessions first to avoid
-  // a short run "stealing" the activity meant for a long run
-  sessionKms.sort((a, b) => b.km - a.km)
-
-  const usedActivities = new Set<number>()
-
+  // Build all valid (session, activity) candidate pairs
+  const candidates: { si: number; ai: number; delta: number }[] = []
   for (const session of sessionKms) {
-    let bestIdx = -1
-    let bestDelta = Infinity
+    const tolerance = session.km * 0.3
     for (let ai = 0; ai < weekActivities.length; ai++) {
-      if (usedActivities.has(ai)) continue
-      const delta = Math.abs(weekActivities[ai].distance_km - session.km)
-      const tolerance = session.km * 0.4
-      if (delta <= tolerance && delta < bestDelta) {
-        bestIdx = ai
-        bestDelta = delta
+      const delta = Math.abs(Number(weekActivities[ai].distance_km) - session.km)
+      if (delta <= tolerance) {
+        candidates.push({ si: session.i, ai, delta })
       }
     }
-    if (bestIdx >= 0) {
-      matched[session.i] = true
-      usedActivities.add(bestIdx)
-    }
+  }
+
+  // Sort by delta ascending — closest matches first
+  candidates.sort((a, b) => a.delta - b.delta)
+
+  // Greedily assign closest pairs, each session and activity used at most once
+  const usedActivities = new Set<number>()
+  const usedSessions = new Set<number>()
+
+  for (const { si, ai } of candidates) {
+    if (usedSessions.has(si) || usedActivities.has(ai)) continue
+    matched[si] = true
+    usedSessions.add(si)
+    usedActivities.add(ai)
   }
 
   return matched
