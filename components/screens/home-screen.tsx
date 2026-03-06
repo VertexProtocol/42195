@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain } from "lucide-react"
+import { useState, useMemo, lazy, Suspense } from "react"
+import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain, AlertTriangle, Timer } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
@@ -16,7 +16,10 @@ import {
   computeDistanceInRange,
   computeWeeklyProgress,
 } from "@/lib/format"
+import { computeACWR, predictRaceTimes } from "@/lib/training-utils"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
+
+const TrainingLoadChart = lazy(() => import("@/components/training-load-chart").then(m => ({ default: m.TrainingLoadChart })))
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -99,6 +102,9 @@ export function HomeScreen({
     }
   }, [activities, loadWindow])
 
+  const acwr = useMemo(() => computeACWR(activities), [activities])
+  const racePredictions = useMemo(() => predictRaceTimes(activities), [activities])
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       {/* Header */}
@@ -110,6 +116,32 @@ export function HomeScreen({
           <p className="mt-0.5 text-sm text-muted-foreground">Your training, at a glance</p>
         </div>
       </header>
+
+      {/* ACWR Injury Risk Banner */}
+      {acwr.ratio > 0 && acwr.risk !== "low" && (
+        <div className={`flex items-start gap-3 rounded-2xl px-4 py-3.5 ring-1 ${
+          acwr.risk === "high"
+            ? "bg-destructive/10 ring-destructive/30"
+            : "bg-warning/10 ring-warning/30"
+        }`}>
+          <AlertTriangle size={18} className={`mt-0.5 shrink-0 ${
+            acwr.risk === "high" ? "text-destructive" : "text-warning"
+          }`} />
+          <div>
+            <p className={`text-sm font-semibold ${
+              acwr.risk === "high" ? "text-destructive" : "text-warning"
+            }`}>
+              {acwr.risk === "high" ? "High injury risk" : "Elevated training load"}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Your 7-day load ({acwr.acuteLoad.toFixed(1)} km) is {acwr.ratio.toFixed(1)}x your 4-week average ({acwr.chronicLoad.toFixed(1)} km/week).
+              {acwr.risk === "high"
+                ? " Consider taking a recovery day."
+                : " Monitor how you feel."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Active Goals */}
       {activeGoals.length > 0 ? (
@@ -284,6 +316,15 @@ export function HomeScreen({
         </div>
       </section>
 
+      {/* Fitness & Fatigue Chart */}
+      {activities.length >= 14 && (
+        <Suspense fallback={
+          <div className="h-[230px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+        }>
+          <TrainingLoadChart activities={activities} />
+        </Suspense>
+      )}
+
       {/* Weekly Goals Progress */}
       {weeklyGoals.length > 0 && (
         <section>
@@ -340,6 +381,40 @@ export function HomeScreen({
               })}
             </CarouselContent>
           </Carousel>
+        </section>
+      )}
+
+      {/* Race Time Predictions */}
+      {racePredictions.predictions.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Race Predictions
+          </h3>
+          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+            {racePredictions.predictions.map((pred, i) => (
+              <div
+                key={pred.distance_label}
+                className={`flex items-center justify-between px-4 py-3 ${
+                  i < racePredictions.predictions.length - 1 ? "border-b border-border" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Timer size={14} className="text-muted-foreground" />
+                  <span className="text-sm text-card-foreground">{pred.distance_label}</span>
+                </div>
+                <span className="text-sm font-bold font-mono text-foreground">
+                  {formatTargetTime(pred.predicted_seconds)}
+                </span>
+              </div>
+            ))}
+            {racePredictions.referenceActivity && (
+              <div className="border-t border-border px-4 py-2">
+                <p className="text-[10px] text-muted-foreground">
+                  Based on {formatDistance(racePredictions.referenceActivity.distance_km)} on {formatDateShort(racePredictions.referenceActivity.date)}
+                </p>
+              </div>
+            )}
+          </div>
         </section>
       )}
 

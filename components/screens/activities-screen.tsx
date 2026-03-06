@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Inbox, RefreshCw, Link } from "lucide-react"
+import { ChevronRight, Inbox, RefreshCw, Link, Plus } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity } from "@/lib/types"
@@ -10,16 +10,26 @@ interface ActivitiesScreenProps {
   stravaConnected: boolean
   onSelectActivity: (activity: Activity) => void
   onSync: () => void
+  onAddActivity: () => void
 }
 
-export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync }: ActivitiesScreenProps) {
+export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
   return (
     <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">Activities</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {activities.length} {activities.length === 1 ? "activity" : "activities"} synced
-        </p>
+      <header className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Activities</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {activities.length} {activities.length === 1 ? "activity" : "activities"}
+          </p>
+        </div>
+        <button
+          onClick={onAddActivity}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground active:opacity-80 transition-opacity"
+          aria-label="Add manual activity"
+        >
+          <Plus size={18} />
+        </button>
       </header>
 
       {activities.length === 0 ? (

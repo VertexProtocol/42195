@@ -8,6 +8,7 @@ import { GoalsScreen } from "@/components/screens/goals-screen"
 import { PlanScreen } from "@/components/screens/plan-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
+import { ManualActivityForm } from "@/components/manual-activity-form"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
@@ -71,6 +72,7 @@ export function AppShell({ initialData }: AppShellProps) {
   const [editingWeeklyGoal, setEditingWeeklyGoal] = useState<WeeklyGoal | null>(null)
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
+  const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
 
   // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -198,6 +200,7 @@ export function AppShell({ initialData }: AppShellProps) {
             stravaConnected={data.stravaConnected}
             onSelectActivity={handleSelectActivity}
             onSync={data.sync}
+            onAddActivity={() => setIsManualActivityOpen(true)}
           />
         )}
 
@@ -249,6 +252,7 @@ export function AppShell({ initialData }: AppShellProps) {
           <Suspense fallback={<ScreenFallback />}>
             <ProfileScreen
               user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
+              activities={data.activities}
               syncStatus={data.syncStatus}
               stravaConnected={data.stravaConnected}
               onSync={data.sync}
@@ -278,6 +282,13 @@ export function AppShell({ initialData }: AppShellProps) {
         onSave={handleSaveWeeklyGoal}
         onDelete={handleDeleteWeeklyGoal}
         onClose={handleCloseWeeklyEditor}
+      />
+
+      {/* Manual Activity Form */}
+      <ManualActivityForm
+        open={isManualActivityOpen}
+        onClose={() => setIsManualActivityOpen(false)}
+        onSave={data.addActivity}
       />
 
       {/* Bottom Tab Bar */}
