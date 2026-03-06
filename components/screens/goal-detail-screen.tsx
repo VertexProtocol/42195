@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   ArrowLeft,
   Sparkles,
@@ -308,6 +308,60 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 // ---- Session status type ----
 type SessionStatus = "planned" | "completed" | "skipped"
 
+/** Parse a distance string like "20 km" or "8–10 km" into km (uses midpoint for ranges) */
+function parseSessionKm(distance: string): number | null {
+  // Handle ranges like "8–10 km" or "8-10km"
+  const rangeMatch = distance.match(/([\d.]+)\s*[–\-]\s*([\d.]+)\s*km/i)
+  if (rangeMatch) return (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2
+  const singleMatch = distance.match(/([\d.]+)\s*km/i)
+  if (singleMatch) return parseFloat(singleMatch[1])
+  return null
+}
+
+/**
+ * Auto-match activities to planned sessions for a given week.
+ * Uses greedy matching: sorts sessions by distance (descending) and
+ * assigns the closest unmatched activity within ±40% distance tolerance.
+ * Returns an array of booleans (one per session index) indicating auto-match.
+ */
+function autoMatchSessions(
+  sessions: { type: string; distance: string }[],
+  weekActivities: { distance_km: number }[],
+): boolean[] {
+  const matched = new Array<boolean>(sessions.length).fill(false)
+  if (weekActivities.length === 0) return matched
+
+  // Parse each session's target distance
+  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionKm(s.distance) }))
+    .filter((s) => s.km !== null && s.km > 0) as { i: number; km: number }[]
+
+  // Sort by distance descending — match longest sessions first to avoid
+  // a short run "stealing" the activity meant for a long run
+  sessionKms.sort((a, b) => b.km - a.km)
+
+  const usedActivities = new Set<number>()
+
+  for (const session of sessionKms) {
+    let bestIdx = -1
+    let bestDelta = Infinity
+    for (let ai = 0; ai < weekActivities.length; ai++) {
+      if (usedActivities.has(ai)) continue
+      const delta = Math.abs(weekActivities[ai].distance_km - session.km)
+      const tolerance = session.km * 0.4
+      if (delta <= tolerance && delta < bestDelta) {
+        bestIdx = ai
+        bestDelta = delta
+      }
+    }
+    if (bestIdx >= 0) {
+      matched[session.i] = true
+      usedActivities.add(bestIdx)
+    }
+  }
+
+  return matched
+}
+
 // ---- Training week card ----
 function WeekCard({
   week,
@@ -473,8 +527,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
-  // Session completion tracking: key = "W{weekNumber}-{sessionIndex}", value = status
-  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
@@ -510,27 +562,60 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     load()
   }, [goal.id])
 
-  // Load session statuses from localStorage
+  // Manual overrides from localStorage (explicit user toggles)
+  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>({})
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(`session-statuses-${goal.id}`)
-      if (stored) setSessionStatuses(JSON.parse(stored))
+      if (stored) setManualStatuses(JSON.parse(stored))
     } catch {}
   }, [goal.id])
 
+  // Auto-match activities to planned sessions for each week
+  const autoStatuses = useMemo(() => {
+    if (!aiPlan) return {} as Record<string, SessionStatus>
+    const result: Record<string, SessionStatus> = {}
+    for (let i = 0; i < aiPlan.plan.weeks.length; i++) {
+      const week = aiPlan.plan.weeks[i]
+      const weekStart = new Date(aiPlan.block_start_date)
+      weekStart.setDate(weekStart.getDate() + i * 7)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 7)
+      const now = new Date()
+      // Only auto-match past and current weeks
+      if (weekStart > now) continue
+
+      const weekActs = activities.filter((a) => {
+        const d = new Date(a.date)
+        return d >= weekStart && d < weekEnd
+      })
+      const matched = autoMatchSessions(week.sessions, weekActs)
+      matched.forEach((m, si) => {
+        if (m) result[`W${week.weekNumber}-${si}`] = "completed"
+      })
+    }
+    return result
+  }, [aiPlan, activities])
+
+  // Merge: manual overrides take priority over auto-matched
+  const sessionStatuses = useMemo(() => {
+    return { ...autoStatuses, ...manualStatuses }
+  }, [autoStatuses, manualStatuses])
+
   const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
-    setSessionStatuses((prev) => {
+    setManualStatuses((prev) => {
       const key = `W${weekNumber}-${sessionIndex}`
-      const current = prev[key] ?? "planned"
+      const effective = sessionStatuses[key] ?? "planned"
       const next: SessionStatus =
-        current === "planned" ? "completed"
-        : current === "completed" ? "skipped"
+        effective === "planned" ? "completed"
+        : effective === "completed" ? "skipped"
         : "planned"
       const updated = { ...prev, [key]: next }
       try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
-  }, [goal.id])
+  }, [goal.id, sessionStatuses])
 
   const handleGenerate = useCallback(
     async (note?: string) => {

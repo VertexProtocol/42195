@@ -456,7 +456,7 @@ export async function POST(req: NextRequest) {
               `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${prefs.sessions_per_week}`
             )
           }
-          const sessionKmTotal = week.sessions.reduce((sum, s) => {
+          const sessionKmTotal = week.sessions.reduce((sum: number, s: { distance: string }) => {
             const match = s.distance.match(/([\d.]+)\s*km/i)
             return sum + (match ? parseFloat(match[1]) : 0)
           }, 0)
@@ -504,6 +504,8 @@ export async function POST(req: NextRequest) {
 
         if (upsertError) {
           console.error("Failed to cache training plan:", upsertError)
+          send({ status: "error", error: "Plan was generated but failed to save. Please try again." })
+          return
         }
 
         send({ status: "done", plan, block_start_date: blockStartDate, generated_at: generatedAt })
