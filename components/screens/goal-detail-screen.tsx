@@ -318,13 +318,25 @@ function parseSessionKm(distance: string): number | null {
   return null
 }
 
+/** Snap a date to the Monday of its ISO week (Mon=start of week) */
+function toMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+  const diff = day === 0 ? -6 : 1 - day // shift Sun→prev Mon, others→current Mon
+  d.setDate(d.getDate() + diff)
+  return d
+}
+
 /**
  * Auto-match activities to planned sessions for a given week.
- * Uses optimal (closest-distance) matching: builds all valid
- * (session, activity) pairs sorted by distance delta, then greedily
- * assigns the closest pair first. Each activity matches at most one session.
- * Tolerance: activity must be within ±30% of the session's planned distance.
- * Returns an array of booleans (one per session index) indicating auto-match.
+ * Builds all valid (session, activity) pairs sorted by distance delta,
+ * then greedily assigns the closest pair first.
+ * Each activity matches at most one session.
+ *
+ * Matching rule: activity distance must be ≥ 95% of planned distance
+ * (i.e. you must run at least the planned distance, with 5% grace for
+ * GPS drift). Running further than planned always counts.
  */
 function autoMatchSessions(
   sessions: { type: string; distance: string }[],
@@ -340,10 +352,12 @@ function autoMatchSessions(
   // Build all valid (session, activity) candidate pairs
   const candidates: { si: number; ai: number; delta: number }[] = []
   for (const session of sessionKms) {
-    const tolerance = session.km * 0.3
+    const minRequired = session.km * 0.95 // must run at least 95% of planned
     for (let ai = 0; ai < weekActivities.length; ai++) {
-      const delta = Math.abs(Number(weekActivities[ai].distance_km) - session.km)
-      if (delta <= tolerance) {
+      const actKm = Number(weekActivities[ai].distance_km)
+      if (actKm >= minRequired) {
+        // Delta = how far the activity is from planned (for ranking closeness)
+        const delta = Math.abs(actKm - session.km)
         candidates.push({ si: session.i, ai, delta })
       }
     }
@@ -580,9 +594,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const autoStatuses = useMemo(() => {
     if (!aiPlan) return {} as Record<string, SessionStatus>
     const result: Record<string, SessionStatus> = {}
+    // Snap block start to Monday so weeks align with calendar weeks
+    const blockMonday = toMonday(new Date(aiPlan.block_start_date))
     for (let i = 0; i < aiPlan.plan.weeks.length; i++) {
       const week = aiPlan.plan.weeks[i]
-      const weekStart = new Date(aiPlan.block_start_date)
+      const weekStart = new Date(blockMonday)
       weekStart.setDate(weekStart.getDate() + i * 7)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekEnd.getDate() + 7)
@@ -704,10 +720,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const best = bestRelevantRun(activities, goal.target_distance_km)
   const longest = longestRun(activities, goal.start_date, goal.created_at)
 
-  // Which week of the plan are we currently in?
+  // Which week of the plan are we currently in? (Monday-aligned)
   const currentWeekIndex = aiPlan
     ? Math.floor(
-        (Date.now() - new Date(aiPlan.block_start_date).getTime()) / (7 * 24 * 60 * 60 * 1000)
+        (Date.now() - toMonday(new Date(aiPlan.block_start_date)).getTime()) / (7 * 24 * 60 * 60 * 1000)
       )
     : -1
 
@@ -920,7 +936,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
             {/* Weekly blocks */}
             {aiPlan.plan.weeks.map((week, i) => {
-              const weekStart = new Date(aiPlan.block_start_date)
+              const weekStart = toMonday(new Date(aiPlan.block_start_date))
               weekStart.setDate(weekStart.getDate() + i * 7)
               const weekEnd = new Date(weekStart)
               weekEnd.setDate(weekEnd.getDate() + 7)
