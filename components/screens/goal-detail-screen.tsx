@@ -305,17 +305,24 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
   )
 }
 
+// ---- Session status type ----
+type SessionStatus = "planned" | "completed" | "skipped"
+
 // ---- Training week card ----
 function WeekCard({
   week,
   isCurrent,
   actualKm,
   isPast,
+  sessionStatuses,
+  onToggleSession,
 }: {
   week: TrainingWeek
   isCurrent: boolean
   actualKm: number | null
   isPast: boolean
+  sessionStatuses: SessionStatus[]
+  onToggleSession: (weekNumber: number, sessionIndex: number) => void
 }) {
   const [expanded, setExpanded] = useState(isCurrent)
 
@@ -323,6 +330,9 @@ function WeekCard({
   const deltaPct = actualKm !== null && week.targetKm > 0
     ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
     : null
+
+  const completedCount = sessionStatuses.filter((s) => s === "completed").length
+  const totalSessions = week.sessions.length
 
   return (
     <div
@@ -357,6 +367,11 @@ function WeekCard({
                   {actualKm.toFixed(1)} km ({deltaPct !== null && deltaPct >= 0 ? "+" : ""}{deltaPct}%)
                 </span>
               )}
+              {(isPast || isCurrent) && completedCount > 0 && (
+                <span className="text-[10px] font-medium text-success">
+                  {completedCount}/{totalSessions} done
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -388,16 +403,46 @@ function WeekCard({
           )}
 
           <div className="flex flex-col gap-3">
-            {week.sessions.map((session, i) => (
-              <div key={i} className="flex flex-col gap-0.5">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-semibold text-card-foreground">{session.type}</span>
-                  <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
+            {week.sessions.map((session, i) => {
+              const status = sessionStatuses[i] ?? "planned"
+              return (
+                <div key={i} className={`flex gap-3 ${status === "skipped" ? "opacity-50" : ""}`}>
+                  {/* Session status toggle */}
+                  {(isPast || isCurrent) && (
+                    <button
+                      onClick={() => onToggleSession(week.weekNumber, i)}
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        status === "completed"
+                          ? "border-success bg-success text-white"
+                          : status === "skipped"
+                            ? "border-muted-foreground bg-muted-foreground/20"
+                            : "border-border active:bg-secondary"
+                      }`}
+                      aria-label={`Mark session as ${status === "planned" ? "completed" : status === "completed" ? "skipped" : "planned"}`}
+                    >
+                      {status === "completed" && (
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5L4 7L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                      {status === "skipped" && (
+                        <span className="text-[8px] font-bold text-muted-foreground">S</span>
+                      )}
+                    </button>
+                  )}
+                  <div className="flex-1 flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between">
+                      <span className={`text-sm font-semibold ${status === "completed" ? "text-success line-through" : "text-card-foreground"}`}>
+                        {session.type}
+                      </span>
+                      <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{session.effort}</p>
+                    <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">{session.effort}</p>
-                <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {week.coachNote && (
@@ -428,6 +473,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
+  // Session completion tracking: key = "W{weekNumber}-{sessionIndex}", value = status
+  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
@@ -461,6 +508,28 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       setPrefsLoaded(true)
     }
     load()
+  }, [goal.id])
+
+  // Load session statuses from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`session-statuses-${goal.id}`)
+      if (stored) setSessionStatuses(JSON.parse(stored))
+    } catch {}
+  }, [goal.id])
+
+  const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
+    setSessionStatuses((prev) => {
+      const key = `W${weekNumber}-${sessionIndex}`
+      const current = prev[key] ?? "planned"
+      const next: SessionStatus =
+        current === "planned" ? "completed"
+        : current === "completed" ? "skipped"
+        : "planned"
+      const updated = { ...prev, [key]: next }
+      try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
+      return updated
+    })
   }, [goal.id])
 
   const handleGenerate = useCallback(
@@ -765,6 +834,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                   isCurrent={i === currentWeekIndex}
                   actualKm={actualKm}
                   isPast={weekEnd <= now && i !== currentWeekIndex}
+                  sessionStatuses={week.sessions.map((_, si) =>
+                    sessionStatuses[`W${week.weekNumber}-${si}`] ?? "planned"
+                  )}
+                  onToggleSession={handleToggleSession}
                 />
               )
             })}

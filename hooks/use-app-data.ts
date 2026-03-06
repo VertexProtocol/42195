@@ -404,6 +404,42 @@ export function useAppData(initialData?: InitialData | null) {
     }
   }, [])
 
+  // ----- Add manual activity -----
+  const addActivity = useCallback(async (activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">): Promise<boolean> => {
+    const { data: authData } = await supabase.auth.getUser()
+    const userId = authData.user?.id
+    if (!userId) return false
+
+    const { data, error } = await supabase
+      .from("activities")
+      .insert({
+        user_id: userId,
+        strava_id: null,
+        type: activity.type,
+        name: activity.name,
+        date: activity.date,
+        distance_km: activity.distance_km,
+        duration_seconds: activity.duration_seconds,
+        pace_min_per_km: activity.pace_min_per_km,
+        elevation_gain_m: activity.elevation_gain_m,
+        avg_heart_rate: activity.avg_heart_rate,
+        calories: activity.calories,
+        map_polyline: null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Failed to add activity:", error)
+      return false
+    }
+
+    if (data) {
+      setActivities((prev) => [mapActivityRow(data), ...prev])
+    }
+    return true
+  }, [])
+
   // ----- Strava Sync -----
   const doSync = useCallback(async (full = false) => {
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
@@ -485,6 +521,9 @@ export function useAppData(initialData?: InitialData | null) {
     // Weekly goal operations
     saveWeeklyGoal,
     deleteWeeklyGoal,
+
+    // Activities
+    addActivity,
 
     // Sync
     sync,

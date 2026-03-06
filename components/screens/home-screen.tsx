@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, lazy, Suspense } from "react"
 import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain, AlertTriangle, Timer } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -18,6 +18,8 @@ import {
 } from "@/lib/format"
 import { computeACWR, predictRaceTimes } from "@/lib/training-utils"
 import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
+
+const TrainingLoadChart = lazy(() => import("@/components/training-load-chart").then(m => ({ default: m.TrainingLoadChart })))
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -313,6 +315,15 @@ export function HomeScreen({
           </div>
         </div>
       </section>
+
+      {/* Fitness & Fatigue Chart */}
+      {activities.length >= 14 && (
+        <Suspense fallback={
+          <div className="h-[230px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+        }>
+          <TrainingLoadChart activities={activities} />
+        </Suspense>
+      )}
 
       {/* Weekly Goals Progress */}
       {weeklyGoals.length > 0 && (
