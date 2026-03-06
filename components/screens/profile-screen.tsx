@@ -3,9 +3,10 @@
 import { useMemo } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
-import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off, Trophy } from "lucide-react"
+import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off, Trophy, Globe } from "lucide-react"
 import { formatTimeAgo, formatTargetTime, formatPace, formatDateShort } from "@/lib/format"
 import { detectPersonalRecords } from "@/lib/training-utils"
+import { useI18n, type Locale } from "@/lib/i18n"
 import type { Activity, SyncStatus, UserProfile } from "@/lib/types"
 
 interface ProfileScreenProps {
@@ -71,6 +72,7 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
 export function ProfileScreen({ user, activities, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
   const { theme, setTheme } = useTheme()
   const isDarkMode = theme === "dark"
+  const { locale, setLocale, t } = useI18n()
 
   const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
 
@@ -166,6 +168,38 @@ export function ProfileScreen({ user, activities, syncStatus, stravaConnected, o
                 }`}
               />
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Language */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("profile.language")}
+        </h3>
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
+                <Globe size={16} className="text-muted-foreground" />
+              </div>
+              <span className="text-sm font-medium text-card-foreground">{t("profile.language")}</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-full bg-secondary p-0.5">
+              {(["en", "no"] as Locale[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    locale === l
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {l === "en" ? "English" : "Norsk"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
