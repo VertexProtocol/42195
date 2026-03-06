@@ -128,6 +128,8 @@ function buildPrompt(
   daysUntilRace: number,
   adjustNote: string | null,
   acwr?: { ratio: number; risk: string },
+  recentEasyPace?: number | null,
+  recentBestPace?: number | null,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -205,7 +207,7 @@ ${weekSummaryText}
 ## Current Fitness Snapshot
 - Avg weekly km (last ${recentWindow} weeks): ${currentAvgWeeklyKm.toFixed(1)} km
 - Volume trend vs prior ${recentWindow} weeks: ${trendLine}
-- Longest recent run: ${longestRecentRun.toFixed(1)} km${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
+- Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
 
 ## Suggested Weekly Volume Targets
 These are calculated from the runner's ${recentWindow}-week rolling average using ${increasePct}% progressive overload. Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
@@ -378,6 +380,19 @@ export async function POST(req: NextRequest) {
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
 
+  // Compute pace stats for the prompt
+  const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+  const recentEasyPace = actsWithPace.length > 0
+    ? actsWithPace
+        .map((a) => Number(a.pace_min_per_km))
+        .sort((a, b) => b - a) // slowest first
+        .slice(0, Math.ceil(actsWithPace.length * 0.5)) // bottom 50% by speed = top 50% by pace value
+        .reduce((s, p, _, arr) => s + p / arr.length, 0)
+    : null
+  const recentBestPace = actsWithPace.length > 0
+    ? Math.min(...actsWithPace.map((a) => Number(a.pace_min_per_km)))
+    : null
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -387,6 +402,8 @@ export async function POST(req: NextRequest) {
     daysUntilRace,
     adjustNote,
     { ratio: acwrRatio, risk: acwrRisk },
+    recentEasyPace,
+    recentBestPace,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
@@ -431,6 +448,24 @@ export async function POST(req: NextRequest) {
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
         const plan = parsed.data
+
+        // Post-generation validation logging
+        for (const week of plan.weeks) {
+          if (week.sessions.length !== prefs.sessions_per_week) {
+            console.warn(
+              `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${prefs.sessions_per_week}`
+            )
+          }
+          const sessionKmTotal = week.sessions.reduce((sum, s) => {
+            const match = s.distance.match(/([\d.]+)\s*km/i)
+            return sum + (match ? parseFloat(match[1]) : 0)
+          }, 0)
+          if (sessionKmTotal > 0 && Math.abs(sessionKmTotal - week.targetKm) > week.targetKm * 0.2) {
+            console.warn(
+              `[plan-validation] Week ${week.weekNumber}: session total ${sessionKmTotal.toFixed(1)} km vs target ${week.targetKm} km (>20% deviation)`
+            )
+          }
+        }
 
         // Cache in DB (upsert — one active plan per goal)
         // Archive the previous plan if one exists

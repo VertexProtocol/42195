@@ -11,6 +11,8 @@ import type { Activity, StreamPoint, Lap } from "@/lib/types"
 interface ActivityDetailScreenProps {
   activity: Activity
   onBack: () => void
+  /** All activities — used to compute global max HR for consistent zone calculation */
+  allActivities?: Activity[]
 }
 
 function StatCard({
@@ -148,7 +150,7 @@ function RouteMap({ polyline }: { polyline: string }) {
   )
 }
 
-export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenProps) {
+export function ActivityDetailScreen({ activity, onBack, allActivities }: ActivityDetailScreenProps) {
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
   const [loadingCharts, setLoadingCharts] = useState(true)
@@ -176,9 +178,21 @@ export function ActivityDetailScreen({ activity, onBack }: ActivityDetailScreenP
   const hasHr = streams?.some((p) => p.hr !== null) ?? false
   const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr)
 
+  // Compute global max HR from all activities for consistent zone boundaries
+  const globalMaxHr = useMemo(() => {
+    if (!allActivities) return undefined
+    const hrs = allActivities
+      .map((a) => a.avg_heart_rate)
+      .filter((hr): hr is number => hr !== null && hr > 0)
+    if (hrs.length === 0) return undefined
+    // Avg HR × 1.2 approximates max HR better than using avg HR directly.
+    // A more accurate approach would use stream data, but avg_heart_rate is available for all activities.
+    return Math.max(...hrs) * 1.2
+  }, [allActivities])
+
   const hrZones = useMemo(
-    () => (streams ? analyzeHrZones(streams) : []),
-    [streams],
+    () => (streams ? analyzeHrZones(streams, globalMaxHr) : []),
+    [streams, globalMaxHr],
   )
 
   const paceZones = useMemo(

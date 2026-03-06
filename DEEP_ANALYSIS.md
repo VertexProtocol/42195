@@ -361,23 +361,25 @@ Not directly about login, but related: after sign-up, the user is redirected to 
 
 ## Summary of Recommended Changes (Priority Order)
 
+> All 15 items have been implemented.
+
 ### High Priority (correctness/safety)
-1. **Add volume cap** to `calcWeekTargets()` — no week > 150% of baseline (Area 5.1)
-2. **Fix adjustNote sanitization** to allow Unicode letters (Area 2.4)
-3. **Add staleness detection** for expired plan blocks (Area 2.1)
-4. **Pass ACWR to prompt** so Claude can back off if injury risk is elevated (Area 5.5)
-5. **Limit activity fetch** to 200 on initial page load (Area 8.1)
+1. ~~**Add volume cap** to `calcWeekTargets()` — no week > 150% of baseline (Area 5.1)~~
+2. ~~**Fix adjustNote sanitization** to allow Unicode letters (Area 2.4)~~
+3. ~~**Add staleness detection** for expired plan blocks (Area 2.1)~~
+4. ~~**Pass ACWR to prompt** so Claude can back off if injury risk is elevated (Area 5.5)~~
+5. ~~**Limit activity fetch** to 200 on initial page load (Area 8.1)~~
 
 ### Medium Priority (plan quality)
-6. **Add training phase hint** to prompt (base/build/peak/taper) (Area 1.1)
-7. **Clamp block weeks** to not extend past race day (Area 1.2)
-8. **Add intensity balance rules** to prompt (80/20 rule) (Area 7.2)
-9. **Include runner's pace data** in prompt snapshot (Area 6.1)
-10. **Add long run progression ceiling** to prompt (Area 6.2)
+6. ~~**Add training phase hint** to prompt (base/build/peak/taper) (Area 1.1)~~
+7. ~~**Clamp block weeks** to not extend past race day (Area 1.2)~~
+8. ~~**Add intensity balance rules** to prompt (80/20 rule) (Area 7.2)~~
+9. ~~**Include runner's pace data** in prompt snapshot (Area 6.1)~~
+10. ~~**Add long run progression ceiling** to prompt (Area 6.2)~~
 
 ### Low Priority (UX polish)
-11. **HR zones: use global max HR** across all activities, not per-activity (Area 3.1)
-12. **Rename pace zone labels** to avoid confusion with absolute training zones (Area 4.4)
-13. **Add loading state** during post-login redirect (Area 8.2)
-14. **Add post-generation validation logging** for session counts (Area 5.4)
-15. **Exclude API routes from middleware** to avoid double auth (Area 8.3)
+11. ~~**HR zones: use global max HR** across all activities, not per-activity (Area 3.1)~~
+12. ~~**Rename pace zone labels** to avoid confusion with absolute training zones (Area 4.4)~~
+13. ~~**Add loading state** during post-login redirect (Area 8.2)~~
+14. ~~**Add post-generation validation logging** for session counts (Area 5.4)~~
+15. ~~**Exclude API routes from middleware** to avoid double auth (Area 8.3)~~

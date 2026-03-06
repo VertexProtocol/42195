@@ -237,7 +237,11 @@ const HR_ZONE_COLORS = [
 
 /**
  * Calculates time spent in each HR zone from stream data.
- * Uses 5-zone model based on max HR (estimated as 220 - age, or from data).
+ * Uses 5-zone model based on max HR.
+ *
+ * For best results, pass `maxHr` from the user's profile or computed as
+ * the global max HR across all activities (× 1.02). If not provided,
+ * estimates from the current stream data (less reliable for easy runs).
  */
 export function analyzeHrZones(
   streams: StreamPoint[],
@@ -246,7 +250,8 @@ export function analyzeHrZones(
   const hrPoints = streams.filter((p) => p.hr !== null && p.hr > 0)
   if (hrPoints.length < 2) return []
 
-  // Estimate max HR from data if not provided
+  // Estimate max HR from data if not provided — note: per-activity estimation
+  // is unreliable for easy runs. Prefer passing a global max HR.
   const estimatedMax = maxHr ?? Math.max(...hrPoints.map((p) => p.hr!)) * 1.05
 
   const zones: { label: string; min: number; max: number }[] = [
@@ -321,13 +326,14 @@ export function analyzePaceZones(streams: StreamPoint[]): PaceZone[] {
   const avgPace =
     pacePoints.reduce((s, p) => s + p.pace!, 0) / pacePoints.length
 
-  // Define zones relative to average pace
+  // Define zones relative to this activity's average pace
+  // Labels reflect relative effort within the run, not absolute training zones
   const zones: { label: string; min: number; max: number }[] = [
-    { label: "Sprint", min: 0, max: avgPace * 0.7 },
-    { label: "Interval", min: avgPace * 0.7, max: avgPace * 0.85 },
-    { label: "Tempo", min: avgPace * 0.85, max: avgPace * 1.0 },
-    { label: "Easy", min: avgPace * 1.0, max: avgPace * 1.2 },
-    { label: "Recovery", min: avgPace * 1.2, max: 99 },
+    { label: "Much faster", min: 0, max: avgPace * 0.7 },
+    { label: "Faster", min: avgPace * 0.7, max: avgPace * 0.85 },
+    { label: "Above avg", min: avgPace * 0.85, max: avgPace * 1.0 },
+    { label: "Below avg", min: avgPace * 1.0, max: avgPace * 1.2 },
+    { label: "Much slower", min: avgPace * 1.2, max: 99 },
   ]
 
   const zoneCounts = [0, 0, 0, 0, 0]

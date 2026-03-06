@@ -209,6 +209,7 @@ export function AppShell({ initialData }: AppShellProps) {
             <ActivityDetailScreen
               activity={selectedActivity}
               onBack={handleBackFromDetail}
+              allActivities={data.activities}
             />
           </Suspense>
         )}
