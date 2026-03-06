@@ -388,6 +388,8 @@ function WeekCard({
   isPast,
   sessionStatuses,
   onToggleSession,
+  weekStart,
+  weekEnd,
 }: {
   week: TrainingWeek
   isCurrent: boolean
@@ -395,6 +397,8 @@ function WeekCard({
   isPast: boolean
   sessionStatuses: SessionStatus[]
   onToggleSession: (weekNumber: number, sessionIndex: number) => void
+  weekStart: Date
+  weekEnd: Date
 }) {
   const [expanded, setExpanded] = useState(isCurrent)
 
@@ -405,6 +409,16 @@ function WeekCard({
 
   const completedCount = sessionStatuses.filter((s) => s === "completed").length
   const totalSessions = week.sessions.length
+
+  // Format date range like "3. mar – 9. mar"
+  const fmtDay = (d: Date) => {
+    const day = d.getDate()
+    const month = d.toLocaleDateString("nb-NO", { month: "short" }).replace(".", "")
+    return `${day}. ${month}`
+  }
+  const lastDay = new Date(weekEnd)
+  lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
+  const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
 
   return (
     <div
@@ -425,7 +439,10 @@ function WeekCard({
             W{week.weekNumber}
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
+              <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
+            </div>
             <div className="flex items-center gap-2">
               <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
               {(isPast || isCurrent) && actualKm !== null && (
@@ -961,6 +978,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     sessionStatuses[`W${week.weekNumber}-${si}`] ?? "planned"
                   )}
                   onToggleSession={handleToggleSession}
+                  weekStart={weekStart}
+                  weekEnd={weekEnd}
                 />
               )
             })}
