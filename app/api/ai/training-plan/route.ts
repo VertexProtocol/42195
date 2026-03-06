@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan } from "@/lib/types"
 
 const TrainingPlanSchema = z.object({
@@ -468,26 +469,37 @@ export async function POST(req: NextRequest) {
         }
 
         // Cache in DB (upsert — one active plan per goal)
-        // Archive the previous plan if one exists
+        // Use service-role client here because the cookie-based client may
+        // have lost its auth context inside the ReadableStream callback
+        // (cookies() from next/headers is only available during initial request handling).
+        const service = createServiceClient()
         const blockStartDate = new Date().toISOString().split("T")[0]
         const generatedAt = new Date().toISOString()
 
-        const previousPlans = Array.isArray(existingPlan?.previous_plans)
-          ? existingPlan.previous_plans
+        // Re-fetch existing plan via service client for archiving
+        const { data: currentPlan } = await service
+          .from("ai_training_plans")
+          .select("plan, generated_at, adjust_note, block_start_date, previous_plans")
+          .eq("goal_id", goalId)
+          .eq("user_id", user.id)
+          .maybeSingle()
+
+        const previousPlans = Array.isArray(currentPlan?.previous_plans)
+          ? currentPlan.previous_plans
           : []
 
-        if (existingPlan?.plan) {
+        if (currentPlan?.plan) {
           previousPlans.unshift({
-            plan: existingPlan.plan,
-            generated_at: existingPlan.generated_at,
-            adjust_note: existingPlan.adjust_note ?? null,
-            block_start_date: existingPlan.block_start_date,
+            plan: currentPlan.plan,
+            generated_at: currentPlan.generated_at,
+            adjust_note: currentPlan.adjust_note ?? null,
+            block_start_date: currentPlan.block_start_date,
           })
           // Keep at most 5 previous plans
           if (previousPlans.length > 5) previousPlans.length = 5
         }
 
-        const { error: upsertError } = await supabase
+        const { error: upsertError } = await service
           .from("ai_training_plans")
           .upsert(
             {
