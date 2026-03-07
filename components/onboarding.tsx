@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Target, Activity, Sparkles, ChevronRight, Check } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 
 interface OnboardingProps {
   stravaConnected: boolean
@@ -10,32 +11,27 @@ interface OnboardingProps {
   onDismiss: () => void
 }
 
-const STEPS = [
-  {
-    id: "welcome",
-    icon: Sparkles,
-    title: "Welcome to 42195",
-    description: "Your personal running training companion. Let's get you set up in a few quick steps.",
-  },
-  {
-    id: "strava",
-    icon: Activity,
-    title: "Connect Strava",
-    description: "Sync your runs automatically from Strava to track your progress effortlessly.",
-  },
-  {
-    id: "goal",
-    icon: Target,
-    title: "Set Your First Goal",
-    description: "Whether it's a marathon, a 10K, or a weekly distance target — we'll help you get there.",
-  },
-] as const
+type StepId = "welcome" | "strava" | "goal"
+
+const STEPS: { id: StepId; icon: typeof Sparkles }[] = [
+  { id: "welcome", icon: Sparkles },
+  { id: "strava", icon: Activity },
+  { id: "goal", icon: Target },
+]
+
+const STEP_CONTENT: Record<StepId, { titleKey: "onboarding.welcome" | "onboarding.step1Title" | "onboarding.step2Title"; descKey: "onboarding.step1Desc" | "onboarding.step2Desc" | "onboarding.step3Desc" }> = {
+  welcome: { titleKey: "onboarding.welcome", descKey: "onboarding.step1Desc" },
+  strava: { titleKey: "onboarding.step1Title", descKey: "onboarding.step1Desc" },
+  goal: { titleKey: "onboarding.step2Title", descKey: "onboarding.step2Desc" },
+}
 
 export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onDismiss }: OnboardingProps) {
+  const { t } = useI18n()
   const [currentStep, setCurrentStep] = useState(0)
 
   const step = STEPS[currentStep]
   const Icon = step.icon
+  const content = STEP_CONTENT[step.id]
   const isLastStep = currentStep === STEPS.length - 1
   const isStravaStep = step.id === "strava"
   const isGoalStep = step.id === "goal"
@@ -90,8 +86,8 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
             <Icon className="h-10 w-10 text-primary" />
           </div>
 
-          <h1 className="mb-3 text-2xl font-bold text-foreground">{step.title}</h1>
-          <p className="mb-8 text-muted-foreground leading-relaxed">{step.description}</p>
+          <h1 className="mb-3 text-2xl font-bold text-foreground">{t(content.titleKey)}</h1>
+          <p className="mb-8 text-muted-foreground leading-relaxed">{t(content.descKey)}</p>
 
           {/* Strava step - show connected state */}
           {isStravaStep && stravaConnected && (
@@ -108,12 +104,12 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
               className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {isStravaStep && !stravaConnected ? (
-                "Connect Strava"
+                t("onboarding.connectStrava")
               ) : isGoalStep ? (
-                "Create Your First Goal"
+                t("onboarding.createGoal")
               ) : (
                 <>
-                  Continue
+                  {t("onboarding.next")}
                   <ChevronRight className="h-4 w-4" />
                 </>
               )}
@@ -124,7 +120,7 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
                 onClick={handleSkip}
                 className="min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
               >
-                {isStravaStep ? "Skip for now" : "Skip"}
+                {t("onboarding.skip")}
               </button>
             )}
 
@@ -133,7 +129,7 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
                 onClick={onDismiss}
                 className="min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
               >
-                I'll do this later
+                {t("onboarding.skip")}
               </button>
             )}
           </div>

@@ -5,7 +5,6 @@ import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
-import { PlanScreen } from "@/components/screens/plan-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
@@ -13,7 +12,7 @@ import { Onboarding } from "@/components/onboarding"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
-const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "plan", "coach", "profile"])
+const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "coach", "profile"])
 
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
@@ -228,7 +227,7 @@ export function AppShell({ initialData }: AppShellProps) {
           </Suspense>
         )}
 
-        {activeTab === "goals" && (
+        {activeTab === "goals" && !selectedGoal && (
           <GoalsScreen
             goals={data.goals}
             activities={data.activities}
@@ -236,23 +235,14 @@ export function AppShell({ initialData }: AppShellProps) {
             onToggleActive={data.toggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("performance")}
+            onAddEventGoal={() => handleAddGoal("event_training")}
             onEditWeeklyGoal={handleEditWeeklyGoal}
             onAddWeeklyGoal={handleAddWeeklyGoal}
-          />
-        )}
-
-        {activeTab === "plan" && !selectedGoal && (
-          <PlanScreen
-            goals={data.goals}
-            activities={data.activities}
-            onEditGoal={handleEditGoal}
-            onAddGoal={() => handleAddGoal("event_training")}
-            onToggleActive={data.toggleActiveGoal}
             onSelectGoal={handleSelectGoal}
           />
         )}
 
-        {activeTab === "plan" && selectedGoal && (
+        {activeTab === "goals" && selectedGoal && (
           <Suspense fallback={<ScreenFallback />}>
             <GoalDetailScreen
               goal={selectedGoal}

@@ -484,6 +484,127 @@ export function GoalsScreen({
           )}
         </div>
       )}
+
+      {/* ── Events tab ───────────────────────────────────────────────────── */}
+      {tab === "events" && (
+        <div className="flex flex-col gap-4">
+          {/* Add Event Goal button */}
+          <button
+            onClick={onAddEventGoal}
+            className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors active:bg-secondary"
+          >
+            <Plus size={18} />
+            {t("plan.addEvent")}
+          </button>
+
+          {/* Event goal cards */}
+          {eventGoals.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-secondary">
+                <CalendarCheck size={24} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground max-w-[240px]">
+                {t("plan.emptyState")}
+              </p>
+            </div>
+          ) : (
+            eventGoals.map((goal) => {
+              const days = daysUntil(goal.target_date)
+              const isPast = isDatePast(goal.target_date)
+              const phase = trainingPhaseKey(goal.start_date, goal.target_date)
+              const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
+              const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
+              const best = bestRelevantRun(activities, goal.target_distance_km, goal.start_date, goal.target_date)
+              const longest = longestRun(activities, goal.start_date, goal.target_date)
+
+              return (
+                <button
+                  key={goal.id}
+                  onClick={() => onSelectGoal(goal)}
+                  className={`relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left transition-all active:scale-[0.98] ${
+                    goal.is_active ? "ring-2 ring-primary" : ""
+                  } ${isPast ? "opacity-60" : ""}`}
+                >
+                  {/* Active badge */}
+                  {goal.is_active && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5">
+                      <Sparkles size={12} className="text-primary" />
+                      <span className="text-[10px] font-semibold text-primary uppercase">
+                        {t("plan.active")}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Goal name and phase */}
+                  <div className="flex items-start gap-3 pr-16">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <Footprints size={20} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
+                      <p className={`text-xs font-medium ${phase.color}`}>
+                        {t(phase.labelKey)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={14} />
+                      <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin size={14} />
+                      <span>{formatDistance(goal.target_distance_km)}</span>
+                    </div>
+                    {goal.target_time_seconds && (
+                      <div className="flex items-center gap-1.5">
+                        <Timer size={14} />
+                        <span>{formatTargetTime(goal.target_time_seconds)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="text-muted-foreground">
+                        {formatDistance(logged)} {t("common.logged")}
+                      </span>
+                      <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-500"
+                        style={{ width: `${timeProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Training stats */}
+                  {(best || longest) && (
+                    <div className="mt-3 pt-3 border-t border-border flex gap-4 text-xs">
+                      {best && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Trophy size={12} className="text-amber-500" />
+                          <span>{t("plan.bestRun")}: {formatDistance(best.distance_km)} in {formatDuration(best.duration_seconds)}</span>
+                        </div>
+                      )}
+                      {longest && !best && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <TrendingUp size={12} className="text-emerald-500" />
+                          <span>{t("plan.longestRun")}: {formatDistance(longest.distance_km)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
     </div>
   )
 }

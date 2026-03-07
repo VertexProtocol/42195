@@ -1,9 +1,10 @@
 "use client"
 
-import { ChevronRight, Inbox, RefreshCw, Link, Plus } from "lucide-react"
+import { useState, useMemo } from "react"
+import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
-import type { Activity } from "@/lib/types"
+import type { Activity, ActivityType } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 interface ActivitiesScreenProps {
@@ -14,8 +15,33 @@ interface ActivitiesScreenProps {
   onAddActivity: () => void
 }
 
+const ACTIVITY_TYPES: ActivityType[] = ["Run", "Trail Run", "Race", "Walk"]
+
 export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
   const { t } = useI18n()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedType, setSelectedType] = useState<ActivityType | "all">("all")
+  const [showFilters, setShowFilters] = useState(false)
+
+  const filteredActivities = useMemo(() => {
+    return activities.filter((activity) => {
+      // Type filter
+      if (selectedType !== "all" && activity.type !== selectedType) {
+        return false
+      }
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase()
+        return (
+          activity.name.toLowerCase().includes(query) ||
+          activity.type.toLowerCase().includes(query)
+        )
+      }
+      return true
+    })
+  }, [activities, searchQuery, selectedType])
+
+  const hasActiveFilters = searchQuery.trim() !== "" || selectedType !== "all"
 
   return (
     <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
@@ -34,6 +60,80 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
           <Plus size={18} />
         </button>
       </header>
+
+      {/* Search and Filter */}
+      {activities.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {/* Search bar */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder={t("activities.search")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl bg-secondary py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground active:text-foreground"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+                showFilters || selectedType !== "all"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-muted-foreground"
+              }`}
+              aria-label="Toggle filters"
+            >
+              <Filter size={16} />
+            </button>
+          </div>
+
+          {/* Filter chips */}
+          {showFilters && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedType("all")}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedType === "all"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {t("activities.allTypes")}
+              </button>
+              {ACTIVITY_TYPES.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selectedType === type
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Results count when filtering */}
+          {hasActiveFilters && (
+            <p className="text-xs text-muted-foreground">
+              {t("activities.showing")} {filteredActivities.length} {t("activities.of")} {activities.length}
+            </p>
+          )}
+        </div>
+      )}
 
       {activities.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20">
@@ -65,9 +165,19 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
             </>
           )}
         </div>
+      ) : filteredActivities.length === 0 && hasActiveFilters ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-12">
+          <p className="text-sm text-muted-foreground">{t("activities.noResults")}</p>
+          <button
+            onClick={() => { setSearchQuery(""); setSelectedType("all"); }}
+            className="text-sm font-medium text-primary"
+          >
+            {t("activities.clearFilters")}
+          </button>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {activities.map((activity) => (
+          {filteredActivities.map((activity) => (
             <button
               key={activity.id}
               onClick={() => onSelectActivity(activity)}
