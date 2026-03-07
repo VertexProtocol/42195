@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react"
 import { X, Trash2, RefreshCw, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 
-const METRIC_OPTIONS: { value: WeeklyGoalMetric; label: string; placeholder: string; unit: string }[] = [
-  { value: "distance_km", label: "Distance", placeholder: "40", unit: "km" },
-  { value: "sessions", label: "Sessions", placeholder: "5", unit: "runs" },
-  { value: "duration_minutes", label: "Duration", placeholder: "300", unit: "min" },
-  { value: "elevation_m", label: "Elevation", placeholder: "500", unit: "m" },
+const METRIC_OPTIONS: { value: WeeklyGoalMetric; labelKey: "weeklyGoalEditor.distance" | "weeklyGoalEditor.sessions" | "weeklyGoalEditor.duration" | "weeklyGoalEditor.elevation"; placeholder: string; unit: string }[] = [
+  { value: "distance_km", labelKey: "weeklyGoalEditor.distance", placeholder: "40", unit: "km" },
+  { value: "sessions", labelKey: "weeklyGoalEditor.sessions", placeholder: "5", unit: "runs" },
+  { value: "duration_minutes", labelKey: "weeklyGoalEditor.duration", placeholder: "300", unit: "min" },
+  { value: "elevation_m", labelKey: "weeklyGoalEditor.elevation", placeholder: "500", unit: "m" },
 ]
 
 interface WeeklyGoalEditorProps {
@@ -27,6 +28,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [sessionMinDuration, setSessionMinDuration] = useState("")
   const [sessionMinDistance, setSessionMinDistance] = useState("")
+  const { t } = useI18n()
 
   useEffect(() => {
     if (open && goal && !isNew) {
@@ -62,12 +64,13 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
     const pad = (n: number) => String(n).padStart(2, "0")
     const mondayStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
 
+    const translatedLabel = t(selectedOption.labelKey)
     const saved: WeeklyGoal = {
-      id: isNew ? `wg-${Date.now()}` : goal!.id,
+      id: isNew ? crypto.randomUUID() : goal!.id,
       metric,
-      label: selectedOption.label === "Distance" ? "Weekly Distance" :
-             selectedOption.label === "Sessions" ? "Training Sessions" :
-             selectedOption.label === "Duration" ? "Active Minutes" :
+      label: translatedLabel === t("weeklyGoalEditor.distance") ? "Weekly Distance" :
+             translatedLabel === t("weeklyGoalEditor.sessions") ? "Training Sessions" :
+             translatedLabel === t("weeklyGoalEditor.duration") ? "Active Minutes" :
              "Elevation Gain",
       target: parseFloat(target),
       current: isNew ? 0 : goal!.current,
@@ -120,7 +123,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
               <X size={18} className="text-muted-foreground" />
             </button>
             <h2 className="text-base font-semibold text-card-foreground">
-              {isNew ? "New Weekly Goal" : "Edit Weekly Goal"}
+              {isNew ? t("weeklyGoalEditor.newGoal") : t("weeklyGoalEditor.editGoal")}
             </h2>
             <button
               onClick={handleSave}
@@ -131,7 +134,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                   : "bg-secondary text-muted-foreground"
               }`}
             >
-              Save
+              {t("weeklyGoalEditor.save")}
             </button>
           </div>
 
@@ -142,7 +145,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             {/* Recurring / One-off toggle */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Frequency
+                {t("weeklyGoalEditor.frequency")}
               </label>
               <div className="flex rounded-xl bg-secondary p-1">
                 <button
@@ -154,7 +157,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                   }`}
                 >
                   <Calendar size={14} />
-                  This week only
+                  {t("weeklyGoalEditor.thisWeekOnly")}
                 </button>
                 <button
                   onClick={() => setIsRecurring(true)}
@@ -165,20 +168,20 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                   }`}
                 >
                   <RefreshCw size={14} />
-                  Every week
+                  {t("weeklyGoalEditor.everyWeek")}
                 </button>
               </div>
               <span className="text-xs text-muted-foreground">
                 {isRecurring
-                  ? "This goal will appear every week as a standing target"
-                  : "This goal is set for this week only"}
+                  ? t("weeklyGoalEditor.recurringHint")
+                  : t("weeklyGoalEditor.oneOffHint")}
               </span>
             </div>
 
             {/* Metric selector */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Metric
+                {t("weeklyGoalEditor.metric")}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {METRIC_OPTIONS.map((option) => (
@@ -191,7 +194,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                         : "bg-secondary text-secondary-foreground active:bg-accent"
                     }`}
                   >
-                    {option.label}
+                    {t(option.labelKey)}
                   </button>
                 ))}
               </div>
@@ -200,7 +203,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             {/* Target value */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Weekly target ({selectedOption.unit})
+                {`${t("weeklyGoalEditor.weeklyTarget")} (${selectedOption.unit})`}
               </label>
               <input
                 type="number"
@@ -218,14 +221,14 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             {metric === "sessions" && (
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Per-session requirement (optional)
+                  {t("weeklyGoalEditor.perSessionReq")}
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  Only count sessions that meet these thresholds. Leave blank to count all sessions.
+                  {t("weeklyGoalEditor.perSessionHint")}
                 </p>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3">
-                    <span className="w-28 text-sm text-foreground">Min. duration</span>
+                    <span className="w-28 text-sm text-foreground">{t("weeklyGoalEditor.minDuration")}</span>
                     <div className="flex flex-1 items-center gap-2">
                       <input
                         type="number"
@@ -237,11 +240,11 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                         step="1"
                         className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       />
-                      <span className="shrink-0 text-sm text-muted-foreground">min</span>
+                      <span className="shrink-0 text-sm text-muted-foreground">{t("common.min")}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="w-28 text-sm text-foreground">Min. distance</span>
+                    <span className="w-28 text-sm text-foreground">{t("weeklyGoalEditor.minDistance")}</span>
                     <div className="flex flex-1 items-center gap-2">
                       <input
                         type="number"
@@ -253,7 +256,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                         step="0.1"
                         className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       />
-                      <span className="shrink-0 text-sm text-muted-foreground">km</span>
+                      <span className="shrink-0 text-sm text-muted-foreground">{t("common.km")}</span>
                     </div>
                   </div>
                 </div>
@@ -275,7 +278,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
                 }`}
               >
                 <Trash2 size={16} />
-                {showConfirmDelete ? "Tap again to confirm" : "Delete goal"}
+                {showConfirmDelete ? t("weeklyGoalEditor.tapToConfirm") : t("weeklyGoalEditor.deleteGoal")}
               </button>
             </div>
           )}

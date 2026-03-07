@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   ArrowLeft,
   Sparkles,
@@ -24,6 +24,8 @@ import {
   timeElapsedPercentage,
   computeDistanceInRange,
   formatDuration,
+  bestRelevantRun,
+  longestRun,
 } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
@@ -33,6 +35,7 @@ import type {
   TrainingFocus,
   AiTrainingPlan,
   TrainingWeek,
+  PlanSnapshot,
 } from "@/lib/types"
 
 interface GoalDetailScreenProps {
@@ -40,24 +43,6 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
-}
-
-// ---- Helper: best run at ±20% of target distance ----
-function bestRelevantRun(activities: Activity[], targetKm: number): Activity | null {
-  const lo = targetKm * 0.8
-  const hi = targetKm * 1.2
-  const candidates = activities.filter(
-    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0
-  )
-  if (candidates.length === 0) return null
-  return candidates.reduce((best, a) => (a.duration_seconds < best.duration_seconds ? a : best))
-}
-
-function longestRun(activities: Activity[], startDate: string | null, createdAt: string): Activity | null {
-  const from = startDate ? new Date(startDate).getTime() : new Date(createdAt).getTime()
-  const relevant = activities.filter((a) => new Date(a.date).getTime() >= from)
-  if (relevant.length === 0) return null
-  return relevant.reduce((best, a) => (a.distance_km > best.distance_km ? a : best))
 }
 
 // ---- Preferences form ----
@@ -80,29 +65,38 @@ function PreferencesForm({
 
   async function handleSave() {
     setSaving(true)
-    await fetch("/api/ai/training-plan", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        goalId,
+    try {
+      const res = await fetch("/api/ai/training-plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goalId,
+          sessions_per_week: sessions,
+          focus,
+          notes,
+          weekly_increase_pct: increasePct,
+          block_weeks: blockWeeks,
+          regenerate_every_weeks: regenEvery,
+        }),
+      })
+      if (!res.ok) {
+        console.error("Failed to save preferences:", res.status)
+        return
+      }
+      onSaved({
+        goal_id: goalId,
         sessions_per_week: sessions,
         focus,
-        notes,
+        notes: notes || null,
         weekly_increase_pct: increasePct,
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
-      }),
-    })
-    setSaving(false)
-    onSaved({
-      goal_id: goalId,
-      sessions_per_week: sessions,
-      focus,
-      notes: notes || null,
-      weekly_increase_pct: increasePct,
-      block_weeks: blockWeeks,
-      regenerate_every_weeks: regenEvery,
-    })
+      })
+    } catch (err) {
+      console.error("Failed to save preferences:", err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -281,10 +275,12 @@ function WeekCardSkeleton() {
   )
 }
 
-function PlanSkeleton({ blockWeeks }: { blockWeeks: number }) {
+function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusText?: string | null }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-center text-sm text-muted-foreground">Analysing your training history…</p>
+      <p className="text-center text-sm text-muted-foreground animate-pulse">
+        {statusText ?? "Analysing your training history…"}
+      </p>
       {/* Summary */}
       <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
         <Skeleton className="h-3.5 w-full" />
@@ -309,9 +305,120 @@ function PlanSkeleton({ blockWeeks }: { blockWeeks: number }) {
   )
 }
 
+// ---- Session status type ----
+type SessionStatus = "planned" | "completed" | "skipped"
+
+/** Parse a distance string like "20 km" or "8–10 km" into km (uses midpoint for ranges) */
+function parseSessionKm(distance: string): number | null {
+  // Handle ranges like "8–10 km" or "8-10km"
+  const rangeMatch = distance.match(/([\d.]+)\s*[–\-]\s*([\d.]+)\s*km/i)
+  if (rangeMatch) return (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2
+  const singleMatch = distance.match(/([\d.]+)\s*km/i)
+  if (singleMatch) return parseFloat(singleMatch[1])
+  return null
+}
+
+/** Snap a date to the Monday of its ISO week (Mon=start of week) */
+function toMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+  const diff = day === 0 ? -6 : 1 - day // shift Sun→prev Mon, others→current Mon
+  d.setDate(d.getDate() + diff)
+  return d
+}
+
+/**
+ * Auto-match activities to planned sessions for a given week.
+ * Builds all valid (session, activity) pairs sorted by distance delta,
+ * then greedily assigns the closest pair first.
+ * Each activity matches at most one session.
+ *
+ * Matching rule: activity distance must be ≥ 95% of planned distance
+ * (i.e. you must run at least the planned distance, with 5% grace for
+ * GPS drift). Running further than planned always counts.
+ */
+function autoMatchSessions(
+  sessions: { type: string; distance: string }[],
+  weekActivities: { distance_km: number }[],
+): boolean[] {
+  const matched = new Array<boolean>(sessions.length).fill(false)
+  if (weekActivities.length === 0) return matched
+
+  // Parse each session's target distance
+  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionKm(s.distance) }))
+    .filter((s) => s.km !== null && s.km > 0) as { i: number; km: number }[]
+
+  // Build all valid (session, activity) candidate pairs
+  const candidates: { si: number; ai: number; delta: number }[] = []
+  for (const session of sessionKms) {
+    const minRequired = session.km * 0.95 // must run at least 95% of planned
+    for (let ai = 0; ai < weekActivities.length; ai++) {
+      const actKm = Number(weekActivities[ai].distance_km)
+      if (actKm >= minRequired) {
+        // Delta = how far the activity is from planned (for ranking closeness)
+        const delta = Math.abs(actKm - session.km)
+        candidates.push({ si: session.i, ai, delta })
+      }
+    }
+  }
+
+  // Sort by delta ascending — closest matches first
+  candidates.sort((a, b) => a.delta - b.delta)
+
+  // Greedily assign closest pairs, each session and activity used at most once
+  const usedActivities = new Set<number>()
+  const usedSessions = new Set<number>()
+
+  for (const { si, ai } of candidates) {
+    if (usedSessions.has(si) || usedActivities.has(ai)) continue
+    matched[si] = true
+    usedSessions.add(si)
+    usedActivities.add(ai)
+  }
+
+  return matched
+}
+
 // ---- Training week card ----
-function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean }) {
+function WeekCard({
+  week,
+  isCurrent,
+  actualKm,
+  isPast,
+  sessionStatuses,
+  onToggleSession,
+  weekStart,
+  weekEnd,
+}: {
+  week: TrainingWeek
+  isCurrent: boolean
+  actualKm: number | null
+  isPast: boolean
+  sessionStatuses: SessionStatus[]
+  onToggleSession: (weekNumber: number, sessionIndex: number) => void
+  weekStart: Date
+  weekEnd: Date
+}) {
   const [expanded, setExpanded] = useState(isCurrent)
+
+  const deltaKm = actualKm !== null ? actualKm - week.targetKm : null
+  const deltaPct = actualKm !== null && week.targetKm > 0
+    ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
+    : null
+
+  const completedCount = sessionStatuses.filter((s) => s === "completed").length
+  const totalSessions = week.sessions.length
+
+  // Format date range like "3. mar – 9. mar"
+  const fmtDay = (d: Date) => {
+    const day = d.getDate()
+    const month = d.toLocaleDateString("nb-NO", { month: "short" }).replace(".", "")
+    return `${day}. ${month}`
+  }
+  const lastDay = new Date(weekEnd)
+  lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
+  const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
 
   return (
     <div
@@ -332,8 +439,29 @@ function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean 
             W{week.weekNumber}
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
-            <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
+              <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
+              {(isPast || isCurrent) && actualKm !== null && (
+                <span
+                  className={`text-xs font-semibold ${
+                    deltaPct !== null && deltaPct >= 0
+                      ? "text-primary"
+                      : "text-warning"
+                  }`}
+                >
+                  {actualKm.toFixed(1)} km ({deltaPct !== null && deltaPct >= 0 ? "+" : ""}{deltaPct}%)
+                </span>
+              )}
+              {(isPast || isCurrent) && completedCount > 0 && (
+                <span className="text-[10px] font-medium text-success">
+                  {completedCount}/{totalSessions} done
+                </span>
+              )}
+            </div>
           </div>
         </div>
         {expanded ? (
@@ -345,27 +473,65 @@ function WeekCard({ week, isCurrent }: { week: TrainingWeek; isCurrent: boolean 
 
       {expanded && (
         <div className="border-t border-border px-4 pb-4 pt-3">
-          <div className="flex flex-col gap-3">
-            {[...week.sessions]
-              .sort((a, b) => {
-                const order = (type: string) => {
-                  const t = type.toLowerCase()
-                  if (t.includes("long")) return 0
-                  if (t.includes("tempo") || t.includes("interval") || t.includes("fartlek") || t.includes("speed")) return 1
-                  return 2
-                }
-                return order(a.type) - order(b.type)
-              })
-              .map((session, i) => (
-              <div key={i} className="flex flex-col gap-0.5">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-semibold text-card-foreground">{session.type}</span>
-                  <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{session.effort}</p>
-                <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
+          {/* Planned vs actual bar */}
+          {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                <span>Planned {week.targetKm} km</span>
+                <span>Actual {actualKm.toFixed(1)} km</span>
               </div>
-            ))}
+              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+                    (deltaKm ?? 0) >= 0 ? "bg-primary" : "bg-warning"
+                  }`}
+                  style={{ width: `${Math.min(100, (actualKm / week.targetKm) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {week.sessions.map((session, i) => {
+              const status = sessionStatuses[i] ?? "planned"
+              return (
+                <div key={i} className={`flex gap-3 ${status === "skipped" ? "opacity-50" : ""}`}>
+                  {/* Session status toggle */}
+                  {(isPast || isCurrent) && (
+                    <button
+                      onClick={() => onToggleSession(week.weekNumber, i)}
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        status === "completed"
+                          ? "border-success bg-success text-white"
+                          : status === "skipped"
+                            ? "border-muted-foreground bg-muted-foreground/20"
+                            : "border-border active:bg-secondary"
+                      }`}
+                      aria-label={`Mark session as ${status === "planned" ? "completed" : status === "completed" ? "skipped" : "planned"}`}
+                    >
+                      {status === "completed" && (
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5L4 7L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                      {status === "skipped" && (
+                        <span className="text-[8px] font-bold text-muted-foreground">S</span>
+                      )}
+                    </button>
+                  )}
+                  <div className="flex-1 flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between">
+                      <span className={`text-sm font-semibold ${status === "completed" ? "text-success line-through" : "text-card-foreground"}`}>
+                        {session.type}
+                      </span>
+                      <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{session.effort}</p>
+                    <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {week.coachNote && (
@@ -395,8 +561,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [showPrefsForm, setShowPrefsForm] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
+  const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Load existing plan + preferences on mount
@@ -404,7 +572,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     async function load() {
       const [planRes, prefsRes] = await Promise.all([
         fetch(`/api/ai/training-plan?goalId=${goal.id}`),
-        fetch(`/api/ai/training-plan?goalId=${goal.id}`), // preferences come via same GET
+        fetch(`/api/ai/training-plan/preferences?goalId=${goal.id}`),
       ])
       // Load plan
       if (planRes.ok) {
@@ -415,13 +583,13 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             plan: data.plan,
             block_start_date: data.block_start_date,
             generated_at: data.generated_at,
+            previous_plans: data.previous_plans ?? [],
           })
         }
       }
       // Load preferences
-      const prefsData = await fetch(`/api/ai/training-plan/preferences?goalId=${goal.id}`)
-      if (prefsData.ok) {
-        const p = await prefsData.json()
+      if (prefsRes.ok) {
+        const p = await prefsRes.json()
         if (p.preferences) setPrefs(p.preferences)
       }
       setPrefsLoaded(true)
@@ -429,9 +597,101 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     load()
   }, [goal.id])
 
+  // Manual overrides persisted to database (with localStorage fallback)
+  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>({})
+
+  useEffect(() => {
+    // Load from database first, fall back to localStorage
+    async function loadStatuses() {
+      try {
+        const res = await fetch(`/api/ai/training-plan/sessions?goalId=${goal.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.statuses && Object.keys(data.statuses).length > 0) {
+            setManualStatuses(data.statuses)
+            return
+          }
+        }
+      } catch {}
+      // Fallback: load from localStorage and migrate to DB
+      try {
+        const stored = localStorage.getItem(`session-statuses-${goal.id}`)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setManualStatuses(parsed)
+          // Migrate localStorage data to database
+          fetch("/api/ai/training-plan/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ goalId: goal.id, statuses: parsed }),
+          }).then(() => {
+            localStorage.removeItem(`session-statuses-${goal.id}`)
+          }).catch(() => {})
+        }
+      } catch {}
+    }
+    loadStatuses()
+  }, [goal.id])
+
+  // Auto-match activities to planned sessions for each week
+  const autoStatuses = useMemo(() => {
+    if (!aiPlan) return {} as Record<string, SessionStatus>
+    const result: Record<string, SessionStatus> = {}
+    // Snap block start to Monday so weeks align with calendar weeks
+    const blockMonday = toMonday(new Date(aiPlan.block_start_date))
+    for (let i = 0; i < aiPlan.plan.weeks.length; i++) {
+      const week = aiPlan.plan.weeks[i]
+      const weekStart = new Date(blockMonday)
+      weekStart.setDate(weekStart.getDate() + i * 7)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 7)
+      const now = new Date()
+      // Only auto-match past and current weeks
+      if (weekStart > now) continue
+
+      const weekActs = activities.filter((a) => {
+        const d = new Date(a.date)
+        return d >= weekStart && d < weekEnd
+      })
+      const matched = autoMatchSessions(week.sessions, weekActs)
+      matched.forEach((m, si) => {
+        if (m) result[`W${week.weekNumber}-${si}`] = "completed"
+      })
+    }
+    return result
+  }, [aiPlan, activities])
+
+  // Merge: manual overrides take priority over auto-matched
+  const sessionStatuses = useMemo(() => {
+    return { ...autoStatuses, ...manualStatuses }
+  }, [autoStatuses, manualStatuses])
+
+  const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
+    setManualStatuses((prev) => {
+      const key = `W${weekNumber}-${sessionIndex}`
+      const effective = sessionStatuses[key] ?? "planned"
+      const next: SessionStatus =
+        effective === "planned" ? "completed"
+        : effective === "completed" ? "skipped"
+        : "planned"
+      const updated = { ...prev, [key]: next }
+      // Persist to database
+      fetch("/api/ai/training-plan/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: goal.id, sessionKey: key, status: next }),
+      }).catch(() => {
+        // Fallback to localStorage if DB save fails
+        try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
+      })
+      return updated
+    })
+  }, [goal.id, sessionStatuses])
+
   const handleGenerate = useCallback(
     async (note?: string) => {
       setIsGenerating(true)
+      setGenerateStatus("Analysing your training history…")
       setError(null)
       setShowAdjustForm(false)
 
@@ -442,24 +702,61 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           body: JSON.stringify({ goalId: goal.id, adjustNote: note || null }),
         })
 
-        const data = await res.json()
-
         if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
           setError(data.error ?? "Failed to generate plan")
           return
         }
 
-        setAiPlan({
-          goal_id: goal.id,
-          plan: data.plan,
-          block_start_date: data.block_start_date,
-          generated_at: data.generated_at,
-        })
-        setAdjustNote("")
+        const reader = res.body?.getReader()
+        if (!reader) {
+          setError("Streaming not supported")
+          return
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+            const event = JSON.parse(line.slice(6))
+
+            if (event.status === "thinking") {
+              setGenerateStatus("Coach is thinking…")
+            } else if (event.status === "generating") {
+              setGenerateStatus("Writing your plan…")
+            } else if (event.status === "done") {
+              setAiPlan((prev) => ({
+                goal_id: goal.id,
+                plan: event.plan,
+                block_start_date: event.block_start_date,
+                generated_at: event.generated_at,
+                previous_plans: prev?.plan
+                  ? [
+                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      ...(prev.previous_plans ?? []),
+                    ].slice(0, 5)
+                  : prev?.previous_plans ?? [],
+              }))
+              setAdjustNote("")
+            } else if (event.status === "error") {
+              setError(event.error ?? "Failed to generate plan")
+            }
+          }
+        }
       } catch {
         setError("Network error. Please try again.")
       } finally {
         setIsGenerating(false)
+        setGenerateStatus(null)
       }
     },
     [goal.id]
@@ -474,10 +771,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const best = bestRelevantRun(activities, goal.target_distance_km)
   const longest = longestRun(activities, goal.start_date, goal.created_at)
 
-  // Which week of the plan are we currently in?
+  // Which week of the plan are we currently in? (Monday-aligned)
   const currentWeekIndex = aiPlan
     ? Math.floor(
-        (Date.now() - new Date(aiPlan.block_start_date).getTime()) / (7 * 24 * 60 * 60 * 1000)
+        (Date.now() - toMonday(new Date(aiPlan.block_start_date)).getTime()) / (7 * 24 * 60 * 60 * 1000)
       )
     : -1
 
@@ -487,6 +784,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
   const isDueForRefresh = aiPlan && prefs.regenerate_every_weeks
     ? generatedAgo !== null && generatedAgo >= prefs.regenerate_every_weeks * 7
+    : false
+
+  // Check if the training block has ended (all weeks are in the past)
+  const isBlockExpired = aiPlan
+    ? currentWeekIndex >= (aiPlan.plan.weeks.length)
     : false
 
   return (
@@ -660,24 +962,61 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         )}
 
         {/* Generating skeleton */}
-        {isGenerating && <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} />}
+        {isGenerating && <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText={generateStatus} />}
 
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
+            {/* Expired block warning */}
+            {isBlockExpired && (
+              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
+                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium text-foreground">Training block ended</p>
+                  <p className="text-xs text-muted-foreground">
+                    This {aiPlan.plan.weeks.length}-week block has finished. Regenerate to get a fresh plan based on your latest training.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Summary */}
             <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20">
               <p className="text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>
             </div>
 
             {/* Weekly blocks */}
-            {aiPlan.plan.weeks.map((week, i) => (
-              <WeekCard
-                key={week.weekNumber}
-                week={week}
-                isCurrent={i === currentWeekIndex}
-              />
-            ))}
+            {aiPlan.plan.weeks.map((week, i) => {
+              const weekStart = toMonday(new Date(aiPlan.block_start_date))
+              weekStart.setDate(weekStart.getDate() + i * 7)
+              const weekEnd = new Date(weekStart)
+              weekEnd.setDate(weekEnd.getDate() + 7)
+              const now = new Date()
+
+              const weekActivities = activities.filter((a) => {
+                const d = new Date(a.date)
+                return d >= weekStart && d < weekEnd
+              })
+              const actualKm = (i < currentWeekIndex || (i === currentWeekIndex))
+                ? weekActivities.reduce((sum, a) => sum + a.distance_km, 0)
+                : null
+
+              return (
+                <WeekCard
+                  key={week.weekNumber}
+                  week={week}
+                  isCurrent={i === currentWeekIndex}
+                  actualKm={actualKm}
+                  isPast={weekEnd <= now && i !== currentWeekIndex}
+                  sessionStatuses={week.sessions.map((_, si) =>
+                    sessionStatuses[`W${week.weekNumber}-${si}`] ?? "planned"
+                  )}
+                  onToggleSession={handleToggleSession}
+                  weekStart={weekStart}
+                  weekEnd={weekEnd}
+                />
+              )
+            })}
 
             {/* Key principles */}
             {aiPlan.plan.keyPrinciples?.length > 0 && (
@@ -744,6 +1083,72 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 Regenerate (fresh start)
               </button>
             </div>
+
+            {/* Previous plans */}
+            {aiPlan.previous_plans.length > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowPreviousPlans((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
+                >
+                  <span className="font-medium text-foreground">
+                    Previous plans ({aiPlan.previous_plans.length})
+                  </span>
+                  {showPreviousPlans ? (
+                    <ChevronUp size={16} className="text-muted-foreground" />
+                  ) : (
+                    <ChevronDown size={16} className="text-muted-foreground" />
+                  )}
+                </button>
+
+                {showPreviousPlans && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {aiPlan.previous_plans.map((prev, i) => {
+                      const genDate = new Date(prev.generated_at)
+                      const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      const totalKm = prev.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-medium text-card-foreground">{label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {prev.plan.weeks.length}w · {totalKm} km total
+                              {prev.adjust_note ? " · adjusted" : ""}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setAiPlan((current) => {
+                                if (!current) return current
+                                // Swap: current → previous, selected previous → current
+                                const newPrevious = [
+                                  { plan: current.plan, generated_at: current.generated_at, adjust_note: null, block_start_date: current.block_start_date },
+                                  ...current.previous_plans.filter((_, j) => j !== i),
+                                ].slice(0, 5)
+                                return {
+                                  ...current,
+                                  plan: prev.plan,
+                                  generated_at: prev.generated_at,
+                                  block_start_date: prev.block_start_date,
+                                  previous_plans: newPrevious,
+                                }
+                              })
+                              setShowPreviousPlans(false)
+                            }}
+                            className="text-xs font-semibold text-primary active:opacity-70"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>

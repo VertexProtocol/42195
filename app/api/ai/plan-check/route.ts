@@ -1,0 +1,190 @@
+import { NextRequest, NextResponse } from "next/server"
+import Anthropic from "@anthropic-ai/sdk"
+import { createClient } from "@/lib/supabase/server"
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+/**
+ * Adaptive plan check — analyzes whether the current plan needs adjustment.
+ *
+ * Called periodically (e.g. end of week) or on-demand. Compares actual training
+ * against the plan and returns a recommendation: keep, adjust, or regenerate.
+ */
+
+const CHECK_SYSTEM_PROMPT = `You are a running coach evaluating whether a training plan needs adjustment. Analyze the runner's actual training versus their plan.
+
+Respond in this exact JSON format:
+{
+  "recommendation": "keep" | "adjust" | "regenerate",
+  "confidence": 0.0 to 1.0,
+  "reason": "1-2 sentences explaining the recommendation",
+  "adjustments": ["specific changes if recommendation is 'adjust'"],
+  "alerts": ["urgent concerns if any — overtraining, injury risk, etc."]
+}
+
+Guidelines:
+- "keep": Plan is on track (within 20% of targets), no changes needed
+- "adjust": Minor deviations — suggest specific tweaks for upcoming weeks
+- "regenerate": Major deviations (>40% off targets, missed multiple weeks, significant fitness change) — full replanning needed
+
+Be conservative — only recommend changes when clearly warranted.`
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  let goalId: string
+  try {
+    const body = await req.json()
+    goalId = body.goalId
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+  }
+
+  if (!goalId) return NextResponse.json({ error: "goalId is required" }, { status: 400 })
+
+  // Fetch plan
+  const { data: planRow } = await supabase
+    .from("ai_training_plans")
+    .select("plan, block_start_date, generated_at")
+    .eq("goal_id", goalId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (!planRow?.plan) {
+    return NextResponse.json({ error: "No training plan found" }, { status: 404 })
+  }
+
+  const plan = planRow.plan as {
+    summary: string
+    weeks: Array<{
+      weekNumber: number
+      theme: string
+      targetKm: number
+      sessions: Array<{ type: string; distance: string }>
+    }>
+  }
+
+  // Fetch goal
+  const { data: goal } = await supabase
+    .from("goals")
+    .select("name, target_distance_km, target_date")
+    .eq("id", goalId)
+    .eq("user_id", user.id)
+    .single()
+
+  if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 })
+
+  // Calculate which week we're in
+  const blockStart = new Date(planRow.block_start_date)
+  const dayOfBlock = Math.floor((Date.now() - blockStart.getTime()) / (1000 * 60 * 60 * 24))
+  const currentWeekIndex = Math.floor(dayOfBlock / 7)
+
+  // Fetch activities since block start
+  const { data: activities } = await supabase
+    .from("activities")
+    .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+    .eq("user_id", user.id)
+    .gte("date", blockStart.toISOString())
+    .order("date", { ascending: true })
+
+  // Compute actual vs planned for each completed week
+  const weekComparisons = []
+  for (let i = 0; i <= Math.min(currentWeekIndex, plan.weeks.length - 1); i++) {
+    const weekStart = new Date(blockStart)
+    weekStart.setDate(weekStart.getDate() + i * 7)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+
+    const weekActs = (activities ?? []).filter((a) => {
+      const d = new Date(a.date)
+      return d >= weekStart && d < weekEnd
+    })
+
+    const actualKm = weekActs.reduce((s, a) => s + Number(a.distance_km), 0)
+    const actualRuns = weekActs.length
+    const plannedWeek = plan.weeks[i]
+    const deviation = plannedWeek.targetKm > 0
+      ? Math.round(((actualKm - plannedWeek.targetKm) / plannedWeek.targetKm) * 100)
+      : 0
+
+    weekComparisons.push({
+      week: i + 1,
+      planned: plannedWeek.targetKm,
+      actual: Math.round(actualKm * 10) / 10,
+      deviation: `${deviation > 0 ? "+" : ""}${deviation}%`,
+      runs: `${actualRuns}/${plannedWeek.sessions.length}`,
+      avgHr: weekActs.filter((a) => a.avg_heart_rate).length > 0
+        ? Math.round(weekActs.filter((a) => a.avg_heart_rate).reduce((s, a) => s + Number(a.avg_heart_rate), 0) / weekActs.filter((a) => a.avg_heart_rate).length)
+        : null,
+    })
+  }
+
+  // ACWR
+  const now = Date.now()
+  const day7 = now - 7 * 24 * 60 * 60 * 1000
+  const day28 = now - 28 * 24 * 60 * 60 * 1000
+  const allActs = activities ?? []
+  const acute = allActs.filter((a) => new Date(a.date).getTime() >= day7).reduce((s, a) => s + Number(a.distance_km), 0)
+  const chronic = allActs.filter((a) => new Date(a.date).getTime() >= day28).reduce((s, a) => s + Number(a.distance_km), 0) / 4
+  const acwr = chronic > 0 ? (acute / chronic).toFixed(2) : "N/A"
+
+  const daysUntilRace = Math.ceil((new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+
+  const prompt = `Evaluate this training plan's status:
+
+GOAL: ${goal.name} (${goal.target_distance_km} km) — ${daysUntilRace} days away
+PLAN: ${plan.weeks.length}-week block, generated ${planRow.generated_at?.split("T")[0]}
+CURRENT: Week ${currentWeekIndex + 1} of ${plan.weeks.length}
+
+WEEKLY COMPARISON (planned vs actual):
+${weekComparisons.map((w) => `  Week ${w.week}: ${w.actual} km / ${w.planned} km (${w.deviation}), ${w.runs} sessions${w.avgHr ? `, avg HR ${w.avgHr}` : ""}`).join("\n")}
+
+ACWR (injury risk): ${acwr}
+REMAINING WEEKS: ${plan.weeks.length - currentWeekIndex - 1}
+
+Should this plan be kept as-is, adjusted, or fully regenerated?`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      system: [
+        {
+          type: "text" as const,
+          text: CHECK_SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" as const },
+        },
+      ],
+      messages: [{ role: "user", content: prompt }],
+    })
+
+    const textBlock = response.content.find((b) => b.type === "text")
+    if (!textBlock || textBlock.type !== "text") {
+      return NextResponse.json({ error: "No response" }, { status: 500 })
+    }
+
+    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return NextResponse.json({ error: "Invalid response format" }, { status: 500 })
+    }
+
+    const check = JSON.parse(jsonMatch[0])
+    return NextResponse.json({
+      check,
+      context: {
+        currentWeek: currentWeekIndex + 1,
+        totalWeeks: plan.weeks.length,
+        daysUntilRace,
+        weekComparisons,
+      },
+    })
+  } catch (err) {
+    console.error("Plan check error:", err)
+    return NextResponse.json({ error: "Failed to check plan" }, { status: 500 })
+  }
+}

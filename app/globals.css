@@ -45,6 +45,8 @@
   --sidebar-ring: oklch(0.63 0.2 30);
   --success: oklch(0.6 0.17 145);
   --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.75 0.18 75);
+  --warning-foreground: oklch(0.15 0 0);
 }
 
 .dark, :root.dark {
@@ -82,6 +84,8 @@
   --sidebar-ring: oklch(0.82 0.17 85);
   --success: oklch(0.6 0.17 145);
   --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.8 0.15 80);
+  --warning-foreground: oklch(0.16 0.02 85);
 }
 
 @theme inline {
@@ -125,6 +129,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 
 @layer base {
@@ -133,5 +139,39 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Improved focus states for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  
+  /* Form input focus styles */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  
+  /* Remove tap highlight on mobile */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Better form field appearance */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  textarea {
+    @apply appearance-none;
   }
 }

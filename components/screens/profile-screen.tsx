@@ -1,42 +1,49 @@
 "use client"
 
-import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off } from "lucide-react"
-import { formatTimeAgo } from "@/lib/format"
-import type { SyncStatus, UserProfile } from "@/lib/types"
+import { useMemo } from "react"
+import Image from "next/image"
+import { useTheme } from "next-themes"
+import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off, Trophy, Globe } from "lucide-react"
+import { formatTimeAgo, formatTargetTime, formatPace, formatDateShort } from "@/lib/format"
+import { detectPersonalRecords } from "@/lib/training-utils"
+import { useI18n, type Locale } from "@/lib/i18n"
+import type { Activity, SyncStatus, UserProfile } from "@/lib/types"
 
 interface ProfileScreenProps {
   user: UserProfile
+  activities: Activity[]
   syncStatus: SyncStatus
   stravaConnected: boolean
-  isDarkMode: boolean
-  onToggleDarkMode: () => void
   onSync: () => void
+  onFullSync: () => void
   onSignOut: () => void
 }
 
 function SyncStatusIndicator({ status }: { status: SyncStatus }) {
+  const { t } = useI18n()
+
   const config = {
     success: {
       icon: CheckCircle2,
-      label: "Synced",
+      label: t("profile.synced"),
       className: "text-success",
       bgClassName: "bg-success/10",
     },
     error: {
       icon: AlertCircle,
-      label: "Sync error",
+      label: t("profile.syncError"),
       className: "text-destructive",
       bgClassName: "bg-destructive/10",
     },
     syncing: {
       icon: RefreshCw,
-      label: "Syncing...",
+      label: t("profile.syncing"),
       className: "text-primary",
       bgClassName: "bg-primary/10",
     },
     never: {
       icon: Clock,
-      label: "Never synced",
+      label: t("profile.neverSynced"),
       className: "text-muted-foreground",
       bgClassName: "bg-secondary",
     },
@@ -64,20 +71,28 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, onToggleDarkMode, onSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, activities, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
+  const { theme, setTheme } = useTheme()
+  const isDarkMode = theme === "dark"
+  const { locale, setLocale, t } = useI18n()
+
+  const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       <header>
-        <h1 className="text-2xl font-bold text-foreground">Profile</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("profile.title")}</h1>
       </header>
 
       {/* User Info */}
       <section className="flex items-center gap-4 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
           {user.avatar_url ? (
-            <img
+            <Image
               src={user.avatar_url}
               alt={user.display_name}
+              width={56}
+              height={56}
               className="h-14 w-14 rounded-full object-cover"
               crossOrigin="anonymous"
             />
@@ -93,10 +108,40 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
         </div>
       </section>
 
+      {/* Personal Records */}
+      {personalRecords.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("profile.personalRecords")}
+          </h3>
+          <div className="flex flex-col gap-2">
+            {personalRecords.map((pr) => (
+              <div
+                key={pr.distance_label}
+                className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/10">
+                  <Trophy size={16} className="text-success" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-card-foreground">{pr.distance_label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateShort(pr.date)} · {formatPace(pr.pace_min_per_km)} {t("profile.pace")}
+                  </p>
+                </div>
+                <span className="text-base font-bold font-mono text-foreground">
+                  {formatTargetTime(pr.time_seconds)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Appearance */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Appearance
+          {t("profile.appearance")}
         </h3>
         <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
           <div className="flex items-center justify-between p-4">
@@ -108,13 +153,13 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
                   <Sun size={16} className="text-muted-foreground" />
                 )}
               </div>
-              <span className="text-sm font-medium text-card-foreground">Dark Mode</span>
+              <span className="text-sm font-medium text-card-foreground">{t("profile.darkMode")}</span>
             </div>
             <button
               role="switch"
               aria-checked={isDarkMode}
               aria-label="Toggle dark mode"
-              onClick={onToggleDarkMode}
+              onClick={() => setTheme(isDarkMode ? "light" : "dark")}
               className={`relative inline-flex h-[30px] w-[52px] shrink-0 items-center rounded-full transition-colors duration-200 ${
                 isDarkMode ? "bg-primary" : "bg-border"
               }`}
@@ -129,10 +174,42 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
         </div>
       </section>
 
+      {/* Language */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("profile.language")}
+        </h3>
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
+                <Globe size={16} className="text-muted-foreground" />
+              </div>
+              <span className="text-sm font-medium text-card-foreground">{t("profile.language")}</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-full bg-secondary p-0.5">
+              {(["en", "no"] as Locale[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    locale === l
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {l === "en" ? "English" : "Norsk"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Sync Status */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Strava Sync
+          {t("profile.stravaSync")}
         </h3>
         <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
           {/* Strava connection indicator */}
@@ -146,7 +223,7 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
                 )}
               </div>
               <span className={`text-sm font-medium ${stravaConnected ? "text-success" : "text-muted-foreground"}`}>
-                {stravaConnected ? "Strava connected" : "Strava not connected"}
+                {stravaConnected ? t("profile.stravaConnected") : t("profile.stravaNotConnected")}
               </span>
             </div>
             {!stravaConnected && (
@@ -154,7 +231,7 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
                 href="/api/auth/strava"
                 className="text-xs font-semibold text-primary underline underline-offset-2 active:opacity-70"
               >
-                Connect
+                {t("profile.connect")}
               </a>
             )}
           </div>
@@ -167,14 +244,21 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
               </div>
             )}
           </div>
-          <div className="border-t border-border px-4 py-3">
+          <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
             <button
               onClick={onSync}
               disabled={!stravaConnected}
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-semibold text-secondary-foreground active:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw size={16} />
-              Sync with Strava
+              {t("profile.syncWithStrava")}
+            </button>
+            <button
+              onClick={onFullSync}
+              disabled={!stravaConnected}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-medium text-muted-foreground active:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t("profile.fullResync")}
             </button>
           </div>
         </div>
@@ -183,14 +267,14 @@ export function ProfileScreen({ user, syncStatus, stravaConnected, isDarkMode, o
       {/* Sign Out */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Account
+          {t("profile.account")}
         </h3>
         <button
           onClick={onSignOut}
           className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-3 text-sm font-semibold text-destructive shadow-sm ring-1 ring-border active:bg-destructive/5 transition-colors"
         >
           <LogOut size={16} />
-          Sign Out
+          {t("profile.signOut")}
         </button>
       </section>
     </div>

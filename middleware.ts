@@ -11,8 +11,9 @@ export const config = {
      * Match all paths except:
      * - _next/static  (static files)
      * - _next/image   (image optimisation)
+     * - api           (API routes handle their own auth — avoids double getUser())
      * - favicon.ico, icons, manifest.json, and image file extensions
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|api|favicon.ico|icons|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }

@@ -1,25 +1,12 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { startOfWeek, endOfWeek } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
+import { getStravaAccessToken } from "@/lib/strava"
 
 // ---------------------------------------------------------------------------
 // Strava type definitions
 // ---------------------------------------------------------------------------
-
-interface StravaTokenRow {
-  user_id: string
-  athlete_id: number
-  access_token: string
-  refresh_token: string
-  expires_at: string
-}
-
-interface StravaRefreshResponse {
-  access_token: string
-  refresh_token: string
-  expires_at: number
-}
 
 interface StravaActivity {
   id: number
@@ -41,13 +28,14 @@ interface StravaActivity {
 // ---------------------------------------------------------------------------
 
 /** Strava sport_type values that are running activities. */
-const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill"])
+const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill", "Walk"])
 
 /**
  * Maps a Strava sport_type / workout_type to our constrained ActivityType.
  */
 function mapActivityType(sport_type: string, workout_type?: number): string {
   if (sport_type === "TrailRun") return "Trail Run"
+  if (sport_type === "Walk") return "Walk"
   if (sport_type === "Run" && workout_type === 1) return "Race"
   return "Run"
 }
@@ -59,30 +47,6 @@ function mapActivityType(sport_type: string, workout_type?: number): string {
 function speedToPace(averageSpeedMs: number): number | null {
   if (averageSpeedMs <= 0) return null
   return 1000 / averageSpeedMs / 60
-}
-
-/**
- * Refreshes a Strava access token and returns the new token data.
- */
-async function refreshStravaToken(refreshToken: string): Promise<StravaRefreshResponse> {
-  const res = await fetch("https://www.strava.com/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: process.env.STRAVA_CLIENT_ID,
-      client_secret: process.env.STRAVA_CLIENT_SECRET,
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
-  })
-
-  if (!res.ok) {
-    const body = await res.text()
-    console.error(`Strava token refresh failed (${res.status}):`, body)
-    throw new Error("Strava token refresh failed. Please reconnect your Strava account.")
-  }
-
-  return res.json() as Promise<StravaRefreshResponse>
 }
 
 /**
@@ -132,7 +96,9 @@ async function fetchStravaActivities(
 // Main handler
 // ---------------------------------------------------------------------------
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const fullSync = request.nextUrl.searchParams.get("full") === "1"
+
   // 1. Authenticate the calling user
   const supabase = await createClient()
   const {
@@ -152,9 +118,31 @@ export async function POST() {
   //    If null (never synced), we perform a full fetch from Strava.
   const { data: prevSync } = await service
     .from("sync_status")
-    .select("last_sync_at")
+    .select("last_sync_at, state, updated_at")
     .eq("user_id", userId)
     .maybeSingle()
+
+  // Rate limit: prevent sync within 30 seconds of last sync
+  if (prevSync?.last_sync_at) {
+    const lastSync = new Date(prevSync.last_sync_at).getTime()
+    if (Date.now() - lastSync < 30_000) {
+      return NextResponse.json(
+        { error: "Please wait at least 30 seconds before syncing again" },
+        { status: 429 },
+      )
+    }
+  }
+
+  // Prevent concurrent syncs (allow recovery if stuck > 2 minutes)
+  if (prevSync?.state === "syncing") {
+    const stuckThreshold = 2 * 60 * 1000
+    if (prevSync.updated_at && Date.now() - new Date(prevSync.updated_at).getTime() < stuckThreshold) {
+      return NextResponse.json(
+        { error: "A sync is already in progress" },
+        { status: 409 },
+      )
+    }
+  }
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 
@@ -165,42 +153,14 @@ export async function POST() {
   )
 
   try {
-    // 4. Load Strava tokens (service client bypasses RLS on strava_tokens)
-    const { data: tokenRow, error: tokenError } = await service
-      .from("strava_tokens")
-      .select("user_id, athlete_id, access_token, refresh_token, expires_at")
-      .eq("user_id", userId)
-      .single<StravaTokenRow>()
-
-    if (tokenError || !tokenRow) {
-      throw new Error("No Strava account connected. Please connect Strava first.")
-    }
-
-    // 5. Refresh token if expired (with 60-second buffer)
-    let accessToken = tokenRow.access_token
-    const expiresAt = new Date(tokenRow.expires_at)
-    const nowPlusBuffer = new Date(Date.now() + 60_000)
-
-    if (expiresAt <= nowPlusBuffer) {
-      const refreshed = await refreshStravaToken(tokenRow.refresh_token)
-      accessToken = refreshed.access_token
-
-      await service
-        .from("strava_tokens")
-        .update({
-          access_token: refreshed.access_token,
-          refresh_token: refreshed.refresh_token,
-          expires_at: new Date(refreshed.expires_at * 1000).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId)
-    }
+    // 4–5. Load Strava token (refreshes automatically if expired)
+    const accessToken = await getStravaAccessToken(userId)
 
     // 6. Fetch activities from Strava.
-    //    - First sync (lastSyncAt = null): fetch all activities.
-    //    - Subsequent syncs: only fetch activities newer than last_sync_at,
+    //    - Full sync (fullSync=true or first sync): fetch all activities.
+    //    - Incremental sync: only fetch activities newer than last_sync_at,
     //      saving Strava API quota (100 req/15 min, 1000/day).
-    const afterTimestamp = lastSyncAt
+    const afterTimestamp = !fullSync && lastSyncAt
       ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
       : undefined
 
@@ -234,33 +194,35 @@ export async function POST() {
     }
 
     // 8. Recalculate current_distance_km for every active goal.
-    //    Multiple goals can now be active simultaneously, so we iterate all.
-    //    Each goal's distance is scoped to its own [start_date, target_date]
-    //    window so activities before a goal was set up don't inflate the count.
+    //    Fetch activities once and compute distances in memory (avoids N+1).
     const { data: activeGoals } = await service
       .from("goals")
       .select("id, start_date, target_date")
       .eq("user_id", userId)
       .eq("is_active", true)
 
-    for (const goal of activeGoals ?? []) {
-      let query = service
+    if (activeGoals && activeGoals.length > 0) {
+      const { data: allActivities } = await service
         .from("activities")
-        .select("distance_km")
+        .select("date, distance_km")
         .eq("user_id", userId)
-        .lte("date", goal.target_date)
 
-      if (goal.start_date) {
-        query = query.gte("date", goal.start_date)
+      const acts = allActivities ?? []
+
+      for (const goal of activeGoals) {
+        const totalKm = acts
+          .filter((a) => {
+            if (a.date > goal.target_date) return false
+            if (goal.start_date && a.date < goal.start_date) return false
+            return true
+          })
+          .reduce((sum, a) => sum + Number(a.distance_km), 0)
+
+        await service
+          .from("goals")
+          .update({ current_distance_km: totalKm })
+          .eq("id", goal.id)
       }
-
-      const { data: distRows } = await query
-      const totalKm = (distRows ?? []).reduce((sum, r) => sum + Number(r.distance_km), 0)
-
-      await service
-        .from("goals")
-        .update({ current_distance_km: totalKm })
-        .eq("id", goal.id)
     }
 
     // 9. Recalculate weekly goals progress for the current week.
@@ -273,7 +235,7 @@ export async function POST() {
 
     const { data: weeklyGoals } = await service
       .from("weekly_goals")
-      .select("id, metric, is_recurring")
+      .select("id, metric, is_recurring, session_min_duration_minutes, session_min_distance_km")
       .eq("user_id", userId)
       .or(`week_start.eq.${weekStartStr},is_recurring.eq.true`)
 
@@ -288,16 +250,24 @@ export async function POST() {
 
       const acts = weekActivities ?? []
 
-      // Pre-compute each metric so we don't recalculate per goal
-      const weekTotals = {
-        distance_km: acts.reduce((sum, a) => sum + Number(a.distance_km), 0),
-        sessions: acts.length,
-        duration_minutes: acts.reduce((sum, a) => sum + a.duration_seconds / 60, 0),
-        elevation_m: acts.reduce((sum, a) => sum + Number(a.elevation_gain_m ?? 0), 0),
-      }
-
       for (const wg of weeklyGoals) {
-        const current = weekTotals[wg.metric as keyof typeof weekTotals] ?? 0
+        let current = 0
+
+        if (wg.metric === "sessions") {
+          // Apply session thresholds when counting qualifying sessions
+          current = acts.filter((a) => {
+            if (wg.session_min_duration_minutes && a.duration_seconds / 60 < wg.session_min_duration_minutes) return false
+            if (wg.session_min_distance_km && Number(a.distance_km) < Number(wg.session_min_distance_km)) return false
+            return true
+          }).length
+        } else if (wg.metric === "distance_km") {
+          current = acts.reduce((sum: number, a) => sum + Number(a.distance_km), 0)
+        } else if (wg.metric === "duration_minutes") {
+          current = acts.reduce((sum: number, a) => sum + a.duration_seconds / 60, 0)
+        } else if (wg.metric === "elevation_m") {
+          current = acts.reduce((sum: number, a) => sum + Number(a.elevation_gain_m ?? 0), 0)
+        }
+
         await service.from("weekly_goals").update({ current }).eq("id", wg.id)
       }
     }
@@ -328,7 +298,9 @@ export async function POST() {
         ? err.message
         : typeof err === "string"
           ? err
-          : "Unknown sync error"
+          : typeof err === "object" && err !== null && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Unknown sync error"
 
     await service.from("sync_status").upsert(
       {

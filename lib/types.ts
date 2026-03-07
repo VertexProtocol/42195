@@ -1,7 +1,9 @@
-export type ActivityType = "Run" | "Trail Run" | "Race"
+export type ActivityType = "Run" | "Trail Run" | "Race" | "Walk"
 
 export interface Activity {
   id: string
+  user_id: string
+  strava_id: number | null
   type: ActivityType
   name: string
   date: string
@@ -11,6 +13,8 @@ export interface Activity {
   elevation_gain_m: number | null
   avg_heart_rate: number | null
   calories: number | null
+  map_polyline: string | null
+  created_at: string
 }
 
 /**
@@ -68,7 +72,7 @@ export interface UserProfile {
   avatar_url: string | null
 }
 
-export type TabId = "home" | "activities" | "goals" | "plan" | "profile"
+export type TabId = "home" | "activities" | "goals" | "coach" | "profile"
 
 export interface StreamPoint {
   time: number
@@ -88,6 +92,7 @@ export interface Lap {
 // ---- AI Training Plan types ----
 
 export type TrainingFocus = "volume" | "workouts" | "balanced"
+export type PlanMode = "block" | "full_cycle"
 
 export interface GoalPreferences {
   goal_id: string
@@ -97,6 +102,7 @@ export interface GoalPreferences {
   weekly_increase_pct: number   // e.g. 10 = 10% volume increase per week
   block_weeks: number           // total weeks per training block (2/3/4/6)
   regenerate_every_weeks: number // how often user plans to regenerate (2/4/6/8)
+  plan_mode?: PlanMode          // "block" (default) or "full_cycle" for complete race prep
 }
 
 export interface TrainingSession {
@@ -121,9 +127,17 @@ export interface TrainingPlan {
   watchOut: string | null
 }
 
+export interface PlanSnapshot {
+  plan: TrainingPlan
+  generated_at: string
+  adjust_note: string | null
+  block_start_date: string
+}
+
 export interface AiTrainingPlan {
   goal_id: string
   plan: TrainingPlan
   block_start_date: string
   generated_at: string
+  previous_plans: PlanSnapshot[]
 }

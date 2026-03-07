@@ -1,40 +1,69 @@
 "use client"
 
-import { useState, useCallback, useEffect, useTransition, useMemo } from "react"
+import { useState, useCallback, useSyncExternalStore, lazy, Suspense } from "react"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
-import { ActivityDetailScreen } from "@/components/screens/activity-detail-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
-import { PlanScreen } from "@/components/screens/plan-screen"
-import { GoalDetailScreen } from "@/components/screens/goal-detail-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
-import { ProfileScreen } from "@/components/screens/profile-screen"
-import { signOut } from "@/lib/actions/auth"
-import { createClient } from "@/lib/supabase/client"
-import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
+import { ManualActivityForm } from "@/components/manual-activity-form"
+import { Onboarding } from "@/components/onboarding"
+import { useAppData, type InitialData } from "@/hooks/use-app-data"
+import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
-const supabase = createClient()
+const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "coach", "profile"])
 
-export function AppShell() {
-  const [activeTab, setActiveTab] = useState<TabId>("home")
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
-  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+// Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
+const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
+const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
+const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
+const CoachScreen = lazy(() => import("@/components/screens/coach-screen").then(m => ({ default: m.CoachScreen })))
 
-  // Real data state (starts empty, loaded from Supabase)
-  const [activities, setActivities] = useState<Activity[]>([])
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([])
-  const [user, setUser] = useState<UserProfile | null>(null)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
-    state: "never",
-    last_sync_at: null,
-    error_message: null,
-  })
-  const [stravaConnected, setStravaConnected] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+// Lightweight URL sync — updates the URL bar without triggering Next.js server navigation
+function getSearchString() {
+  if (typeof window === "undefined") return ""
+  return window.location.search
+}
+
+function useLocationSearch() {
+  const subscribe = useCallback((cb: () => void) => {
+    window.addEventListener("popstate", cb)
+    return () => window.removeEventListener("popstate", cb)
+  }, [])
+  const search = useSyncExternalStore(subscribe, getSearchString, () => "")
+  return new URLSearchParams(search)
+}
+
+function ScreenFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    </div>
+  )
+}
+
+interface AppShellProps {
+  initialData?: InitialData | null
+}
+
+export function AppShell({ initialData }: AppShellProps) {
+  const data = useAppData(initialData)
+  const searchParams = useLocationSearch()
+
+  // Read navigation state from URL
+  const urlTab = searchParams.get("tab") as TabId | null
+  const activeTab: TabId = urlTab && VALID_TABS.has(urlTab) ? urlTab : "home"
+  const activityId = searchParams.get("activity")
+  const goalId = searchParams.get("goal")
+
+  // Resolve selected items from URL IDs
+  const selectedActivity = activityId
+    ? data.activities.find((a) => a.id === activityId) ?? null
+    : null
+  const selectedGoal = goalId
+    ? data.goals.find((g) => g.id === goalId) ?? null
+    : null
 
   // Editor state
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
@@ -44,229 +73,50 @@ export function AppShell() {
   const [editingWeeklyGoal, setEditingWeeklyGoal] = useState<WeeklyGoal | null>(null)
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
+  const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
 
-  const [, startTransition] = useTransition()
+  // Onboarding state - show if user has no goals and Strava not connected
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+  const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
 
-  // ----- Fetch all data from Supabase on mount -----
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true)
-
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
-
-      if (!authUser) {
-        setIsLoading(false)
-        return
-      }
-
-      // Fetch everything in parallel
-      const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncStatusRes, stravaRes] =
-        await Promise.all([
-          supabase
-            .from("activities")
-            .select("*")
-            .order("date", { ascending: false }),
-          supabase
-            .from("goals")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("weekly_goals")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase.from("profiles").select("*").eq("id", authUser.id).single(),
-          supabase
-            .from("sync_status")
-            .select("*")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
-          supabase
-            .from("strava_tokens")
-            .select("athlete_id")
-            .eq("user_id", authUser.id)
-            .maybeSingle(),
-        ])
-
-      if (activitiesRes.data) {
-        setActivities(
-          activitiesRes.data.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
-      }
-
-      if (goalsRes.data) {
-        setGoals(
-          goalsRes.data.map((g) => ({
-            id: g.id,
-            goal_category: (g.goal_category ?? "performance") as GoalCategory,
-            name: g.name,
-            target_distance_km: Number(g.target_distance_km),
-            start_date: g.start_date ?? null,
-            target_time_seconds: g.target_time_seconds ?? null,
-            target_date: g.target_date,
-            current_distance_km: Number(g.current_distance_km),
-            is_active: g.is_active,
-            created_at: g.created_at,
-          }))
-        )
-      }
-
-      if (weeklyGoalsRes.data) {
-        setWeeklyGoals(
-          weeklyGoalsRes.data.map((wg) => ({
-            id: wg.id,
-            metric: wg.metric,
-            label: wg.label,
-            target: Number(wg.target),
-            current: Number(wg.current),
-            week_start: wg.week_start,
-            is_recurring: wg.is_recurring ?? false,
-            session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
-            session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
-          }))
-        )
-      }
-
-      if (profileRes.data) {
-        setUser({
-          id: profileRes.data.id,
-          display_name: profileRes.data.display_name ?? authUser.email ?? "Runner",
-          email: profileRes.data.email ?? authUser.email ?? "",
-          avatar_url: profileRes.data.avatar_url ?? null,
-        })
-      } else {
-        // Fallback user from auth
-        setUser({
-          id: authUser.id,
-          display_name: authUser.email ?? "Runner",
-          email: authUser.email ?? "",
-          avatar_url: null,
-        })
-      }
-
-      if (syncStatusRes.data) {
-        setSyncStatus({
-          state: syncStatusRes.data.state,
-          last_sync_at: syncStatusRes.data.last_sync_at,
-          error_message: syncStatusRes.data.error_message,
-        })
-      }
-
-      setStravaConnected(!!stravaRes.data)
-      setIsLoading(false)
+  // ----- URL navigation helpers -----
+  // Uses pushState directly to avoid Next.js server round-trips
+  const navigate = useCallback((params: Record<string, string | null>) => {
+    const sp = new URLSearchParams(window.location.search)
+    for (const [key, value] of Object.entries(params)) {
+      if (value === null) sp.delete(key)
+      else sp.set(key, value)
     }
-
-    loadData()
+    const qs = sp.toString()
+    const url = qs ? `/?${qs}` : "/"
+    window.history.pushState(null, "", url)
+    // Trigger re-render via popstate listener
+    window.dispatchEvent(new PopStateEvent("popstate"))
   }, [])
 
-  // ----- Dark mode -----
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDarkMode)
-  }, [isDarkMode])
-
-  const handleToggleDarkMode = useCallback(() => {
-    setIsDarkMode((prev) => !prev)
-  }, [])
-
-  // ----- Derived data -----
-  const activeGoals = goals.filter((g) => g.is_active)
-
-  const { currentWeekMonday, weeklySummary } = useMemo(() => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    const monday = new Date(now)
-    monday.setDate(now.getDate() + diff)
-    monday.setHours(0, 0, 0, 0)
-
-    const weekActivities = activities.filter(
-      (a) => new Date(a.date) >= monday
-    )
-    return {
-      currentWeekMonday: monday,
-      weeklySummary: {
-        total_distance_km: weekActivities.reduce((s, a) => s + a.distance_km, 0),
-        total_time_seconds: weekActivities.reduce(
-          (s, a) => s + a.duration_seconds,
-          0
-        ),
-        run_count: weekActivities.length,
-      },
-    }
-  }, [activities])
-
-  // Weekly goals for HomeScreen: recurring goals + this week's one-off goals
-  const currentWeekGoals = useMemo(() => {
-    const p = (n: number) => String(n).padStart(2, "0")
-    const mondayStr = `${currentWeekMonday.getFullYear()}-${p(currentWeekMonday.getMonth() + 1)}-${p(currentWeekMonday.getDate())}`
-    return weeklyGoals.filter((wg) => wg.is_recurring || wg.week_start === mondayStr)
-  }, [weeklyGoals, currentWeekMonday])
-
-  // ----- Navigation -----
   const handleTabChange = useCallback((tab: TabId) => {
-    setActiveTab(tab)
-    setSelectedActivity(null)
-    setSelectedGoal(null)
-  }, [])
+    navigate(tab === "home"
+      ? { tab: null, activity: null, goal: null }
+      : { tab, activity: null, goal: null })
+  }, [navigate])
 
   const handleSelectGoal = useCallback((goal: Goal) => {
-    setSelectedGoal(goal)
-  }, [])
+    navigate({ goal: goal.id })
+  }, [navigate])
 
   const handleBackFromGoalDetail = useCallback(() => {
-    setSelectedGoal(null)
-  }, [])
+    navigate({ goal: null })
+  }, [navigate])
 
   const handleSelectActivity = useCallback((activity: Activity) => {
-    setSelectedActivity(activity)
-  }, [])
+    navigate({ activity: activity.id })
+  }, [navigate])
 
   const handleBackFromDetail = useCallback(() => {
-    setSelectedActivity(null)
-  }, [])
+    navigate({ activity: null })
+  }, [navigate])
 
-  // ----- Goal CRUD (persisted to Supabase) -----
-  const handleToggleActiveGoal = useCallback(async (goalId: string) => {
-    const target = goals.find((g) => g.id === goalId)
-    if (!target) return
-
-    const newActive = !target.is_active
-
-    // Optimistic update — just toggle this one goal
-    setGoals((prev) =>
-      prev.map((g) => (g.id === goalId ? { ...g, is_active: newActive } : g))
-    )
-
-    const { error } = await supabase
-      .from("goals")
-      .update({ is_active: newActive })
-      .eq("id", goalId)
-
-    if (error) {
-      console.error("Failed to toggle goal active state:", error)
-      // Revert optimistic update
-      setGoals((prev) =>
-        prev.map((g) => (g.id === goalId ? { ...g, is_active: target.is_active } : g))
-      )
-    }
-  }, [goals])
-
+  // ----- Editor handlers (thin wrappers around data hook) -----
   const handleEditGoal = useCallback((goal: Goal) => {
     setEditingGoal(goal)
     setIsNewGoal(false)
@@ -280,97 +130,20 @@ export function AppShell() {
     setIsEditorOpen(true)
   }, [])
 
-  const handleSaveGoal = useCallback(
-    async (saved: Goal) => {
-      const exists = goals.find((g) => g.id === saved.id)
-
-      if (exists) {
-        // Update existing goal — optimistic, revert on error
-        setGoals((prev) => prev.map((g) => (g.id === saved.id ? saved : g)))
-        const { error } = await supabase
-          .from("goals")
-          .update({
-            goal_category: saved.goal_category,
-            name: saved.name,
-            target_distance_km: saved.target_distance_km,
-            start_date: saved.start_date,
-            target_time_seconds: saved.target_time_seconds,
-            target_date: saved.target_date,
-            current_distance_km: saved.current_distance_km,
-            is_active: saved.is_active,
-          })
-          .eq("id", saved.id)
-        if (error) {
-          console.error("Failed to update goal:", error)
-          setGoals((prev) => prev.map((g) => (g.id === saved.id ? exists : g)))
-          return // keep editor open
-        }
-      } else {
-        // Insert new goal
-        const { data: authData } = await supabase.auth.getUser()
-        const userId = authData.user?.id
-        if (!userId) {
-          console.error("No authenticated user — cannot save goal")
-          return
-        }
-
-        const { data, error } = await supabase
-          .from("goals")
-          .insert({
-            goal_category: saved.goal_category,
-            name: saved.name,
-            user_id: userId,
-            target_distance_km: saved.target_distance_km,
-            start_date: saved.start_date,
-            target_time_seconds: saved.target_time_seconds,
-            target_date: saved.target_date,
-            current_distance_km: saved.current_distance_km,
-            is_active: saved.is_active,
-          })
-          .select()
-          .single()
-
-        if (error) {
-          console.error("Failed to create goal:", error)
-          return // keep editor open
-        }
-
-        if (data) {
-          setGoals((prev) => [
-            {
-              id: data.id,
-              goal_category: (data.goal_category ?? "performance") as GoalCategory,
-              name: data.name,
-              target_distance_km: Number(data.target_distance_km),
-              start_date: data.start_date ?? null,
-              target_time_seconds: data.target_time_seconds ?? null,
-              target_date: data.target_date,
-              current_distance_km: Number(data.current_distance_km),
-              is_active: data.is_active,
-              created_at: data.created_at,
-            },
-            ...prev,
-          ])
-        }
-      }
-
-      setIsEditorOpen(false) // only reached on success
-    },
-    [goals]
-  )
+  const handleSaveGoal = useCallback(async (saved: Goal) => {
+    const ok = await data.saveGoal(saved)
+    if (ok) setIsEditorOpen(false)
+  }, [data.saveGoal])
 
   const handleDeleteGoal = useCallback(async (goalId: string) => {
-    setGoals((prev) => prev.filter((g) => g.id !== goalId))
+    await data.deleteGoal(goalId)
     setIsEditorOpen(false)
-
-    await supabase.from("goals").delete().eq("id", goalId)
-  }, [])
+  }, [data.deleteGoal])
 
   const handleCloseEditor = useCallback(() => {
     setIsEditorOpen(false)
   }, [])
 
-  // ----- Weekly Goal CRUD (persisted to Supabase) -----
   const handleEditWeeklyGoal = useCallback((goal: WeeklyGoal) => {
     setEditingWeeklyGoal(goal)
     setIsNewWeeklyGoal(false)
@@ -383,171 +156,30 @@ export function AppShell() {
     setIsWeeklyEditorOpen(true)
   }, [])
 
-  const handleSaveWeeklyGoal = useCallback(
-    async (saved: WeeklyGoal) => {
-      const exists = weeklyGoals.find((g) => g.id === saved.id)
-
-      if (exists) {
-        setWeeklyGoals((prev) =>
-          prev.map((g) => (g.id === saved.id ? saved : g))
-        )
-        const { error } = await supabase
-          .from("weekly_goals")
-          .update({
-            metric: saved.metric,
-            label: saved.label,
-            target: saved.target,
-            current: saved.current,
-            week_start: saved.week_start,
-            is_recurring: saved.is_recurring,
-            session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
-            session_min_distance_km: saved.session_min_distance_km ?? null,
-          })
-          .eq("id", saved.id)
-        if (error) {
-          console.error("Failed to update weekly goal:", error)
-          // revert optimistic update
-          setWeeklyGoals((prev) =>
-            prev.map((g) => (g.id === saved.id ? exists : g))
-          )
-          return // keep editor open so user knows something went wrong
-        }
-      } else {
-        const { data: authData } = await supabase.auth.getUser()
-        const userId = authData.user?.id
-        if (!userId) {
-          console.error("No authenticated user found — cannot save weekly goal")
-          return
-        }
-
-        const { data, error } = await supabase
-          .from("weekly_goals")
-          .insert({
-            user_id: userId,
-            metric: saved.metric,
-            label: saved.label,
-            target: saved.target,
-            current: 0,
-            week_start: saved.week_start,
-            is_recurring: saved.is_recurring,
-            session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
-            session_min_distance_km: saved.session_min_distance_km ?? null,
-          })
-          .select()
-          .single()
-
-        if (error) {
-          console.error("Failed to create weekly goal:", error)
-          return // keep editor open
-        }
-
-        if (data) {
-          setWeeklyGoals((prev) => [
-            {
-              id: data.id,
-              metric: data.metric,
-              label: data.label,
-              target: Number(data.target),
-              current: Number(data.current),
-              week_start: data.week_start,
-              is_recurring: data.is_recurring ?? false,
-              session_min_duration_minutes: data.session_min_duration_minutes ?? null,
-              session_min_distance_km: data.session_min_distance_km ? Number(data.session_min_distance_km) : null,
-            },
-            ...prev,
-          ])
-        }
-      }
-
-      setIsWeeklyEditorOpen(false)
-    },
-    [weeklyGoals]
-  )
+  const handleSaveWeeklyGoal = useCallback(async (saved: WeeklyGoal) => {
+    const ok = await data.saveWeeklyGoal(saved)
+    if (ok) setIsWeeklyEditorOpen(false)
+  }, [data.saveWeeklyGoal])
 
   const handleDeleteWeeklyGoal = useCallback(async (goalId: string) => {
-    setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId))
+    await data.deleteWeeklyGoal(goalId)
     setIsWeeklyEditorOpen(false)
-
-    await supabase.from("weekly_goals").delete().eq("id", goalId)
-  }, [])
+  }, [data.deleteWeeklyGoal])
 
   const handleCloseWeeklyEditor = useCallback(() => {
     setIsWeeklyEditorOpen(false)
   }, [])
 
-  // ----- Strava Sync -----
-  const handleSync = useCallback(async () => {
-    setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
-
-    try {
-      const res = await fetch("/api/sync-strava", { method: "POST" })
-      const data = await res.json()
-
-      if (!res.ok) {
-        if (
-          data.error?.includes("No Strava account connected") ||
-          data.error?.includes("connect Strava")
-        ) {
-          window.location.href = "/api/auth/strava"
-          return
-        }
-        setSyncStatus((prev) => ({
-          ...prev,
-          state: "error",
-          error_message: data.error ?? "Sync failed",
-        }))
-        return
-      }
-
-      setSyncStatus({
-        state: "success",
-        last_sync_at: new Date().toISOString(),
-        error_message: null,
-      })
-
-      // Refetch activities after successful sync
-      const { data: freshActivities } = await supabase
-        .from("activities")
-        .select("*")
-        .order("date", { ascending: false })
-
-      if (freshActivities) {
-        setActivities(
-          freshActivities.map((a) => ({
-            id: a.id,
-            user_id: a.user_id,
-            strava_id: a.strava_id,
-            type: a.type,
-            name: a.name,
-            date: a.date,
-            distance_km: Number(a.distance_km),
-            duration_seconds: a.duration_seconds,
-            pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-            elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-            avg_heart_rate: a.avg_heart_rate,
-            calories: a.calories,
-            map_polyline: a.map_polyline,
-            created_at: a.created_at,
-          }))
-        )
-      }
-    } catch {
-      setSyncStatus((prev) => ({
-        ...prev,
-        state: "error",
-        error_message: "Network error. Please try again.",
-      }))
-    }
+  const handleConnectStrava = useCallback(() => {
+    window.location.href = "/api/auth/strava"
   }, [])
 
-  const handleSignOut = useCallback(() => {
-    startTransition(async () => {
-      await signOut()
-    })
+  const handleDismissOnboarding = useCallback(() => {
+    setOnboardingDismissed(true)
   }, [])
 
   // ----- Loading state -----
-  if (isLoading) {
+  if (data.isLoading) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -564,12 +196,12 @@ export function AppShell() {
       <main className="relative pb-20">
         {activeTab === "home" && (
           <HomeScreen
-            activeGoals={activeGoals}
-            activities={activities}
-            weeklySummary={weeklySummary}
-            weeklyGoals={currentWeekGoals}
-            currentWeekStart={currentWeekMonday.toISOString()}
-            recentActivities={activities.slice(0, 5)}
+            activeGoals={data.activeGoals}
+            activities={data.activities}
+            weeklySummary={data.weeklySummary}
+            weeklyGoals={data.currentWeekGoals}
+            currentWeekStart={data.currentWeekMonday.toISOString()}
+            recentActivities={data.activities.slice(0, 5)}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
           />
@@ -577,63 +209,68 @@ export function AppShell() {
 
         {activeTab === "activities" && !selectedActivity && (
           <ActivitiesScreen
-            activities={activities}
-            stravaConnected={stravaConnected}
+            activities={data.activities}
+            stravaConnected={data.stravaConnected}
             onSelectActivity={handleSelectActivity}
-            onSync={handleSync}
+            onSync={data.sync}
+            onAddActivity={() => setIsManualActivityOpen(true)}
           />
         )}
 
         {activeTab === "activities" && selectedActivity && (
-          <ActivityDetailScreen
-            activity={selectedActivity}
-            onBack={handleBackFromDetail}
-          />
+          <Suspense fallback={<ScreenFallback />}>
+            <ActivityDetailScreen
+              activity={selectedActivity}
+              onBack={handleBackFromDetail}
+              allActivities={data.activities}
+            />
+          </Suspense>
         )}
 
-        {activeTab === "goals" && (
+        {activeTab === "goals" && !selectedGoal && (
           <GoalsScreen
-            goals={goals}
-            activities={activities}
-            weeklyGoals={weeklyGoals}
-            onToggleActive={handleToggleActiveGoal}
+            goals={data.goals}
+            activities={data.activities}
+            weeklyGoals={data.weeklyGoals}
+            onToggleActive={data.toggleActiveGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("performance")}
+            onAddEventGoal={() => handleAddGoal("event_training")}
             onEditWeeklyGoal={handleEditWeeklyGoal}
             onAddWeeklyGoal={handleAddWeeklyGoal}
-          />
-        )}
-
-        {activeTab === "plan" && !selectedGoal && (
-          <PlanScreen
-            goals={goals}
-            activities={activities}
-            onEditGoal={handleEditGoal}
-            onAddGoal={() => handleAddGoal("event_training")}
-            onToggleActive={handleToggleActiveGoal}
             onSelectGoal={handleSelectGoal}
           />
         )}
 
-        {activeTab === "plan" && selectedGoal && (
-          <GoalDetailScreen
-            goal={selectedGoal}
-            activities={activities}
-            onBack={handleBackFromGoalDetail}
-            onEditGoal={handleEditGoal}
-          />
+        {activeTab === "goals" && selectedGoal && (
+          <Suspense fallback={<ScreenFallback />}>
+            <GoalDetailScreen
+              goal={selectedGoal}
+              activities={data.activities}
+              onBack={handleBackFromGoalDetail}
+              onEditGoal={handleEditGoal}
+            />
+          </Suspense>
+        )}
+
+        {activeTab === "coach" && (
+          <Suspense fallback={<ScreenFallback />}>
+            <CoachScreen />
+          </Suspense>
         )}
 
         {activeTab === "profile" && (
-          <ProfileScreen
-            user={user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
-            syncStatus={syncStatus}
-            stravaConnected={stravaConnected}
-            isDarkMode={isDarkMode}
-            onToggleDarkMode={handleToggleDarkMode}
-            onSync={handleSync}
-            onSignOut={handleSignOut}
-          />
+          <Suspense fallback={<ScreenFallback />}>
+            <ProfileScreen
+              user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
+              activities={data.activities}
+              syncStatus={data.syncStatus}
+              stravaConnected={data.stravaConnected}
+              onSync={data.sync}
+              onFullSync={data.fullSync}
+              onSignOut={data.signOut}
+            />
+          </Suspense>
         )}
       </main>
 
@@ -658,8 +295,25 @@ export function AppShell() {
         onClose={handleCloseWeeklyEditor}
       />
 
+      {/* Manual Activity Form */}
+      <ManualActivityForm
+        open={isManualActivityOpen}
+        onClose={() => setIsManualActivityOpen(false)}
+        onSave={data.addActivity}
+      />
+
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Onboarding Flow */}
+      {showOnboarding && (
+        <Onboarding
+          stravaConnected={data.stravaConnected}
+          onConnectStrava={handleConnectStrava}
+          onCreateGoal={() => handleAddGoal("performance")}
+          onDismiss={handleDismissOnboarding}
+        />
+      )}
     </div>
   )
 }
