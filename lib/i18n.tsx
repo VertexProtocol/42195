@@ -264,6 +264,23 @@ const translations = {
     // Validation
     "validation.required": "This field is required",
     "validation.validDistance": "Please enter a valid distance",
+    // Coach
+    "coach.title": "AI Coach",
+    "coach.subtitle": "Ask about your training, goals, or performance",
+    "coach.empty": "Your AI running coach",
+    "coach.emptyDesc": "Ask me anything about your training \u2014 I can look up your activities, goals, training load, and more.",
+    "coach.placeholder": "Ask your coach\u2026",
+    "coach.thinking": "Thinking\u2026",
+    "coach.networkError": "Network error. Please check your connection and try again.",
+    "coach.genericError": "Something went wrong. Please try again.",
+    "coach.suggestion1": "How was my training this week?",
+    "coach.suggestion2": "Am I ready for my race?",
+    "coach.suggestion3": "What should I focus on next?",
+    "coach.suggestion4": "Am I at risk of overtraining?",
+    // Activity analysis
+    "analysis.coachAnalysis": "Coach Analysis",
+    "analysis.getAnalysis": "Get AI analysis",
+    "analysis.analyzing": "Analyzing your run\u2026",
   },
   no: {
     // App
@@ -524,6 +541,23 @@ const translations = {
     // Validation
     "validation.required": "Dette feltet er pakrevd",
     "validation.validDistance": "Vennligst oppgi en gyldig distanse",
+    // Coach
+    "coach.title": "AI-trener",
+    "coach.subtitle": "Sp\u00f8r om trening, m\u00e5l eller ytelse",
+    "coach.empty": "Din AI-l\u00f8petrener",
+    "coach.emptyDesc": "Sp\u00f8r meg om hva som helst rundt treningen din \u2014 jeg kan sl\u00e5 opp aktiviteter, m\u00e5l, treningsbelastning og mer.",
+    "coach.placeholder": "Sp\u00f8r treneren din\u2026",
+    "coach.thinking": "Tenker\u2026",
+    "coach.networkError": "Nettverksfeil. Sjekk tilkoblingen og pr\u00f8v igjen.",
+    "coach.genericError": "Noe gikk galt. Pr\u00f8v igjen.",
+    "coach.suggestion1": "Hvordan var treningen min denne uken?",
+    "coach.suggestion2": "Er jeg klar for l\u00f8pet?",
+    "coach.suggestion3": "Hva b\u00f8r jeg fokusere p\u00e5 n\u00e5?",
+    "coach.suggestion4": "Er jeg i fare for overtrening?",
+    // Activity analysis
+    "analysis.coachAnalysis": "Treneranalyse",
+    "analysis.getAnalysis": "F\u00e5 AI-analyse",
+    "analysis.analyzing": "Analyserer l\u00f8pet ditt\u2026",
   },
 } as const
 

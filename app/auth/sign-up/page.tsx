@@ -32,6 +32,16 @@ export default function SignUpPage() {
       redirect(`/auth/error?message=${encodeURIComponent(error.message)}`)
     }
 
+    // Supabase returns a fake success with empty identities for already-registered
+    // emails (to prevent email enumeration). Detect this and show a helpful message.
+    if (data.user && data.user.identities?.length === 0) {
+      redirect(
+        `/auth/error?message=${encodeURIComponent(
+          "An account with this email may already exist. Try signing in or resetting your password."
+        )}`
+      )
+    }
+
     // If email confirmation is disabled in Supabase, a session is returned
     // immediately — send the user straight into the app.
     if (data.session) {

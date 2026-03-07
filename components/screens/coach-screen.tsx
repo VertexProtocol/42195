@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2, Sparkles, Trash2 } from "lucide-react"
+import { Send, Bot, User, Loader2, Trash2 } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 
 interface Message {
   role: "user" | "assistant"
@@ -9,6 +10,7 @@ interface Message {
 }
 
 export function CoachScreen() {
+  const { t } = useI18n()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -35,7 +37,6 @@ export function CoachScreen() {
     setThinkingDetail(null)
 
     try {
-      // Build the messages array for the API (only role + content)
       const apiMessages = newMessages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -51,7 +52,7 @@ export function CoachScreen() {
         const data = await res.json().catch(() => ({}))
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.error ?? "Something went wrong. Please try again." },
+          { role: "assistant", content: data.error ?? t("coach.genericError") },
         ])
         return
       }
@@ -76,7 +77,7 @@ export function CoachScreen() {
             const event = JSON.parse(line.slice(6))
 
             if (event.status === "thinking") {
-              setThinkingDetail(event.detail ?? "Thinking…")
+              setThinkingDetail(event.detail ?? t("coach.thinking"))
             } else if (event.status === "done") {
               setThinkingDetail(null)
               setMessages((prev) => [
@@ -87,7 +88,7 @@ export function CoachScreen() {
               setThinkingDetail(null)
               setMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: event.error ?? "Something went wrong." },
+                { role: "assistant", content: event.error ?? t("coach.genericError") },
               ])
             }
           } catch {}
@@ -96,13 +97,13 @@ export function CoachScreen() {
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Network error. Please check your connection and try again." },
+        { role: "assistant", content: t("coach.networkError") },
       ])
     } finally {
       setIsLoading(false)
       setThinkingDetail(null)
     }
-  }, [input, messages, isLoading])
+  }, [input, messages, isLoading, t])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -116,57 +117,54 @@ export function CoachScreen() {
     setInput("")
   }
 
+  const suggestions = [
+    t("coach.suggestion1"),
+    t("coach.suggestion2"),
+    t("coach.suggestion3"),
+    t("coach.suggestion4"),
+  ]
+
   return (
-    <div className="flex flex-col h-full max-h-[calc(100vh-8rem)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold">AI Coach</h2>
-            <p className="text-xs text-muted-foreground">Ask about your training, goals, or performance</p>
-          </div>
+    <div className="flex flex-col" style={{ height: "calc(100dvh - 5rem)" }}>
+      {/* Header — matches other screens: px-5 pt-4 */}
+      <header className="flex items-center justify-between px-5 pt-4 pb-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{t("coach.title")}</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">{t("coach.subtitle")}</p>
         </div>
         {messages.length > 0 && (
           <button
             onClick={handleClear}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            title="Clear chat"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            aria-label="Clear chat"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 size={18} />
           </button>
         )}
-      </div>
+      </header>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      {/* Messages area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="w-6 h-6 text-primary" />
+          <div className="flex flex-col items-center justify-center text-center space-y-5 py-10">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Bot size={28} className="text-primary" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium">Your AI running coach</p>
+              <p className="text-sm font-semibold text-foreground">{t("coach.empty")}</p>
               <p className="text-xs text-muted-foreground max-w-[280px]">
-                Ask me anything about your training — I can look up your activities, goals, training load, and more.
+                {t("coach.emptyDesc")}
               </p>
             </div>
-            <div className="space-y-2 w-full max-w-[300px]">
-              {[
-                "How was my training this week?",
-                "Am I ready for my race?",
-                "What should I focus on next?",
-                "Am I at risk of overtraining?",
-              ].map((suggestion) => (
+            <div className="flex flex-col gap-2 w-full max-w-[300px]">
+              {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => {
                     setInput(suggestion)
                     inputRef.current?.focus()
                   }}
-                  className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/40 hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                  className="w-full text-left text-xs px-4 py-2.5 rounded-2xl bg-card shadow-sm ring-1 ring-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
                 >
                   {suggestion}
                 </button>
@@ -181,22 +179,22 @@ export function CoachScreen() {
             className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             {msg.role === "assistant" && (
-              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Bot className="w-3 h-3 text-primary" />
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
+                <Bot size={12} className="text-primary" />
               </div>
             )}
             <div
-              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === "user"
                   ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-muted/50 text-foreground rounded-bl-md"
+                  : "bg-card shadow-sm ring-1 ring-border text-card-foreground rounded-bl-md"
               }`}
             >
               {msg.content}
             </div>
             {msg.role === "user" && (
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
-                <User className="w-3 h-3 text-muted-foreground" />
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                <User size={12} className="text-muted-foreground" />
               </div>
             )}
           </div>
@@ -205,36 +203,36 @@ export function CoachScreen() {
         {/* Thinking indicator */}
         {isLoading && (
           <div className="flex gap-2 items-start">
-            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Bot className="w-3 h-3 text-primary" />
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <Bot size={12} className="text-primary" />
             </div>
-            <div className="bg-muted/50 rounded-2xl rounded-bl-md px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              {thinkingDetail ?? "Thinking…"}
+            <div className="bg-card shadow-sm ring-1 ring-border rounded-2xl rounded-bl-md px-3.5 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              {thinkingDetail ?? t("coach.thinking")}
             </div>
           </div>
         )}
       </div>
 
-      {/* Input */}
-      <div className="border-t border-border/40 px-4 py-3">
+      {/* Input — pinned to bottom */}
+      <div className="border-t border-border px-5 py-3">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask your coach…"
+            placeholder={t("coach.placeholder")}
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-border/40 bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 max-h-24"
+            className="flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-24"
             disabled={isLoading}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 active:opacity-80 transition-opacity"
           >
-            <Send className="w-4 h-4" />
+            <Send size={16} />
           </button>
         </div>
       </div>
