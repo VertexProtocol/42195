@@ -597,14 +597,40 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     load()
   }, [goal.id])
 
-  // Manual overrides from localStorage (explicit user toggles)
+  // Manual overrides persisted to database (with localStorage fallback)
   const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>({})
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`session-statuses-${goal.id}`)
-      if (stored) setManualStatuses(JSON.parse(stored))
-    } catch {}
+    // Load from database first, fall back to localStorage
+    async function loadStatuses() {
+      try {
+        const res = await fetch(`/api/ai/training-plan/sessions?goalId=${goal.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.statuses && Object.keys(data.statuses).length > 0) {
+            setManualStatuses(data.statuses)
+            return
+          }
+        }
+      } catch {}
+      // Fallback: load from localStorage and migrate to DB
+      try {
+        const stored = localStorage.getItem(`session-statuses-${goal.id}`)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setManualStatuses(parsed)
+          // Migrate localStorage data to database
+          fetch("/api/ai/training-plan/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ goalId: goal.id, statuses: parsed }),
+          }).then(() => {
+            localStorage.removeItem(`session-statuses-${goal.id}`)
+          }).catch(() => {})
+        }
+      } catch {}
+    }
+    loadStatuses()
   }, [goal.id])
 
   // Auto-match activities to planned sessions for each week
@@ -649,7 +675,15 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         : effective === "completed" ? "skipped"
         : "planned"
       const updated = { ...prev, [key]: next }
-      try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
+      // Persist to database
+      fetch("/api/ai/training-plan/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: goal.id, sessionKey: key, status: next }),
+      }).catch(() => {
+        // Fallback to localStorage if DB save fails
+        try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
+      })
       return updated
     })
   }, [goal.id, sessionStatuses])
