@@ -1,0 +1,327 @@
+import { startOfWeek, endOfWeek } from "date-fns"
+import { createServiceClient } from "@/lib/supabase/service"
+import { getStravaAccessToken } from "@/lib/strava"
+
+// ---------------------------------------------------------------------------
+// Strava type definitions
+// ---------------------------------------------------------------------------
+
+interface StravaActivity {
+  id: number
+  name: string
+  type: string
+  sport_type: string
+  workout_type?: number // 0=default, 1=race, 2=long run, 3=workout
+  start_date: string
+  distance: number // metres
+  moving_time: number // seconds
+  average_speed: number // m/s
+  total_elevation_gain: number // metres
+  average_heartrate?: number
+  calories?: number
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Strava sport_type values that are running activities. */
+const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill", "Walk"])
+
+/**
+ * Maps a Strava sport_type / workout_type to our constrained ActivityType.
+ */
+function mapActivityType(sport_type: string, workout_type?: number): string {
+  if (sport_type === "TrailRun") return "Trail Run"
+  if (sport_type === "Walk") return "Walk"
+  if (sport_type === "Run" && workout_type === 1) return "Race"
+  return "Run"
+}
+
+/**
+ * Converts Strava average_speed (m/s) to pace in min/km.
+ * Returns null when speed is zero or missing (e.g. manual entries).
+ */
+function speedToPace(averageSpeedMs: number): number | null {
+  if (averageSpeedMs <= 0) return null
+  return 1000 / averageSpeedMs / 60
+}
+
+/**
+ * Fetches activities from Strava, paginating until an empty page.
+ */
+export async function fetchStravaActivities(
+  accessToken: string,
+  after?: number,
+): Promise<StravaActivity[]> {
+  const allActivities: StravaActivity[] = []
+  let page = 1
+  const perPage = 100
+
+  while (true) {
+    const url = new URL("https://www.strava.com/api/v3/athlete/activities")
+    url.searchParams.set("per_page", String(perPage))
+    url.searchParams.set("page", String(page))
+    if (after !== undefined) url.searchParams.set("after", String(after))
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (!res.ok) {
+      const body = await res.text()
+      console.error(`Strava activities fetch failed (${res.status}):`, body)
+      throw new Error(`Strava activities fetch failed: ${res.status}`)
+    }
+
+    const batch = (await res.json()) as StravaActivity[]
+    if (batch.length === 0) break
+
+    allActivities.push(...batch)
+    if (batch.length < perPage) break
+    page++
+  }
+
+  return allActivities
+}
+
+/**
+ * Fetches a single activity from Strava by ID.
+ */
+async function fetchSingleStravaActivity(
+  accessToken: string,
+  activityId: number,
+): Promise<StravaActivity | null> {
+  const res = await fetch(
+    `https://www.strava.com/api/v3/activities/${activityId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`Strava activity fetch failed (${res.status}):`, body)
+    throw new Error(`Strava activity fetch failed: ${res.status}`)
+  }
+
+  return (await res.json()) as StravaActivity
+}
+
+// ---------------------------------------------------------------------------
+// Goal recalculation (shared by manual sync + webhook)
+// ---------------------------------------------------------------------------
+
+export async function recalculateGoals(userId: string) {
+  const service = createServiceClient()
+
+  // Recalculate lifetime goals
+  const { data: activeGoals } = await service
+    .from("goals")
+    .select("id, start_date, target_date")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+
+  if (activeGoals && activeGoals.length > 0) {
+    const { data: allActivities } = await service
+      .from("activities")
+      .select("date, distance_km")
+      .eq("user_id", userId)
+
+    const acts = allActivities ?? []
+
+    for (const goal of activeGoals) {
+      const totalKm = acts
+        .filter((a) => {
+          if (a.date > goal.target_date) return false
+          if (goal.start_date && a.date < goal.start_date) return false
+          return true
+        })
+        .reduce((sum, a) => sum + Number(a.distance_km), 0)
+
+      await service
+        .from("goals")
+        .update({ current_distance_km: totalKm })
+        .eq("id", goal.id)
+    }
+  }
+
+  // Recalculate weekly goals for the current week
+  const now = new Date()
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+  const weekStartStr = weekStart.toISOString().split("T")[0]
+
+  const { data: weeklyGoals } = await service
+    .from("weekly_goals")
+    .select("id, metric, is_recurring, session_min_duration_minutes, session_min_distance_km")
+    .eq("user_id", userId)
+    .or(`week_start.eq.${weekStartStr},is_recurring.eq.true`)
+
+  if (weeklyGoals && weeklyGoals.length > 0) {
+    const { data: weekActivities } = await service
+      .from("activities")
+      .select("distance_km, duration_seconds, elevation_gain_m")
+      .eq("user_id", userId)
+      .gte("date", weekStart.toISOString())
+      .lte("date", weekEnd.toISOString())
+
+    const acts = weekActivities ?? []
+
+    for (const wg of weeklyGoals) {
+      let current = 0
+
+      if (wg.metric === "sessions") {
+        current = acts.filter((a) => {
+          if (wg.session_min_duration_minutes && a.duration_seconds / 60 < wg.session_min_duration_minutes) return false
+          if (wg.session_min_distance_km && Number(a.distance_km) < Number(wg.session_min_distance_km)) return false
+          return true
+        }).length
+      } else if (wg.metric === "distance_km") {
+        current = acts.reduce((sum: number, a) => sum + Number(a.distance_km), 0)
+      } else if (wg.metric === "duration_minutes") {
+        current = acts.reduce((sum: number, a) => sum + a.duration_seconds / 60, 0)
+      } else if (wg.metric === "elevation_m") {
+        current = acts.reduce((sum: number, a) => sum + Number(a.elevation_gain_m ?? 0), 0)
+      }
+
+      await service.from("weekly_goals").update({ current }).eq("id", wg.id)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Full incremental sync for a user (used by /api/sync-strava)
+// ---------------------------------------------------------------------------
+
+export interface SyncResult {
+  synced: number
+  skipped: number
+  incremental: boolean
+}
+
+export async function syncUserActivities(
+  userId: string,
+  fullSync: boolean,
+): Promise<SyncResult> {
+  const service = createServiceClient()
+
+  const { data: prevSync } = await service
+    .from("sync_status")
+    .select("last_sync_at")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
+
+  const accessToken = await getStravaAccessToken(userId)
+
+  const afterTimestamp = !fullSync && lastSyncAt
+    ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
+    : undefined
+
+  const stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+
+  const runningActivities = stravaActivities.filter((a) =>
+    RUNNING_SPORT_TYPES.has(a.sport_type),
+  )
+
+  const rows = runningActivities.map((a) => ({
+    user_id: userId,
+    strava_id: a.id,
+    type: mapActivityType(a.sport_type, a.workout_type),
+    name: a.name,
+    date: a.start_date,
+    distance_km: a.distance / 1000,
+    duration_seconds: Math.round(a.moving_time),
+    pace_min_per_km: speedToPace(a.average_speed),
+    elevation_gain_m: a.total_elevation_gain,
+    avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+    calories: a.calories != null ? Math.round(a.calories) : null,
+  }))
+
+  if (rows.length > 0) {
+    const { error: upsertError } = await service
+      .from("activities")
+      .upsert(rows, { onConflict: "strava_id" })
+    if (upsertError) throw upsertError
+  }
+
+  await recalculateGoals(userId)
+
+  return {
+    synced: rows.length,
+    skipped: stravaActivities.length - runningActivities.length,
+    incremental: afterTimestamp !== undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single activity sync (used by webhook)
+// ---------------------------------------------------------------------------
+
+export async function syncSingleActivity(
+  userId: string,
+  stravaActivityId: number,
+): Promise<{ synced: boolean }> {
+  const service = createServiceClient()
+  const accessToken = await getStravaAccessToken(userId)
+  const activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
+
+  if (!activity || !RUNNING_SPORT_TYPES.has(activity.sport_type)) {
+    return { synced: false }
+  }
+
+  const row = {
+    user_id: userId,
+    strava_id: activity.id,
+    type: mapActivityType(activity.sport_type, activity.workout_type),
+    name: activity.name,
+    date: activity.start_date,
+    distance_km: activity.distance / 1000,
+    duration_seconds: Math.round(activity.moving_time),
+    pace_min_per_km: speedToPace(activity.average_speed),
+    elevation_gain_m: activity.total_elevation_gain,
+    avg_heart_rate: activity.average_heartrate != null ? Math.round(activity.average_heartrate) : null,
+    calories: activity.calories != null ? Math.round(activity.calories) : null,
+  }
+
+  const { error } = await service
+    .from("activities")
+    .upsert([row], { onConflict: "strava_id" })
+  if (error) throw error
+
+  // Update sync timestamp
+  await service.from("sync_status").upsert(
+    {
+      user_id: userId,
+      state: "success",
+      last_sync_at: new Date().toISOString(),
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  )
+
+  await recalculateGoals(userId)
+
+  return { synced: true }
+}
+
+// ---------------------------------------------------------------------------
+// Delete activity (used by webhook on activity.delete)
+// ---------------------------------------------------------------------------
+
+export async function deleteSyncedActivity(
+  userId: string,
+  stravaActivityId: number,
+): Promise<void> {
+  const service = createServiceClient()
+
+  await service
+    .from("activities")
+    .delete()
+    .eq("user_id", userId)
+    .eq("strava_id", stravaActivityId)
+
+  await recalculateGoals(userId)
+}
