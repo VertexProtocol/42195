@@ -12,12 +12,13 @@ import { ManualActivityForm } from "@/components/manual-activity-form"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
-const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "plan", "profile"])
+const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "plan", "coach", "profile"])
 
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
 const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
+const CoachScreen = lazy(() => import("@/components/screens/coach-screen").then(m => ({ default: m.CoachScreen })))
 
 // Lightweight URL sync — updates the URL bar without triggering Next.js server navigation
 function getSearchString() {
@@ -246,6 +247,12 @@ export function AppShell({ initialData }: AppShellProps) {
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
             />
+          </Suspense>
+        )}
+
+        {activeTab === "coach" && (
+          <Suspense fallback={<ScreenFallback />}>
+            <CoachScreen />
           </Suspense>
         )}
 

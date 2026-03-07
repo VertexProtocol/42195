@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin } from "lucide-react"
+import { useEffect, useState, useMemo, useCallback } from "react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2 } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
@@ -156,6 +156,24 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
   const [loadingCharts, setLoadingCharts] = useState(true)
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+
+  const handleGetAnalysis = useCallback(async () => {
+    setAiAnalysisLoading(true)
+    try {
+      const res = await fetch("/api/ai/activity-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId: activity.id }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiAnalysis(data.analysis)
+      }
+    } catch {}
+    setAiAnalysisLoading(false)
+  }, [activity.id])
 
   useEffect(() => {
     let cancelled = false
@@ -279,6 +297,37 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
             </div>
           )}
         </div>
+      </section>
+
+      {/* AI Analysis */}
+      <section>
+        {aiAnalysis ? (
+          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="mb-2 flex items-center gap-2">
+              <Sparkles size={14} className="text-primary" />
+              <span className="text-xs font-medium text-primary">Coach Analysis</span>
+            </div>
+            <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
+          </div>
+        ) : (
+          <button
+            onClick={handleGetAnalysis}
+            disabled={aiAnalysisLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/40 bg-card px-4 py-3 text-sm font-medium text-primary shadow-sm transition-colors hover:bg-muted/50 disabled:opacity-50"
+          >
+            {aiAnalysisLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Analyzing your run…
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                Get AI analysis
+              </>
+            )}
+          </button>
+        )}
       </section>
 
       {/* Route Map */}
