@@ -274,18 +274,18 @@ export function bestRelevantRun(
   )
 }
 
-/** Longest single run since a start date */
+/** Longest single run within a date range */
 export function longestRun(
   activities: Activity[],
   startDate: string | null,
-  createdAt: string,
+  endDate?: string | null,
 ): Activity | null {
-  const from = startDate
-    ? new Date(startDate).getTime()
-    : new Date(createdAt).getTime()
-  const relevant = activities.filter(
-    (a) => new Date(a.date).getTime() >= from,
-  )
+  const from = startDate ? new Date(startDate).getTime() : 0
+  const to = endDate ? new Date(endDate).getTime() : Infinity
+  const relevant = activities.filter((a) => {
+    const t = new Date(a.date).getTime()
+    return t >= from && t <= to
+  })
   if (relevant.length === 0) return null
   return relevant.reduce((best, a) =>
     a.distance_km > best.distance_km ? a : best,
