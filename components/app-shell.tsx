@@ -77,7 +77,8 @@ export function AppShell({ initialData }: AppShellProps) {
 
   // Onboarding state - show if user has no goals and Strava not connected
   const [onboardingDismissed, setOnboardingDismissed] = useState(false)
-  const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
+  // Temporarily disabled for debugging
+  const showOnboarding = false // !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
 
   // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
