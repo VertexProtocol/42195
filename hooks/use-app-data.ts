@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
 
 const supabase = createClient()
@@ -246,8 +247,10 @@ export function useAppData(initialData?: InitialData | null) {
         if (error) {
           console.error("Failed to update goal:", error)
           setGoals((prev) => prev.map((g) => (g.id === saved.id ? exists : g)))
+          toast.error("Failed to save goal")
           return false
         }
+        toast.success("Goal updated")
       } else {
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
@@ -274,9 +277,11 @@ export function useAppData(initialData?: InitialData | null) {
 
         if (error) {
           console.error("Failed to create goal:", error)
+          toast.error("Failed to create goal")
           return false
         }
 
+        toast.success("Goal created")
         if (data) {
           setGoals((prev) => [
             {
@@ -309,6 +314,9 @@ export function useAppData(initialData?: InitialData | null) {
     if (error) {
       console.error("Failed to delete goal:", error)
       setGoals(snapshot)
+      toast.error("Failed to delete goal")
+    } else {
+      toast.success("Goal deleted")
     }
   }, [])
 
@@ -339,8 +347,10 @@ export function useAppData(initialData?: InitialData | null) {
           setWeeklyGoals((prev) =>
             prev.map((g) => (g.id === saved.id ? exists : g))
           )
+          toast.error("Failed to save weekly goal")
           return false
         }
+        toast.success("Weekly goal updated")
       } else {
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
@@ -367,9 +377,11 @@ export function useAppData(initialData?: InitialData | null) {
 
         if (error) {
           console.error("Failed to create weekly goal:", error)
+          toast.error("Failed to create weekly goal")
           return false
         }
 
+        toast.success("Weekly goal created")
         if (data) {
           setWeeklyGoals((prev) => [
             {
@@ -401,6 +413,9 @@ export function useAppData(initialData?: InitialData | null) {
     if (error) {
       console.error("Failed to delete weekly goal:", error)
       setWeeklyGoals(snapshot)
+      toast.error("Failed to delete weekly goal")
+    } else {
+      toast.success("Weekly goal deleted")
     }
   }, [])
 
@@ -431,9 +446,11 @@ export function useAppData(initialData?: InitialData | null) {
 
     if (error) {
       console.error("Failed to add activity:", error)
+      toast.error("Failed to add activity")
       return false
     }
 
+    toast.success("Activity added")
     if (data) {
       setActivities((prev) => [mapActivityRow(data), ...prev])
     }
@@ -462,6 +479,7 @@ export function useAppData(initialData?: InitialData | null) {
           state: "error",
           error_message: data.error ?? "Sync failed",
         }))
+        toast.error(data.error ?? "Sync failed")
         return
       }
 
@@ -470,6 +488,7 @@ export function useAppData(initialData?: InitialData | null) {
         last_sync_at: new Date().toISOString(),
         error_message: null,
       })
+      toast.success("Activities synced from Strava")
 
       const { data: freshActivities } = await supabase
         .from("activities")
@@ -485,6 +504,7 @@ export function useAppData(initialData?: InitialData | null) {
         state: "error",
         error_message: "Network error. Please try again.",
       }))
+      toast.error("Network error. Please try again.")
     }
   }, [])
 

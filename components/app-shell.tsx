@@ -9,6 +9,7 @@ import { PlanScreen } from "@/components/screens/plan-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
+import { Onboarding } from "@/components/onboarding"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
@@ -74,6 +75,10 @@ export function AppShell({ initialData }: AppShellProps) {
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
   const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
+
+  // Onboarding state - show if user has no goals and Strava not connected
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+  const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
 
   // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -164,6 +169,14 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleCloseWeeklyEditor = useCallback(() => {
     setIsWeeklyEditorOpen(false)
+  }, [])
+
+  const handleConnectStrava = useCallback(() => {
+    window.location.href = "/api/auth/strava"
+  }, [])
+
+  const handleDismissOnboarding = useCallback(() => {
+    setOnboardingDismissed(true)
   }, [])
 
   // ----- Loading state -----
@@ -301,6 +314,16 @@ export function AppShell({ initialData }: AppShellProps) {
 
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Onboarding Flow */}
+      {showOnboarding && (
+        <Onboarding
+          stravaConnected={data.stravaConnected}
+          onConnectStrava={handleConnectStrava}
+          onCreateGoal={() => handleAddGoal("performance")}
+          onDismiss={handleDismissOnboarding}
+        />
+      )}
     </div>
   )
 }

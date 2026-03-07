@@ -5,22 +5,29 @@ import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
+  CalendarCheck, MapPin, Footprints, Sparkles,
 } from "lucide-react"
 import {
   formatDistance,
   formatDate,
   formatDateShort,
+  formatDuration,
   daysUntil,
+  isDatePast,
   progressPercentage,
+  timeElapsedPercentage,
   formatWeeklyMetric,
   formatTargetTime,
   computeWeeklyProgress,
   evaluatePerformanceGoal,
+  computeDistanceInRange,
+  bestRelevantRun,
+  longestRun,
 } from "@/lib/format"
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
-type GoalTab = "weekly" | "performance"
+type GoalTab = "weekly" | "performance" | "events"
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -43,8 +50,10 @@ interface GoalsScreenProps {
   onToggleActive: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
+  onAddEventGoal: () => void
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
   onAddWeeklyGoal: () => void
+  onSelectGoal: (goal: Goal) => void
 }
 
 // ---- date helpers ----
@@ -74,6 +83,18 @@ function weekLabel(weekStr: string, currentStr: string, thisWeekLabel: string): 
   return `${fmt(start)} – ${fmt(end)}`
 }
 
+// ---- training phase helper ----
+function trainingPhaseKey(startDate: string | null, targetDate: string): {
+  labelKey: "plan.raceWeek" | "plan.tapering" | "plan.peakTraining" | "plan.buildingBase"
+  color: string
+} {
+  const pct = timeElapsedPercentage(startDate, targetDate)
+  if (pct >= 95) return { labelKey: "plan.raceWeek", color: "text-destructive" }
+  if (pct >= 85) return { labelKey: "plan.tapering", color: "text-warning" }
+  if (pct >= 70) return { labelKey: "plan.peakTraining", color: "text-primary" }
+  return { labelKey: "plan.buildingBase", color: "text-success" }
+}
+
 // ---- component ----
 
 export function GoalsScreen({
@@ -83,8 +104,10 @@ export function GoalsScreen({
   onToggleActive,
   onEditGoal,
   onAddGoal,
+  onAddEventGoal,
   onEditWeeklyGoal,
   onAddWeeklyGoal,
+  onSelectGoal,
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("weekly")
@@ -100,8 +123,14 @@ export function GoalsScreen({
     wg.is_recurring || wg.week_start === selectedWeekStart
   )
 
-  // Performance goals only (event_training goals live in Plan tab)
+  // Performance goals
   const performanceGoals = goals.filter((g) => g.goal_category === "performance")
+
+  // Event training goals (sorted: active first, then by date)
+  const eventGoals = [...goals.filter((g) => g.goal_category === "event_training")].sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+    return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
+  })
 
   // Pre-compute performance goal evaluations (avoids O(goals * activities) inside JSX)
   const perfGoalStatuses = useMemo(
@@ -145,6 +174,16 @@ export function GoalsScreen({
           }`}
         >
           {t("goals.performance")}
+        </button>
+        <button
+          onClick={() => setTab("events")}
+          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+            tab === "events"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground active:text-foreground"
+          }`}
+        >
+          {t("goals.events")}
         </button>
       </div>
 
