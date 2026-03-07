@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createServiceClient } from "@/lib/supabase/service"
+import { syncSingleActivity, deleteSyncedActivity } from "@/lib/strava-sync"
+
+// ---------------------------------------------------------------------------
+// Strava Webhook Event types
+// ---------------------------------------------------------------------------
+
+interface StravaWebhookEvent {
+  object_type: "activity" | "athlete"
+  object_id: number
+  aspect_type: "create" | "update" | "delete"
+  owner_id: number // Strava athlete_id
+  subscription_id: number
+  event_time: number
+  updates?: Record<string, string>
+}
+
+// ---------------------------------------------------------------------------
+// GET — Webhook subscription verification
+//
+// Strava sends a GET request when you create a subscription to verify
+// ownership of the callback URL. We must echo back hub.challenge.
+// ---------------------------------------------------------------------------
+
+export async function GET(request: NextRequest) {
+  const mode = request.nextUrl.searchParams.get("hub.mode")
+  const challenge = request.nextUrl.searchParams.get("hub.challenge")
+  const verifyToken = request.nextUrl.searchParams.get("hub.verify_token")
+
+  if (mode === "subscribe" && challenge) {
+    // Verify the token matches what we set when creating the subscription
+    if (verifyToken !== process.env.STRAVA_WEBHOOK_VERIFY_TOKEN) {
+      console.error("Strava webhook verification failed: token mismatch")
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    return NextResponse.json({ "hub.challenge": challenge })
+  }
+
+  return NextResponse.json({ error: "Bad request" }, { status: 400 })
+}
+
+// ---------------------------------------------------------------------------
+// POST — Incoming webhook events
+//
+// Strava sends a POST for every activity create/update/delete.
+// We respond 200 immediately — Strava requires a response within 2 seconds.
+// Actual processing happens in the background.
+// ---------------------------------------------------------------------------
+
+export async function POST(request: NextRequest) {
+  let event: StravaWebhookEvent
+  try {
+    event = (await request.json()) as StravaWebhookEvent
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  // We only care about activity events
+  if (event.object_type !== "activity") {
+    return NextResponse.json({ ok: true })
+  }
+
+  const service = createServiceClient()
+
+  // Look up which user owns this Strava athlete_id
+  const { data: tokenRow } = await service
+    .from("strava_tokens")
+    .select("user_id")
+    .eq("athlete_id", event.owner_id)
+    .maybeSingle()
+
+  if (!tokenRow) {
+    // Unknown athlete — nothing to do
+    console.warn(`Strava webhook: unknown athlete_id ${event.owner_id}`)
+    return NextResponse.json({ ok: true })
+  }
+
+  const userId = tokenRow.user_id
+
+  try {
+    if (event.aspect_type === "create" || event.aspect_type === "update") {
+      await syncSingleActivity(userId, event.object_id)
+    } else if (event.aspect_type === "delete") {
+      await deleteSyncedActivity(userId, event.object_id)
+    }
+  } catch (err) {
+    // Log but still return 200 — Strava will retry on non-2xx and we don't
+    // want retries piling up for transient errors.
+    console.error(`Strava webhook processing error (athlete=${event.owner_id}, activity=${event.object_id}):`, err)
+  }
+
+  return NextResponse.json({ ok: true })
+}
