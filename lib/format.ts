@@ -257,12 +257,17 @@ export function evaluatePerformanceGoal(
 export function bestRelevantRun(
   activities: Activity[],
   targetDistanceKm: number,
+  startDate?: string | null,
+  endDate?: string | null,
 ): Activity | null {
   const lo = targetDistanceKm * 0.8
   const hi = targetDistanceKm * 1.2
-  const candidates = activities.filter(
-    (a) => a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0,
-  )
+  const from = startDate ? new Date(startDate).getTime() : 0
+  const to = endDate ? new Date(endDate).getTime() : Infinity
+  const candidates = activities.filter((a) => {
+    const t = new Date(a.date).getTime()
+    return a.distance_km >= lo && a.distance_km <= hi && a.duration_seconds > 0 && t >= from && t <= to
+  })
   if (candidates.length === 0) return null
   return candidates.reduce((best, a) =>
     a.duration_seconds < best.duration_seconds ? a : best,
