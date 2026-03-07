@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { X, Trash2, Timer, CalendarCheck } from "lucide-react"
 import type { Goal, GoalCategory } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 
 interface GoalEditorProps {
   goal: Goal | null
@@ -16,6 +17,7 @@ interface GoalEditorProps {
 }
 
 export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelete, onClose }: GoalEditorProps) {
+  const { t } = useI18n()
   const [category, setCategory] = useState<GoalCategory>("performance")
   const [name, setName] = useState("")
   const [targetDistance, setTargetDistance] = useState("")
@@ -135,7 +137,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
               <X size={18} className="text-muted-foreground" />
             </button>
             <h2 className="text-base font-semibold text-card-foreground">
-              {isNew ? "New Goal" : "Edit Goal"}
+              {isNew ? t("goalEditor.newGoal") : t("goalEditor.editGoal")}
             </h2>
             <button
               onClick={handleSave}
@@ -146,7 +148,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                   : "bg-secondary text-muted-foreground"
               }`}
             >
-              Save
+              {t("goalEditor.save")}
             </button>
           </div>
 
@@ -157,7 +159,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
             {/* Goal category */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Goal type
+                {t("goalEditor.goalType")}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -169,7 +171,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                   }`}
                 >
                   <Timer size={16} />
-                  Performance
+                  {t("goalEditor.performance")}
                 </button>
                 <button
                   onClick={() => setCategory("event_training")}
@@ -180,20 +182,20 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                   }`}
                 >
                   <CalendarCheck size={16} />
-                  Event training
+                  {t("goalEditor.eventTraining")}
                 </button>
               </div>
               <span className="text-xs text-muted-foreground">
                 {category === "performance"
-                  ? "A timed benchmark, e.g. run 10 km in under 50 min"
-                  : "Preparing for a race or event, e.g. a marathon in September"}
+                  ? t("goalEditor.perfDesc")
+                  : t("goalEditor.eventDesc")}
               </span>
             </div>
 
             {/* Name */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? "Event name" : "Goal name"}
+                {category === "event_training" ? t("goalEditor.eventName") : t("goalEditor.goalName")}
               </label>
               <input
                 type="text"
@@ -201,8 +203,8 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                 onChange={(e) => setName(e.target.value)}
                 placeholder={
                   category === "event_training"
-                    ? "e.g. Oslo Marathon"
-                    : "e.g. Sub-50 10 km"
+                    ? t("goalEditor.eventPlaceholder")
+                    : t("goalEditor.goalPlaceholder")
                 }
                 className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
@@ -211,7 +213,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
             {/* Target distance */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? "Race distance (km)" : "Target distance (km)"}
+                {category === "event_training" ? t("goalEditor.raceDistance") : t("goalEditor.targetDistance")}
               </label>
               <input
                 type="text"
@@ -226,7 +228,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
             {/* Target time */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "performance" ? "Target time (required)" : "Target finish time (optional)"}
+                {category === "performance" ? t("goalEditor.targetTimeRequired") : t("goalEditor.targetTimeOptional")}
               </label>
               <div className="flex items-center gap-2">
                 <div className="flex flex-1 items-center gap-1">
@@ -238,7 +240,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     placeholder="0"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
-                  <span className="text-xs text-muted-foreground shrink-0">h</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{t("common.h")}</span>
                 </div>
                 <div className="flex flex-1 items-center gap-1">
                   <input
@@ -250,7 +252,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
-                  <span className="text-xs text-muted-foreground shrink-0">m</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{t("common.m")}</span>
                 </div>
                 <div className="flex flex-1 items-center gap-1">
                   <input
@@ -262,20 +264,20 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                     placeholder="00"
                     className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
-                  <span className="text-xs text-muted-foreground shrink-0">s</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{t("common.s")}</span>
                 </div>
               </div>
               <span className="text-xs text-muted-foreground">
                 {category === "performance"
-                  ? "e.g. 0h 50m 00s to target sub-50 for a 10 km"
-                  : "e.g. 3h 30m 00s for a marathon target"}
+                  ? t("goalEditor.targetTimeHintPerf")
+                  : t("goalEditor.targetTimeHintEvent")}
               </span>
             </div>
 
             {/* Training start date */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? "Training start date" : "Start counting from (optional)"}
+                {category === "event_training" ? t("goalEditor.trainingStartDate") : t("goalEditor.startCountingFrom")}
               </label>
               <input
                 type="date"
@@ -285,15 +287,15 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
               />
               <span className="text-xs text-muted-foreground">
                 {category === "event_training"
-                  ? "Distance logged from this date counts toward race prep"
-                  : "Distance from this date counts towards your goal"}
+                  ? t("goalEditor.startDateHintEvent")
+                  : t("goalEditor.startDateHintPerf")}
               </span>
             </div>
 
             {/* Target / event date */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? "Race / event date" : "Target date"}
+                {category === "event_training" ? t("goalEditor.raceDate") : t("goalEditor.targetDate")}
               </label>
               <input
                 type="date"
@@ -318,7 +320,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                 }`}
               >
                 <Trash2 size={16} />
-                {showConfirmDelete ? "Tap again to confirm" : "Delete goal"}
+                {showConfirmDelete ? t("goalEditor.tapToConfirm") : t("goalEditor.deleteGoal")}
               </button>
             </div>
           )}

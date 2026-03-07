@@ -6,6 +6,7 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } fr
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
+import { useI18n } from "@/lib/i18n"
 import type { Activity, StreamPoint, Lap } from "@/lib/types"
 
 interface ActivityDetailScreenProps {
@@ -151,6 +152,7 @@ function RouteMap({ polyline }: { polyline: string }) {
 }
 
 export function ActivityDetailScreen({ activity, onBack, allActivities }: ActivityDetailScreenProps) {
+  const { t } = useI18n()
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
   const [loadingCharts, setLoadingCharts] = useState(true)
@@ -209,7 +211,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
         aria-label="Back to activities"
       >
         <ArrowLeft size={20} />
-        <span>Activities</span>
+        <span>{t("activities.backToActivities")}</span>
       </button>
 
       {/* Header */}
@@ -229,10 +231,10 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       <section>
         <h2 className="sr-only">Key metrics</h2>
         <div className={`grid gap-3 ${activity.pace_min_per_km !== null ? "grid-cols-3" : "grid-cols-2"}`}>
-          <StatCard icon={TrendingUp} label="Distance" value={formatDistance(activity.distance_km)} />
-          <StatCard icon={Clock} label="Duration" value={formatDuration(activity.duration_seconds)} />
+          <StatCard icon={TrendingUp} label={t("activityDetail.distance")} value={formatDistance(activity.distance_km)} />
+          <StatCard icon={Clock} label={t("activityDetail.duration")} value={formatDuration(activity.duration_seconds)} />
           {activity.pace_min_per_km !== null && (
-            <StatCard icon={Gauge} label="Pace" value={formatPace(activity.pace_min_per_km)} />
+            <StatCard icon={Gauge} label={t("activityDetail.pace")} value={formatPace(activity.pace_min_per_km)} />
           )}
         </div>
       </section>
@@ -240,14 +242,14 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {/* Secondary Stats */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Details
+          {t("activityDetail.details")}
         </h3>
         <div className="flex flex-col gap-0 overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
           {activity.elevation_gain_m !== null && (
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Mountain size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">Elevation Gain</span>
+                <span className="text-sm text-card-foreground">{t("activityDetail.elevationGain")}</span>
               </div>
               <span className="text-sm font-semibold text-card-foreground">
                 {activity.elevation_gain_m} m
@@ -258,7 +260,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Heart size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">Avg Heart Rate</span>
+                <span className="text-sm text-card-foreground">{t("activityDetail.avgHeartRate")}</span>
               </div>
               <span className="text-sm font-semibold text-card-foreground">
                 {activity.avg_heart_rate} bpm
@@ -269,7 +271,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Flame size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">Calories</span>
+                <span className="text-sm text-card-foreground">{t("activityDetail.calories")}</span>
               </div>
               <span className="text-sm font-semibold text-card-foreground">
                 {activity.calories} kcal
@@ -290,7 +292,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {hrZones.length > 0 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Heart Rate Zones
+            {t("activityDetail.hrZones")}
           </h3>
           <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
             <div className="flex flex-col gap-2.5">
@@ -324,7 +326,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {paceZones.length > 0 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Pace Distribution
+            {t("activityDetail.paceDistribution")}
           </h3>
           <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
             <div className="flex flex-col gap-2.5">
@@ -358,7 +360,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {loadingCharts && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Performance
+            {t("activityDetail.performance")}
           </h3>
           <div className="flex flex-col gap-3">
             <div className="h-[170px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
@@ -369,12 +371,12 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {showCharts && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Performance
+            {t("activityDetail.performance")}
           </h3>
           <div className="flex flex-col gap-3">
             {hasPace && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-                <p className="mb-3 text-xs font-medium text-card-foreground">Pace</p>
+                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -420,7 +422,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
 
             {hasHr && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-                <p className="mb-3 text-xs font-medium text-card-foreground">Heart Rate</p>
+                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.heartRate")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -463,7 +465,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
 
             {hasAltitude && (
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-                <p className="mb-3 text-xs font-medium text-card-foreground">Elevation</p>
+                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.elevation")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -511,14 +513,14 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
       {laps !== null && laps.length > 1 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Laps
+            {t("activityDetail.laps")}
           </h3>
           <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
             <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
               <span className="text-[11px] font-medium text-muted-foreground">#</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">Dist</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">Pace</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">HR</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.pace")}</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.hr")}</span>
             </div>
             {laps.map((lap, i) => (
               <div

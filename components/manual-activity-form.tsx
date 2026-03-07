@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { X } from "lucide-react"
 import type { Activity, ActivityType } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 
 interface ManualActivityFormProps {
   open: boolean
@@ -10,11 +11,11 @@ interface ManualActivityFormProps {
   onSave: (activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">) => Promise<boolean>
 }
 
-const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
-  { value: "Run", label: "Run" },
-  { value: "Trail Run", label: "Trail Run" },
-  { value: "Race", label: "Race" },
-  { value: "Walk", label: "Walk" },
+const ACTIVITY_TYPE_KEYS: { value: ActivityType; labelKey: "manualActivity.run" | "manualActivity.trailRun" | "manualActivity.race" | "manualActivity.walk" }[] = [
+  { value: "Run", labelKey: "manualActivity.run" },
+  { value: "Trail Run", labelKey: "manualActivity.trailRun" },
+  { value: "Race", labelKey: "manualActivity.race" },
+  { value: "Walk", labelKey: "manualActivity.walk" },
 ]
 
 export function ManualActivityForm({ open, onClose, onSave }: ManualActivityFormProps) {
@@ -27,6 +28,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
   const [elevationM, setElevationM] = useState("")
   const [avgHr, setAvgHr] = useState("")
   const [saving, setSaving] = useState(false)
+  const { t } = useI18n()
 
   if (!open) return null
 
@@ -71,7 +73,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
       <div className="w-full max-w-md animate-in slide-in-from-bottom rounded-t-3xl bg-card p-5 pb-8 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-card-foreground">Add Activity</h2>
+          <h2 className="text-lg font-bold text-card-foreground">{t("manualActivity.addActivity")}</h2>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent"
@@ -83,18 +85,18 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Activity type */}
           <div className="flex gap-2">
-            {ACTIVITY_TYPES.map((t) => (
+            {ACTIVITY_TYPE_KEYS.map((at) => (
               <button
-                key={t.value}
+                key={at.value}
                 type="button"
-                onClick={() => setType(t.value)}
+                onClick={() => setType(at.value)}
                 className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
-                  type === t.value
+                  type === at.value
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-secondary-foreground active:bg-accent"
                 }`}
               >
-                {t.label}
+                {t(at.labelKey)}
               </button>
             ))}
           </div>
@@ -104,7 +106,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Activity name"
+            placeholder={t("manualActivity.activityName")}
             required
             className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
@@ -119,7 +121,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
 
           {/* Distance */}
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Distance (km)</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.distance")}</label>
             <input
               type="number"
               step="0.01"
@@ -134,7 +136,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
 
           {/* Duration */}
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Duration</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.duration")}</label>
             <div className="flex gap-2">
               <div className="flex-1">
                 <input
@@ -142,7 +144,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
                   min="0"
                   value={durationMin}
                   onChange={(e) => setDurationMin(e.target.value)}
-                  placeholder="min"
+                  placeholder={t("common.min")}
                   required
                   className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -164,24 +166,24 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
           {/* Optional fields */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Elevation (m)</label>
+              <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.elevation")}</label>
               <input
                 type="number"
                 min="0"
                 value={elevationM}
                 onChange={(e) => setElevationM(e.target.value)}
-                placeholder="optional"
+                placeholder={t("manualActivity.optional")}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Avg HR (bpm)</label>
+              <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.avgHr")}</label>
               <input
                 type="number"
                 min="0"
                 value={avgHr}
                 onChange={(e) => setAvgHr(e.target.value)}
-                placeholder="optional"
+                placeholder={t("manualActivity.optional")}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -192,7 +194,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
             disabled={saving || !name.trim() || !distanceKm || !durationMin}
             className="flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Activity"}
+            {saving ? t("manualActivity.saving") : t("manualActivity.save")}
           </button>
         </form>
       </div>
