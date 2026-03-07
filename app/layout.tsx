@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 // import { Toaster } from '@/components/ui/sonner' // Temporarily disabled
 import { I18nProvider } from '@/lib/i18n'
 import { ServiceWorkerRegistration } from '@/components/sw-register'
+import { AuthListener } from '@/components/auth-listener'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -51,6 +52,7 @@ export default function RootLayout({
           </I18nProvider>
           {/* <Toaster position="top-center" richColors closeButton /> */}
         </ThemeProvider>
+        <AuthListener />
         <ServiceWorkerRegistration />
         {process.env.VERCEL === '1' && <Analytics />}
       </body>
