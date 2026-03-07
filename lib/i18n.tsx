@@ -234,6 +234,23 @@ const translations = {
     "common.s": "s",
     "common.min": "min",
     "common.km": "km",
+    // Coach
+    "coach.title": "AI Coach",
+    "coach.subtitle": "Ask about your training, goals, or performance",
+    "coach.empty": "Your AI running coach",
+    "coach.emptyDesc": "Ask me anything about your training — I can look up your activities, goals, training load, and more.",
+    "coach.placeholder": "Ask your coach\u2026",
+    "coach.thinking": "Thinking\u2026",
+    "coach.networkError": "Network error. Please check your connection and try again.",
+    "coach.genericError": "Something went wrong. Please try again.",
+    "coach.suggestion1": "How was my training this week?",
+    "coach.suggestion2": "Am I ready for my race?",
+    "coach.suggestion3": "What should I focus on next?",
+    "coach.suggestion4": "Am I at risk of overtraining?",
+    // Activity analysis
+    "analysis.coachAnalysis": "Coach Analysis",
+    "analysis.getAnalysis": "Get AI analysis",
+    "analysis.analyzing": "Analyzing your run\u2026",
   },
   no: {
     // App
@@ -464,6 +481,23 @@ const translations = {
     "common.s": "s",
     "common.min": "min",
     "common.km": "km",
+    // Coach
+    "coach.title": "AI-trener",
+    "coach.subtitle": "Spør om trening, mål eller ytelse",
+    "coach.empty": "Din AI-løpetrener",
+    "coach.emptyDesc": "Spør meg om hva som helst rundt treningen din — jeg kan slå opp aktiviteter, mål, treningsbelastning og mer.",
+    "coach.placeholder": "Spør treneren din\u2026",
+    "coach.thinking": "Tenker\u2026",
+    "coach.networkError": "Nettverksfeil. Sjekk tilkoblingen og prøv igjen.",
+    "coach.genericError": "Noe gikk galt. Prøv igjen.",
+    "coach.suggestion1": "Hvordan var treningen min denne uken?",
+    "coach.suggestion2": "Er jeg klar for løpet?",
+    "coach.suggestion3": "Hva bør jeg fokusere på nå?",
+    "coach.suggestion4": "Er jeg i fare for overtrening?",
+    // Activity analysis
+    "analysis.coachAnalysis": "Treneranalyse",
+    "analysis.getAnalysis": "Få AI-analyse",
+    "analysis.analyzing": "Analyserer løpet ditt\u2026",
   },
 } as const
 

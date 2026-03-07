@@ -27,7 +27,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
       role="tablist"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-md items-center justify-around px-1 py-1">
+      <div className="mx-auto flex max-w-md items-center justify-around px-0.5 py-1">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -37,7 +37,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               role="tab"
               aria-selected={isActive}
               aria-label={t(tab.labelKey)}
-              className={`flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1 transition-colors ${
+              className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors ${
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground active:text-foreground"
@@ -45,10 +45,10 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               onClick={() => onTabChange(tab.id)}
             >
               <Icon
-                size={22}
+                size={20}
                 strokeWidth={isActive ? 2.5 : 1.8}
               />
-              <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
+              <span className={`text-[9px] leading-tight truncate max-w-full ${isActive ? "font-semibold" : "font-medium"}`}>
                 {t(tab.labelKey)}
               </span>
             </button>

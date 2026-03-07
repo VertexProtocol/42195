@@ -305,7 +305,7 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
           <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
             <div className="mb-2 flex items-center gap-2">
               <Sparkles size={14} className="text-primary" />
-              <span className="text-xs font-medium text-primary">Coach Analysis</span>
+              <span className="text-xs font-medium text-primary">{t("analysis.coachAnalysis")}</span>
             </div>
             <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
           </div>
@@ -313,17 +313,17 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
           <button
             onClick={handleGetAnalysis}
             disabled={aiAnalysisLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/40 bg-card px-4 py-3 text-sm font-medium text-primary shadow-sm transition-colors hover:bg-muted/50 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-primary shadow-sm ring-1 ring-border transition-colors hover:bg-muted/50 disabled:opacity-50 active:opacity-80"
           >
             {aiAnalysisLoading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Analyzing your run…
+                {t("analysis.analyzing")}
               </>
             ) : (
               <>
                 <Sparkles size={16} />
-                Get AI analysis
+                {t("analysis.getAnalysis")}
               </>
             )}
           </button>
