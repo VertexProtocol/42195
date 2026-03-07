@@ -13,6 +13,7 @@ const translations = {
     "tab.activities": "Activities",
     "tab.goals": "Goals",
     "tab.plan": "Plan",
+    "tab.coach": "Coach",
     "tab.profile": "Profile",
     // Home
     "home.activeGoals": "Active Goals",
@@ -242,6 +243,7 @@ const translations = {
     "tab.activities": "Aktiviteter",
     "tab.goals": "Mål",
     "tab.plan": "Plan",
+    "tab.coach": "Trener",
     "tab.profile": "Profil",
     // Home
     "home.activeGoals": "Aktive mål",
