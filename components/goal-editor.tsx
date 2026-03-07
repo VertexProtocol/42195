@@ -27,6 +27,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
   const [startDate, setStartDate] = useState("")
   const [targetDate, setTargetDate] = useState("")
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [touched, setTouched] = useState({ name: false, distance: false, date: false })
 
   useEffect(() => {
     if (open && goal && !isNew) {
@@ -48,6 +49,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       setStartDate(goal.start_date ? goal.start_date.split("T")[0] : "")
       setTargetDate(goal.target_date.split("T")[0])
       setShowConfirmDelete(false)
+      setTouched({ name: false, distance: false, date: false })
     } else if (open && isNew) {
       setCategory(defaultCategory ?? "performance")
       setName("")
@@ -58,6 +60,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       setStartDate("")
       setTargetDate("")
       setShowConfirmDelete(false)
+      setTouched({ name: false, distance: false, date: false })
     }
   }, [open, goal, isNew, defaultCategory])
 
@@ -73,6 +76,12 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
     return String(Math.min(max, Math.max(0, parseInt(digits, 10))))
   }
 
+  // Validation
+  const errors = {
+    name: touched.name && name.trim().length === 0,
+    distance: touched.distance && (targetDistance === "" || parseDistance(targetDistance) <= 0 || isNaN(parseDistance(targetDistance))),
+    date: touched.date && targetDate.length === 0,
+  }
   const canSave = name.trim().length > 0 && parseDistance(targetDistance) > 0 && targetDate.length > 0
 
   const handleSave = () => {
@@ -201,13 +210,19 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                 placeholder={
                   category === "event_training"
                     ? t("goalEditor.eventPlaceholder")
                     : t("goalEditor.goalPlaceholder")
                 }
-                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 ${
+                  errors.name ? "ring-2 ring-destructive" : "focus:ring-primary/40"
+                }`}
               />
+              {errors.name && (
+                <span className="text-xs text-destructive">{t("validation.required")}</span>
+              )}
             </div>
 
             {/* Target distance */}
@@ -220,9 +235,15 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                 inputMode="decimal"
                 value={targetDistance}
                 onChange={(e) => setTargetDistance(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, distance: true }))}
                 placeholder="42,195"
-                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 ${
+                  errors.distance ? "ring-2 ring-destructive" : "focus:ring-primary/40"
+                }`}
               />
+              {errors.distance && (
+                <span className="text-xs text-destructive">{t("validation.validDistance")}</span>
+              )}
             </div>
 
             {/* Target time */}
@@ -301,8 +322,14 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                onBlur={() => setTouched((t) => ({ ...t, date: true }))}
+                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 ${
+                  errors.date ? "ring-2 ring-destructive" : "focus:ring-primary/40"
+                }`}
               />
+              {errors.date && (
+                <span className="text-xs text-destructive">{t("validation.required")}</span>
+              )}
             </div>
 
           </div>
