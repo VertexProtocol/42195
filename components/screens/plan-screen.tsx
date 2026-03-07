@@ -13,6 +13,7 @@ import {
   longestRun,
 } from "@/lib/format"
 import type { Activity, Goal } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 
 interface PlanScreenProps {
   goals: Goal[]
@@ -30,18 +31,19 @@ interface PlanScreenProps {
  * 85–95% → Tapering
  * 95%+   → Race week
  */
-function trainingPhase(startDate: string | null, targetDate: string): {
-  label: string
+function trainingPhaseKey(startDate: string | null, targetDate: string): {
+  labelKey: "plan.raceWeek" | "plan.tapering" | "plan.peakTraining" | "plan.buildingBase"
   color: string
 } {
   const pct = timeElapsedPercentage(startDate, targetDate)
-  if (pct >= 95) return { label: "Race week", color: "text-destructive" }
-  if (pct >= 85) return { label: "Tapering", color: "text-warning" }
-  if (pct >= 70) return { label: "Peak training", color: "text-primary" }
-  return { label: "Building base", color: "text-success" }
+  if (pct >= 95) return { labelKey: "plan.raceWeek", color: "text-destructive" }
+  if (pct >= 85) return { labelKey: "plan.tapering", color: "text-warning" }
+  if (pct >= 70) return { labelKey: "plan.peakTraining", color: "text-primary" }
+  return { labelKey: "plan.buildingBase", color: "text-success" }
 }
 
 export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleActive, onSelectGoal }: PlanScreenProps) {
+  const { t } = useI18n()
   const eventGoals = goals.filter((g) => g.goal_category === "event_training")
 
   // Sort: active first, then by target date ascending
@@ -53,9 +55,9 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
   return (
     <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
       <header>
-        <h1 className="text-2xl font-bold text-foreground">Plan</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("plan.title")}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Race preparation and long-term training
+          {t("plan.subtitle")}
         </p>
       </header>
 
@@ -65,7 +67,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
         className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
       >
         <Plus size={18} />
-        Add event / race goal
+        {t("plan.addEvent")}
       </button>
 
       {sorted.length === 0 ? (
@@ -73,9 +75,9 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
             <CalendarCheck size={28} className="text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground">No events planned</p>
+          <p className="text-sm font-medium text-muted-foreground">{t("plan.noEvents")}</p>
           <p className="text-xs text-muted-foreground text-center max-w-[220px]">
-            Add a race or event goal to start tracking your training preparation
+            {t("plan.noEventsDesc")}
           </p>
         </div>
       ) : (
@@ -90,7 +92,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
             goal.target_date,
             goal.created_at,
           )
-          const phase = trainingPhase(goal.start_date, goal.target_date)
+          const phase = trainingPhaseKey(goal.start_date, goal.target_date)
           const best = bestRelevantRun(activities, goal.target_distance_km)
           const longest = longestRun(activities, goal.start_date, goal.created_at)
 
@@ -119,14 +121,14 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                       <div className="flex items-center gap-1.5">
                         <Trophy size={12} className="text-success" />
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-success">
-                          Race complete
+                          {t("plan.raceComplete")}
                         </span>
                       </div>
                     ) : goal.is_active ? (
                       <div className="flex items-center gap-1.5">
                         <div className="h-2 w-2 rounded-full bg-primary" />
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
-                          Active plan
+                          {t("plan.activePlan")}
                         </span>
                       </div>
                     ) : null}
@@ -155,12 +157,12 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                   </div>
                   {!past && days > 0 && (
                     <div className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-foreground">
-                      {days} days to go
+                      {days} {t("plan.daysToGo")}
                     </div>
                   )}
                   {!past && days === 0 && (
                     <div className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                      Race day!
+                      {t("plan.raceDay")}
                     </div>
                   )}
                 </div>
@@ -168,7 +170,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                 {/* Training phase — only while still preparing */}
                 {goal.start_date && !past && days > 0 && (
                   <div className={`mt-2 text-xs font-semibold ${phase.color}`}>
-                    {phase.label}
+                    {t(phase.labelKey)}
                   </div>
                 )}
               </div>
@@ -178,10 +180,10 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-muted-foreground">
                     {past
-                      ? "Training completed"
+                      ? t("plan.trainingCompleted")
                       : goal.start_date
-                        ? `Training from ${formatDate(goal.start_date)}`
-                        : "Training progress"}
+                        ? `${t("plan.trainingFrom")} ${formatDate(goal.start_date)}`
+                        : t("plan.trainingProgress")}
                   </span>
                   <span className={`font-medium ${past ? "text-success" : "text-foreground"}`}>
                     {timeProgress}%
@@ -202,28 +204,28 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                   <span className="text-base font-bold font-mono text-foreground">
                     {logged.toFixed(0)}
                   </span>
-                  <span className="text-[10px] text-muted-foreground text-center">km logged</span>
+                  <span className="text-[10px] text-muted-foreground text-center">{t("plan.kmLogged")}</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 px-3 py-3">
                   <Footprints size={14} className="text-muted-foreground" />
                   <span className="text-base font-bold font-mono text-foreground">
                     {longest ? `${longest.distance_km.toFixed(1)}` : "—"}
                   </span>
-                  <span className="text-[10px] text-muted-foreground text-center">longest run</span>
+                  <span className="text-[10px] text-muted-foreground text-center">{t("plan.longestRun")}</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 px-3 py-3">
                   <Clock size={14} className="text-muted-foreground" />
                   <span className="text-base font-bold font-mono text-foreground">
                     {best ? formatDuration(best.duration_seconds) : "—"}
                   </span>
-                  <span className="text-[10px] text-muted-foreground text-center">best sim. run</span>
+                  <span className="text-[10px] text-muted-foreground text-center">{t("plan.bestSimRun")}</span>
                 </div>
               </div>
 
               {/* AI plan hint row */}
               <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
                 <Sparkles size={13} className="text-primary" />
-                <span>Tap to view AI training plan</span>
+                <span>{t("plan.aiPlan")}</span>
                 <ChevronRight size={13} className="ml-auto" />
               </div>
               </button>{/* end tappable button */}
@@ -239,7 +241,7 @@ export function PlanScreen({ goals, activities, onEditGoal, onAddGoal, onToggleA
                   }`}
                 >
                   <Check size={14} />
-                  {goal.is_active ? "Active plan" : "Set as active"}
+                  {goal.is_active ? t("plan.activePlan") : t("plan.setAsActive")}
                 </button>
               </div>
             </div>

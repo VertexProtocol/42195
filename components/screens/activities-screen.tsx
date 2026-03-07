@@ -4,6 +4,7 @@ import { ChevronRight, Inbox, RefreshCw, Link, Plus } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 
 interface ActivitiesScreenProps {
   activities: Activity[]
@@ -14,13 +15,15 @@ interface ActivitiesScreenProps {
 }
 
 export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
+  const { t } = useI18n()
+
   return (
     <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Activities</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("activities.title")}</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {activities.length} {activities.length === 1 ? "activity" : "activities"}
+            {activities.length} {activities.length === 1 ? t("activities.activity") : t("activities.activities")}
           </p>
         </div>
         <button
@@ -37,27 +40,27 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
             <Inbox size={28} className="text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground">No activities yet</p>
+          <p className="text-sm font-medium text-muted-foreground">{t("activities.noActivities")}</p>
           {stravaConnected ? (
             <>
-              <p className="text-xs text-muted-foreground">Sync your Strava runs to get started</p>
+              <p className="text-xs text-muted-foreground">{t("activities.syncDesc")}</p>
               <button
                 onClick={onSync}
                 className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
               >
                 <RefreshCw size={15} />
-                Sync from Strava
+                {t("activities.syncStrava")}
               </button>
             </>
           ) : (
             <>
-              <p className="text-xs text-muted-foreground">Connect Strava to import your runs</p>
+              <p className="text-xs text-muted-foreground">{t("activities.connectDesc")}</p>
               <a
                 href="/api/auth/strava"
                 className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
               >
                 <Link size={15} />
-                Connect Strava
+                {t("activities.connectStrava")}
               </a>
             </>
           )}

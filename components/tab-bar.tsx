@@ -1,6 +1,7 @@
 "use client"
 
 import { Home, Activity, Target, BookOpen, User } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 import type { TabId } from "@/lib/types"
 
 interface TabBarProps {
@@ -8,15 +9,16 @@ interface TabBarProps {
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "activities", label: "Activities", icon: Activity },
-  { id: "goals", label: "Goals", icon: Target },
-  { id: "plan", label: "Plan", icon: BookOpen },
-  { id: "profile", label: "Profile", icon: User },
+const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.plan" | "tab.profile"; icon: typeof Home }[] = [
+  { id: "home", labelKey: "tab.home", icon: Home },
+  { id: "activities", labelKey: "tab.activities", icon: Activity },
+  { id: "goals", labelKey: "tab.goals", icon: Target },
+  { id: "plan", labelKey: "tab.plan", icon: BookOpen },
+  { id: "profile", labelKey: "tab.profile", icon: User },
 ]
 
 export function TabBar({ activeTab, onTabChange }: TabBarProps) {
+  const { t } = useI18n()
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl"
@@ -33,7 +35,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               key={tab.id}
               role="tab"
               aria-selected={isActive}
-              aria-label={tab.label}
+              aria-label={t(tab.labelKey)}
               className={`flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1 transition-colors ${
                 isActive
                   ? "text-primary"
@@ -46,7 +48,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
                 strokeWidth={isActive ? 2.5 : 1.8}
               />
               <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
-                {tab.label}
+                {t(tab.labelKey)}
               </span>
             </button>
           )
