@@ -275,6 +275,7 @@ export function AppShell({ initialData }: AppShellProps) {
               stravaConnected={data.stravaConnected}
               onSync={data.sync}
               onFullSync={data.fullSync}
+              onConnectStrava={data.connectStrava}
               onSignOut={data.signOut}
             />
           </Suspense>
