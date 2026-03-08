@@ -45,13 +45,6 @@ export async function GET(request: NextRequest) {
   const errorParam = searchParams.get("error")
   const stateParam = searchParams.get("state")
 
-  // --- CSRF check ---
-  // Must happen before anything else. The state cookie was set by /api/auth/strava.
-  const storedState = request.cookies.get("strava_oauth_state")?.value
-  if (!storedState || stateParam !== storedState) {
-    return errorRedirect("Invalid OAuth state. Please try connecting again.")
-  }
-
   // User explicitly denied access on Strava's side
   if (errorParam) {
     return errorRedirect("Strava access was denied.")
@@ -71,6 +64,35 @@ export async function GET(request: NextRequest) {
     const res = NextResponse.redirect(`${baseUrl}/auth/login`)
     res.cookies.delete("strava_oauth_state")
     return res
+  }
+
+  // --- CSRF check ---
+  // First try the cookie (works on most browsers). If the cookie is missing
+  // (e.g. mobile Safari drops cookies set on redirect responses), fall back
+  // to the oauth_state stored in the DB by /api/auth/strava.
+  const cookieState = request.cookies.get("strava_oauth_state")?.value
+  let stateValid = cookieState && stateParam === cookieState
+
+  if (!stateValid && stateParam && user) {
+    const service = createServiceClient()
+    const { data: tokenRow } = await service
+      .from("strava_tokens")
+      .select("oauth_state")
+      .eq("user_id", user.id)
+      .single()
+    stateValid = tokenRow?.oauth_state === stateParam
+
+    // Clear the used oauth_state from DB to prevent replay
+    if (stateValid) {
+      await service
+        .from("strava_tokens")
+        .update({ oauth_state: null })
+        .eq("user_id", user.id)
+    }
+  }
+
+  if (!stateValid) {
+    return errorRedirect("Invalid OAuth state. Please try connecting again.")
   }
 
   // Exchange authorization code for tokens
