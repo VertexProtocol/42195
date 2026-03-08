@@ -457,6 +457,25 @@ export function useAppData(initialData?: InitialData | null) {
     return true
   }, [])
 
+  // ----- Delete activity (from app only, not from Strava) -----
+  const activitiesRef = useRef(activities)
+  activitiesRef.current = activities
+
+  const deleteActivity = useCallback(async (activityId: string) => {
+    const snapshot = activitiesRef.current
+    setActivities((prev) => prev.filter((a) => a.id !== activityId))
+
+    const { error } = await supabase.from("activities").delete().eq("id", activityId)
+    if (error) {
+      console.error("Failed to delete activity:", error)
+      setActivities(snapshot)
+      toast.error("Failed to delete activity")
+      return false
+    }
+    toast.success("Activity deleted")
+    return true
+  }, [])
+
   // ----- Strava Sync -----
   const doSync = useCallback(async (full = false) => {
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
@@ -544,6 +563,7 @@ export function useAppData(initialData?: InitialData | null) {
 
     // Activities
     addActivity,
+    deleteActivity,
 
     // Sync
     sync,
