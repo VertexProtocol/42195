@@ -17,7 +17,10 @@ interface StravaRefreshResponse {
  * Returns a valid Strava access token for the given user,
  * refreshing it if it is expired or about to expire.
  */
-export async function getStravaAccessToken(userId: string): Promise<string> {
+export async function getStravaAccessToken(
+  userId: string,
+  forceRefresh = false,
+): Promise<string> {
   const service = createServiceClient()
 
   const { data: tokenRow, error } = await service
@@ -38,8 +41,7 @@ export async function getStravaAccessToken(userId: string): Promise<string> {
   const expiresAt = new Date(tokenRow.expires_at)
   const nowPlusBuffer = new Date(Date.now() + 60_000)
 
-  // If token is still valid, return it
-  if (expiresAt > nowPlusBuffer && tokenRow.access_token && tokenRow.access_token !== "") {
+  if (!forceRefresh && expiresAt > nowPlusBuffer) {
     return tokenRow.access_token
   }
 
