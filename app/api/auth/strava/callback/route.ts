@@ -118,6 +118,19 @@ export async function GET(request: NextRequest) {
 
   const tokens = (await tokenRes.json()) as StravaTokenResponse
 
+  // Verify the granted scope includes the permissions we need
+  const REQUIRED_SCOPES = ["read", "activity:read_all", "activity:write"]
+  const grantedScopes = (tokens.scope ?? "").split(",").map((s) => s.trim())
+  const missingScopes = REQUIRED_SCOPES.filter((s) => !grantedScopes.includes(s))
+  if (missingScopes.length > 0) {
+    console.error(
+      `Strava granted insufficient scopes. Got: "${tokens.scope}", missing: ${missingScopes.join(", ")}`,
+    )
+    return errorRedirect(
+      "Strava did not grant all required permissions. Please reconnect and accept all requested permissions.",
+    )
+  }
+
   // Store tokens using the service client — never accessible from the browser
   const service = createServiceClient()
   const { error: upsertError } = await service.from("strava_tokens").upsert(
