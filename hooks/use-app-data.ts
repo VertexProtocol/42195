@@ -527,6 +527,19 @@ export function useAppData(initialData?: InitialData | null) {
   const sync = useCallback(() => doSync(false), [doSync])
   const fullSync = useCallback(() => doSync(true), [doSync])
 
+  // ----- Bootstrap Strava connection -----
+  const connectStrava = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    const res = await fetch("/api/auth/strava/setup", { method: "POST" })
+    const json = await res.json()
+    if (!res.ok) {
+      return { ok: false, error: json.error ?? "Setup failed" }
+    }
+    setStravaConnected(true)
+    // Kick off a full sync so activities load immediately
+    doSync(true)
+    return { ok: true }
+  }, [doSync])
+
   const handleSignOut = useCallback(() => {
     startTransition(async () => {
       await signOut()
@@ -565,6 +578,7 @@ export function useAppData(initialData?: InitialData | null) {
     // Sync
     sync,
     fullSync,
+    connectStrava,
 
     // Auth
     signOut: handleSignOut,
