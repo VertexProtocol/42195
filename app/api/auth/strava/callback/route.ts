@@ -119,16 +119,26 @@ export async function GET(request: NextRequest) {
   const tokens = (await tokenRes.json()) as StravaTokenResponse
   console.log(`Strava token exchange succeeded. Scope: "${tokens.scope}", athlete: ${tokens.athlete?.id}`)
 
-  // Verify the granted scope includes the permissions we need
-  const REQUIRED_SCOPES = ["read", "activity:read_all", "activity:write"]
+  // Verify the granted scope includes the minimum permissions we need
+  const MINIMUM_SCOPES = ["read", "activity:read_all"]
+  const OPTIONAL_SCOPES = ["activity:write"] // Nice to have for deleting activities
   const grantedScopes = (tokens.scope ?? "").split(",").map((s) => s.trim())
-  const missingScopes = REQUIRED_SCOPES.filter((s) => !grantedScopes.includes(s))
-  if (missingScopes.length > 0) {
+  const missingMinimum = MINIMUM_SCOPES.filter((s) => !grantedScopes.includes(s))
+  
+  if (missingMinimum.length > 0) {
     console.error(
-      `Strava granted insufficient scopes. Got: "${tokens.scope}", missing: ${missingScopes.join(", ")}`,
+      `Strava granted insufficient scopes. Got: "${tokens.scope}", missing minimum: ${missingMinimum.join(", ")}`,
     )
     return errorRedirect(
-      "Strava did not grant all required permissions. Please reconnect and accept all requested permissions.",
+      "Strava did not grant required permissions. Please reconnect and accept at least read permissions.",
+    )
+  }
+  
+  // Log if optional scopes are missing (but don't block)
+  const missingOptional = OPTIONAL_SCOPES.filter((s) => !grantedScopes.includes(s))
+  if (missingOptional.length > 0) {
+    console.warn(
+      `Strava connection missing optional scopes: ${missingOptional.join(", ")}. Some features like deleting activities may not work.`,
     )
   }
 
