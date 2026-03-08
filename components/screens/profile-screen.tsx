@@ -234,6 +234,14 @@ export function ProfileScreen({ user, activities, syncStatus, stravaConnected, o
                 {t("profile.connect")}
               </a>
             )}
+            {stravaConnected && (
+              <a
+                href="/api/auth/strava"
+                className="text-xs font-medium text-muted-foreground underline underline-offset-2 active:opacity-70"
+              >
+                {t("profile.reconnect")}
+              </a>
+            )}
           </div>
 
           <div className="p-4">
