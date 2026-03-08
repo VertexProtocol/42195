@@ -8,7 +8,6 @@ interface StravaTokenResponse {
   expires_in: number
   refresh_token: string
   access_token: string
-  scope: string
   athlete: {
     id: number
     firstname: string
@@ -66,32 +65,9 @@ export async function GET(request: NextRequest) {
     return res
   }
 
-  // --- CSRF check ---
-  // First try the cookie (works on most browsers). If the cookie is missing
-  // (e.g. mobile Safari drops cookies set on redirect responses), fall back
-  // to the oauth_state stored in the DB by /api/auth/strava.
+  // CSRF check — verify state cookie
   const cookieState = request.cookies.get("strava_oauth_state")?.value
-  let stateValid = cookieState && stateParam === cookieState
-
-  if (!stateValid && stateParam && user) {
-    const service = createServiceClient()
-    const { data: tokenRow } = await service
-      .from("strava_tokens")
-      .select("oauth_state")
-      .eq("user_id", user.id)
-      .single()
-    stateValid = tokenRow?.oauth_state === stateParam
-
-    // Clear the used oauth_state from DB to prevent replay
-    if (stateValid) {
-      await service
-        .from("strava_tokens")
-        .update({ oauth_state: null })
-        .eq("user_id", user.id)
-    }
-  }
-
-  if (!stateValid) {
+  if (!cookieState || stateParam !== cookieState) {
     return errorRedirect("Invalid OAuth state. Please try connecting again.")
   }
 
@@ -117,30 +93,6 @@ export async function GET(request: NextRequest) {
   }
 
   const tokens = (await tokenRes.json()) as StravaTokenResponse
-  console.log(`Strava token exchange succeeded. Scope: "${tokens.scope}", athlete: ${tokens.athlete?.id}`)
-
-  // Verify the granted scope includes the minimum permissions we need
-  const MINIMUM_SCOPES = ["read", "activity:read_all"]
-  const OPTIONAL_SCOPES = ["activity:write"] // Nice to have for deleting activities
-  const grantedScopes = (tokens.scope ?? "").split(",").map((s) => s.trim())
-  const missingMinimum = MINIMUM_SCOPES.filter((s) => !grantedScopes.includes(s))
-  
-  if (missingMinimum.length > 0) {
-    console.error(
-      `Strava granted insufficient scopes. Got: "${tokens.scope}", missing minimum: ${missingMinimum.join(", ")}`,
-    )
-    return errorRedirect(
-      "Strava did not grant required permissions. Please reconnect and accept at least read permissions.",
-    )
-  }
-  
-  // Log if optional scopes are missing (but don't block)
-  const missingOptional = OPTIONAL_SCOPES.filter((s) => !grantedScopes.includes(s))
-  if (missingOptional.length > 0) {
-    console.warn(
-      `Strava connection missing optional scopes: ${missingOptional.join(", ")}. Some features like deleting activities may not work.`,
-    )
-  }
 
   // Store tokens using the service client — never accessible from the browser
   const service = createServiceClient()
@@ -151,7 +103,6 @@ export async function GET(request: NextRequest) {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: new Date(tokens.expires_at * 1000).toISOString(),
-      scope: tokens.scope,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
@@ -161,8 +112,6 @@ export async function GET(request: NextRequest) {
     console.error("Failed to save Strava tokens:", upsertError)
     return errorRedirect("Failed to save Strava connection.")
   }
-
-  console.log(`Strava tokens saved for user ${user.id}, scope: ${tokens.scope}`)
 
   // Success — clear state cookie and send the user back to the app
   const res = NextResponse.redirect(`${baseUrl}/`)
