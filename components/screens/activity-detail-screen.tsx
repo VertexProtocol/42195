@@ -612,7 +612,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     else setDeleting(false)
                   }}
                   disabled={deleting}
-                  className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-opacity disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
                 >
                   {deleting ? "Deleting..." : "Delete"}
                 </button>
