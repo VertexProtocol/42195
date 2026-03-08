@@ -485,7 +485,10 @@ export function useAppData(initialData?: InitialData | null) {
           data.error?.includes("No Strava account connected") ||
           data.error?.includes("connect Strava") ||
           data.error?.includes("reconnect") ||
-          data.error?.includes("session expired")
+          data.error?.includes("session expired") ||
+          // 401 from Strava activities endpoint = token lacks activity:read scope;
+          // re-authorize via OAuth which requests the correct scopes.
+          data.error?.includes("fetch failed: 401")
         ) {
           window.location.href = "/api/auth/strava"
           return
