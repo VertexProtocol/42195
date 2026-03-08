@@ -75,7 +75,27 @@ export async function POST(request: NextRequest) {
     expires_at: number
   }
 
-  // ── 4. Fetch athlete info ──────────────────────────────────────────────────
+  // ── 4. Verify activity scope before storing ────────────────────────────────
+  // Strava returns 401 for activity:read scope issues (not 403), so we probe
+  // the activities endpoint early to catch scope problems with a clear message.
+  const scopeCheckRes = await fetch(
+    "https://www.strava.com/api/v3/athlete/activities?per_page=1",
+    { headers: { Authorization: `Bearer ${refreshed.access_token}` } },
+  )
+  if (!scopeCheckRes.ok) {
+    const body = await scopeCheckRes.text()
+    console.error(`Strava scope check failed (${scopeCheckRes.status}):`, body)
+    return NextResponse.json(
+      {
+        error:
+          "Bootstrap token lacks activity read permission (activity:read_all). " +
+          "Obtain a token via the full OAuth flow which requests the correct scopes.",
+      },
+      { status: 403 },
+    )
+  }
+
+  // ── 5. Fetch athlete info ──────────────────────────────────────────────────
   const athleteRes = await fetch("https://www.strava.com/api/v3/athlete", {
     headers: { Authorization: `Bearer ${refreshed.access_token}` },
   })
@@ -95,7 +115,7 @@ export async function POST(request: NextRequest) {
     lastname: string
   }
 
-  // ── 5. Upsert tokens ──────────────────────────────────────────────────────
+  // ── 6. Upsert tokens ──────────────────────────────────────────────────────
   const service = createServiceClient()
   const { error: upsertError } = await service.from("strava_tokens").upsert(
     {
