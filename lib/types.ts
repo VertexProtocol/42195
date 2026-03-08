@@ -1,4 +1,5 @@
-export type ActivityType = "Run" | "Trail Run" | "Race" | "Walk"
+/** Activity type — matches display names mapped from Strava sport_type */
+export type ActivityType = string
 
 export interface Activity {
   id: string

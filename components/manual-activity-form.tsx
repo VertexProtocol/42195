@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { X } from "lucide-react"
-import type { Activity, ActivityType } from "@/lib/types"
+import type { Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 interface ManualActivityFormProps {
@@ -11,16 +11,24 @@ interface ManualActivityFormProps {
   onSave: (activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">) => Promise<boolean>
 }
 
-const ACTIVITY_TYPE_KEYS: { value: ActivityType; labelKey: "manualActivity.run" | "manualActivity.trailRun" | "manualActivity.race" | "manualActivity.walk" }[] = [
+const QUICK_TYPES = [
   { value: "Run", labelKey: "manualActivity.run" },
   { value: "Trail Run", labelKey: "manualActivity.trailRun" },
   { value: "Race", labelKey: "manualActivity.race" },
   { value: "Walk", labelKey: "manualActivity.walk" },
+] as const
+
+const OTHER_TYPES = [
+  "Ride", "Swim", "Hike", "Nordic Ski", "Alpine Ski", "Snowboard",
+  "Yoga", "Weight Training", "HIIT", "CrossFit", "Rowing",
+  "Kayaking", "Elliptical", "Pilates", "Soccer", "Tennis",
+  "Golf", "Skateboard", "Surfing", "Rock Climbing",
 ]
 
 export function ManualActivityForm({ open, onClose, onSave }: ManualActivityFormProps) {
   const [name, setName] = useState("")
-  const [type, setType] = useState<ActivityType>("Run")
+  const [type, setType] = useState("Run")
+  const [showOtherTypes, setShowOtherTypes] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [distanceKm, setDistanceKm] = useState("")
   const [durationMin, setDurationMin] = useState("")
@@ -31,6 +39,8 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
   const { t } = useI18n()
 
   if (!open) return null
+
+  const isQuickType = QUICK_TYPES.some((qt) => qt.value === type)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -65,6 +75,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
       setDurationSec("")
       setElevationM("")
       setAvgHr("")
+      setShowOtherTypes(false)
       onClose()
     }
   }
@@ -83,13 +94,13 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Activity type */}
+          {/* Activity type — quick buttons + Other */}
           <div className="flex gap-2">
-            {ACTIVITY_TYPE_KEYS.map((at) => (
+            {QUICK_TYPES.map((at) => (
               <button
                 key={at.value}
                 type="button"
-                onClick={() => setType(at.value)}
+                onClick={() => { setType(at.value); setShowOtherTypes(false) }}
                 className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
                   type === at.value
                     ? "bg-primary text-primary-foreground"
@@ -99,7 +110,38 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
                 {t(at.labelKey)}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowOtherTypes(!showOtherTypes)}
+              className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
+                !isQuickType
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {!isQuickType ? type : t("manualActivity.other")}
+            </button>
           </div>
+
+          {/* Other type picker */}
+          {showOtherTypes && (
+            <div className="flex flex-wrap gap-1.5">
+              {OTHER_TYPES.map((ot) => (
+                <button
+                  key={ot}
+                  type="button"
+                  onClick={() => { setType(ot); setShowOtherTypes(false) }}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    type === ot
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground active:bg-accent"
+                  }`}
+                >
+                  {ot}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Name */}
           <input
