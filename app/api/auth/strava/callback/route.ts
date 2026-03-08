@@ -117,6 +117,7 @@ export async function GET(request: NextRequest) {
   }
 
   const tokens = (await tokenRes.json()) as StravaTokenResponse
+  console.log(`Strava token exchange succeeded. Scope: "${tokens.scope}", athlete: ${tokens.athlete?.id}`)
 
   // Verify the granted scope includes the permissions we need
   const REQUIRED_SCOPES = ["read", "activity:read_all", "activity:write"]
@@ -150,6 +151,8 @@ export async function GET(request: NextRequest) {
     console.error("Failed to save Strava tokens:", upsertError)
     return errorRedirect("Failed to save Strava connection.")
   }
+
+  console.log(`Strava tokens saved for user ${user.id}, scope: ${tokens.scope}`)
 
   // Success — clear state cookie and send the user back to the app
   const res = NextResponse.redirect(`${baseUrl}/`)
