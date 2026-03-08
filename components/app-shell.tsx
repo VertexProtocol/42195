@@ -170,8 +170,8 @@ export function AppShell({ initialData }: AppShellProps) {
     setIsWeeklyEditorOpen(false)
   }, [])
 
-  const handleDeleteActivity = useCallback(async (activityId: string) => {
-    const ok = await data.deleteActivity(activityId)
+  const handleDeleteActivity = useCallback(async (activityId: string, fromStrava = false) => {
+    const ok = await data.deleteActivity(activityId, fromStrava)
     if (ok) navigate({ activity: null })
     return ok
   }, [data.deleteActivity, navigate])

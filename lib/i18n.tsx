@@ -86,6 +86,11 @@ const translations = {
     "activityDetail.laps": "Laps",
     "activityDetail.dist": "Dist",
     "activityDetail.hr": "HR",
+    "activityDetail.delete": "Delete activity",
+    "activityDetail.deleteConfirm": "How would you like to delete this activity?",
+    "activityDetail.deleteAppOnly": "Remove from app only",
+    "activityDetail.deleteFromStrava": "Delete from Strava and app",
+    "common.cancel": "Cancel",
     // Goals
     "goals.title": "Goals",
     "goals.subtitle": "Weekly targets and performance benchmarks",
@@ -364,6 +369,11 @@ const translations = {
     "activityDetail.laps": "Runder",
     "activityDetail.dist": "Dist",
     "activityDetail.hr": "Puls",
+    "activityDetail.delete": "Slett aktivitet",
+    "activityDetail.deleteConfirm": "Hvordan vil du slette denne aktiviteten?",
+    "activityDetail.deleteAppOnly": "Fjern kun fra appen",
+    "activityDetail.deleteFromStrava": "Slett fra Strava og appen",
+    "common.cancel": "Avbryt",
     // Goals
     "goals.title": "Mål",
     "goals.subtitle": "Ukentlige mål og ytelsesbenchmarks",
