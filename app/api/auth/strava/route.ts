@@ -38,17 +38,28 @@ export async function GET(request: NextRequest) {
   // Store state server-side as fallback (mobile Safari can lose cookies on redirects)
   const service = createServiceClient()
 
-  // Try UPDATE first (reconnect — row already exists).
-  // Fall back to INSERT for first-time connections.
-  const { data: updated } = await service
+  // Check if a valid token row already exists
+  const { data: existingRow } = await service
     .from("strava_tokens")
-    .update({ oauth_state: state, updated_at: new Date().toISOString() })
+    .select("user_id, refresh_token")
     .eq("user_id", user.id)
-    .select("user_id")
+    .maybeSingle()
 
-  if (!updated || updated.length === 0) {
-    // First-time connection — no row yet; insert a placeholder that the
-    // callback will fill in with the real tokens.
+  if (existingRow && existingRow.refresh_token && existingRow.refresh_token !== "") {
+    // User has a valid connection - just update the oauth_state for reconnection
+    await service
+      .from("strava_tokens")
+      .update({ oauth_state: state, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+  } else if (existingRow) {
+    // Row exists but has empty/invalid tokens - update with new state
+    await service
+      .from("strava_tokens")
+      .update({ oauth_state: state, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+  } else {
+    // First-time connection — insert a row with just the oauth_state
+    // The callback will fill in the real tokens via upsert
     await service.from("strava_tokens").insert({
       user_id: user.id,
       athlete_id: 0,

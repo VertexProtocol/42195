@@ -4,6 +4,7 @@ interface StravaTokenRow {
   access_token: string
   refresh_token: string
   expires_at: string
+  scope: string | null
 }
 
 interface StravaRefreshResponse {
@@ -24,12 +25,17 @@ export async function getStravaAccessToken(
 
   const { data: tokenRow, error } = await service
     .from("strava_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, refresh_token, expires_at, scope")
     .eq("user_id", userId)
     .single<StravaTokenRow>()
 
   if (error || !tokenRow) {
     throw new Error("No Strava account connected")
+  }
+
+  // Check if we have valid tokens (not placeholder values from incomplete OAuth)
+  if (!tokenRow.refresh_token || tokenRow.refresh_token === "") {
+    throw new Error("Strava connection incomplete. Please reconnect your Strava account.")
   }
 
   const expiresAt = new Date(tokenRow.expires_at)
@@ -39,6 +45,9 @@ export async function getStravaAccessToken(
     return tokenRow.access_token
   }
 
+  // Refresh the token
+  console.log(`Refreshing Strava token for user ${userId}`)
+  
   const res = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -51,6 +60,20 @@ export async function getStravaAccessToken(
   })
 
   if (!res.ok) {
+    const errorBody = await res.text()
+    console.error(`Strava token refresh failed (${res.status}):`, errorBody)
+    
+    // If refresh token is invalid (400/401), the user needs to reconnect
+    if (res.status === 400 || res.status === 401) {
+      // Clear the invalid tokens so the user can reconnect
+      await service
+        .from("strava_tokens")
+        .delete()
+        .eq("user_id", userId)
+      
+      throw new Error("Strava session expired. Please reconnect your Strava account.")
+    }
+    
     throw new Error(`Strava token refresh failed: ${res.status}`)
   }
 
@@ -66,5 +89,6 @@ export async function getStravaAccessToken(
     })
     .eq("user_id", userId)
 
+  console.log(`Strava token refreshed successfully for user ${userId}`)
   return refreshed.access_token
 }
