@@ -58,6 +58,14 @@ export async function DELETE(
     if (!res.ok && res.status !== 404) {
       const body = await res.text()
       console.error(`Strava delete failed (${res.status}):`, body)
+
+      if (res.status === 401 || res.status === 403) {
+        return NextResponse.json(
+          { error: "Missing Strava permission. Please reconnect Strava from your profile." },
+          { status: 403 },
+        )
+      }
+
       return NextResponse.json(
         { error: "Failed to delete from Strava" },
         { status: 502 },
