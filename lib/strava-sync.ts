@@ -269,13 +269,24 @@ export async function syncUserActivities(
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 
-  const accessToken = await getStravaAccessToken(userId)
+  let accessToken = await getStravaAccessToken(userId)
 
   const afterTimestamp = !fullSync && lastSyncAt
     ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
     : undefined
 
-  const stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+  let stravaActivities: StravaActivity[]
+  try {
+    stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+  } catch (err) {
+    // If Strava returns 401, force a token refresh and retry once
+    if (err instanceof Error && err.message.includes("401")) {
+      accessToken = await getStravaAccessToken(userId, true)
+      stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+    } else {
+      throw err
+    }
+  }
 
   const rows = stravaActivities.map((a) => ({
     user_id: userId,
@@ -316,8 +327,18 @@ export async function syncSingleActivity(
   stravaActivityId: number,
 ): Promise<{ synced: boolean }> {
   const service = createServiceClient()
-  const accessToken = await getStravaAccessToken(userId)
-  const activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
+  let accessToken = await getStravaAccessToken(userId)
+  let activity: StravaActivity | null
+  try {
+    activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("401")) {
+      accessToken = await getStravaAccessToken(userId, true)
+      activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
+    } else {
+      throw err
+    }
+  }
 
   if (!activity) {
     return { synced: false }
