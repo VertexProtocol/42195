@@ -457,22 +457,35 @@ export function useAppData(initialData?: InitialData | null) {
     return true
   }, [])
 
-  // ----- Delete activity (from app only, not from Strava) -----
+  // ----- Delete activity -----
   const activitiesRef = useRef(activities)
   activitiesRef.current = activities
 
-  const deleteActivity = useCallback(async (activityId: string) => {
+  const deleteActivity = useCallback(async (activityId: string, fromStrava = false) => {
     const snapshot = activitiesRef.current
     setActivities((prev) => prev.filter((a) => a.id !== activityId))
 
-    const { error } = await supabase.from("activities").delete().eq("id", activityId)
-    if (error) {
-      console.error("Failed to delete activity:", error)
-      setActivities(snapshot)
-      // Dynamic import to stay compatible with branches where sonner is temporarily disabled
-      import("sonner").then(({ toast: t }) => t.error("Failed to delete activity")).catch(() => {})
-      return false
+    if (fromStrava) {
+      // Delete from both Strava and app via server route
+      const res = await fetch(`/api/activities/${activityId}/strava`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Delete failed" }))
+        console.error("Failed to delete activity from Strava:", data.error)
+        setActivities(snapshot)
+        import("sonner").then(({ toast: t }) => t.error(data.error ?? "Failed to delete from Strava")).catch(() => {})
+        return false
+      }
+    } else {
+      // Delete from app database only
+      const { error } = await supabase.from("activities").delete().eq("id", activityId)
+      if (error) {
+        console.error("Failed to delete activity:", error)
+        setActivities(snapshot)
+        import("sonner").then(({ toast: t }) => t.error("Failed to delete activity")).catch(() => {})
+        return false
+      }
     }
+
     import("sonner").then(({ toast: t }) => t.success("Activity deleted")).catch(() => {})
     return true
   }, [])

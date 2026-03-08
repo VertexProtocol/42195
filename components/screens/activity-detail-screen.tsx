@@ -12,7 +12,7 @@ import type { Activity, StreamPoint, Lap } from "@/lib/types"
 interface ActivityDetailScreenProps {
   activity: Activity
   onBack: () => void
-  onDelete?: (activityId: string) => Promise<boolean>
+  onDelete?: (activityId: string, fromStrava?: boolean) => Promise<boolean>
   /** All activities — used to compute global max HR for consistent zone calculation */
   allActivities?: Activity[]
 }
@@ -601,27 +601,41 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           {confirmDelete ? (
             <div className="rounded-2xl bg-destructive/10 p-4 ring-1 ring-destructive/20">
               <p className="mb-3 text-sm text-destructive">
-                Delete this activity from the app? It will not be deleted from Strava.
+                {t("activityDetail.deleteConfirm")}
               </p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-2">
                 <button
                   onClick={async () => {
                     setDeleting(true)
-                    const ok = await onDelete(activity.id)
+                    const ok = await onDelete(activity.id, false)
                     if (ok) onBack()
                     else setDeleting(false)
                   }}
                   disabled={deleting}
-                  className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+                  className="w-full rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-secondary-foreground transition-opacity disabled:opacity-50"
                 >
-                  {deleting ? "Deleting..." : "Delete"}
+                  {t("activityDetail.deleteAppOnly")}
                 </button>
+                {activity.strava_id && (
+                  <button
+                    onClick={async () => {
+                      setDeleting(true)
+                      const ok = await onDelete(activity.id, true)
+                      if (ok) onBack()
+                      else setDeleting(false)
+                    }}
+                    disabled={deleting}
+                    className="w-full rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+                  >
+                    {t("activityDetail.deleteFromStrava")}
+                  </button>
+                )}
                 <button
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
-                  className="flex-1 rounded-xl bg-secondary px-4 py-2.5 text-sm font-medium text-secondary-foreground transition-opacity disabled:opacity-50"
+                  className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-opacity disabled:opacity-50"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -631,7 +645,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 active:opacity-80"
             >
               <Trash2 size={16} />
-              Delete activity
+              {t("activityDetail.delete")}
             </button>
           )}
         </section>
