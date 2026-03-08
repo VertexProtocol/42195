@@ -25,17 +25,73 @@ interface StravaActivity {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Strava sport_type values that are running activities. */
-const RUNNING_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun", "Treadmill", "Walk"])
-
 /**
- * Maps a Strava sport_type / workout_type to our constrained ActivityType.
+ * Maps a Strava sport_type to a human-readable display name.
+ * Keeps known running types as before; everything else gets a
+ * readable label derived from the PascalCase sport_type.
  */
+const SPORT_TYPE_LABELS: Record<string, string> = {
+  Run: "Run",
+  TrailRun: "Trail Run",
+  VirtualRun: "Virtual Run",
+  Treadmill: "Treadmill",
+  Walk: "Walk",
+  Ride: "Ride",
+  VirtualRide: "Virtual Ride",
+  EBikeRide: "E-Bike Ride",
+  GravelRide: "Gravel Ride",
+  MountainBikeRide: "Mountain Bike Ride",
+  EMountainBikeRide: "E-Mountain Bike Ride",
+  Handcycle: "Handcycle",
+  Velomobile: "Velomobile",
+  Swim: "Swim",
+  Hike: "Hike",
+  RockClimbing: "Rock Climbing",
+  AlpineSki: "Alpine Ski",
+  BackcountrySki: "Backcountry Ski",
+  NordicSki: "Nordic Ski",
+  Snowboard: "Snowboard",
+  Snowshoe: "Snowshoe",
+  IceSkate: "Ice Skate",
+  InlineSkate: "Inline Skate",
+  RollerSki: "Roller Ski",
+  Kayaking: "Kayaking",
+  Canoeing: "Canoeing",
+  Rowing: "Rowing",
+  VirtualRow: "Virtual Row",
+  StandUpPaddling: "Stand Up Paddling",
+  Surfing: "Surfing",
+  Kitesurf: "Kitesurf",
+  Windsurf: "Windsurf",
+  Sail: "Sail",
+  Crossfit: "CrossFit",
+  Elliptical: "Elliptical",
+  StairStepper: "Stair Stepper",
+  WeightTraining: "Weight Training",
+  Yoga: "Yoga",
+  Pilates: "Pilates",
+  HighIntensityIntervalTraining: "HIIT",
+  Workout: "Workout",
+  Soccer: "Soccer",
+  Tennis: "Tennis",
+  TableTennis: "Table Tennis",
+  Squash: "Squash",
+  Racquetball: "Racquetball",
+  Badminton: "Badminton",
+  Pickleball: "Pickleball",
+  Golf: "Golf",
+  Skateboard: "Skateboard",
+  Wheelchair: "Wheelchair",
+}
+
+/** Convert PascalCase to spaced words as fallback for unknown sport types */
+function pascalToWords(s: string): string {
+  return s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+}
+
 function mapActivityType(sport_type: string, workout_type?: number): string {
-  if (sport_type === "TrailRun") return "Trail Run"
-  if (sport_type === "Walk") return "Walk"
   if (sport_type === "Run" && workout_type === 1) return "Race"
-  return "Run"
+  return SPORT_TYPE_LABELS[sport_type] ?? pascalToWords(sport_type)
 }
 
 /**
@@ -221,11 +277,7 @@ export async function syncUserActivities(
 
   const stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
 
-  const runningActivities = stravaActivities.filter((a) =>
-    RUNNING_SPORT_TYPES.has(a.sport_type),
-  )
-
-  const rows = runningActivities.map((a) => ({
+  const rows = stravaActivities.map((a) => ({
     user_id: userId,
     strava_id: a.id,
     type: mapActivityType(a.sport_type, a.workout_type),
@@ -250,7 +302,7 @@ export async function syncUserActivities(
 
   return {
     synced: rows.length,
-    skipped: stravaActivities.length - runningActivities.length,
+    skipped: 0,
     incremental: afterTimestamp !== undefined,
   }
 }
@@ -267,7 +319,7 @@ export async function syncSingleActivity(
   const accessToken = await getStravaAccessToken(userId)
   const activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
 
-  if (!activity || !RUNNING_SPORT_TYPES.has(activity.sport_type)) {
+  if (!activity) {
     return { synced: false }
   }
 
