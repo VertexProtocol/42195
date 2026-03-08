@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
-import type { Activity, ActivityType } from "@/lib/types"
+import type { Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 interface ActivitiesScreenProps {
@@ -15,12 +15,22 @@ interface ActivitiesScreenProps {
   onAddActivity: () => void
 }
 
-const ACTIVITY_TYPES: ActivityType[] = ["Run", "Trail Run", "Race", "Walk"]
-
 export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedType, setSelectedType] = useState<ActivityType | "all">("all")
+  const [selectedType, setSelectedType] = useState<string>("all")
+
+  // Derive filter options from the actual activities — only show types that exist
+  const activityTypes = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const a of activities) {
+      counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
+    }
+    // Sort by frequency (most common first)
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([type]) => type)
+  }, [activities])
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredActivities = useMemo(() => {
@@ -110,7 +120,7 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
               >
                 {t("activities.allTypes")}
               </button>
-              {ACTIVITY_TYPES.map((type) => (
+              {activityTypes.map((type) => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
