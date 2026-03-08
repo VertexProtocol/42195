@@ -11,19 +11,11 @@ interface OnboardingProps {
   onDismiss: () => void
 }
 
-type StepId = "welcome" | "strava" | "goal"
-
-const STEPS: { id: StepId; icon: typeof Sparkles }[] = [
-  { id: "welcome", icon: Sparkles },
-  { id: "strava", icon: Activity },
-  { id: "goal", icon: Target },
+const STEPS = [
+  { id: "welcome", icon: Sparkles, titleKey: "onboarding.welcome" as const, descKey: "onboarding.step1Desc" as const },
+  { id: "strava", icon: Activity, titleKey: "onboarding.step1Title" as const, descKey: "onboarding.step2Desc" as const },
+  { id: "goal", icon: Target, titleKey: "onboarding.step2Title" as const, descKey: "onboarding.step3Desc" as const },
 ]
-
-const STEP_CONTENT: Record<StepId, { titleKey: "onboarding.welcome" | "onboarding.step1Title" | "onboarding.step2Title"; descKey: "onboarding.step1Desc" | "onboarding.step2Desc" | "onboarding.step3Desc" }> = {
-  welcome: { titleKey: "onboarding.welcome", descKey: "onboarding.step1Desc" },
-  strava: { titleKey: "onboarding.step1Title", descKey: "onboarding.step1Desc" },
-  goal: { titleKey: "onboarding.step2Title", descKey: "onboarding.step2Desc" },
-}
 
 export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onDismiss }: OnboardingProps) {
   const { t } = useI18n()
@@ -31,7 +23,6 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
 
   const step = STEPS[currentStep]
   const Icon = step.icon
-  const content = STEP_CONTENT[step.id]
   const isLastStep = currentStep === STEPS.length - 1
   const isStravaStep = step.id === "strava"
   const isGoalStep = step.id === "goal"
@@ -86,8 +77,8 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
             <Icon className="h-10 w-10 text-primary" />
           </div>
 
-          <h1 className="mb-3 text-2xl font-bold text-foreground">{t(content.titleKey)}</h1>
-          <p className="mb-8 text-muted-foreground leading-relaxed">{t(content.descKey)}</p>
+          <h1 className="mb-3 text-2xl font-bold text-foreground">{t(step.titleKey)}</h1>
+          <p className="mb-8 text-muted-foreground leading-relaxed">{t(step.descKey)}</p>
 
           {/* Strava step - show connected state */}
           {isStravaStep && stravaConnected && (

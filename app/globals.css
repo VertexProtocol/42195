@@ -140,38 +140,4 @@
   body {
     @apply bg-background text-foreground;
   }
-  
-  /* Improved focus states for accessibility */
-  button:focus-visible,
-  a:focus-visible,
-  [role="button"]:focus-visible {
-    @apply outline-2 outline-offset-2 outline-ring;
-  }
-  
-  /* Form input focus styles */
-  input:focus-visible,
-  textarea:focus-visible,
-  select:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
-  }
-  
-  /* Remove tap highlight on mobile */
-  button, a, [role="button"] {
-    -webkit-tap-highlight-color: transparent;
-  }
-  
-  /* Smooth scrolling */
-  html {
-    scroll-behavior: smooth;
-  }
-  
-  /* Better form field appearance */
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="number"],
-  input[type="date"],
-  textarea {
-    @apply appearance-none;
-  }
 }
