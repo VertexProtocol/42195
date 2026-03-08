@@ -469,10 +469,11 @@ export function useAppData(initialData?: InitialData | null) {
     if (error) {
       console.error("Failed to delete activity:", error)
       setActivities(snapshot)
-      toast.error("Failed to delete activity")
+      // Dynamic import to stay compatible with branches where sonner is temporarily disabled
+      import("sonner").then(({ toast: t }) => t.error("Failed to delete activity")).catch(() => {})
       return false
     }
-    toast.success("Activity deleted")
+    import("sonner").then(({ toast: t }) => t.success("Activity deleted")).catch(() => {})
     return true
   }, [])
 
