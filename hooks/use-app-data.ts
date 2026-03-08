@@ -458,20 +458,13 @@ export function useAppData(initialData?: InitialData | null) {
   }, [])
 
   // ----- Delete activity -----
-  const activitiesRef = useRef(activities)
-  activitiesRef.current = activities
-
   const deleteActivity = useCallback(async (activityId: string, fromStrava = false) => {
-    const snapshot = activitiesRef.current
-    setActivities((prev) => prev.filter((a) => a.id !== activityId))
-
     if (fromStrava) {
       // Delete from both Strava and app via server route
       const res = await fetch(`/api/activities/${activityId}/strava`, { method: "DELETE" })
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Delete failed" }))
         console.error("Failed to delete activity from Strava:", data.error)
-        setActivities(snapshot)
         import("sonner").then(({ toast: t }) => t.error(data.error ?? "Failed to delete from Strava")).catch(() => {})
         return false
       }
@@ -480,12 +473,13 @@ export function useAppData(initialData?: InitialData | null) {
       const { error } = await supabase.from("activities").delete().eq("id", activityId)
       if (error) {
         console.error("Failed to delete activity:", error)
-        setActivities(snapshot)
         import("sonner").then(({ toast: t }) => t.error("Failed to delete activity")).catch(() => {})
         return false
       }
     }
 
+    // Remove from local state only after confirmed deletion
+    setActivities((prev) => prev.filter((a) => a.id !== activityId))
     import("sonner").then(({ toast: t }) => t.success("Activity deleted")).catch(() => {})
     return true
   }, [])

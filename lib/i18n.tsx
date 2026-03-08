@@ -90,6 +90,7 @@ const translations = {
     "activityDetail.deleteConfirm": "How would you like to delete this activity?",
     "activityDetail.deleteAppOnly": "Remove from app only",
     "activityDetail.deleteFromStrava": "Delete from Strava and app",
+    "activityDetail.deleting": "Deleting...",
     "common.cancel": "Cancel",
     // Goals
     "goals.title": "Goals",
@@ -373,6 +374,7 @@ const translations = {
     "activityDetail.deleteConfirm": "Hvordan vil du slette denne aktiviteten?",
     "activityDetail.deleteAppOnly": "Fjern kun fra appen",
     "activityDetail.deleteFromStrava": "Slett fra Strava og appen",
+    "activityDetail.deleting": "Sletter...",
     "common.cancel": "Avbryt",
     // Goals
     "goals.title": "Mål",
