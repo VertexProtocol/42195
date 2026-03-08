@@ -119,7 +119,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
                   : "bg-secondary text-secondary-foreground active:bg-accent"
               }`}
             >
-              {!isQuickType ? type : t("manualActivity.other")}
+              {t("manualActivity.other")}
             </button>
           </div>
 
