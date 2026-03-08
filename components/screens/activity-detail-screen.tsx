@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2 } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2 } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
@@ -12,6 +12,7 @@ import type { Activity, StreamPoint, Lap } from "@/lib/types"
 interface ActivityDetailScreenProps {
   activity: Activity
   onBack: () => void
+  onDelete?: (activityId: string) => Promise<boolean>
   /** All activities — used to compute global max HR for consistent zone calculation */
   allActivities?: Activity[]
 }
@@ -151,13 +152,15 @@ function RouteMap({ polyline }: { polyline: string }) {
   )
 }
 
-export function ActivityDetailScreen({ activity, onBack, allActivities }: ActivityDetailScreenProps) {
+export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities }: ActivityDetailScreenProps) {
   const { t } = useI18n()
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
   const [loadingCharts, setLoadingCharts] = useState(true)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const handleGetAnalysis = useCallback(async () => {
     setAiAnalysisLoading(true)
@@ -589,6 +592,48 @@ export function ActivityDetailScreen({ activity, onBack, allActivities }: Activi
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Delete Activity */}
+      {onDelete && (
+        <section className="pt-2">
+          {confirmDelete ? (
+            <div className="rounded-2xl bg-destructive/10 p-4 ring-1 ring-destructive/20">
+              <p className="mb-3 text-sm text-destructive">
+                Delete this activity from the app? It will not be deleted from Strava.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    setDeleting(true)
+                    const ok = await onDelete(activity.id)
+                    if (ok) onBack()
+                    else setDeleting(false)
+                  }}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-opacity disabled:opacity-50"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl bg-secondary px-4 py-2.5 text-sm font-medium text-secondary-foreground transition-opacity disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 active:opacity-80"
+            >
+              <Trash2 size={16} />
+              Delete activity
+            </button>
+          )}
         </section>
       )}
     </div>
