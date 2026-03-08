@@ -170,6 +170,12 @@ export function AppShell({ initialData }: AppShellProps) {
     setIsWeeklyEditorOpen(false)
   }, [])
 
+  const handleDeleteActivity = useCallback(async (activityId: string) => {
+    const ok = await data.deleteActivity(activityId)
+    if (ok) navigate({ activity: null })
+    return ok
+  }, [data.deleteActivity, navigate])
+
   const handleConnectStrava = useCallback(() => {
     window.location.href = "/api/auth/strava"
   }, [])
@@ -222,6 +228,7 @@ export function AppShell({ initialData }: AppShellProps) {
             <ActivityDetailScreen
               activity={selectedActivity}
               onBack={handleBackFromDetail}
+              onDelete={handleDeleteActivity}
               allActivities={data.activities}
             />
           </Suspense>
