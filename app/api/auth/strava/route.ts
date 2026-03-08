@@ -37,14 +37,28 @@ export async function GET(request: NextRequest) {
 
   // Store state server-side as fallback (mobile Safari can lose cookies on redirects)
   const service = createServiceClient()
-  await service.from("strava_tokens").upsert(
-    {
+
+  // Try UPDATE first (reconnect — row already exists).
+  // Fall back to INSERT for first-time connections.
+  const { data: updated } = await service
+    .from("strava_tokens")
+    .update({ oauth_state: state, updated_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .select("user_id")
+
+  if (!updated || updated.length === 0) {
+    // First-time connection — no row yet; insert a placeholder that the
+    // callback will fill in with the real tokens.
+    await service.from("strava_tokens").insert({
       user_id: user.id,
+      athlete_id: 0,
+      access_token: "",
+      refresh_token: "",
+      expires_at: new Date().toISOString(),
       oauth_state: state,
       updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  )
+    })
+  }
 
   const stravaAuthUrl = new URL("https://www.strava.com/oauth/authorize")
   stravaAuthUrl.searchParams.set("client_id", clientId)
