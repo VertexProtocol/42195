@@ -608,26 +608,24 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                   onClick={async () => {
                     setDeleting(true)
                     const ok = await onDelete(activity.id, false)
-                    if (ok) onBack()
-                    else setDeleting(false)
+                    if (!ok) setDeleting(false)
                   }}
                   disabled={deleting}
                   className="w-full rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-secondary-foreground transition-opacity disabled:opacity-50"
                 >
-                  {t("activityDetail.deleteAppOnly")}
+                  {deleting ? t("activityDetail.deleting") : t("activityDetail.deleteAppOnly")}
                 </button>
                 {activity.strava_id && (
                   <button
                     onClick={async () => {
                       setDeleting(true)
                       const ok = await onDelete(activity.id, true)
-                      if (ok) onBack()
-                      else setDeleting(false)
+                      if (!ok) setDeleting(false)
                     }}
                     disabled={deleting}
                     className="w-full rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
                   >
-                    {t("activityDetail.deleteFromStrava")}
+                    {deleting ? t("activityDetail.deleting") : t("activityDetail.deleteFromStrava")}
                   </button>
                 )}
                 <button
