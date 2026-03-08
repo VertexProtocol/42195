@@ -483,7 +483,9 @@ export function useAppData(initialData?: InitialData | null) {
       if (!res.ok) {
         if (
           data.error?.includes("No Strava account connected") ||
-          data.error?.includes("connect Strava")
+          data.error?.includes("connect Strava") ||
+          data.error?.includes("reconnect") ||
+          data.error?.includes("session expired")
         ) {
           window.location.href = "/api/auth/strava"
           return

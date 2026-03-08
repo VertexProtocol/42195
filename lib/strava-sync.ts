@@ -281,8 +281,14 @@ export async function syncUserActivities(
   } catch (err) {
     // If Strava returns 401, force a token refresh and retry once
     if (err instanceof Error && err.message.includes("401")) {
-      accessToken = await getStravaAccessToken(userId, true)
-      stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+      console.log(`Strava 401 for user ${userId}, forcing token refresh and retrying…`)
+      try {
+        accessToken = await getStravaAccessToken(userId, true)
+        stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
+      } catch (retryErr) {
+        console.error("Retry after token refresh also failed:", retryErr)
+        throw retryErr
+      }
     } else {
       throw err
     }
