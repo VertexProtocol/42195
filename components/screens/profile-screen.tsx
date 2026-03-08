@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
 import { RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun, Link2, Link2Off, Trophy, Globe } from "lucide-react"
@@ -16,6 +16,7 @@ interface ProfileScreenProps {
   stravaConnected: boolean
   onSync: () => void
   onFullSync: () => void
+  onConnectStrava: () => Promise<{ ok: boolean; error?: string }>
   onSignOut: () => void
 }
 
@@ -71,10 +72,20 @@ function SyncStatusIndicator({ status }: { status: SyncStatus }) {
   )
 }
 
-export function ProfileScreen({ user, activities, syncStatus, stravaConnected, onSync, onFullSync, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({ user, activities, syncStatus, stravaConnected, onSync, onFullSync, onConnectStrava, onSignOut }: ProfileScreenProps) {
   const { theme, setTheme } = useTheme()
   const isDarkMode = theme === "dark"
   const { locale, setLocale, t } = useI18n()
+  const [connecting, setConnecting] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
+
+  async function handleConnect() {
+    setConnecting(true)
+    setConnectError(null)
+    const result = await onConnectStrava()
+    if (!result.ok) setConnectError(result.error ?? "Connection failed")
+    setConnecting(false)
+  }
 
   const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
 
@@ -227,12 +238,21 @@ export function ProfileScreen({ user, activities, syncStatus, stravaConnected, o
               </span>
             </div>
             {!stravaConnected && (
-              <a
-                href="/api/auth/strava"
-                className="text-xs font-semibold text-primary underline underline-offset-2 active:opacity-70"
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary active:opacity-70 disabled:opacity-50"
               >
-                {t("profile.connect")}
-              </a>
+                {connecting ? (
+                  <RefreshCw size={12} className="animate-spin" />
+                ) : (
+                  <Link2 size={12} />
+                )}
+                {connecting ? "Connecting…" : t("profile.connect")}
+              </button>
+            )}
+            {connectError && (
+              <p className="mt-1 w-full text-xs text-destructive">{connectError}</p>
             )}
           </div>
 
