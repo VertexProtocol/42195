@@ -147,7 +147,7 @@ const translations = {
     "plan.completed": "Completed",
     "plan.timeElapsed": "time elapsed",
     "plan.bestRun": "Best",
-    // Insights
+    // Insights screen
     "insights.title": "Insights",
     "insights.subtitle": "Your performance data and AI coach",
     "insights.askCoach": "Ask AI Coach",
