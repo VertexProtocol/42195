@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2 } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
@@ -308,7 +308,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           {activity.avg_cadence !== null && (
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
-                <Activity size={18} className="text-muted-foreground" />
+                <ActivityIcon size={18} className="text-muted-foreground" />
                 <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
               </div>
               <span className="text-sm font-semibold text-card-foreground">
