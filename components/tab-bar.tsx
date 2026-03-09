@@ -9,12 +9,12 @@ interface TabBarProps {
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.insights" | "tab.you"; icon: typeof Home }[] = [
+const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.insights" | "tab.profile"; icon: typeof Home }[] = [
   { id: "home", labelKey: "tab.home", icon: Home },
   { id: "activities", labelKey: "tab.activities", icon: Activity },
   { id: "goals", labelKey: "tab.goals", icon: Target },
   { id: "insights", labelKey: "tab.insights", icon: Lightbulb },
-  { id: "profile", labelKey: "tab.you", icon: User },
+  { id: "profile", labelKey: "tab.profile", icon: User },
 ]
 
 export function TabBar({ activeTab, onTabChange }: TabBarProps) {
