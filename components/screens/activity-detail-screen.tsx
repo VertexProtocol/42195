@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2 } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
@@ -199,7 +199,8 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
   const hasPace = streams?.some((p) => p.pace !== null) ?? false
   const hasHr = streams?.some((p) => p.hr !== null) ?? false
-  const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr)
+  const hasCadence = streams?.some((p) => p.cadence !== null) ?? false
+  const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr || hasCadence)
 
   // Compute global max HR from all activities for consistent zone boundaries
   const globalMaxHr = useMemo(() => {
@@ -285,6 +286,17 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               </div>
               <span className="text-sm font-semibold text-card-foreground">
                 {activity.avg_heart_rate} bpm
+              </span>
+            </div>
+          )}
+          {activity.avg_cadence !== null && (
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <Activity size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.avg_cadence} spm
               </span>
             </div>
           )}
@@ -548,6 +560,49 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       dataKey="altitude"
                       stroke="var(--chart-3)"
                       fill="var(--chart-3)"
+                      fillOpacity={0.15}
+                      dot={false}
+                      strokeWidth={1.5}
+                      connectNulls
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {hasCadence && (
+              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.cadence")}</p>
+                <ResponsiveContainer width="100%" height={130}>
+                  <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
+                    <XAxis
+                      dataKey="time"
+                      tickFormatter={formatElapsed}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    >
+                      <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
+                    </XAxis>
+                    <YAxis
+                      domain={["auto", "auto"]}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={42}
+                    >
+                      <Label value="spm" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
+                    </YAxis>
+                    <Tooltip
+                      formatter={(v) => [`${Math.round(v as number)} spm`, "Cadence"]}
+                      labelFormatter={(l) => formatElapsed(l as number)}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="cadence"
+                      stroke="var(--chart-2)"
+                      fill="var(--chart-2)"
                       fillOpacity={0.15}
                       dot={false}
                       strokeWidth={1.5}

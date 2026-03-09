@@ -13,6 +13,7 @@ interface StravaStreamsResponse {
   heartrate?: StravaStreamData
   velocity_smooth?: StravaStreamData
   altitude?: StravaStreamData
+  cadence?: StravaStreamData
 }
 
 function velocityToPace(ms: number): number | null {
@@ -80,7 +81,7 @@ export async function GET(
   }
 
   const res = await fetch(
-    `https://www.strava.com/api/v3/activities/${activity.strava_id}/streams?keys=time,heartrate,velocity_smooth,altitude&key_by_type=true`,
+    `https://www.strava.com/api/v3/activities/${activity.strava_id}/streams?keys=time,heartrate,velocity_smooth,altitude,cadence&key_by_type=true`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   )
 
@@ -94,12 +95,14 @@ export async function GET(
   const hrData = streams.heartrate?.data
   const velocityData = streams.velocity_smooth?.data
   const altitudeData = streams.altitude?.data
+  const cadenceData = streams.cadence?.data
 
   const rawPoints: StreamPoint[] = timeData.map((t, i) => ({
     time: t,
     hr: hrData ? (hrData[i] ?? null) : null,
     pace: velocityData ? velocityToPace(velocityData[i] ?? 0) : null,
     altitude: altitudeData ? (altitudeData[i] ?? null) : null,
+    cadence: cadenceData ? (cadenceData[i] ?? null) : null,
   }))
 
   const points = downsample(rawPoints, 200)

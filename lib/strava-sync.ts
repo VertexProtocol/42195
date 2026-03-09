@@ -18,6 +18,7 @@ interface StravaActivity {
   average_speed: number // m/s
   total_elevation_gain: number // metres
   average_heartrate?: number
+  average_cadence?: number
   calories?: number
 }
 
@@ -305,6 +306,7 @@ export async function syncUserActivities(
     pace_min_per_km: speedToPace(a.average_speed),
     elevation_gain_m: a.total_elevation_gain,
     avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+    avg_cadence: a.average_cadence != null ? Math.round(a.average_cadence) : null,
     calories: a.calories != null ? Math.round(a.calories) : null,
   }))
 
@@ -361,6 +363,7 @@ export async function syncSingleActivity(
     pace_min_per_km: speedToPace(activity.average_speed),
     elevation_gain_m: activity.total_elevation_gain,
     avg_heart_rate: activity.average_heartrate != null ? Math.round(activity.average_heartrate) : null,
+    avg_cadence: activity.average_cadence != null ? Math.round(activity.average_cadence) : null,
     calories: activity.calories != null ? Math.round(activity.calories) : null,
   }
 
