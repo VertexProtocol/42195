@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2 } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
