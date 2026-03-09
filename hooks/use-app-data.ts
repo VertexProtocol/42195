@@ -22,6 +22,7 @@ function mapActivityRow(a: any): Activity {
     pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
     elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
     avg_heart_rate: a.avg_heart_rate,
+    avg_cadence: a.avg_cadence ?? null,
     calories: a.calories,
     map_polyline: a.map_polyline,
     created_at: a.created_at,
@@ -86,7 +87,7 @@ export function useAppData(initialData?: InitialData | null) {
         await Promise.all([
           supabase
             .from("activities")
-            .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
+            .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
             .order("date", { ascending: false }),
           supabase
             .from("goals")
@@ -513,7 +514,7 @@ export function useAppData(initialData?: InitialData | null) {
 
       const { data: freshActivities } = await supabase
         .from("activities")
-        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
+        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
         .order("date", { ascending: false })
 
       if (freshActivities) {

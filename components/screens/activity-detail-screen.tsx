@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2 } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
@@ -205,26 +205,15 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   // Smooth pace data to remove GPS warmup artifacts and outliers
   const smoothedStreams = useMemo(() => {
     if (!streams || streams.length === 0) return streams
-    
-    // Calculate median pace for outlier detection
     const validPaces = streams.map(p => p.pace).filter((p): p is number => p !== null && p > 0 && p < 15)
     if (validPaces.length === 0) return streams
-    
     validPaces.sort((a, b) => a - b)
     const medianPace = validPaces[Math.floor(validPaces.length / 2)]
-    const upperBound = medianPace * 2 // Allow up to 2x median pace
-    const lowerBound = medianPace * 0.4 // Allow down to 40% of median pace
-    
-    // Apply smoothing: replace outliers with null and skip first few points (GPS warmup)
+    const upperBound = medianPace * 2
+    const lowerBound = medianPace * 0.4
     return streams.map((point, i) => {
-      // Skip first 3 data points (GPS warmup period)
-      if (i < 3 && point.pace !== null && point.pace > upperBound) {
-        return { ...point, pace: null }
-      }
-      // Filter extreme outliers
-      if (point.pace !== null && (point.pace > upperBound || point.pace < lowerBound)) {
-        return { ...point, pace: null }
-      }
+      if (i < 3 && point.pace !== null && point.pace > upperBound) return { ...point, pace: null }
+      if (point.pace !== null && (point.pace > upperBound || point.pace < lowerBound)) return { ...point, pace: null }
       return point
     })
   }, [streams])
@@ -313,6 +302,17 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               </div>
               <span className="text-sm font-semibold text-card-foreground">
                 {activity.avg_heart_rate} bpm
+              </span>
+            </div>
+          )}
+          {activity.avg_cadence !== null && (
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <ActivityIcon size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.avg_cadence} spm
               </span>
             </div>
           )}
@@ -458,7 +458,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
-                  <AreaChart data={smoothedStreams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
+                  <AreaChart data={smoothedStreams ?? undefined} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}

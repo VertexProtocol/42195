@@ -216,6 +216,7 @@ export function AppShell({ initialData }: AppShellProps) {
           <ActivitiesScreen
             activities={data.activities}
             stravaConnected={data.stravaConnected}
+            syncStatus={data.syncStatus}
             onSelectActivity={handleSelectActivity}
             onSync={data.sync}
             onAddActivity={() => setIsManualActivityOpen(true)}

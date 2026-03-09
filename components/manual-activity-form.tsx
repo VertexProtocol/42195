@@ -62,6 +62,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
       pace_min_per_km: paceMinPerKm,
       elevation_gain_m: elevation,
       avg_heart_rate: hr,
+      avg_cadence: null,
       calories: null,
       map_polyline: null,
     })

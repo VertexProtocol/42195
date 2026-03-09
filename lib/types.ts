@@ -13,6 +13,7 @@ export interface Activity {
   pace_min_per_km: number | null
   elevation_gain_m: number | null
   avg_heart_rate: number | null
+  avg_cadence: number | null
   calories: number | null
   map_polyline: string | null
   created_at: string
