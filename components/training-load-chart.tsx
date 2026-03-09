@@ -33,6 +33,8 @@ export function TrainingLoadChart({ activities }: TrainingLoadChartProps) {
   const [chartExpanded, setChartExpanded] = useState(false)
   const data = useMemo(() => computeTrainingLoad(activities), [activities])
 
+  console.log("[v0] TrainingLoadChart - data.length:", data.length, "chartExpanded:", chartExpanded)
+
   if (data.length < 7) return null
 
   const latest = data[data.length - 1]
