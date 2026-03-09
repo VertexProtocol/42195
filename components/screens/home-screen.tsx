@@ -3,6 +3,7 @@
 import { useMemo, lazy, Suspense } from "react"
 import { ChevronRight, TrendingUp, Clock, Footprints, AlertTriangle } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
+import { CollapsibleSection } from "@/components/collapsible-section"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
   formatDistance,
@@ -222,11 +223,13 @@ export function HomeScreen({
 
       {/* Fitness & Fatigue Chart */}
       {activities.length >= 14 && (
-        <Suspense fallback={
-          <div className="h-[230px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
-        }>
-          <TrainingLoadChart activities={activities} />
-        </Suspense>
+        <CollapsibleSection title={t("home.trainingLoad")} defaultCollapsed>
+          <Suspense fallback={
+            <div className="h-[230px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+          }>
+            <TrainingLoadChart activities={activities} />
+          </Suspense>
+        </CollapsibleSection>
       )}
 
       {/* Recent Activities Carousel */}

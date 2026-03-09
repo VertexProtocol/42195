@@ -80,6 +80,7 @@ export interface StreamPoint {
   hr: number | null
   pace: number | null
   altitude: number | null
+  cadence: number | null
 }
 
 export interface Lap {
