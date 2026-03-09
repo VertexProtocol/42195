@@ -24,7 +24,7 @@ export default async function Page() {
     await Promise.all([
       supabase
         .from("activities")
-        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, calories, map_polyline, created_at")
+        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
         .order("date", { ascending: false })
         .limit(200),
       supabase
@@ -53,6 +53,7 @@ export default async function Page() {
       pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
       elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
       avg_heart_rate: a.avg_heart_rate,
+      avg_cadence: (a as any).avg_cadence ?? null,
       calories: a.calories,
       map_polyline: a.map_polyline,
       created_at: a.created_at,

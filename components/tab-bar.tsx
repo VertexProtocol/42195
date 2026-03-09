@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, Activity, Target, User, Sparkles } from "lucide-react"
+import { Home, Activity, Target, User, Lightbulb } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import type { TabId } from "@/lib/types"
 
@@ -9,11 +9,11 @@ interface TabBarProps {
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.coach" | "tab.profile"; icon: typeof Home }[] = [
+const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.insights" | "tab.profile"; icon: typeof Home }[] = [
   { id: "home", labelKey: "tab.home", icon: Home },
   { id: "activities", labelKey: "tab.activities", icon: Activity },
   { id: "goals", labelKey: "tab.goals", icon: Target },
-  { id: "coach", labelKey: "tab.coach", icon: Sparkles },
+  { id: "insights", labelKey: "tab.insights", icon: Lightbulb },
   { id: "profile", labelKey: "tab.profile", icon: User },
 ]
 

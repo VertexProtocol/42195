@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   AreaChart,
   Area,
@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts"
+import { ChevronDown } from "lucide-react"
 import { computeTrainingLoad } from "@/lib/training-utils"
 import type { Activity } from "@/lib/types"
 
@@ -29,7 +30,10 @@ function getFormStatus(tsb: number): {
 }
 
 export function TrainingLoadChart({ activities }: TrainingLoadChartProps) {
+  const [chartExpanded, setChartExpanded] = useState(false)
   const data = useMemo(() => computeTrainingLoad(activities), [activities])
+
+  console.log("[v0] TrainingLoadChart - data.length:", data.length, "chartExpanded:", chartExpanded)
 
   if (data.length < 7) return null
 
@@ -84,72 +88,92 @@ export function TrainingLoadChart({ activities }: TrainingLoadChartProps) {
           </div>
         </div>
 
-        {/* Chart — simplified: just fitness and fatigue lines */}
-        <div className="px-2 pb-2 pt-1">
-          <ResponsiveContainer width="100%" height={120}>
-            <AreaChart data={data} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-              <defs>
-                <linearGradient id="fitnessGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="fatigueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-5)" stopOpacity={0.15} />
-                  <stop offset="100%" stopColor="var(--chart-5)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatDate}
-                tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-                minTickGap={50}
-              />
-              <Tooltip
-                labelFormatter={formatDate}
-                formatter={(value: number, name: string) => [
-                  value.toFixed(1),
-                  name === "ctl" ? "Fitness" : "Fatigue",
-                ]}
-                contentStyle={{
-                  fontSize: 11,
-                  borderRadius: 8,
-                  border: "1px solid var(--border)",
-                  background: "var(--card)",
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="ctl"
-                name="ctl"
-                stroke="var(--chart-2)"
-                fill="url(#fitnessGrad)"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="atl"
-                name="atl"
-                stroke="var(--chart-5)"
-                fill="url(#fatigueGrad)"
-                strokeWidth={1.5}
-                dot={false}
-                strokeDasharray="4 2"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-          {/* Inline Legend */}
-          <div className="flex items-center justify-center gap-4 pt-1 pb-1">
-            <div className="flex items-center gap-1.5">
-              <div className="h-0.5 w-3 rounded-full" style={{ background: "var(--chart-2)" }} />
-              <span className="text-[10px] text-muted-foreground">Fitness</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-0.5 w-3 rounded-full" style={{ background: "var(--chart-5)", opacity: 0.7 }} />
-              <span className="text-[10px] text-muted-foreground">Fatigue</span>
+        {/* Chart Toggle Button */}
+        <button
+          onClick={() => setChartExpanded(!chartExpanded)}
+          className="flex w-full items-center justify-center gap-1.5 border-t border-border/50 py-2 text-xs text-muted-foreground active:bg-muted/30 transition-colors"
+        >
+          <span>{chartExpanded ? "Hide chart" : "Show chart"}</span>
+          <ChevronDown
+            size={14}
+            className={`transition-transform duration-200 ${chartExpanded ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {/* Collapsible Chart */}
+        <div
+          className={`grid transition-all duration-300 ease-in-out ${
+            chartExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="px-2 pb-2 pt-1">
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={data} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="fitnessGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="fatigueGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--chart-5)" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="var(--chart-5)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatDate}
+                    tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval="preserveStartEnd"
+                    minTickGap={50}
+                  />
+                  <Tooltip
+                    labelFormatter={formatDate}
+                    formatter={(value: number, name: string) => [
+                      value.toFixed(1),
+                      name === "ctl" ? "Fitness" : "Fatigue",
+                    ]}
+                    contentStyle={{
+                      fontSize: 11,
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="ctl"
+                    name="ctl"
+                    stroke="var(--chart-2)"
+                    fill="url(#fitnessGrad)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="atl"
+                    name="atl"
+                    stroke="var(--chart-5)"
+                    fill="url(#fatigueGrad)"
+                    strokeWidth={1.5}
+                    dot={false}
+                    strokeDasharray="4 2"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              {/* Inline Legend */}
+              <div className="flex items-center justify-center gap-4 pt-1 pb-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-0.5 w-3 rounded-full" style={{ background: "var(--chart-2)" }} />
+                  <span className="text-[10px] text-muted-foreground">Fitness</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-0.5 w-3 rounded-full" style={{ background: "var(--chart-5)", opacity: 0.7 }} />
+                  <span className="text-[10px] text-muted-foreground">Fatigue</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

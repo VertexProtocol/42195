@@ -1,24 +1,40 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
-import type { Activity } from "@/lib/types"
+import type { Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 interface ActivitiesScreenProps {
   activities: Activity[]
   stravaConnected: boolean
+  syncStatus: SyncStatus
   onSelectActivity: (activity: Activity) => void
   onSync: () => void
   onAddActivity: () => void
 }
 
-export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
+export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
+  const [syncSuccess, setSyncSuccess] = useState(false)
+
+  // Detect sync completion for brief success feedback
+  const prevSyncStateRef = useRef(syncStatus.state)
+  useEffect(() => {
+    const prev = prevSyncStateRef.current
+    prevSyncStateRef.current = syncStatus.state
+    if (prev === "syncing" && syncStatus.state === "success") {
+      setSyncSuccess(true)
+      const timer = setTimeout(() => setSyncSuccess(false), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [syncStatus.state])
+
+  const isSyncing = syncStatus.state === "syncing"
 
   // Derive filter options from the actual activities — only show types that exist
   const activityTypes = useMemo(() => {
@@ -62,14 +78,47 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
             {activities.length} {activities.length === 1 ? t("activities.activity") : t("activities.activities")}
           </p>
         </div>
-        <button
-          onClick={onAddActivity}
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground active:opacity-80 transition-opacity"
-          aria-label="Add manual activity"
-        >
-          <Plus size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          {stravaConnected && (
+            <button
+              onClick={() => { setSyncSuccess(false); onSync() }}
+              disabled={isSyncing}
+              className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                syncSuccess
+                  ? "bg-success/10 text-success"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+              aria-label="Sync with Strava"
+            >
+              {isSyncing ? (
+                <RefreshCw size={13} className="animate-spin" />
+              ) : syncSuccess ? (
+                <Check size={13} />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              <span>
+                {isSyncing ? t("profile.syncing") : syncSuccess ? t("profile.synced") : t("activities.syncStrava")}
+              </span>
+            </button>
+          )}
+          <button
+            onClick={onAddActivity}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground active:opacity-80 transition-opacity"
+            aria-label="Add manual activity"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
       </header>
+
+      {/* Sync error feedback */}
+      {syncStatus.state === "error" && syncStatus.error_message && (
+        <div className="flex items-start gap-2 rounded-xl bg-destructive/5 px-3 py-2.5 ring-1 ring-destructive/20">
+          <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
+          <p className="text-xs text-destructive">{syncStatus.error_message}</p>
+        </div>
+      )}
 
       {/* Search and Filter */}
       {activities.length > 0 && (
@@ -155,11 +204,12 @@ export function ActivitiesScreen({ activities, stravaConnected, onSelectActivity
             <>
               <p className="text-xs text-muted-foreground">{t("activities.syncDesc")}</p>
               <button
-                onClick={onSync}
-                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
+                onClick={() => { setSyncSuccess(false); onSync() }}
+                disabled={isSyncing}
+                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity disabled:opacity-60"
               >
-                <RefreshCw size={15} />
-                {t("activities.syncStrava")}
+                <RefreshCw size={15} className={isSyncing ? "animate-spin" : ""} />
+                {isSyncing ? t("profile.syncing") : t("activities.syncStrava")}
               </button>
             </>
           ) : (

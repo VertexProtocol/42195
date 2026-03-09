@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, lazy, Suspense } from "react"
-import { ChevronRight, TrendingUp, Clock, Footprints, Target, Flame, Mountain, AlertTriangle, Timer } from "lucide-react"
+import { useMemo, lazy, Suspense } from "react"
+import { ChevronRight, TrendingUp, Clock, Footprints, AlertTriangle } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
@@ -9,49 +9,36 @@ import {
   formatDuration,
   formatDateShort,
   daysUntil,
-  progressPercentage,
   timeElapsedPercentage,
-  formatWeeklyMetric,
   formatTargetTime,
   computeDistanceInRange,
-  computeWeeklyProgress,
 } from "@/lib/format"
-import { computeACWR, predictRaceTimes } from "@/lib/training-utils"
-import type { Goal, WeeklySummary, WeeklyGoal, Activity } from "@/lib/types"
+import { computeACWR } from "@/lib/training-utils"
+import type { Goal, WeeklySummary, Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 const TrainingLoadChart = lazy(() => import("@/components/training-load-chart").then(m => ({ default: m.TrainingLoadChart })))
-
-const METRIC_ICONS: Record<string, typeof Flame> = {
-  distance_km: TrendingUp,
-  sessions: Flame,
-  duration_minutes: Clock,
-  elevation_m: Mountain,
-}
 
 interface HomeScreenProps {
   activeGoals: Goal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
-  weeklyGoals: WeeklyGoal[]
-  currentWeekStart: string
   recentActivities: Activity[]
   onViewActivities: () => void
   onViewGoal: () => void
+  onViewInsights: () => void
 }
 
 export function HomeScreen({
   activeGoals,
   activities,
   weeklySummary,
-  weeklyGoals,
-  currentWeekStart,
   recentActivities,
   onViewActivities,
   onViewGoal,
+  onViewInsights,
 }: HomeScreenProps) {
   const { t } = useI18n()
-  const [loadWindow, setLoadWindow] = useState<7 | 30>(7)
 
   // Pre-compute goal metrics outside JSX so we don't run O(goals * activities) on every render
   const goalMetrics = useMemo(
@@ -74,38 +61,7 @@ export function HomeScreen({
     [activeGoals, activities],
   )
 
-  const weeklyMetrics = useMemo(
-    () =>
-      weeklyGoals.map((wg) => {
-        const current = computeWeeklyProgress(
-          activities,
-          wg.metric,
-          currentWeekStart,
-          wg.session_min_duration_minutes,
-          wg.session_min_distance_km,
-        )
-        return {
-          id: wg.id,
-          current,
-          progress: progressPercentage(current, wg.target),
-          isComplete: current >= wg.target,
-        }
-      }),
-    [weeklyGoals, activities, currentWeekStart],
-  )
-
-  const loadStats = useMemo(() => {
-    const cutoff = Date.now() - loadWindow * 24 * 60 * 60 * 1000
-    const relevant = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
-    return {
-      total_distance_km: relevant.reduce((s, a) => s + a.distance_km, 0),
-      total_time_seconds: relevant.reduce((s, a) => s + a.duration_seconds, 0),
-      run_count: relevant.length,
-    }
-  }, [activities, loadWindow])
-
   const acwr = useMemo(() => computeACWR(activities), [activities])
-  const racePredictions = useMemo(() => predictRaceTimes(activities), [activities])
 
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
@@ -264,160 +220,13 @@ export function HomeScreen({
         </div>
       </section>
 
-      {/* Training Load */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("home.trainingLoad")}
-          </h3>
-          <div className="flex items-center gap-0.5 rounded-full bg-secondary p-0.5">
-            <button
-              onClick={() => setLoadWindow(7)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                loadWindow === 7
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {t("home.days7")}
-            </button>
-            <button
-              onClick={() => setLoadWindow(30)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                loadWindow === 30
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {t("home.days30")}
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
-          <div className="flex flex-col items-center gap-1.5 p-4">
-            <TrendingUp size={16} className="text-muted-foreground" />
-            <span className="text-lg font-bold font-mono text-card-foreground">
-              {loadStats.total_distance_km.toFixed(1)}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.km")}</span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5 p-4">
-            <Clock size={16} className="text-muted-foreground" />
-            <span className="text-lg font-bold font-mono text-card-foreground">
-              {formatDuration(loadStats.total_time_seconds)}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.time")}</span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5 p-4">
-            <Footprints size={16} className="text-muted-foreground" />
-            <span className="text-lg font-bold font-mono text-card-foreground">
-              {loadStats.run_count}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Fitness & Fatigue Chart */}
+      {/* Training Status */}
       {activities.length >= 14 && (
         <Suspense fallback={
-          <div className="h-[230px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+          <div className="h-[180px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
         }>
           <TrainingLoadChart activities={activities} />
         </Suspense>
-      )}
-
-      {/* Weekly Goals Progress */}
-      {weeklyGoals.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t("home.weeklyGoals")}
-            </h3>
-            <button
-              onClick={onViewGoal}
-              className="text-xs font-medium text-primary active:opacity-70"
-            >
-              {t("home.seeAll")}
-            </button>
-          </div>
-          <Carousel opts={{ align: "start", dragFree: true }}>
-            <CarouselContent className="-ml-3">
-              {weeklyGoals.map((wg, i) => {
-                const m = weeklyMetrics[i]
-                const Icon = METRIC_ICONS[wg.metric] || Target
-
-                return (
-                  <CarouselItem key={wg.id} className="pl-3 basis-[46%]">
-                    <button
-                      onClick={onViewGoal}
-                      className="flex w-full flex-col items-start gap-2.5 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
-                    >
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        m.isComplete ? "bg-success/15" : "bg-primary/10"
-                      }`}>
-                        <Icon size={16} className={m.isComplete ? "text-success" : "text-primary"} />
-                      </div>
-                      <div className="w-full">
-                        <p className="text-[11px] text-muted-foreground">{wg.label}</p>
-                        <div className="mt-0.5 flex items-baseline gap-1">
-                          <span className="text-sm font-bold font-mono text-card-foreground">
-                            {formatWeeklyMetric(m.current, wg.metric)}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            / {formatWeeklyMetric(wg.target, wg.metric)}
-                          </span>
-                        </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              m.isComplete ? "bg-success" : "bg-primary"
-                            }`}
-                            style={{ width: `${m.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </button>
-                  </CarouselItem>
-                )
-              })}
-            </CarouselContent>
-          </Carousel>
-        </section>
-      )}
-
-      {/* Race Time Predictions */}
-      {racePredictions.predictions.length > 0 && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("home.racePredictions")}
-          </h3>
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
-            {racePredictions.predictions.map((pred, i) => (
-              <div
-                key={pred.distance_label}
-                className={`flex items-center justify-between px-4 py-3 ${
-                  i < racePredictions.predictions.length - 1 ? "border-b border-border" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Timer size={14} className="text-muted-foreground" />
-                  <span className="text-sm text-card-foreground">{pred.distance_label}</span>
-                </div>
-                <span className="text-sm font-bold font-mono text-foreground">
-                  {formatTargetTime(pred.predicted_seconds)}
-                </span>
-              </div>
-            ))}
-            {racePredictions.referenceActivity && (
-              <div className="border-t border-border px-4 py-2">
-                <p className="text-[10px] text-muted-foreground">
-                  {t("home.basedOn")} {formatDistance(racePredictions.referenceActivity.distance_km)} {t("home.on")} {formatDateShort(racePredictions.referenceActivity.date)}
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
       )}
 
       {/* Recent Activities Carousel */}
