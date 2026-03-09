@@ -535,6 +535,11 @@ export function useAppData(initialData?: InitialData | null) {
     const res = await fetch("/api/auth/strava/setup", { method: "POST" })
     const json = await res.json()
     if (!res.ok) {
+      // 403 = bootstrap token lacks activity:read scope; fall back to full OAuth
+      if (res.status === 403) {
+        window.location.href = "/api/auth/strava"
+        return { ok: true }
+      }
       return { ok: false, error: json.error ?? "Setup failed" }
     }
     setStravaConnected(true)
