@@ -74,7 +74,7 @@ export interface UserProfile {
   avatar_url: string | null
 }
 
-export type TabId = "home" | "activities" | "goals" | "coach" | "profile"
+export type TabId = "home" | "activities" | "goals" | "insights" | "profile"
 
 export interface StreamPoint {
   time: number

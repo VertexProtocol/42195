@@ -202,6 +202,22 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const hasCadence = streams?.some((p) => p.cadence !== null) ?? false
   const showCharts = streams !== null && streams.length > 0 && (hasAltitude || hasPace || hasHr || hasCadence)
 
+  // Smooth pace data to remove GPS warmup artifacts and outliers
+  const smoothedStreams = useMemo(() => {
+    if (!streams || streams.length === 0) return streams
+    const validPaces = streams.map(p => p.pace).filter((p): p is number => p !== null && p > 0 && p < 15)
+    if (validPaces.length === 0) return streams
+    validPaces.sort((a, b) => a - b)
+    const medianPace = validPaces[Math.floor(validPaces.length / 2)]
+    const upperBound = medianPace * 2
+    const lowerBound = medianPace * 0.4
+    return streams.map((point, i) => {
+      if (i < 3 && point.pace !== null && point.pace > upperBound) return { ...point, pace: null }
+      if (point.pace !== null && (point.pace > upperBound || point.pace < lowerBound)) return { ...point, pace: null }
+      return point
+    })
+  }, [streams])
+
   // Compute global max HR from all activities for consistent zone boundaries
   const globalMaxHr = useMemo(() => {
     if (!allActivities) return undefined
@@ -442,7 +458,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
-                  <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
+                  <AreaChart data={smoothedStreams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}
@@ -454,7 +470,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </XAxis>
                     <YAxis
-                      domain={["auto", "auto"]}
+                      domain={["dataMin - 0.5", "dataMax + 0.5"]}
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
@@ -595,14 +611,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       <Label value="spm" angle={-90} position="insideLeft" offset={12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </YAxis>
                     <Tooltip
-                      formatter={(v) => [`${Math.round(v as number)} spm`, "Cadence"]}
+                      formatter={(v) => [`${Math.round((v as number) * 2)} spm`, "Cadence"]}
                       labelFormatter={(l) => formatElapsed(l as number)}
                     />
                     <Area
                       type="monotone"
                       dataKey="cadence"
-                      stroke="var(--chart-2)"
-                      fill="var(--chart-2)"
+                      stroke="var(--chart-4)"
+                      fill="var(--chart-4)"
                       fillOpacity={0.15}
                       dot={false}
                       strokeWidth={1.5}

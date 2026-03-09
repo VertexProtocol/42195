@@ -12,13 +12,13 @@ import { ManualActivityForm } from "@/components/manual-activity-form"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
-const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "coach", "profile"])
+const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
 
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
 const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
-const CoachScreen = lazy(() => import("@/components/screens/coach-screen").then(m => ({ default: m.CoachScreen })))
+const InsightsScreen = lazy(() => import("@/components/screens/insights-screen").then(m => ({ default: m.InsightsScreen })))
 
 // Lightweight URL sync — updates the URL bar without triggering Next.js server navigation
 function getSearchString() {
@@ -205,11 +205,10 @@ export function AppShell({ initialData }: AppShellProps) {
             activeGoals={data.activeGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
-            weeklyGoals={data.currentWeekGoals}
-            currentWeekStart={data.currentWeekMonday.toISOString()}
             recentActivities={data.activities.slice(0, 5)}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
+            onViewInsights={() => handleTabChange("insights")}
           />
         )}
 
@@ -261,9 +260,9 @@ export function AppShell({ initialData }: AppShellProps) {
           </Suspense>
         )}
 
-        {activeTab === "coach" && (
+        {activeTab === "insights" && (
           <Suspense fallback={<ScreenFallback />}>
-            <CoachScreen />
+            <InsightsScreen activities={data.activities} />
           </Suspense>
         )}
 
@@ -271,7 +270,6 @@ export function AppShell({ initialData }: AppShellProps) {
           <Suspense fallback={<ScreenFallback />}>
             <ProfileScreen
               user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
-              activities={data.activities}
               syncStatus={data.syncStatus}
               stravaConnected={data.stravaConnected}
               onSync={data.sync}
