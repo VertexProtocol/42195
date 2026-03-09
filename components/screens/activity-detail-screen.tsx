@@ -458,7 +458,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
-                  <AreaChart data={smoothedStreams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
+                  <AreaChart data={smoothedStreams ?? undefined} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatElapsed}
