@@ -2,6 +2,7 @@
 
 import { Home, Activity, Target, User, Lightbulb } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
+import { triggerHaptic } from "@/lib/haptics"
 import type { TabId } from "@/lib/types"
 
 interface TabBarProps {
@@ -21,12 +22,12 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   const { t } = useI18n()
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl transition-colors md:relative md:border-t-0 md:border-r md:bottom-auto md:left-auto md:right-auto md:h-auto md:min-h-screen"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="tablist"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-md items-center justify-around px-0.5 py-1">
+      <div className="mx-auto flex max-w-md md:max-w-none md:flex-col md:w-20 items-center justify-around md:justify-start md:items-stretch px-0.5 py-1 md:px-0 md:py-4 md:gap-2">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -36,16 +37,20 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               role="tab"
               aria-selected={isActive}
               aria-label={t(tab.labelKey)}
-              className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors ${
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-all active:scale-95 ${
                 isActive
-                  ? "text-primary"
-                  : "text-muted-foreground active:text-foreground"
+                  ? "text-primary bg-primary/5"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
               }`}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => {
+                onTabChange(tab.id)
+                triggerHaptic("light")
+              }}
             >
               <Icon
                 size={20}
                 strokeWidth={isActive ? 2.5 : 1.8}
+                className="transition-transform"
               />
               <span className={`text-[9px] leading-tight truncate max-w-full ${isActive ? "font-semibold" : "font-medium"}`}>
                 {t(tab.labelKey)}

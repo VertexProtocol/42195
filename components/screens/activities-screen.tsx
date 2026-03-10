@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle } from "lucide-react"
+import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, ArrowUpDown } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, SyncStatus } from "@/lib/types"
@@ -16,11 +16,15 @@ interface ActivitiesScreenProps {
   onAddActivity: () => void
 }
 
+type SortOption = "date-desc" | "date-asc" | "distance-desc" | "distance-asc" | "pace-asc" | "pace-desc"
+
 export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [syncSuccess, setSyncSuccess] = useState(false)
+  const [sortBy, setSortBy] = useState<SortOption>("date-desc")
+  const [showSortMenu, setShowSortMenu] = useState(false)
 
   // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
@@ -49,8 +53,8 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
   }, [activities])
   const [showFilters, setShowFilters] = useState(false)
 
-  const filteredActivities = useMemo(() => {
-    return activities.filter((activity) => {
+  const filteredAndSortedActivities = useMemo(() => {
+    let filtered = activities.filter((activity) => {
       // Type filter
       if (selectedType !== "all" && activity.type !== selectedType) {
         return false
@@ -65,12 +69,45 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
       }
       return true
     })
-  }, [activities, searchQuery, selectedType])
+
+    // Sort
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "date-desc":
+          return new Date(b.date).getTime() - new Date(a.date).getTime()
+        case "date-asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        case "distance-desc":
+          return b.distance_km - a.distance_km
+        case "distance-asc":
+          return a.distance_km - b.distance_km
+        case "pace-asc":
+          return (a.pace_min_per_km ?? Infinity) - (b.pace_min_per_km ?? Infinity)
+        case "pace-desc":
+          return (b.pace_min_per_km ?? Infinity) - (a.pace_min_per_km ?? Infinity)
+        default:
+          return 0
+      }
+    })
+
+    return filtered
+  }, [activities, searchQuery, selectedType, sortBy])
 
   const hasActiveFilters = searchQuery.trim() !== "" || selectedType !== "all"
 
+  const getSortLabel = (sort: SortOption) => {
+    switch (sort) {
+      case "date-desc": return t("activities.newestFirst")
+      case "date-asc": return t("activities.oldestFirst")
+      case "distance-desc": return t("activities.longestFirst")
+      case "distance-asc": return t("activities.shortestFirst")
+      case "pace-asc": return t("activities.fastestPace")
+      case "pace-desc": return t("activities.slowestPace")
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
+    <div className="flex flex-col gap-4 px-5 pb-6 pt-4 md:px-8 md:max-w-2xl md:mx-auto">
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t("activities.title")}</h1>
@@ -123,7 +160,7 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
       {/* Search and Filter */}
       {activities.length > 0 && (
         <div className="flex flex-col gap-3">
-          {/* Search bar */}
+          {/* Search bar with sort */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -153,6 +190,13 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
               aria-label="Toggle filters"
             >
               <Filter size={16} />
+            </button>
+            <button
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-muted-foreground active:text-foreground transition-colors"
+              aria-label="Sort activities"
+            >
+              <ArrowUpDown size={16} />
             </button>
           </div>
 
@@ -185,10 +229,29 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
             </div>
           )}
 
+          {/* Sort menu */}
+          {showSortMenu && (
+            <div className="flex flex-wrap gap-2 rounded-xl bg-secondary p-3">
+              {(["date-desc", "date-asc", "distance-desc", "distance-asc", "pace-asc", "pace-desc"] as SortOption[]).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => { setSortBy(option); setShowSortMenu(false) }}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    sortBy === option
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card text-muted-foreground"
+                  }`}
+                >
+                  {getSortLabel(option)}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Results count when filtering */}
-          {hasActiveFilters && (
+          {(hasActiveFilters || sortBy !== "date-desc") && (
             <p className="text-xs text-muted-foreground">
-              {t("activities.showing")} {filteredActivities.length} {t("activities.of")} {activities.length}
+              {t("activities.showing")} {filteredAndSortedActivities.length} {t("activities.of")} {activities.length}
             </p>
           )}
         </div>
@@ -225,7 +288,7 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
             </>
           )}
         </div>
-      ) : filteredActivities.length === 0 && hasActiveFilters ? (
+      ) : filteredAndSortedActivities.length === 0 && hasActiveFilters ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12">
           <p className="text-sm text-muted-foreground">{t("activities.noResults")}</p>
           <button
@@ -236,38 +299,49 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filteredActivities.map((activity) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filteredAndSortedActivities.map((activity) => (
             <button
               key={activity.id}
               onClick={() => onSelectActivity(activity)}
-              className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+              className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
             >
-              <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <ActivityTypeBadge type={activity.type} />
                   <span className="text-xs text-muted-foreground">
                     {formatDateShort(activity.date)}
                   </span>
                 </div>
-                <h3 className="mt-1.5 truncate text-sm font-semibold text-card-foreground">
+                <ChevronRight size={18} className="text-muted-foreground" />
+              </div>
+              <div>
+                <h3 className="truncate text-sm font-semibold text-card-foreground">
                   {activity.name}
                 </h3>
-                <div className="mt-2 flex items-center gap-4">
-                  <span className="text-sm font-medium text-foreground">
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("activities.distance")}</span>
+                  <span className="text-sm font-semibold text-foreground">
                     {formatDistance(activity.distance_km)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("activities.duration")}</span>
+                  <span className="text-sm font-semibold text-foreground">
                     {formatDuration(activity.duration_seconds)}
                   </span>
-                  {activity.pace_min_per_km !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatPace(activity.pace_min_per_km)}
-                    </span>
-                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("activities.pace")}</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {activity.pace_min_per_km !== null
+                      ? formatPace(activity.pace_min_per_km)
+                      : "—"}
+                  </span>
                 </div>
               </div>
-              <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
             </button>
           ))}
         </div>

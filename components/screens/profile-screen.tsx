@@ -85,7 +85,7 @@ export function ProfileScreen({
   }
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4 md:px-8 md:max-w-2xl md:mx-auto">
       <header>
         <h1 className="text-2xl font-bold text-foreground">{t("profile.title")}</h1>
       </header>
@@ -238,17 +238,41 @@ export function ProfileScreen({
             {t("profile.syncSettings")}
           </h3>
           <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
-            {/* Last synced */}
+            {/* Sync status indicator */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
-                <Clock size={16} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("profile.lastSynced")}</span>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                  syncStatus.state === "success" ? "bg-success/10" :
+                  syncStatus.state === "syncing" ? "bg-primary/10" :
+                  syncStatus.state === "error" ? "bg-destructive/10" :
+                  "bg-secondary"
+                }`}>
+                  {syncStatus.state === "syncing" ? (
+                    <RefreshCw size={16} className="animate-spin text-primary" />
+                  ) : syncStatus.state === "success" ? (
+                    <CheckCircle2 size={16} className="text-success" />
+                  ) : syncStatus.state === "error" ? (
+                    <AlertCircle size={16} className="text-destructive" />
+                  ) : (
+                    <Clock size={16} className="text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <span className="block text-sm font-medium text-card-foreground">{t("profile.lastSynced")}</span>
+                  <span className={`block text-xs font-medium mt-0.5 ${
+                    syncStatus.state === "success" ? "text-success" :
+                    syncStatus.state === "syncing" ? "text-primary" :
+                    syncStatus.state === "error" ? "text-destructive" :
+                    "text-muted-foreground"
+                  }`}>
+                    {syncStatus.state === "syncing"
+                      ? t("profile.syncing")
+                      : syncStatus.last_sync_at
+                        ? formatTimeAgo(syncStatus.last_sync_at)
+                        : t("profile.neverSynced")}
+                  </span>
+                </div>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {syncStatus.last_sync_at
-                  ? formatTimeAgo(syncStatus.last_sync_at)
-                  : t("profile.neverSynced")}
-              </span>
             </div>
 
             {/* Full Resync */}
@@ -305,20 +329,32 @@ export function ProfileScreen({
         </h3>
         <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
           {/* HR Zones */}
-          <div className="border-b border-border px-4 py-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Settings2 size={15} className="text-muted-foreground" />
-              <span className="text-sm font-medium text-card-foreground">{t("profile.hrZones")}</span>
+          <div className="border-b border-border px-4 py-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Settings2 size={16} className="text-primary" />
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">{t("profile.hrZones")}</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">{t("profile.hrZonesDesc")}</p>
-            <div className="flex gap-1">
+            <p className="text-xs text-muted-foreground mb-4">{t("profile.hrZonesDesc")}</p>
+
+            {/* HR Zones visualization */}
+            <div className="space-y-2.5">
               {HR_ZONES.map((z) => (
-                <div key={z.zone} className="flex flex-1 flex-col items-center gap-1">
-                  <div
-                    className="h-6 w-full rounded-md"
-                    style={{ backgroundColor: z.color, opacity: 0.7 }}
-                  />
-                  <span className="text-[9px] text-muted-foreground font-medium">Z{z.zone}</span>
+                <div key={z.zone} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-foreground">Zone {z.zone}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">{z.label}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-muted-foreground">{z.pct}</span>
+                  </div>
+                  <div className="h-4 w-full overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ backgroundColor: z.color, width: `${z.zone * 20}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

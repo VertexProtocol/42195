@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useCallback, useSyncExternalStore, lazy, Suspense } from "react"
+import { useState, useCallback, useSyncExternalStore, lazy, Suspense, useRef, useEffect } from "react"
 import { TabBar } from "@/components/tab-bar"
+import { triggerHaptic } from "@/lib/haptics"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
-// import { Onboarding } from "@/components/onboarding" // Temporarily disabled
+import { Onboarding } from "@/components/onboarding"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
@@ -38,7 +39,15 @@ function useLocationSearch() {
 function ScreenFallback() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative h-12 w-12">
+          {/* Outer rotating ring */}
+          <div className="absolute inset-0 rounded-full border-3 border-muted border-t-primary animate-spin" />
+          {/* Inner pulsing dot */}
+          <div className="absolute inset-2 rounded-full bg-primary/20 animate-pulse" />
+        </div>
+        <p className="text-xs text-muted-foreground animate-pulse">Loading...</p>
+      </div>
     </div>
   )
 }
@@ -75,9 +84,9 @@ export function AppShell({ initialData }: AppShellProps) {
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
   const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
 
-  // Onboarding temporarily disabled for debugging
-  const [onboardingDismissed, setOnboardingDismissed] = useState(true)
-  const showOnboarding = false // !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
+  // Onboarding enabled for new users
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+  const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
 
   // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -93,6 +102,48 @@ export function AppShell({ initialData }: AppShellProps) {
     // Trigger re-render via popstate listener
     window.dispatchEvent(new PopStateEvent("popstate"))
   }, [])
+
+  // ----- Swipe navigation -----
+  const touchStartXRef = useRef<number>(0)
+  const touchStartYRef = useRef<number>(0)
+
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartXRef.current = e.touches[0]?.clientX ?? 0
+      touchStartYRef.current = e.touches[0]?.clientY ?? 0
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchEndX = e.changedTouches[0]?.clientX ?? 0
+      const touchEndY = e.changedTouches[0]?.clientY ?? 0
+      const deltaX = touchEndX - touchStartXRef.current
+      const deltaY = touchEndY - touchStartYRef.current
+
+      // Only handle horizontal swipes (at least 50px, with small vertical movement)
+      if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 30) {
+        const tabsList: TabId[] = ["home", "activities", "goals", "insights", "profile"]
+        const currentIndex = tabsList.indexOf(activeTab)
+
+        if (deltaX > 0 && currentIndex > 0) {
+          // Swipe right: go to previous tab
+          handleTabChange(tabsList[currentIndex - 1])
+          triggerHaptic("light")
+        } else if (deltaX < 0 && currentIndex < tabsList.length - 1) {
+          // Swipe left: go to next tab
+          handleTabChange(tabsList[currentIndex + 1])
+          triggerHaptic("light")
+        }
+      }
+    }
+
+    window.addEventListener("touchstart", handleTouchStart)
+    window.addEventListener("touchend", handleTouchEnd)
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart)
+      window.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [activeTab, handleTabChange])
 
   const handleTabChange = useCallback((tab: TabId) => {
     navigate(tab === "home"
@@ -197,9 +248,9 @@ export function AppShell({ initialData }: AppShellProps) {
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-background">
+    <div className="mx-auto min-h-dvh max-w-md md:max-w-2xl lg:max-w-4xl bg-background">
       {/* Screen content */}
-      <main className="relative pb-20">
+      <main className="relative pb-20 md:pb-6">
         {activeTab === "home" && (
           <HomeScreen
             activeGoals={data.activeGoals}
@@ -312,15 +363,15 @@ export function AppShell({ initialData }: AppShellProps) {
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {/* Onboarding Flow - temporarily disabled for debugging */}
-      {/* {showOnboarding && (
+      {/* Onboarding Flow for new users */}
+      {showOnboarding && (
         <Onboarding
           stravaConnected={data.stravaConnected}
           onConnectStrava={handleConnectStrava}
           onCreateGoal={() => handleAddGoal("performance")}
           onDismiss={handleDismissOnboarding}
         />
-      )} */}
+      )}
     </div>
   )
 }
