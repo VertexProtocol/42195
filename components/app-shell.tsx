@@ -103,6 +103,12 @@ export function AppShell({ initialData }: AppShellProps) {
     window.dispatchEvent(new PopStateEvent("popstate"))
   }, [])
 
+  const handleTabChange = useCallback((tab: TabId) => {
+    navigate(tab === "home"
+      ? { tab: null, activity: null, goal: null }
+      : { tab, activity: null, goal: null })
+  }, [navigate])
+
   // ----- Swipe navigation -----
   const touchStartXRef = useRef<number>(0)
   const touchStartYRef = useRef<number>(0)
@@ -144,12 +150,6 @@ export function AppShell({ initialData }: AppShellProps) {
       window.removeEventListener("touchend", handleTouchEnd)
     }
   }, [activeTab, handleTabChange])
-
-  const handleTabChange = useCallback((tab: TabId) => {
-    navigate(tab === "home"
-      ? { tab: null, activity: null, goal: null }
-      : { tab, activity: null, goal: null })
-  }, [navigate])
 
   const handleSelectGoal = useCallback((goal: Goal) => {
     navigate({ goal: goal.id })
