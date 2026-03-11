@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { getStravaAccessToken } from "@/lib/strava"
+import { withStravaRetry, StravaAuthError } from "@/lib/strava"
 import type { Lap } from "@/lib/types"
 
 interface StravaLap {
@@ -63,23 +63,23 @@ export async function GET(
     return NextResponse.json({ laps: [] })
   }
 
-  let accessToken: string
+  let stravaLaps: StravaLap[]
   try {
-    accessToken = await getStravaAccessToken(user.id)
-  } catch {
-    return NextResponse.json({ error: "No Strava account connected" }, { status: 403 })
-  }
-
-  const res = await fetch(
-    `https://www.strava.com/api/v3/activities/${activity.strava_id}/laps`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  )
-
-  if (!res.ok) {
+    stravaLaps = await withStravaRetry(user.id, async (token) => {
+      const res = await fetch(
+        `https://www.strava.com/api/v3/activities/${activity.strava_id}/laps`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (res.status === 401) throw new Error("Strava 401")
+      if (!res.ok) throw new Error(`Strava laps fetch failed: ${res.status}`)
+      return res.json() as Promise<StravaLap[]>
+    })
+  } catch (err) {
+    if (err instanceof StravaAuthError) {
+      return NextResponse.json({ error: "No Strava account connected", code: err.code }, { status: 403 })
+    }
     return NextResponse.json({ error: "Strava laps fetch failed" }, { status: 502 })
   }
-
-  const stravaLaps = (await res.json()) as StravaLap[]
 
   const laps: Lap[] = stravaLaps.map((lap) => ({
     index: lap.lap_index,

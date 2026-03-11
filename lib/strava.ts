@@ -16,6 +16,24 @@ interface StravaRefreshResponse {
 const EXPIRY_BUFFER_MS = 60_000
 
 /**
+ * Structured error for Strava authentication failures.
+ * Carry a machine-readable `code` so callers can react without
+ * string-matching the human-readable message.
+ */
+export class StravaAuthError extends Error {
+  readonly code: "STRAVA_NOT_CONNECTED" | "STRAVA_DISCONNECTED"
+
+  constructor(
+    message: string,
+    code: "STRAVA_NOT_CONNECTED" | "STRAVA_DISCONNECTED",
+  ) {
+    super(message)
+    this.name = "StravaAuthError"
+    this.code = code
+  }
+}
+
+/**
  * Returns a valid Strava access token for the given user.
  *
  * If the stored token is expired (or within EXPIRY_BUFFER_MS of expiring),
@@ -24,10 +42,11 @@ const EXPIRY_BUFFER_MS = 60_000
  * Pass `forceRefresh = true` to skip the expiry check (e.g. after a 401
  * response from the Strava API indicates the token is no longer valid).
  *
- * Throws if:
+ * Throws StravaAuthError if:
  *  - No Strava account is connected for the user.
  *  - The refresh token has been revoked (HTTP 400/401 from Strava).
- *  - Any unexpected Strava API error occurs.
+ *
+ * Throws Error for unexpected Strava API errors.
  */
 export async function getStravaAccessToken(
   userId: string,
@@ -42,7 +61,10 @@ export async function getStravaAccessToken(
     .single<StravaTokenRow>()
 
   if (error || !tokenRow) {
-    throw new Error("No Strava account connected. Please connect Strava in your profile.")
+    throw new StravaAuthError(
+      "No Strava account connected. Please connect Strava in your profile.",
+      "STRAVA_NOT_CONNECTED",
+    )
   }
 
   const expiresAt = new Date(tokenRow.expires_at)
@@ -58,6 +80,11 @@ export async function getStravaAccessToken(
 /**
  * Exchanges a refresh token for a new access + refresh token pair,
  * persists the result, and returns the new access token.
+ *
+ * Uses an optimistic-concurrency check: the DB update only applies if
+ * the refresh_token in the DB still matches what we read. If another
+ * concurrent request already refreshed the token, we fall back to reading
+ * the freshly-written token instead of overwriting it with a stale value.
  */
 async function refreshStravaToken(userId: string, refreshToken: string): Promise<string> {
   const clientId = process.env.STRAVA_CLIENT_ID
@@ -80,8 +107,9 @@ async function refreshStravaToken(userId: string, refreshToken: string): Promise
 
   if (!res.ok) {
     if (res.status === 401 || res.status === 400) {
-      throw new Error(
+      throw new StravaAuthError(
         "Strava authorization has expired or been revoked. Please reconnect your Strava account.",
+        "STRAVA_DISCONNECTED",
       )
     }
     throw new Error(`Strava token refresh failed with status ${res.status}.`)
@@ -90,7 +118,12 @@ async function refreshStravaToken(userId: string, refreshToken: string): Promise
   const refreshed = (await res.json()) as StravaRefreshResponse
 
   const service = createServiceClient()
-  await service
+
+  // Optimistic concurrency: only update if the refresh_token we used is still
+  // the one in the DB. If another concurrent request already refreshed and
+  // rotated the token, this update will match 0 rows — we then read back
+  // whatever the winner wrote.
+  const { data: updated } = await service
     .from("strava_tokens")
     .update({
       access_token: refreshed.access_token,
@@ -99,6 +132,53 @@ async function refreshStravaToken(userId: string, refreshToken: string): Promise
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
+    .eq("refresh_token", refreshToken)
+    .select("access_token")
 
-  return refreshed.access_token
+  if (updated && updated.length > 0) {
+    return refreshed.access_token
+  }
+
+  // Another concurrent refresh won the race. Read the token it stored.
+  const { data: fresh, error } = await service
+    .from("strava_tokens")
+    .select("access_token")
+    .eq("user_id", userId)
+    .single<{ access_token: string }>()
+
+  if (error || !fresh) {
+    // Highly unlikely — fall back to what we got from Strava anyway
+    return refreshed.access_token
+  }
+
+  return fresh.access_token
+}
+
+/**
+ * Runs `fn` with a valid Strava access token. If Strava responds with a 401,
+ * the token is force-refreshed and `fn` is retried exactly once.
+ *
+ * This centralises the retry logic so every Strava API call gets it for free.
+ *
+ * Usage:
+ *   const data = await withStravaRetry(userId, (token) =>
+ *     fetch(`https://www.strava.com/api/v3/...`, {
+ *       headers: { Authorization: `Bearer ${token}` },
+ *     })
+ *   )
+ */
+export async function withStravaRetry<T>(
+  userId: string,
+  fn: (accessToken: string) => Promise<T>,
+): Promise<T> {
+  const token = await getStravaAccessToken(userId)
+  try {
+    return await fn(token)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("401")) {
+      const refreshedToken = await getStravaAccessToken(userId, true)
+      return fn(refreshedToken)
+    }
+    throw err
+  }
 }

@@ -483,18 +483,11 @@ export function useAppData(initialData?: InitialData | null) {
 
       if (!res.ok) {
         if (
-          data.error?.includes("No Strava account connected") ||
-          data.error?.includes("connect Strava") ||
-          data.error?.includes("reconnect") ||
-          data.error?.includes("session expired")
+          data.code === "STRAVA_NOT_CONNECTED" ||
+          data.code === "STRAVA_DISCONNECTED"
         ) {
           window.location.href = "/api/auth/strava"
           return
-        }
-        // 401 from Strava = token invalid or missing activity:read scope.
-        // Mark as disconnected so the Connect button reappears.
-        if (data.error?.includes("fetch failed: 401")) {
-          setStravaConnected(false)
         }
         setSyncStatus((prev) => ({
           ...prev,

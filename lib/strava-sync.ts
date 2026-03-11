@@ -1,6 +1,6 @@
 import { startOfWeek, endOfWeek } from "date-fns"
 import { createServiceClient } from "@/lib/supabase/service"
-import { getStravaAccessToken } from "@/lib/strava"
+import { withStravaRetry } from "@/lib/strava"
 
 // ---------------------------------------------------------------------------
 // Strava type definitions
@@ -270,30 +270,13 @@ export async function syncUserActivities(
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 
-  let accessToken = await getStravaAccessToken(userId)
-
   const afterTimestamp = !fullSync && lastSyncAt
     ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
     : undefined
 
-  let stravaActivities: StravaActivity[]
-  try {
-    stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
-  } catch (err) {
-    // If Strava returns 401, force a token refresh and retry once
-    if (err instanceof Error && err.message.includes("401")) {
-      console.log(`Strava 401 for user ${userId}, forcing token refresh and retrying…`)
-      try {
-        accessToken = await getStravaAccessToken(userId, true)
-        stravaActivities = await fetchStravaActivities(accessToken, afterTimestamp)
-      } catch (retryErr) {
-        console.error("Retry after token refresh also failed:", retryErr)
-        throw retryErr
-      }
-    } else {
-      throw err
-    }
-  }
+  const stravaActivities = await withStravaRetry(userId, (token) =>
+    fetchStravaActivities(token, afterTimestamp)
+  )
 
   const rows = stravaActivities.map((a) => ({
     user_id: userId,
@@ -335,18 +318,9 @@ export async function syncSingleActivity(
   stravaActivityId: number,
 ): Promise<{ synced: boolean }> {
   const service = createServiceClient()
-  let accessToken = await getStravaAccessToken(userId)
-  let activity: StravaActivity | null
-  try {
-    activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("401")) {
-      accessToken = await getStravaAccessToken(userId, true)
-      activity = await fetchSingleStravaActivity(accessToken, stravaActivityId)
-    } else {
-      throw err
-    }
-  }
+  const activity = await withStravaRetry(userId, (token) =>
+    fetchSingleStravaActivity(token, stravaActivityId)
+  )
 
   if (!activity) {
     return { synced: false }
