@@ -22,12 +22,12 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   const { t } = useI18n()
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl transition-colors md:relative md:border-t-0 md:border-r md:bottom-auto md:left-auto md:right-auto md:h-auto md:min-h-screen"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl transition-colors"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="tablist"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-md md:max-w-none md:flex-col md:w-20 items-center justify-around md:justify-start md:items-stretch px-0.5 py-1 md:px-0 md:py-4 md:gap-2">
+      <div className="mx-auto flex max-w-md items-center justify-around px-0.5 py-1">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id

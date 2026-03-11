@@ -126,7 +126,7 @@ export function HomeScreen({
                   >
                     <button
                       onClick={onViewGoal}
-                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-all hover:shadow-md hover:ring-border/80 group"
+                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 pr-4">
@@ -164,7 +164,7 @@ export function HomeScreen({
                           </div>
                         </div>
                       </div>
-                      <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-hover:translate-x-1 transition-transform" />
+                      <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
                     </button>
                   </CarouselItem>
                 )
@@ -173,13 +173,13 @@ export function HomeScreen({
           </Carousel>
         </section>
       ) : (
-        <div className="rounded-2xl bg-gradient-to-br from-card to-card/80 p-5 shadow-sm ring-1 ring-border hover:ring-border/80 hover:shadow-md transition-all">
+        <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
           <p className="text-sm text-muted-foreground">{t("home.noActiveGoals")}</p>
           <button
             onClick={onViewGoal}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95"
+            className="mt-2 text-sm font-medium text-primary active:opacity-70"
           >
-            + {t("home.setGoal")}
+            {t("home.setGoal")}
           </button>
         </div>
       )}
@@ -190,32 +190,32 @@ export function HomeScreen({
           {t("home.thisWeek")}
         </h3>
         <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border hover:ring-border/80 hover:shadow-md transition-all hover:scale-[1.02] active:scale-95">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 group-hover:bg-primary/20 transition-colors">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <TrendingUp size={20} className="text-primary" />
             </div>
-            <span className="text-xl font-bold text-card-foreground">
+            <span className="text-lg font-bold text-card-foreground">
               {weeklySummary.total_distance_km.toFixed(1)}
             </span>
-            <span className="text-xs text-muted-foreground font-medium">{t("home.km")}</span>
+            <span className="text-xs text-muted-foreground">{t("home.km")}</span>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border hover:ring-border/80 hover:shadow-md transition-all hover:scale-[1.02] active:scale-95">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 group-hover:bg-primary/20 transition-colors">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <Clock size={20} className="text-primary" />
             </div>
-            <span className="text-xl font-bold text-card-foreground">
+            <span className="text-lg font-bold text-card-foreground">
               {formatDuration(weeklySummary.total_time_seconds)}
             </span>
-            <span className="text-xs text-muted-foreground font-medium">{t("home.time")}</span>
+            <span className="text-xs text-muted-foreground">{t("home.time")}</span>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border hover:ring-border/80 hover:shadow-md transition-all hover:scale-[1.02] active:scale-95">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 group-hover:bg-primary/20 transition-colors">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <Footprints size={20} className="text-primary" />
             </div>
-            <span className="text-xl font-bold text-card-foreground">
+            <span className="text-lg font-bold text-card-foreground">
               {weeklySummary.run_count}
             </span>
-            <span className="text-xs text-muted-foreground font-medium">{t("home.runs")}</span>
+            <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
           </div>
         </div>
       </section>
@@ -238,9 +238,9 @@ export function HomeScreen({
             </h3>
             <button
               onClick={onViewActivities}
-              className="text-xs font-semibold text-primary transition-all hover:gap-1 active:scale-95 inline-flex items-center gap-0.5"
+              className="text-xs font-medium text-primary active:opacity-70"
             >
-              {t("home.seeAll")} <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              {t("home.seeAll")}
             </button>
           </div>
           <Carousel opts={{ align: "start", dragFree: true }}>

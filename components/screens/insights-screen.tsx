@@ -216,25 +216,25 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`flex gap-3 animate-in fade-in slide-in-from-bottom-1 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 mt-0.5">
-                  <Bot size={14} className="text-primary" />
+                <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
+                  <Bot size={12} className="text-primary" />
                 </div>
               )}
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap transition-all ${
+                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                   msg.role === "user"
-                    ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground rounded-br-md shadow-md"
-                    : "bg-card shadow-sm ring-1 ring-border text-card-foreground rounded-bl-md hover:ring-border/80"
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-card shadow-sm ring-1 ring-border text-card-foreground rounded-bl-md"
                 }`}
               >
                 {msg.content}
               </div>
               {msg.role === "user" && (
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
-                  <User size={14} className="text-muted-foreground" />
+                <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                  <User size={12} className="text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -291,46 +291,40 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
       {/* AI Coach Card */}
       <button
         onClick={() => setActiveTab("coach")}
-        className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 p-5 shadow-md ring-2 ring-primary/30 text-left active:scale-[0.98] transition-all hover:ring-primary/50 hover:shadow-lg group"
+        className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 p-5 shadow-sm ring-1 ring-primary/20 text-left active:scale-[0.98] transition-transform"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/20 group-hover:from-primary/40 group-hover:to-primary/30 transition-colors">
-          <Sparkles size={26} className="text-primary group-hover:scale-110 transition-transform" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
+          <Sparkles size={24} className="text-primary" />
         </div>
         <div className="flex-1">
-          <h2 className="text-base font-bold text-foreground">{t("insights.askCoach")}</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("insights.askCoach")}</h2>
           <p className="text-xs text-muted-foreground">{t("insights.coachDesc")}</p>
         </div>
-        <ChevronRight size={20} className="text-primary group-hover:translate-x-1 transition-transform" />
+        <ChevronRight size={18} className="text-muted-foreground" />
       </button>
 
-      {/* Personal Records - Milestones */}
+      {/* Personal Records */}
       {personalRecords.length > 0 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            🏆 {t("insights.personalRecords")}
+            {t("insights.personalRecords")}
           </h3>
-          <div className="flex flex-col gap-3">
-            {personalRecords.map((pr, idx) => (
+          <div className="flex flex-col gap-2">
+            {personalRecords.map((pr) => (
               <div
                 key={pr.distance_label}
-                className="group flex items-center gap-3 rounded-2xl bg-gradient-to-r from-success/10 to-success/5 px-4 py-4 shadow-sm ring-2 ring-success/30 animate-in fade-in slide-in-from-bottom-2 transition-all hover:ring-success/50 hover:shadow-md"
-                style={{ animationDelay: `${idx * 100}ms` }}
+                className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success/20 group-hover:bg-success/30 transition-colors">
-                  <Trophy size={18} className="text-success" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/10">
+                  <Trophy size={16} className="text-success" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-foreground">{pr.distance_label}</p>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success/20 px-2 py-0.5 text-[10px] font-semibold text-success">
-                      ⭐ NEW
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-sm font-semibold text-card-foreground">{pr.distance_label}</p>
+                  <p className="text-xs text-muted-foreground">
                     {formatDateShort(pr.date)} · {formatPace(pr.pace_min_per_km)} {t("insights.pace")}
                   </p>
                 </div>
-                <span className="text-lg font-black font-mono text-success">
+                <span className="text-base font-bold font-mono text-foreground">
                   {formatTargetTime(pr.time_seconds)}
                 </span>
               </div>
@@ -343,29 +337,29 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
       {racePredictions.predictions.length > 0 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            ⏱️ {t("insights.racePredictions")}
+            {t("insights.racePredictions")}
           </h3>
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border divide-y divide-border">
+          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
             {racePredictions.predictions.map((pred, i) => (
               <div
                 key={pred.distance_label}
-                className="flex items-center justify-between px-4 py-3.5 hover:bg-muted/30 transition-colors"
+                className={`flex items-center justify-between px-4 py-3 ${
+                  i < racePredictions.predictions.length - 1 ? "border-b border-border" : ""
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                    <Timer size={14} className="text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-card-foreground">{pred.distance_label}</span>
+                  <Timer size={14} className="text-muted-foreground" />
+                  <span className="text-sm text-card-foreground">{pred.distance_label}</span>
                 </div>
-                <span className="text-base font-black font-mono text-primary">
+                <span className="text-sm font-bold font-mono text-foreground">
                   {formatTargetTime(pred.predicted_seconds)}
                 </span>
               </div>
             ))}
             {racePredictions.referenceActivity && (
-              <div className="px-4 py-2.5 bg-muted/20">
+              <div className="border-t border-border px-4 py-2">
                 <p className="text-[10px] text-muted-foreground">
-                  {t("insights.basedOn")} <span className="font-semibold">{formatDistance(racePredictions.referenceActivity.distance_km)}</span> {t("insights.on")} <span className="font-semibold">{formatDateShort(racePredictions.referenceActivity.date)}</span>
+                  {t("insights.basedOn")} {formatDistance(racePredictions.referenceActivity.distance_km)} {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
                 </p>
               </div>
             )}

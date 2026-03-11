@@ -311,21 +311,21 @@ export function GoalsScreen({
                       </div>
 
                       <div className="mt-2.5">
-                        <div className="h-3 overflow-hidden rounded-full bg-secondary ring-1 ring-border/50">
+                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${
-                              isComplete ? "bg-gradient-to-r from-success to-success/80 shadow-lg" : "bg-gradient-to-r from-primary to-primary/80"
+                              isComplete ? "bg-success" : "bg-primary"
                             }`}
                             style={{ width: `${progress}%` }}
                           />
                         </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className={`text-[11px] font-medium ${isComplete ? "text-success" : "text-muted-foreground"}`}>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">
                             {isComplete ? t("goals.completed") : `${progress}%`}
                           </span>
                           {isComplete && (
-                            <span className="text-[11px] font-semibold text-success animate-pulse">
-                              ✓ {t("goals.goalReached")}
+                            <span className="text-[11px] font-medium text-success">
+                              {t("goals.goalReached")}
                             </span>
                           )}
                         </div>
@@ -430,7 +430,7 @@ export function GoalsScreen({
                   {/* Progress toward goal */}
                   <div className="mt-4">
                     <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className={`${status.reached ? "text-success font-medium" : "text-muted-foreground"}`}>
+                      <span className="text-muted-foreground">
                         {goal.target_time_seconds
                           ? (status.bestActivity ? t("goals.bestTime") : t("goals.noQualifyingRuns"))
                           : (status.bestActivity ? t("goals.longestRun") : t("goals.noRuns"))}
@@ -443,13 +443,13 @@ export function GoalsScreen({
                         </span>
                       )}
                     </div>
-                    <div className="h-3 overflow-hidden rounded-full bg-secondary ring-1 ring-border/50">
+                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${status.reached ? "bg-gradient-to-r from-success to-success/80 shadow-lg" : "bg-gradient-to-r from-primary to-primary/80"}`}
+                        className={`h-full rounded-full transition-all duration-500 ${status.reached ? "bg-success" : "bg-primary"}`}
                         style={{ width: `${status.progress}%` }}
                       />
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground">
                         {`${t("goals.target")}: `}
                         {goal.target_time_seconds
@@ -457,8 +457,8 @@ export function GoalsScreen({
                           : formatDistance(goal.target_distance_km)}
                       </span>
                       {status.reached && status.bestActivity && (
-                        <span className="font-semibold text-success animate-pulse">
-                          ✓ {formatDateShort(status.bestActivity.date)}
+                        <span className="font-medium text-success">
+                          {formatDateShort(status.bestActivity.date)}
                         </span>
                       )}
                     </div>
@@ -576,18 +576,11 @@ export function GoalsScreen({
                       <span className="text-muted-foreground">
                         {formatDistance(logged)} {t("common.logged")}
                       </span>
-                      <span className={`font-medium ${timeProgress >= 95 ? "text-destructive" : timeProgress >= 85 ? "text-warning" : timeProgress >= 70 ? "text-primary" : "text-success"}`}>
-                        {timeProgress}% {t("plan.timeElapsed")}
-                      </span>
+                      <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
                     </div>
-                    <div className="h-3 overflow-hidden rounded-full bg-secondary ring-1 ring-border/50">
+                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          timeProgress >= 95 ? "bg-gradient-to-r from-destructive to-destructive/80 shadow-lg" :
-                          timeProgress >= 85 ? "bg-gradient-to-r from-warning to-warning/80 shadow-lg" :
-                          timeProgress >= 70 ? "bg-gradient-to-r from-primary to-primary/80 shadow-lg" :
-                          "bg-gradient-to-r from-success to-success/80 shadow-lg"
-                        }`}
+                        className="h-full rounded-full bg-primary transition-all duration-500"
                         style={{ width: `${timeProgress}%` }}
                       />
                     </div>
