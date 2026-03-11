@@ -241,7 +241,8 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            selectedWeekGoals.map((wg) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {selectedWeekGoals.map((wg) => {
               const current = computeWeeklyProgress(
                 activities,
                 wg.metric,
@@ -333,7 +334,8 @@ export function GoalsScreen({
                   </div>
                 </div>
               )
-            })
+            })}
+            </div>
           )}
         </div>
       )}
@@ -360,7 +362,8 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            performanceGoals.map((goal) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {performanceGoals.map((goal) => {
               const status = perfGoalStatuses.get(goal.id) ?? { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 }
               const days = daysUntil(goal.target_date)
 
@@ -480,7 +483,8 @@ export function GoalsScreen({
                   </div>
                 </div>
               )
-            })
+            })}
+            </div>
           )}
         </div>
       )}
