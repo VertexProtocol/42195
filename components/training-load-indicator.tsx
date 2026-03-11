@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import { Activity as ActivityIcon, TrendingUp, AlertTriangle } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 
 interface TrainingLoadIndicatorProps {
@@ -13,7 +13,7 @@ interface TrainingLoadIndicatorProps {
   compact?: boolean
 }
 
-function statusConfig(status: LoadStatus, t: (key: string) => string) {
+function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
   switch (status) {
     case "optimal":
       return {
