@@ -13,8 +13,20 @@
  * - Plan validation layer integrated into generation flow
  */
 
-import type { Activity, TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
+import type { TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
 import { computeACWR, computeTrainingLoad } from "@/lib/training-utils"
+
+/**
+ * Minimal activity shape required by the safety engine.
+ * Accepts both full Activity objects and the partial selects used in API routes.
+ */
+export interface SafetyActivity {
+  date: string
+  distance_km: number
+  duration_seconds: number
+  pace_min_per_km: number | null
+  avg_heart_rate: number | null
+}
 
 // ── Athlete level classification ──────────────────────────────────────────────
 
@@ -33,7 +45,7 @@ const MAX_WEEKLY_INCREASE: Record<AthleteLevel, number> = {
  * - Intermediate: avg weekly km 20–50 OR  avg sessions/week 2–4
  * - Advanced:     avg weekly km > 50  OR  avg sessions/week > 4
  */
-export function classifyAthleteLevel(activities: Activity[]): AthleteLevel {
+export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel {
   if (activities.length === 0) return "beginner"
 
   const twelveWeeksMs = 84 * 24 * 60 * 60 * 1000
@@ -109,7 +121,7 @@ export interface AcwrSafety {
  * Extends the basic ACWR computation with "unsafe" tier and concrete week-1
  * adjustment recommendations.
  */
-export function evaluateAcwrSafety(activities: Activity[]): AcwrSafety {
+export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
   const { acuteLoad, chronicLoad, ratio } = computeACWR(activities)
 
   if (ratio > 1.5) {
@@ -152,7 +164,7 @@ export interface FrequencyWarning {
  * Rule: max +1 session per block from the athlete's recent average.
  */
 export function checkFrequencyProgression(
-  activities: Activity[],
+  activities: SafetyActivity[],
   requestedSessionsPerWeek: number,
 ): FrequencyWarning | null {
   const fourWeeksMs = 28 * 24 * 60 * 60 * 1000
@@ -189,7 +201,7 @@ export interface FatigueResult {
  * - HR elevated: recent avg HR > overall avg + 5 bpm at the same distance
  * - Pace declining: recent avg pace worse than overall avg by >5%
  */
-export function detectFatigue(activities: Activity[]): FatigueResult {
+export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
   const runs = activities
     .filter((a) => a.distance_km > 3 && a.duration_seconds > 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -314,7 +326,7 @@ export interface ProlongedFatigueResult {
  * Detects if TSB has been below -15 for 3+ consecutive weeks,
  * indicating accumulated fatigue that requires a forced deload.
  */
-export function checkProlongedFatigue(activities: Activity[]): ProlongedFatigueResult {
+export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFatigueResult {
   const loadPoints = computeTrainingLoad(activities)
   if (loadPoints.length < 21) {
     return { detected: false, consecutiveNegativeTsbWeeks: 0, deloadMultiplier: 1.0, message: null }
@@ -363,7 +375,7 @@ export interface TrainingLoadStatus {
  * Computes the composite training load status for UI display.
  * Returns one of: "optimal" | "high" | "overtraining_risk"
  */
-export function computeTrainingLoadStatus(activities: Activity[]): TrainingLoadStatus {
+export function computeTrainingLoadStatus(activities: SafetyActivity[]): TrainingLoadStatus {
   const acwr = evaluateAcwrSafety(activities)
   const fatigue = detectFatigue(activities)
   const prolongedFatigue = checkProlongedFatigue(activities)
@@ -419,7 +431,7 @@ export interface SafetyValidationResult {
  */
 export function validateAndAdjustPlan(
   plan: TrainingPlan,
-  activities: Activity[],
+  activities: SafetyActivity[],
   prefs: GoalPreferences,
 ): SafetyValidationResult {
   const safetyNotes: string[] = []

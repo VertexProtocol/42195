@@ -75,7 +75,7 @@ export interface AcwrResult {
  * Acute = last 7 days distance. Chronic = 28-day average weekly distance.
  * Risk: <0.8 = low (underprepared), 0.8-1.3 = low (sweet spot), 1.3-1.5 = moderate, >1.5 = high.
  */
-export function computeACWR(activities: Activity[]): AcwrResult {
+export function computeACWR(activities: Array<{ date: string; distance_km: number }>): AcwrResult {
   const now = Date.now()
   const day7 = now - 7 * 24 * 60 * 60 * 1000
   const day28 = now - 28 * 24 * 60 * 60 * 1000
@@ -113,7 +113,7 @@ export interface TrainingLoadPoint {
  * ATL decay constant = 7 days, CTL decay constant = 42 days.
  * Returns the last 90 days of data points.
  */
-export function computeTrainingLoad(activities: Activity[]): TrainingLoadPoint[] {
+export function computeTrainingLoad(activities: Array<{ date: string; distance_km: number }>): TrainingLoadPoint[] {
   if (activities.length === 0) return []
 
   // Build daily distance map for the last 120 days (buffer for EWMA warmup)
