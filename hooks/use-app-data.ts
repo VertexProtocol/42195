@@ -460,17 +460,21 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Delete activity -----
   const deleteActivity = useCallback(async (activityId: string) => {
+    // Optimistic update — remove immediately, rollback on error
+    const snapshot = activities
+    setActivities((prev) => prev.filter((a) => a.id !== activityId))
+
     const { error } = await supabase.from("activities").delete().eq("id", activityId)
     if (error) {
       console.error("Failed to delete activity:", error)
+      setActivities(snapshot)
       // toast.error("Failed to delete activity")
       return false
     }
 
-    setActivities((prev) => prev.filter((a) => a.id !== activityId))
     // toast.success("Activity deleted")
     return true
-  }, [])
+  }, [activities])
 
   // ----- Strava Sync -----
   const doSync = useCallback(async (full = false) => {
@@ -486,6 +490,11 @@ export function useAppData(initialData?: InitialData | null) {
           data.code === "STRAVA_NOT_CONNECTED" ||
           data.code === "STRAVA_DISCONNECTED"
         ) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            state: "error",
+            error_message: "Strava account disconnected. Reconnecting…",
+          }))
           window.location.href = "/api/auth/strava"
           return
         }

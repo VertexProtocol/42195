@@ -34,6 +34,19 @@ export class StravaAuthError extends Error {
 }
 
 /**
+ * Sentinel thrown by withStravaRetry callbacks to signal an HTTP 401 from
+ * the Strava API. Using a dedicated class avoids fragile message-string
+ * matching and prevents any other error containing "401" from accidentally
+ * triggering a token refresh.
+ */
+export class StravaUnauthorizedError extends Error {
+  constructor() {
+    super("Strava returned 401 — token needs refresh")
+    this.name = "StravaUnauthorizedError"
+  }
+}
+
+/**
  * Returns a valid Strava access token for the given user.
  *
  * If the stored token is expired (or within EXPIRY_BUFFER_MS of expiring),
@@ -175,7 +188,7 @@ export async function withStravaRetry<T>(
   try {
     return await fn(token)
   } catch (err) {
-    if (err instanceof Error && err.message.includes("401")) {
+    if (err instanceof StravaUnauthorizedError) {
       const refreshedToken = await getStravaAccessToken(userId, true)
       return fn(refreshedToken)
     }

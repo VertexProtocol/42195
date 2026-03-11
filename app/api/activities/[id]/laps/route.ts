@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { withStravaRetry, StravaAuthError } from "@/lib/strava"
+import { withStravaRetry, StravaAuthError, StravaUnauthorizedError } from "@/lib/strava"
 import type { Lap } from "@/lib/types"
 
 interface StravaLap {
@@ -70,7 +70,7 @@ export async function GET(
         `https://www.strava.com/api/v3/activities/${activity.strava_id}/laps`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
-      if (res.status === 401) throw new Error("Strava 401")
+      if (res.status === 401) throw new StravaUnauthorizedError()
       if (!res.ok) throw new Error(`Strava laps fetch failed: ${res.status}`)
       return res.json() as Promise<StravaLap[]>
     })

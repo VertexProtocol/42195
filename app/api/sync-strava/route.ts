@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" },
     )
 
-    const code = err instanceof StravaAuthError ? err.code : undefined
-    return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status: 500 })
+    if (err instanceof StravaAuthError) {
+      return NextResponse.json({ error: message, code: err.code }, { status: 403 })
+    }
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

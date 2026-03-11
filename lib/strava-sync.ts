@@ -107,6 +107,8 @@ function speedToPace(averageSpeedMs: number): number | null {
 /**
  * Fetches activities from Strava, paginating until an empty page.
  */
+const MAX_PAGES = 50 // 50 × 100 = 5 000 activities — sufficient for any real account
+
 export async function fetchStravaActivities(
   accessToken: string,
   after?: number,
@@ -115,7 +117,7 @@ export async function fetchStravaActivities(
   let page = 1
   const perPage = 100
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const url = new URL("https://www.strava.com/api/v3/athlete/activities")
     url.searchParams.set("per_page", String(perPage))
     url.searchParams.set("page", String(page))

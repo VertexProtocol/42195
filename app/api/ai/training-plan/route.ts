@@ -4,6 +4,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
+import { validateAndAdjustPlan } from "@/lib/training-safety"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -589,7 +590,7 @@ export async function POST(req: NextRequest) {
         }
         const plan = parsed.data
 
-        // Post-generation validation logging
+        // Post-generation structural validation logging
         for (const week of plan.weeks) {
           if (week.sessions.length !== prefs.sessions_per_week) {
             console.warn(
@@ -605,6 +606,17 @@ export async function POST(req: NextRequest) {
               `[plan-validation] Week ${week.weekNumber}: session total ${sessionKmTotal.toFixed(1)} km vs target ${week.targetKm} km (>20% deviation)`
             )
           }
+        }
+
+        // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue
+        const safetyResult = validateAndAdjustPlan(plan, acts, prefs)
+        const safePlan = safetyResult.adjustedPlan
+
+        if (!safetyResult.passed) {
+          console.warn(
+            `[safety] Plan adjusted for goal ${goalId} (level: ${safetyResult.athleteLevel}):`,
+            safetyResult.safetyNotes,
+          )
         }
 
         // Cache in DB (upsert — one active plan per goal)
@@ -644,7 +656,7 @@ export async function POST(req: NextRequest) {
             {
               goal_id: goalId,
               user_id: user.id,
-              plan,
+              plan: safePlan,
               adjust_note: adjustNote,
               block_start_date: blockStartDate,
               generated_at: generatedAt,
@@ -659,7 +671,16 @@ export async function POST(req: NextRequest) {
           return
         }
 
-        send({ status: "done", plan, block_start_date: blockStartDate, generated_at: generatedAt })
+        send({
+          status: "done",
+          plan: safePlan,
+          block_start_date: blockStartDate,
+          generated_at: generatedAt,
+          safety: safetyResult.passed ? null : {
+            athleteLevel: safetyResult.athleteLevel,
+            notes: safetyResult.safetyNotes,
+          },
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Claude API error:", msg, err)

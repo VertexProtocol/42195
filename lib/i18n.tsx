@@ -314,6 +314,19 @@ const translations = {
     "analysis.coachAnalysis": "Coach Analysis",
     "analysis.getAnalysis": "Get AI analysis",
     "analysis.analyzing": "Analyzing your run\u2026",
+    // Training load indicator
+    "loadIndicator.optimal": "Optimal",
+    "loadIndicator.high": "High Load",
+    "loadIndicator.overtraining": "Overtraining Risk",
+    "loadIndicator.acwr": "ACWR",
+    "loadIndicator.fatigue": "Fatigue",
+    "loadIndicator.level": "Level",
+    "loadIndicator.fatigueHrPace": "HR + Pace",
+    "loadIndicator.fatigueHr": "HR \u2191",
+    "loadIndicator.fatiguePace": "Pace \u2193",
+    "loadIndicator.level_beginner": "Beginner",
+    "loadIndicator.level_intermediate": "Intermediate",
+    "loadIndicator.level_advanced": "Advanced",
   },
   no: {
     // App
@@ -624,6 +637,19 @@ const translations = {
     "analysis.coachAnalysis": "Treneranalyse",
     "analysis.getAnalysis": "F\u00e5 AI-analyse",
     "analysis.analyzing": "Analyserer l\u00f8pet ditt\u2026",
+    // Training load indicator
+    "loadIndicator.optimal": "Optimal",
+    "loadIndicator.high": "H\u00f8y belastning",
+    "loadIndicator.overtraining": "Overtreningsrisiko",
+    "loadIndicator.acwr": "ACWR",
+    "loadIndicator.fatigue": "Tretthet",
+    "loadIndicator.level": "Niv\u00e5",
+    "loadIndicator.fatigueHrPace": "Puls + tempo",
+    "loadIndicator.fatigueHr": "Puls \u2191",
+    "loadIndicator.fatiguePace": "Tempo \u2193",
+    "loadIndicator.level_beginner": "Nybegynner",
+    "loadIndicator.level_intermediate": "Middels",
+    "loadIndicator.level_advanced": "Avansert",
   },
 } as const
 

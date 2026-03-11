@@ -22,6 +22,7 @@ import {
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { useI18n } from "@/lib/i18n"
 import type { Activity } from "@/lib/types"
+import { InfoTooltip } from "@/components/ui/info-tooltip"
 
 interface Message {
   role: "user" | "assistant"
@@ -336,9 +337,12 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
       {/* Race Time Predictions */}
       {racePredictions.predictions.length > 0 && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("insights.racePredictions")}
-          </h3>
+          <div className="mb-3 flex items-center gap-1.5">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {t("insights.racePredictions")}
+            </h3>
+            <InfoTooltip content="Estimated finish times for common race distances, based on your recent best run." side="right" />
+          </div>
           <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
             {racePredictions.predictions.map((pred, i) => (
               <div
