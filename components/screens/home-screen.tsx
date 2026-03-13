@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { ChevronRight, TrendingUp, Clock, Footprints, AlertTriangle } from "lucide-react"
+import { ChevronRight, TrendingUp, Clock, Footprints } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
@@ -13,11 +13,11 @@ import {
   formatTargetTime,
   computeDistanceInRange,
 } from "@/lib/format"
-import { computeACWR } from "@/lib/training-utils"
 import type { Goal, WeeklySummary, Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 const TrainingLoadChart = lazy(() => import("@/components/training-load-chart").then(m => ({ default: m.TrainingLoadChart })))
+const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
 interface HomeScreenProps {
   activeGoals: Goal[]
@@ -61,8 +61,6 @@ export function HomeScreen({
     [activeGoals, activities],
   )
 
-  const acwr = useMemo(() => computeACWR(activities), [activities])
-
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       {/* Header */}
@@ -75,30 +73,11 @@ export function HomeScreen({
         </div>
       </header>
 
-      {/* ACWR Injury Risk Banner */}
-      {acwr.ratio > 0 && acwr.risk !== "low" && (
-        <div className={`flex items-start gap-3 rounded-2xl px-4 py-3.5 ring-1 ${
-          acwr.risk === "high"
-            ? "bg-destructive/10 ring-destructive/30"
-            : "bg-warning/10 ring-warning/30"
-        }`}>
-          <AlertTriangle size={18} className={`mt-0.5 shrink-0 ${
-            acwr.risk === "high" ? "text-destructive" : "text-warning"
-          }`} />
-          <div>
-            <p className={`text-sm font-semibold ${
-              acwr.risk === "high" ? "text-destructive" : "text-warning"
-            }`}>
-              {acwr.risk === "high" ? t("home.highInjuryRisk") : t("home.elevatedLoad")}
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Your 7-day load ({acwr.acuteLoad.toFixed(1)} km) is {acwr.ratio.toFixed(1)}x your 4-week average ({acwr.chronicLoad.toFixed(1)} km/week).
-              {acwr.risk === "high"
-                ? ` ${t("home.considerRecovery")}`
-                : ` ${t("home.monitorFeeling")}`}
-            </p>
-          </div>
-        </div>
+      {/* Training Load Indicator (Optimal / High Load / Overtraining Risk) */}
+      {activities.length >= 7 && (
+        <Suspense fallback={null}>
+          <TrainingLoadIndicator activities={activities} />
+        </Suspense>
       )}
 
       {/* Active Goals */}
