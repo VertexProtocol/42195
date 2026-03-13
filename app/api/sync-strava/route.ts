@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { syncUserActivities } from "@/lib/strava-sync"
+import { StravaAuthError } from "@/lib/strava"
 
 export async function POST(request: NextRequest) {
   const fullSync = request.nextUrl.searchParams.get("full") === "1"
@@ -91,6 +92,9 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" },
     )
 
+    if (err instanceof StravaAuthError) {
+      return NextResponse.json({ error: message, code: err.code }, { status: 403 })
+    }
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

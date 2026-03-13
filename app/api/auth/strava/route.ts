@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   stravaAuthUrl.searchParams.set("client_id", clientId)
   stravaAuthUrl.searchParams.set("redirect_uri", callbackUrl)
   stravaAuthUrl.searchParams.set("response_type", "code")
-  stravaAuthUrl.searchParams.set("approval_prompt", "force")
+  stravaAuthUrl.searchParams.set("approval_prompt", "auto")
   stravaAuthUrl.searchParams.set("scope", "read,activity:read_all")
   stravaAuthUrl.searchParams.set("state", state)
 

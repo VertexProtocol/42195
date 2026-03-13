@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { getStravaAccessToken } from "@/lib/strava"
+import { withStravaRetry, StravaAuthError, StravaUnauthorizedError } from "@/lib/strava"
 import type { StreamPoint } from "@/lib/types"
 
 interface StravaStreamData {
@@ -73,23 +73,23 @@ export async function GET(
     return NextResponse.json({ points: [] })
   }
 
-  let accessToken: string
+  let streams: StravaStreamsResponse
   try {
-    accessToken = await getStravaAccessToken(user.id)
-  } catch {
-    return NextResponse.json({ error: "No Strava account connected" }, { status: 403 })
-  }
-
-  const res = await fetch(
-    `https://www.strava.com/api/v3/activities/${activity.strava_id}/streams?keys=time,heartrate,velocity_smooth,altitude,cadence&key_by_type=true`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  )
-
-  if (!res.ok) {
+    streams = await withStravaRetry(user.id, async (token) => {
+      const res = await fetch(
+        `https://www.strava.com/api/v3/activities/${activity.strava_id}/streams?keys=time,heartrate,velocity_smooth,altitude,cadence&key_by_type=true`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (res.status === 401) throw new StravaUnauthorizedError()
+      if (!res.ok) throw new Error(`Strava streams fetch failed: ${res.status}`)
+      return res.json() as Promise<StravaStreamsResponse>
+    })
+  } catch (err) {
+    if (err instanceof StravaAuthError) {
+      return NextResponse.json({ error: "No Strava account connected", code: err.code }, { status: 403 })
+    }
     return NextResponse.json({ error: "Strava streams fetch failed" }, { status: 502 })
   }
-
-  const streams = (await res.json()) as StravaStreamsResponse
 
   const timeData = streams.time?.data ?? []
   const hrData = streams.heartrate?.data

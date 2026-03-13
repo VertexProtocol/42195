@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createClient } from "@/lib/supabase/server"
-import { detectAthleteLevel, detectFatigue } from "@/lib/safety-engine"
-import type { Activity } from "@/lib/types"
+import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -323,22 +322,21 @@ async function executeToolCall(
       // Fetch extended data for fatigue detection and athlete level
       const { data: extendedData } = await supabase
         .from("activities")
-        .select("id, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, avg_cadence, elevation_gain_m, calories, map_polyline, created_at, user_id, strava_id, type, name")
+        .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
         .eq("user_id", userId)
         .gte("date", new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString())
         .order("date", { ascending: false })
 
-      const fullActivities: Activity[] = (extendedData ?? []).map((a) => ({
-        ...a,
+      const safetyActivities: SafetyActivity[] = (extendedData ?? []).map((a) => ({
+        date: a.date,
         distance_km: Number(a.distance_km),
+        duration_seconds: a.duration_seconds,
         pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
         avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
-        avg_cadence: a.avg_cadence ? Number(a.avg_cadence) : null,
-        elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
       }))
 
-      const fatigueResult = detectFatigue(fullActivities)
-      const athleteLevel = detectAthleteLevel(fullActivities)
+      const fatigueResult = detectFatigue(safetyActivities)
+      const athleteLevel = classifyAthleteLevel(safetyActivities)
 
       return JSON.stringify({
         acwr: { ratio: Math.round(acwr * 100) / 100, risk },
@@ -347,10 +345,9 @@ async function executeToolCall(
         fatigue: Math.round(fatigue * 10) / 10,
         form: Math.round(form * 10) / 10,
         interpretation: form > 5 ? "Fresh — good for hard sessions or racing" : form > -5 ? "Neutral — normal training load" : "Fatigued — consider easy days or rest",
-        athleteLevel: athleteLevel.level,
-        maxSafeWeeklyIncrease: `${athleteLevel.maxWeeklyIncreasePct}%`,
-        fatigueSignals: fatigueResult.fatigued
-          ? { detected: true, signals: fatigueResult.signals.map((s) => s.description), recommendation: fatigueResult.recommendation }
+        athleteLevel,
+        fatigueSignals: fatigueResult.signal !== "none"
+          ? { detected: true, signal: fatigueResult.signal, description: fatigueResult.description, intensityMultiplier: fatigueResult.intensityMultiplier }
           : { detected: false },
       })
     }
