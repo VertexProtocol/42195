@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createClient } from "@/lib/supabase/server"
+import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -318,6 +319,25 @@ async function executeToolCall(
       const fatigue = acuteLoad // 7-day total
       const form = fitness - fatigue
 
+      // Fetch extended data for fatigue detection and athlete level
+      const { data: extendedData } = await supabase
+        .from("activities")
+        .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+        .eq("user_id", userId)
+        .gte("date", new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString())
+        .order("date", { ascending: false })
+
+      const safetyActivities: SafetyActivity[] = (extendedData ?? []).map((a) => ({
+        date: a.date,
+        distance_km: Number(a.distance_km),
+        duration_seconds: a.duration_seconds,
+        pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+        avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+      }))
+
+      const fatigueResult = detectFatigue(safetyActivities)
+      const athleteLevel = classifyAthleteLevel(safetyActivities)
+
       return JSON.stringify({
         acwr: { ratio: Math.round(acwr * 100) / 100, risk },
         weeklyKm: { last7days: Math.round(acuteLoad * 10) / 10, avg28days: Math.round(chronicLoad * 10) / 10 },
@@ -325,6 +345,10 @@ async function executeToolCall(
         fatigue: Math.round(fatigue * 10) / 10,
         form: Math.round(form * 10) / 10,
         interpretation: form > 5 ? "Fresh — good for hard sessions or racing" : form > -5 ? "Neutral — normal training load" : "Fatigued — consider easy days or rest",
+        athleteLevel,
+        fatigueSignals: fatigueResult.signal !== "none"
+          ? { detected: true, signal: fatigueResult.signal, description: fatigueResult.description, intensityMultiplier: fatigueResult.intensityMultiplier }
+          : { detected: false },
       })
     }
 
