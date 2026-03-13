@@ -16,7 +16,6 @@ import {
 import type { Goal, WeeklySummary, Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
-const TrainingLoadChart = lazy(() => import("@/components/training-load-chart").then(m => ({ default: m.TrainingLoadChart })))
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
 interface HomeScreenProps {
@@ -199,19 +198,6 @@ export function HomeScreen({
         </div>
       </section>
 
-      {/* Training Load */}
-      {activities.length >= 7 && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("home.trainingLoad")}
-          </h3>
-          <Suspense fallback={
-            <div className="h-[152px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
-          }>
-            <TrainingLoadChart activities={activities} />
-          </Suspense>
-        </section>
-      )}
 
       {/* Recent Activities Carousel */}
       {recentActivities.length > 0 && (
