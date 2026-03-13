@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createClient } from "@/lib/supabase/server"
+import { detectAthleteLevel, detectFatigue } from "@/lib/safety-engine"
+import type { Activity } from "@/lib/types"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -318,6 +320,26 @@ async function executeToolCall(
       const fatigue = acuteLoad // 7-day total
       const form = fitness - fatigue
 
+      // Fetch extended data for fatigue detection and athlete level
+      const { data: extendedData } = await supabase
+        .from("activities")
+        .select("id, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, avg_cadence, elevation_gain_m, calories, map_polyline, created_at, user_id, strava_id, type, name")
+        .eq("user_id", userId)
+        .gte("date", new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString())
+        .order("date", { ascending: false })
+
+      const fullActivities: Activity[] = (extendedData ?? []).map((a) => ({
+        ...a,
+        distance_km: Number(a.distance_km),
+        pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+        avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+        avg_cadence: a.avg_cadence ? Number(a.avg_cadence) : null,
+        elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
+      }))
+
+      const fatigueResult = detectFatigue(fullActivities)
+      const athleteLevel = detectAthleteLevel(fullActivities)
+
       return JSON.stringify({
         acwr: { ratio: Math.round(acwr * 100) / 100, risk },
         weeklyKm: { last7days: Math.round(acuteLoad * 10) / 10, avg28days: Math.round(chronicLoad * 10) / 10 },
@@ -325,6 +347,11 @@ async function executeToolCall(
         fatigue: Math.round(fatigue * 10) / 10,
         form: Math.round(form * 10) / 10,
         interpretation: form > 5 ? "Fresh — good for hard sessions or racing" : form > -5 ? "Neutral — normal training load" : "Fatigued — consider easy days or rest",
+        athleteLevel: athleteLevel.level,
+        maxSafeWeeklyIncrease: `${athleteLevel.maxWeeklyIncreasePct}%`,
+        fatigueSignals: fatigueResult.fatigued
+          ? { detected: true, signals: fatigueResult.signals.map((s) => s.description), recommendation: fatigueResult.recommendation }
+          : { detected: false },
       })
     }
 

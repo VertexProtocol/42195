@@ -4,6 +4,12 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
+import {
+  detectAthleteLevel,
+  detectFatigue,
+  checkFrequencyProgression,
+  validateAndCorrectPlan,
+} from "@/lib/safety-engine"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -100,6 +106,7 @@ function calcWeekTargets(
   pct: number,
   blockWeeks: number,
   acwr?: { ratio: number; risk: string },
+  levelMaxPct?: number,
 ): number[] {
   let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15 // Conservative default for beginners (was 20)
   // If ACWR indicates injury risk, reduce the starting baseline
@@ -108,7 +115,9 @@ function calcWeekTargets(
   } else if (acwr?.risk === "moderate") {
     base = base * 0.9 // 10% reduction for moderate risk
   }
-  const multiplier = 1 + pct / 100
+  // Cap progression to the athlete-level maximum if provided
+  const safePct = levelMaxPct ? Math.min(pct, levelMaxPct) : pct
+  const multiplier = 1 + safePct / 100
   // Safety cap: no week should exceed 150% of baseline to prevent injury
   const maxWeeklyKm = (avgWeeklyKm > 0 ? avgWeeklyKm : 15) * 1.5
   const targets: number[] = []
@@ -212,10 +221,11 @@ Distribute each week's km across sessions with meaningful variety — never assi
 - Follow the 80/20 rule: ~80% of weekly volume at easy/conversational effort, ~20% at moderate-to-hard effort
 
 ## Safety Guidelines
-- Never increase weekly volume by more than 10-15% compared to the previous week
+- Beginner runners: max 5-8% weekly volume increase. Intermediate: 8-10%. Advanced: 10-12%.
 - Always include a recovery week (70-80% of peak volume) at the end of each training block
 - If injury risk (ACWR) is moderate or high, reduce suggested volume by 10-20%
 - If the runner has very low recent mileage (<10 km/week), start conservatively
+- Long run must not exceed 35% of total weekly distance
 - Taper phase: reduce volume 30-50% compared to peak, prioritise rest and race-day readiness
 
 ## Output Format
@@ -261,6 +271,7 @@ function buildPrompt(
   recentBestPace?: number | null,
   previousPlanSummary?: string | null,
   hrSummary?: string | null,
+  levelMaxPct?: number,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -295,7 +306,7 @@ function buildPrompt(
   if (isFullCycle && blockWeeks > 6) {
     weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, acwr)
   } else {
-    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, acwr)
+    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, acwr, levelMaxPct)
   }
   const weekTargetLines = weekTargets
     .map((km, i) => {
@@ -358,8 +369,13 @@ ${weekSummaryText}
 - Volume trend vs prior ${recentWindow} weeks: ${trendLine}
 - Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
 
+## Athlete Level & Safety
+- Classification: ${levelMaxPct ? (levelMaxPct <= 8 ? "beginner" : levelMaxPct <= 10 ? "intermediate" : "advanced") : "unknown"}
+- Max safe weekly volume increase: ${levelMaxPct ?? increasePct}%
+- Long run cap: 35% of weekly distance
+
 ## Suggested Weekly Volume Targets
-${isFullCycle ? `This is a FULL-CYCLE plan from now to race day with periodised phases (base → build → taper). Recovery weeks at ~70% volume are included every 3rd week.` : `These are calculated from the runner's ${recentWindow}-week rolling average using ${increasePct}% progressive overload.`} Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
+${isFullCycle ? `This is a FULL-CYCLE plan from now to race day with periodised phases (base → build → taper). Recovery weeks at ~70% volume are included every 3rd week.` : `These are calculated from the runner's ${recentWindow}-week rolling average using ${Math.min(increasePct, levelMaxPct ?? increasePct)}% progressive overload (capped by athlete level).`} Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
 ${weekTargetLines}
 
 IMPORTANT: Do not specify which day of the week to run. Sessions should be described as "do these runs this week, on days that suit you."
@@ -486,6 +502,41 @@ export async function POST(req: NextRequest) {
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
 
+  // Safety engine: detect athlete level for adaptive progression
+  const athleteLevel = detectAthleteLevel(acts.map((a) => ({
+    ...a,
+    id: "", user_id: "", strava_id: null, type: "Run", name: "",
+    distance_km: Number(a.distance_km),
+    elevation_gain_m: null, avg_cadence: null, calories: null,
+    map_polyline: null, created_at: a.date,
+  })))
+
+  // Safety engine: detect fatigue signals
+  const fatigue = detectFatigue(acts.map((a) => ({
+    ...a,
+    id: "", user_id: "", strava_id: null, type: "Run", name: "",
+    distance_km: Number(a.distance_km),
+    pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+    avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+    elevation_gain_m: null, avg_cadence: null, calories: null,
+    map_polyline: null, created_at: a.date,
+  })))
+
+  // Safety engine: check frequency progression
+  const frequencyCheck = checkFrequencyProgression(
+    acts.map((a) => ({
+      ...a,
+      id: "", user_id: "", strava_id: null, type: "Run", name: "",
+      distance_km: Number(a.distance_km),
+      elevation_gain_m: null, avg_cadence: null, calories: null,
+      map_polyline: null, created_at: a.date,
+    })),
+    prefs.sessions_per_week,
+  )
+
+  // Auto-adjust sessions if frequency jump is unsafe
+  const safeSessionsPerWeek = frequencyCheck.adjusted
+
   // Compute pace stats for the prompt
   const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
   const recentEasyPace = actsWithPace.length > 0
@@ -524,9 +575,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Use safe sessions count (frequency-protected)
+  const safePrefs: GoalPreferences = {
+    ...prefs,
+    sessions_per_week: safeSessionsPerWeek,
+  }
+
+  // Build fatigue context for the prompt
+  let fatigueSection: string | null = null
+  if (fatigue.fatigued) {
+    fatigueSection = `\n## Fatigue Signals Detected\n${fatigue.signals.map((s) => `- ${s.description} (${s.severity})`).join("\n")}\nRecommendation: ${fatigue.recommendation === "add_recovery" ? "Add recovery sessions, reduce first week volume by 20%" : "Reduce intensity in first week"}\n`
+  }
+
+  // Append fatigue info to HR summary if present
+  const fullHrSummary = [hrSummary, fatigueSection].filter(Boolean).join("\n") || null
+
   const prompt = buildPrompt(
     goal,
-    prefs,
+    safePrefs,
     weeklySummaries,
     longestRecentRun,
     currentAvgWeeklyKm,
@@ -536,7 +602,8 @@ export async function POST(req: NextRequest) {
     recentEasyPace,
     recentBestPace,
     previousPlanSummary,
-    hrSummary,
+    fullHrSummary,
+    athleteLevel.maxWeeklyIncreasePct,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
@@ -587,13 +654,13 @@ export async function POST(req: NextRequest) {
           console.error("Invalid plan structure from Claude:", parsed.error.message)
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
-        const plan = parsed.data
+        let plan = parsed.data
 
         // Post-generation validation logging
         for (const week of plan.weeks) {
-          if (week.sessions.length !== prefs.sessions_per_week) {
+          if (week.sessions.length !== safePrefs.sessions_per_week) {
             console.warn(
-              `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${prefs.sessions_per_week}`
+              `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${safePrefs.sessions_per_week}`
             )
           }
           const sessionKmTotal = week.sessions.reduce((sum: number, s: { distance: string }) => {
@@ -606,6 +673,31 @@ export async function POST(req: NextRequest) {
             )
           }
         }
+
+        // Safety engine: validate and auto-correct the plan
+        const safetyResult = validateAndCorrectPlan(
+          plan,
+          currentAvgWeeklyKm,
+          athleteLevel,
+          fatigue,
+          safePrefs.sessions_per_week,
+        )
+
+        if (!safetyResult.valid && safetyResult.adjustedPlan) {
+          console.log(
+            `[safety-engine] Plan adjusted — ${safetyResult.violations.length} violation(s):`,
+            safetyResult.violations.map((v) => v.description),
+          )
+          plan = safetyResult.adjustedPlan
+        }
+
+        // Log safety context
+        console.log(
+          `[safety-engine] Level: ${athleteLevel.level} (max ${athleteLevel.maxWeeklyIncreasePct}%), ` +
+          `Fatigue: ${fatigue.fatigued ? fatigue.recommendation : "none"}, ` +
+          `Frequency: ${frequencyCheck.previousSessionsPerWeek} → ${safeSessionsPerWeek} sessions/week` +
+          `${!frequencyCheck.safe ? " (capped from " + frequencyCheck.requestedSessionsPerWeek + ")" : ""}`,
+        )
 
         // Cache in DB (upsert — one active plan per goal)
         // Use service-role client here because the cookie-based client may
@@ -659,7 +751,20 @@ export async function POST(req: NextRequest) {
           return
         }
 
-        send({ status: "done", plan, block_start_date: blockStartDate, generated_at: generatedAt })
+        send({
+          status: "done",
+          plan,
+          block_start_date: blockStartDate,
+          generated_at: generatedAt,
+          safety: {
+            athleteLevel: athleteLevel.level,
+            maxWeeklyIncreasePct: athleteLevel.maxWeeklyIncreasePct,
+            fatigueDetected: fatigue.fatigued,
+            fatigueRecommendation: fatigue.recommendation,
+            frequencyAdjusted: !frequencyCheck.safe,
+            violations: safetyResult.violations.map((v) => v.description),
+          },
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Claude API error:", msg, err)
