@@ -6,6 +6,7 @@ import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/l
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { PoweredByStrava } from "@/components/strava-brand"
 
 interface ActivitiesScreenProps {
   activities: Activity[]
@@ -271,6 +272,11 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
             </button>
           ))}
         </div>
+      )}
+
+      {/* Strava attribution — required by brand guidelines */}
+      {stravaConnected && activities.length > 0 && (
+        <PoweredByStrava className="mt-4" />
       )}
     </div>
   )

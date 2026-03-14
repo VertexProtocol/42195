@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { withStravaRetry, StravaAuthError, StravaUnauthorizedError } from "@/lib/strava"
+import { withStravaRetry, stravaApiFetch, StravaAuthError, StravaUnauthorizedError } from "@/lib/strava"
 import type { StreamPoint } from "@/lib/types"
 
 interface StravaStreamData {
@@ -76,9 +76,9 @@ export async function GET(
   let streams: StravaStreamsResponse
   try {
     streams = await withStravaRetry(user.id, async (token) => {
-      const res = await fetch(
+      const res = await stravaApiFetch(
         `https://www.strava.com/api/v3/activities/${activity.strava_id}/streams?keys=time,heartrate,velocity_smooth,altitude,cadence&key_by_type=true`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        token,
       )
       if (res.status === 401) throw new StravaUnauthorizedError()
       if (!res.ok) throw new Error(`Strava streams fetch failed: ${res.status}`)
