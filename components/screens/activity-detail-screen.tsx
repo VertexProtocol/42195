@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon, FlaskConical, X, ChevronDown, ChevronUp, Zap } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon, FlaskConical, X, ChevronDown, ChevronUp, Zap, Target } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
-import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
-import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
+import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed, formatTargetTime } from "@/lib/format"
+import { analyzeHrZones, analyzePaceZones, predictRaceTimes, PREDICTION_DISTANCES } from "@/lib/training-utils"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import { useI18n } from "@/lib/i18n"
-import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics } from "@/lib/types"
+import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics, PredictionValidation } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 
@@ -218,13 +218,17 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     return () => { cancelled = true }
   }, [activity.id])
 
-  const handleTagTestRun = useCallback(async (testType: TestRunType) => {
+  const handleTagTestRun = useCallback(async (testType: TestRunType, predictionDistanceKm?: number) => {
     setTestRunLoading(testType)
     try {
+      const body: Record<string, unknown> = { activity_id: activity.id, test_type: testType }
+      if (predictionDistanceKm != null) {
+        body.prediction_distance_km = predictionDistanceKm
+      }
       const res = await fetch("/api/test-runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activity_id: activity.id, test_type: testType }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         const data = await res.json()
@@ -437,6 +441,49 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
             {testRunExpanded && (
               <div className="border-t border-violet-500/20 px-4 py-3">
+                {/* Prediction Validation */}
+                {testRun.prediction_validation && (
+                  <div className="mb-3 rounded-xl bg-card p-3 ring-1 ring-border">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Target size={12} className="text-violet-500" />
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                        {testRun.prediction_validation.prediction_distance_label} {t("testRun.predictionTest")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">{t("testRun.predictedTime")}</p>
+                        <p className="text-sm font-bold font-mono text-card-foreground">
+                          {formatTargetTime(testRun.prediction_validation.predicted_seconds)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatPace(testRun.prediction_validation.predicted_pace)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">{t("testRun.actualTime")}</p>
+                        <p className="text-sm font-bold font-mono text-card-foreground">
+                          {formatTargetTime(testRun.prediction_validation.actual_seconds)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatPace(testRun.prediction_validation.actual_pace)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      testRun.prediction_validation.result === "validated"
+                        ? "bg-success/10 text-success"
+                        : testRun.prediction_validation.result === "too_conservative"
+                          ? "bg-blue-500/10 text-blue-500"
+                          : testRun.prediction_validation.result === "slightly_optimistic"
+                            ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                            : "bg-destructive/10 text-destructive"
+                    }`}>
+                      {t(`testRun.result_${testRun.prediction_validation.result}` as any)}
+                    </div>
+                  </div>
+                )}
+
                 {/* Derived metrics */}
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   {testRun.derived_metrics.estimated_vo2max != null && (
@@ -531,6 +578,43 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     </button>
                   ))}
                 </div>
+
+                {/* Prediction Test options */}
+                {(() => {
+                  const preds = allActivities ? predictRaceTimes(allActivities) : { predictions: [], referenceActivity: null }
+                  if (preds.predictions.length === 0) return null
+                  return (
+                    <>
+                      <div className="my-3 border-t border-border" />
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Target size={12} className="text-primary" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.predictionTests")}</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {preds.predictions.map((pred) => {
+                          const targetPace = pred.predicted_seconds / pred.distance_km
+                          const predKey = `pred_${pred.distance_km}` as TestRunType
+                          return (
+                            <button
+                              key={pred.distance_label}
+                              onClick={() => handleTagTestRun("custom", pred.distance_km)}
+                              disabled={!!testRunLoading}
+                              className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 disabled:opacity-50"
+                            >
+                              <div className="flex items-center gap-2">
+                                {testRunLoading === "custom" ? <Loader2 size={14} className="animate-spin" /> : <Target size={14} className="text-primary/60" />}
+                                <span>{pred.distance_label} {t("testRun.predictionTest")}</span>
+                              </div>
+                              <span className="text-xs font-mono text-muted-foreground">
+                                {formatPace(targetPace)} · {formatTargetTime(pred.predicted_seconds)}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             )}
           </>
