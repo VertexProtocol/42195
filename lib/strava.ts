@@ -180,6 +180,72 @@ async function refreshStravaToken(userId: string, refreshToken: string): Promise
  *     })
  *   )
  */
+// ---------------------------------------------------------------------------
+// Rate-limit aware Strava API fetch
+// ---------------------------------------------------------------------------
+
+/**
+ * Error thrown when Strava returns HTTP 429 (rate limited).
+ */
+export class StravaRateLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "StravaRateLimitError"
+  }
+}
+
+/**
+ * Fetch wrapper that logs Strava rate-limit headers and handles 429 responses.
+ * Use this for all Strava API calls inside `withStravaRetry` callbacks.
+ *
+ * On 429: waits until the next 15-minute window, then retries (up to `maxRetries`).
+ * Logs a warning when usage exceeds 80% of the limit.
+ */
+export async function stravaApiFetch(
+  url: string,
+  token: string,
+  maxRetries = 2,
+): Promise<Response> {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  // Log rate limit usage
+  const limitHeader = res.headers.get("X-RateLimit-Limit")
+  const usageHeader = res.headers.get("X-RateLimit-Usage")
+  if (limitHeader && usageHeader) {
+    const [limit15m, limitDay] = limitHeader.split(",").map(Number)
+    const [usage15m, usageDay] = usageHeader.split(",").map(Number)
+    const pct15m = limit15m > 0 ? Math.round((usage15m / limit15m) * 100) : 0
+    const pctDay = limitDay > 0 ? Math.round((usageDay / limitDay) * 100) : 0
+    if (pct15m > 80 || pctDay > 80) {
+      console.warn(
+        `[Strava Rate Limit] 15min: ${usage15m}/${limit15m} (${pct15m}%), daily: ${usageDay}/${limitDay} (${pctDay}%)`
+      )
+    }
+  }
+
+  if (res.status === 429) {
+    if (maxRetries <= 0) {
+      throw new StravaRateLimitError("Strava rate limit exceeded. Please try again later.")
+    }
+    // Wait until next 15-minute window
+    const now = new Date()
+    const minuteSlot = Math.ceil(now.getMinutes() / 15) * 15
+    const nextWindow = new Date(now)
+    nextWindow.setMinutes(minuteSlot, 0, 0)
+    if (nextWindow <= now) nextWindow.setMinutes(nextWindow.getMinutes() + 15)
+    const delayMs = Math.min(nextWindow.getTime() - now.getTime() + 1000, 15 * 60 * 1000)
+
+    console.warn(`[Strava Rate Limit] 429 received. Waiting ${Math.ceil(delayMs / 1000)}s until next window.`)
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+
+    return stravaApiFetch(url, token, maxRetries - 1)
+  }
+
+  return res
+}
+
 export async function withStravaRetry<T>(
   userId: string,
   fn: (accessToken: string) => Promise<T>,

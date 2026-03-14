@@ -8,6 +8,7 @@ import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import { useI18n } from "@/lib/i18n"
 import type { Activity, StreamPoint, Lap } from "@/lib/types"
+import { PoweredByStrava } from "@/components/strava-brand"
 
 interface ActivityDetailScreenProps {
   activity: Activity
@@ -705,6 +706,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             </button>
           )}
         </section>
+      )}
+
+      {/* Strava attribution */}
+      {activity.strava_id && (
+        <PoweredByStrava className="mt-4 mb-2" />
       )}
     </div>
   )

@@ -7,6 +7,7 @@ import {
   RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw, Settings2,
 } from "lucide-react"
+import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
@@ -219,12 +220,17 @@ export function ProfileScreen({
             </div>
           )}
 
-          {/* Not connected: connect prompt */}
+          {/* Not connected: official "Connect with Strava" button */}
           {!stravaConnected && (
-            <div className="px-4 py-3">
+            <div className="px-4 py-3 space-y-2">
               <p className="text-xs text-muted-foreground">
                 Connect Strava to sync your activities automatically.
               </p>
+              <ConnectWithStravaButton
+                onClick={handleConnect}
+                disabled={connecting}
+                connecting={connecting}
+              />
             </div>
           )}
         </div>
