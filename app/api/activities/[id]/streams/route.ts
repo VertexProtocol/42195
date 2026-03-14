@@ -57,15 +57,20 @@ export async function GET(
     return NextResponse.json({ error: "Activity not found" }, { status: 404 })
   }
 
-  // 1. Return cached streams if available
+  // 1. Return cached streams if available and not stale (7-day TTL)
+  const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
   const { data: cached } = await service
     .from("activity_streams")
-    .select("points")
+    .select("points, fetched_at")
     .eq("activity_id", id)
-    .single<{ points: StreamPoint[] }>()
+    .single<{ points: StreamPoint[]; fetched_at: string }>()
 
   if (cached) {
-    return NextResponse.json({ points: cached.points })
+    const cacheAge = Date.now() - new Date(cached.fetched_at).getTime()
+    if (cacheAge < CACHE_TTL_MS) {
+      return NextResponse.json({ points: cached.points })
+    }
+    // Cache is stale — fall through to re-fetch from Strava
   }
 
   // 2. No cache — need to fetch from Strava
