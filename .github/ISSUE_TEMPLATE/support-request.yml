@@ -1,0 +1,21 @@
+name: Support Request
+description: Get help with using 42195
+labels: ["support"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What do you need help with?
+      description: Describe your question or issue.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps you've already tried
+      description: What have you tried so far?
+  - type: input
+    id: device
+    attributes:
+      label: Device & browser
+      description: e.g. iPhone 15, Safari
