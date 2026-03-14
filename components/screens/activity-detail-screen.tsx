@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon } from "lucide-react"
+import { ArrowLeft, TrendingUp, Clock, Gauge, Mountain, Heart, Flame, MapPin, Sparkles, Loader2, Trash2, Activity as ActivityIcon, FlaskConical, X, ChevronDown, ChevronUp, Zap } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Label } from "recharts"
 import { formatDistance, formatDuration, formatPace, formatDate, formatElapsed } from "@/lib/format"
 import { analyzeHrZones, analyzePaceZones } from "@/lib/training-utils"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import { useI18n } from "@/lib/i18n"
-import type { Activity, StreamPoint, Lap } from "@/lib/types"
+import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics } from "@/lib/types"
+import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 
 interface ActivityDetailScreenProps {
@@ -162,6 +163,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Test run state
+  const [testRun, setTestRun] = useState<TestRun | null>(null)
+  const [testRunLoading, setTestRunLoading] = useState(false)
+  const [showTestRunPicker, setShowTestRunPicker] = useState(false)
+  const [testRunExpanded, setTestRunExpanded] = useState(false)
 
   const handleGetAnalysis = useCallback(async () => {
     setAiAnalysisLoading(true)
@@ -195,6 +201,50 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     ]).finally(() => { if (!cancelled) setLoadingCharts(false) })
 
     return () => { cancelled = true }
+  }, [activity.id])
+
+  // Fetch test run status for this activity
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/test-runs?activity_id=${activity.id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.test_runs) {
+          const match = data.test_runs.find((tr: TestRun) => tr.activity_id === activity.id)
+          if (match) setTestRun(match)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activity.id])
+
+  const handleTagTestRun = useCallback(async (testType: TestRunType) => {
+    setTestRunLoading(true)
+    try {
+      const res = await fetch("/api/test-runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activity_id: activity.id, test_type: testType }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setTestRun(data.test_run)
+        setShowTestRunPicker(false)
+      }
+    } catch {}
+    setTestRunLoading(false)
+  }, [activity.id])
+
+  const handleRemoveTestRun = useCallback(async () => {
+    setTestRunLoading(true)
+    try {
+      const res = await fetch(`/api/test-runs?activity_id=${activity.id}`, { method: "DELETE" })
+      if (res.ok) {
+        setTestRun(null)
+        setTestRunExpanded(false)
+      }
+    } catch {}
+    setTestRunLoading(false)
   }, [activity.id])
 
   const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
@@ -260,6 +310,12 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           <span className="text-xs text-muted-foreground">
             {formatDate(activity.date)}
           </span>
+          {testRun && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
+              <FlaskConical size={10} />
+              {t("testRun.badge")}
+            </span>
+          )}
         </div>
         <h1 className="mt-2 text-2xl font-bold text-foreground text-balance">
           {activity.name}
@@ -359,6 +415,125 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               </>
             )}
           </button>
+        )}
+      </section>
+
+      {/* Test Run Section */}
+      <section>
+        {testRun ? (
+          <div className="rounded-2xl bg-violet-500/5 ring-1 ring-violet-500/20 overflow-hidden">
+            <button
+              onClick={() => setTestRunExpanded(!testRunExpanded)}
+              className="flex w-full items-center justify-between px-4 py-3 active:bg-violet-500/10 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <FlaskConical size={14} className="text-violet-600 dark:text-violet-400" />
+                <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">
+                  {t("testRun.badge")} — {TEST_RUN_TYPES.find(tt => tt.value === testRun.test_type)?.label ?? testRun.test_type}
+                </span>
+              </div>
+              {testRunExpanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+            </button>
+
+            {testRunExpanded && (
+              <div className="border-t border-violet-500/20 px-4 py-3">
+                {/* Derived metrics */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  {testRun.derived_metrics.estimated_vo2max != null && (
+                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Zap size={12} className="text-violet-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</span>
+                      </div>
+                      <span className="text-lg font-bold font-mono text-card-foreground">
+                        {testRun.derived_metrics.estimated_vo2max.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  {testRun.derived_metrics.threshold_pace != null && (
+                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Gauge size={12} className="text-violet-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</span>
+                      </div>
+                      <span className="text-lg font-bold font-mono text-card-foreground">
+                        {formatPace(testRun.derived_metrics.threshold_pace)}
+                      </span>
+                    </div>
+                  )}
+                  {testRun.derived_metrics.threshold_hr != null && (
+                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Heart size={12} className="text-violet-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</span>
+                      </div>
+                      <span className="text-lg font-bold font-mono text-card-foreground">
+                        {testRun.derived_metrics.threshold_hr} <span className="text-xs font-normal text-muted-foreground">bpm</span>
+                      </span>
+                    </div>
+                  )}
+                  {testRun.derived_metrics.running_efficiency != null && (
+                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <TrendingUp size={12} className="text-violet-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.efficiency")}</span>
+                      </div>
+                      <span className="text-lg font-bold font-mono text-card-foreground">
+                        {testRun.derived_metrics.running_efficiency.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Remove button */}
+                <button
+                  onClick={handleRemoveTestRun}
+                  disabled={testRunLoading}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground active:opacity-70 disabled:opacity-50"
+                >
+                  <X size={12} />
+                  {t("testRun.remove")}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {!showTestRunPicker ? (
+              <button
+                onClick={() => setShowTestRunPicker(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-violet-600 dark:text-violet-400 shadow-sm ring-1 ring-border transition-colors hover:bg-violet-500/5 active:opacity-80"
+              >
+                <FlaskConical size={16} />
+                {t("testRun.markAs")}
+              </button>
+            ) : (
+              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical size={14} className="text-violet-600 dark:text-violet-400" />
+                    <span className="text-sm font-medium text-card-foreground">{t("testRun.selectType")}</span>
+                  </div>
+                  <button onClick={() => setShowTestRunPicker(false)} className="p-1 text-muted-foreground active:opacity-70">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {TEST_RUN_TYPES.map((tt) => (
+                    <button
+                      key={tt.value}
+                      onClick={() => handleTagTestRun(tt.value)}
+                      disabled={testRunLoading}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-violet-500/5 active:bg-violet-500/10 disabled:opacity-50"
+                    >
+                      {testRunLoading ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} className="text-violet-500/60" />}
+                      {tt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </section>
 
