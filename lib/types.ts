@@ -137,6 +137,47 @@ export interface PlanSnapshot {
   block_start_date: string
 }
 
+// ---- Test Run types ----
+
+export type TestRunType =
+  | "5k_time_trial"
+  | "10k_time_trial"
+  | "max_effort"
+  | "threshold_test"
+  | "custom"
+
+export const TEST_RUN_TYPES: { value: TestRunType; label: string }[] = [
+  { value: "5k_time_trial", label: "5K Time Trial" },
+  { value: "10k_time_trial", label: "10K Time Trial" },
+  { value: "max_effort", label: "Max Effort Run" },
+  { value: "threshold_test", label: "Threshold Test" },
+  { value: "custom", label: "Custom Test Run" },
+]
+
+export interface DerivedMetrics {
+  estimated_vo2max: number | null
+  threshold_pace: number | null       // min/km
+  threshold_hr: number | null         // bpm
+  running_efficiency: number | null   // pace / hr ratio (lower = more efficient)
+  aerobic_capacity: number | null     // distance × avg_hr product
+}
+
+export interface TestRun {
+  id: string
+  user_id: string
+  activity_id: string
+  test_type: TestRunType
+  distance_km: number
+  time_seconds: number
+  avg_pace: number | null
+  avg_hr: number | null
+  max_hr: number | null
+  elevation_m: number | null
+  derived_metrics: DerivedMetrics
+  notes: string | null
+  created_at: string
+}
+
 export interface AiTrainingPlan {
   goal_id: string
   plan: TrainingPlan

@@ -1,27 +1,29 @@
 "use client"
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
-import { 
-  Trophy, 
-  Timer, 
-  TrendingUp, 
-  Bot, 
-  Send, 
-  User, 
-  Loader2, 
+import {
+  Trophy,
+  Timer,
+  TrendingUp,
+  Bot,
+  Send,
+  User,
+  Loader2,
   Trash2,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  FlaskConical
 } from "lucide-react"
-import { 
-  formatTargetTime, 
-  formatPace, 
-  formatDateShort, 
-  formatDistance 
+import {
+  formatTargetTime,
+  formatPace,
+  formatDateShort,
+  formatDistance
 } from "@/lib/format"
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { useI18n } from "@/lib/i18n"
-import type { Activity } from "@/lib/types"
+import type { Activity, TestRun } from "@/lib/types"
+import { TEST_RUN_TYPES } from "@/lib/types"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 
 interface Message {
@@ -47,8 +49,30 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  const [testRuns, setTestRuns] = useState<TestRun[]>([])
+  const [testRunsLoading, setTestRunsLoading] = useState(true)
+
   const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
   const racePredictions = useMemo(() => predictRaceTimes(activities), [activities])
+
+  // Fetch test runs for benchmarks section
+  useEffect(() => {
+    let cancelled = false
+    async function fetchTestRuns() {
+      try {
+        const res = await fetch("/api/test-runs")
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setTestRuns(data.test_runs ?? [])
+      } catch {
+        // silently ignore
+      } finally {
+        if (!cancelled) setTestRunsLoading(false)
+      }
+    }
+    fetchTestRuns()
+    return () => { cancelled = true }
+  }, [])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -370,6 +394,114 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
           </div>
         </section>
       )}
+
+      {/* Test Run Benchmarks */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("testRun.benchmarks")}
+        </h3>
+        {testRunsLoading ? (
+          <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border flex items-center justify-center">
+            <Loader2 size={18} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : testRuns.length === 0 ? (
+          <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
+                <FlaskConical size={20} className="text-violet-500" />
+              </div>
+              <p className="text-xs text-muted-foreground flex-1">{t("testRun.noBenchmarks")}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {/* Latest metrics summary */}
+            {(() => {
+              const latest = testRuns[0]
+              const dm = latest.derived_metrics
+              const prev = testRuns.length >= 2 ? testRuns[1] : null
+              const vo2delta = dm.estimated_vo2max != null && prev?.derived_metrics.estimated_vo2max != null
+                ? dm.estimated_vo2max - prev.derived_metrics.estimated_vo2max
+                : null
+              const trend = vo2delta != null
+                ? vo2delta > 0.5 ? "improving" : vo2delta < -0.5 ? "declining" : "stable"
+                : "stable"
+              return (
+                <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical size={14} className="text-violet-500" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {TEST_RUN_TYPES.find(tt => tt.value === latest.test_type)?.label ?? latest.test_type}
+                      {" · "}
+                      {formatDateShort(latest.created_at)}
+                    </span>
+                    {testRuns.length >= 2 && (
+                      <span className={`ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                        trend === "improving" ? "bg-success/10 text-success" :
+                        trend === "declining" ? "bg-destructive/10 text-destructive" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {t(trend === "improving" ? "testRun.improving" : trend === "declining" ? "testRun.declining" : "testRun.stable")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {dm.estimated_vo2max != null && (
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-card-foreground">{dm.estimated_vo2max.toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</p>
+                        {vo2delta != null && (
+                          <p className={`text-[10px] font-medium ${vo2delta > 0 ? "text-success" : vo2delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                            {vo2delta > 0 ? "+" : ""}{vo2delta.toFixed(1)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {dm.threshold_pace != null && (
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-card-foreground">{formatPace(dm.threshold_pace)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</p>
+                      </div>
+                    )}
+                    {dm.threshold_hr != null && (
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-card-foreground">{dm.threshold_hr}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Historical list */}
+            {testRuns.length > 1 && (
+              <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+                {testRuns.slice(1, 6).map((tr, i) => (
+                  <div
+                    key={tr.id}
+                    className={`flex items-center justify-between px-4 py-2.5 ${
+                      i < Math.min(testRuns.length - 2, 4) ? "border-b border-border" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FlaskConical size={12} className="text-violet-400" />
+                      <span className="text-xs text-card-foreground">
+                        {TEST_RUN_TYPES.find(tt => tt.value === tr.test_type)?.label ?? tr.test_type}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{formatDateShort(tr.created_at)}</span>
+                    </div>
+                    {tr.derived_metrics.estimated_vo2max != null && (
+                      <span className="text-xs font-semibold font-mono text-foreground">
+                        {tr.derived_metrics.estimated_vo2max.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* Training Trends - placeholder for future */}
       <section>

@@ -40,6 +40,7 @@ export async function DELETE() {
     const tables = [
       "activity_streams",
       "activity_laps",
+      "test_runs",
       "activities",
       "ai_training_plans",
       "goal_preferences",

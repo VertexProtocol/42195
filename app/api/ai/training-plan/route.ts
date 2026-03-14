@@ -262,6 +262,7 @@ function buildPrompt(
   recentBestPace?: number | null,
   previousPlanSummary?: string | null,
   hrSummary?: string | null,
+  testRunSection?: string | null,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -338,6 +339,10 @@ function buildPrompt(
     ? `\n## Heart Rate Data\n${hrSummary}\n`
     : ""
 
+  const testRunPromptSection = testRunSection
+    ? `\n${testRunSection}\n`
+    : ""
+
   return `Create a ${blockWeeks}-week training block for this runner.
 
 ## The Runner's Goal
@@ -350,7 +355,7 @@ function buildPrompt(
 - Sessions per week: ${prefs.sessions_per_week}
 - Focus: ${focusDescription}
 - Notes: ${prefs.notes ? `"${prefs.notes}"` : "None provided"}
-${adjustSection}${previousPlanSection}${hrSection}
+${adjustSection}${previousPlanSection}${hrSection}${testRunPromptSection}
 ## Recent Training History (most recent first)
 ${weekSummaryText}
 
@@ -512,6 +517,26 @@ export async function POST(req: NextRequest) {
     hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}\n- Estimated max HR: ~${Math.round(maxHr * 1.1)} bpm (from activity data)`
   }
 
+  // Fetch test run benchmarks for calibration
+  const { data: testRuns } = await supabase
+    .from("test_runs")
+    .select("test_type, distance_km, time_seconds, avg_pace, avg_hr, derived_metrics, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(10)
+
+  let testRunSection: string | null = null
+  if (testRuns && testRuns.length > 0) {
+    const lines = testRuns.map((tr) => {
+      const metrics = tr.derived_metrics as Record<string, number | null> | null
+      const vo2max = metrics?.estimated_vo2max
+      const threshPace = metrics?.threshold_pace
+      const paceStr = tr.avg_pace ? formatPace(Number(tr.avg_pace)) : "N/A"
+      return `  - ${tr.test_type} (${tr.created_at.split("T")[0]}): ${Number(tr.distance_km).toFixed(1)} km in ${Math.floor(tr.time_seconds / 60)}min, pace ${paceStr}${tr.avg_hr ? `, HR ${tr.avg_hr}` : ""}${vo2max ? `, est. VO2max ${vo2max}` : ""}${threshPace ? `, threshold pace ~${formatPace(threshPace)}` : ""}`
+    })
+    testRunSection = `## Test Run Benchmarks (high-confidence fitness data)\nThese are user-tagged benchmark efforts. Use them as strong calibration signals for pace targets and training intensity.\n${lines.join("\n")}`
+  }
+
   // Build previous plan summary for continuity
   let previousPlanSummary: string | null = null
   if (existingPlan?.plan) {
@@ -538,6 +563,7 @@ export async function POST(req: NextRequest) {
     recentBestPace,
     previousPlanSummary,
     hrSummary,
+    testRunSection,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
