@@ -1,0 +1,21 @@
+name: Account Request
+description: Request account deletion or data export
+labels: ["account"]
+body:
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: Request type
+      options:
+        - Delete my account and all data
+        - Export my data
+        - Disconnect Strava
+    validations:
+      required: true
+  - type: input
+    id: email
+    attributes:
+      label: Account email
+      description: The email address associated with your 42195 account.
+    validations:
+      required: true
