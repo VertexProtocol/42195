@@ -105,6 +105,20 @@ const tools: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: "get_test_runs",
+    description: "Fetch the runner's test run benchmarks — user-tagged high-effort runs used for fitness calibration. Returns estimated VO2max, threshold pace, threshold HR, and running efficiency. Use this for fitness assessment, pace recommendations, or training calibration questions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        test_type: {
+          type: "string",
+          description: "Optional filter: '5k_time_trial', '10k_time_trial', 'max_effort', 'threshold_test', or 'custom'.",
+        },
+      },
+      required: [],
+    },
+  },
 ]
 
 // Tool implementations
@@ -375,6 +389,37 @@ async function executeToolCall(
         adherence: total > 0 ? `${Math.round((completed / total) * 100)}%` : "N/A",
         details: data,
       })
+    }
+
+    case "get_test_runs": {
+      const testType = toolInput.test_type as string | undefined
+
+      let query = supabase
+        .from("test_runs")
+        .select("test_type, distance_km, time_seconds, avg_pace, avg_hr, max_hr, derived_metrics, created_at, notes")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+      if (testType) {
+        query = query.eq("test_type", testType)
+      }
+
+      const { data } = await query
+
+      if (!data || data.length === 0) return "No test runs found. The runner has not tagged any activities as benchmark/test runs yet."
+
+      return JSON.stringify(data.map((tr) => ({
+        type: tr.test_type,
+        date: tr.created_at.split("T")[0],
+        distance_km: Number(tr.distance_km).toFixed(1),
+        time_minutes: Math.round(tr.time_seconds / 60),
+        avg_pace: tr.avg_pace ? `${Math.floor(Number(tr.avg_pace))}:${String(Math.round((Number(tr.avg_pace) % 1) * 60)).padStart(2, "0")} min/km` : null,
+        avg_hr: tr.avg_hr,
+        max_hr: tr.max_hr,
+        derived_metrics: tr.derived_metrics,
+        notes: tr.notes,
+      })))
     }
 
     default:
