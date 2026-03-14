@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle } from "lucide-react"
+import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, FlaskConical } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, SyncStatus } from "@/lib/types"
@@ -22,6 +22,21 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [syncSuccess, setSyncSuccess] = useState(false)
+  const [testRunActivityIds, setTestRunActivityIds] = useState<Set<string>>(new Set())
+
+  // Fetch which activities are tagged as test runs
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/test-runs")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.test_runs) {
+          setTestRunActivityIds(new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)))
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
@@ -250,6 +265,12 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
                   <span className="text-xs text-muted-foreground">
                     {formatDateShort(activity.date)}
                   </span>
+                  {testRunActivityIds.has(activity.id) && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
+                      <FlaskConical size={9} />
+                      {t("testRun.badge")}
+                    </span>
+                  )}
                 </div>
                 <h3 className="mt-1.5 truncate text-sm font-semibold text-card-foreground">
                   {activity.name}
