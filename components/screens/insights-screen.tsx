@@ -381,7 +381,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] text-muted-foreground font-mono">
-                    {formatPace(pred.predicted_seconds / pred.distance_km)}
+                    {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}
                   </span>
                   <span className="text-sm font-bold font-mono text-foreground">
                     {formatTargetTime(pred.predicted_seconds)}

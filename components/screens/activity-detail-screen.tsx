@@ -592,7 +592,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {preds.predictions.map((pred) => {
-                          const targetPace = pred.predicted_seconds / pred.distance_km
+                          const targetPace = pred.predicted_seconds / 60 / pred.distance_km
                           const predKey = `pred_${pred.distance_km}` as TestRunType
                           return (
                             <button
