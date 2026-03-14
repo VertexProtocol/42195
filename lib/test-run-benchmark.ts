@@ -9,7 +9,8 @@
  * - Aerobic capacity indicator
  */
 
-import type { Activity, TestRun, TestRunType, DerivedMetrics } from "@/lib/types"
+import type { Activity, TestRun, TestRunType, DerivedMetrics, PredictionValidation, PredictionValidationResult } from "@/lib/types"
+import type { RacePrediction } from "@/lib/training-utils"
 
 /**
  * Estimates VO2max using the Jack Daniels / VDOT formula.
@@ -275,5 +276,125 @@ export function getTestRunCalibration(testRuns: TestRun[]): {
     confidenceLevel,
     latestVO2max: latest.derived_metrics.estimated_vo2max,
     latestThresholdPace: latest.derived_metrics.threshold_pace,
+  }
+}
+
+/**
+ * Validates a test run against a race prediction.
+ *
+ * Compares the actual performance to the predicted pace/time and classifies
+ * the result as validated, slightly optimistic, too aggressive, or too conservative.
+ *
+ * Thresholds:
+ *  - Within ±2%  → validated
+ *  - 2-5% slower → slightly optimistic
+ *  - >5% slower  → too aggressive
+ *  - >2% faster  → too conservative
+ */
+export function validatePrediction(
+  prediction: RacePrediction,
+  actualSeconds: number,
+  actualDistanceKm: number,
+): PredictionValidation {
+  const predictedPace = prediction.predicted_seconds / prediction.distance_km
+  // Normalize actual time to prediction distance using Riegel
+  const normalizedSeconds = actualSeconds * (prediction.distance_km / actualDistanceKm) ** 1.06
+  const actualPace = normalizedSeconds / prediction.distance_km
+
+  const paceDiff = actualPace - predictedPace  // positive = slower than predicted
+  const timeDiff = normalizedSeconds - prediction.predicted_seconds
+  const pctDiff = paceDiff / predictedPace     // fractional
+
+  let result: PredictionValidationResult
+  if (pctDiff <= -0.02) {
+    result = "too_conservative"     // ran >2% faster than predicted
+  } else if (pctDiff <= 0.02) {
+    result = "validated"            // within ±2%
+  } else if (pctDiff <= 0.05) {
+    result = "slightly_optimistic"  // 2-5% slower
+  } else {
+    result = "too_aggressive"       // >5% slower
+  }
+
+  return {
+    prediction_distance_km: prediction.distance_km,
+    prediction_distance_label: prediction.distance_label,
+    predicted_seconds: prediction.predicted_seconds,
+    predicted_pace: Math.round(predictedPace * 100) / 100,
+    actual_seconds: Math.round(normalizedSeconds),
+    actual_pace: Math.round(actualPace * 100) / 100,
+    pace_diff: Math.round(paceDiff * 100) / 100,
+    time_diff_seconds: Math.round(timeDiff),
+    result,
+  }
+}
+
+/**
+ * Computes prediction adjustment signals from validated test runs.
+ *
+ * Uses test runs that have prediction validations to suggest adjustments
+ * to the prediction model. Adjustments are gradual and require multiple
+ * consistent signals before shifting significantly.
+ *
+ * Returns a multiplier for the Riegel exponent (1.06 baseline):
+ *  - consistently faster → slightly lower exponent (faster predictions)
+ *  - consistently slower → slightly higher exponent (slower predictions)
+ *  - mixed signals → no adjustment
+ */
+export function computePredictionAdjustment(testRuns: TestRun[]): {
+  exponentAdjustment: number
+  signalStrength: "strong" | "moderate" | "weak" | "none"
+  summary: string
+} {
+  const validated = testRuns.filter(
+    (tr) => tr.prediction_validation != null,
+  )
+
+  if (validated.length === 0) {
+    return { exponentAdjustment: 0, signalStrength: "none", summary: "No prediction test runs yet" }
+  }
+
+  // Count results
+  let fasterCount = 0
+  let validatedCount = 0
+  let slowerCount = 0
+
+  for (const tr of validated) {
+    const v = tr.prediction_validation!
+    if (v.result === "too_conservative") fasterCount++
+    else if (v.result === "validated") validatedCount++
+    else slowerCount++
+  }
+
+  const total = validated.length
+
+  // Need at least 2 signals in the same direction
+  if (total < 2) {
+    return { exponentAdjustment: 0, signalStrength: "weak", summary: "Need more test runs to adjust predictions" }
+  }
+
+  // Strong signal: 70%+ in one direction
+  if (fasterCount / total >= 0.7) {
+    const adj = total >= 3 ? -0.02 : -0.01
+    return {
+      exponentAdjustment: adj,
+      signalStrength: total >= 3 ? "strong" : "moderate",
+      summary: "Predictions appear conservative — you're running faster than expected",
+    }
+  }
+
+  if (slowerCount / total >= 0.7) {
+    const adj = total >= 3 ? 0.02 : 0.01
+    return {
+      exponentAdjustment: adj,
+      signalStrength: total >= 3 ? "strong" : "moderate",
+      summary: "Predictions appear optimistic — actual times are slower than predicted",
+    }
+  }
+
+  return {
+    exponentAdjustment: 0,
+    signalStrength: validatedCount / total >= 0.5 ? "moderate" : "weak",
+    summary: "Predictions are reasonably accurate",
   }
 }

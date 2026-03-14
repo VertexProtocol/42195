@@ -165,7 +165,7 @@ export interface RacePrediction {
   predicted_seconds: number
 }
 
-const PREDICTION_DISTANCES = [
+export const PREDICTION_DISTANCES = [
   { label: "5 km", km: 5 },
   { label: "10 km", km: 10 },
   { label: "Half Marathon", km: 21.0975 },
