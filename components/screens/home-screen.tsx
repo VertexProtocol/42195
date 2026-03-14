@@ -2,6 +2,7 @@
 
 import { useMemo, lazy, Suspense } from "react"
 import { ChevronRight, TrendingUp, Clock, Footprints } from "lucide-react"
+import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
@@ -243,6 +244,10 @@ export function HomeScreen({
         </section>
       )}
 
+      {/* Strava attribution */}
+      {activities.length > 0 && (
+        <PoweredByStrava className="mt-2" />
+      )}
     </div>
   )
 }

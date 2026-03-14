@@ -1,6 +1,6 @@
 import { startOfWeek, endOfWeek } from "date-fns"
 import { createServiceClient } from "@/lib/supabase/service"
-import { withStravaRetry } from "@/lib/strava"
+import { withStravaRetry, stravaApiFetch } from "@/lib/strava"
 
 // ---------------------------------------------------------------------------
 // Strava type definitions
@@ -123,9 +123,7 @@ export async function fetchStravaActivities(
     url.searchParams.set("page", String(page))
     if (after !== undefined) url.searchParams.set("after", String(after))
 
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    const res = await stravaApiFetch(url.toString(), accessToken)
 
     if (!res.ok) {
       const body = await res.text()
@@ -151,9 +149,9 @@ async function fetchSingleStravaActivity(
   accessToken: string,
   activityId: number,
 ): Promise<StravaActivity | null> {
-  const res = await fetch(
+  const res = await stravaApiFetch(
     `https://www.strava.com/api/v3/activities/${activityId}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+    accessToken,
   )
 
   if (res.status === 404) return null
