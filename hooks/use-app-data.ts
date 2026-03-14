@@ -67,10 +67,22 @@ export function useAppData(initialData?: InitialData | null) {
   useEffect(() => {
     async function loadData() {
       if (hasInitial) {
-        // After a fresh Strava OAuth connection the callback redirects to /.
-        // If Strava is connected but we have zero activities, auto-trigger a
-        // full sync so the user sees their data immediately.
-        if (initialData?.stravaConnected && initialData.activities.length === 0) {
+        // After a fresh Strava OAuth connection the callback redirects to
+        // /?strava_connected=1. Detect this and auto-trigger a full sync.
+        const params = new URLSearchParams(window.location.search)
+        const justConnected = params.get("strava_connected") === "1"
+
+        if (justConnected) {
+          // Clean up the query parameter from the URL
+          const url = new URL(window.location.href)
+          url.searchParams.delete("strava_connected")
+          window.history.replaceState({}, "", url.pathname)
+          setStravaConnected(true)
+        }
+
+        if (
+          (justConnected || (initialData?.stravaConnected && initialData.activities.length === 0))
+        ) {
           doSync(true)
         }
         return
@@ -527,7 +539,8 @@ export function useAppData(initialData?: InitialData | null) {
       if (freshActivities) {
         setActivities(freshActivities.map(mapActivityRow))
       }
-    } catch {
+    } catch (err) {
+      console.error("Sync fetch error:", err)
       setSyncStatus((prev) => ({
         ...prev,
         state: "error",
