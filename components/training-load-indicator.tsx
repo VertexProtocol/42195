@@ -159,7 +159,7 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
           </div>
           <div className="text-sm font-semibold font-mono text-card-foreground capitalize">
             {fatigue.signal === "none"
-              ? "—"
+              ? t("loadIndicator.fatigueNone")
               : fatigue.signal === "both"
                 ? t("loadIndicator.fatigueHrPace")
                 : fatigue.signal === "hr_elevated"
