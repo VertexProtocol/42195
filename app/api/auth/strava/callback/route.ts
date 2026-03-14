@@ -113,8 +113,9 @@ export async function GET(request: NextRequest) {
     return errorRedirect("Failed to save Strava connection.")
   }
 
-  // Success — clear state cookie and send the user back to the app
-  const res = NextResponse.redirect(`${baseUrl}/`)
+  // Success — clear state cookie and send the user back to the app.
+  // The ?strava_connected=1 query parameter signals the client to auto-sync.
+  const res = NextResponse.redirect(`${baseUrl}/?strava_connected=1`)
   res.cookies.delete("strava_oauth_state")
   return res
 }
