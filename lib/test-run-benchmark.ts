@@ -296,14 +296,14 @@ export function validatePrediction(
   actualSeconds: number,
   actualDistanceKm: number,
 ): PredictionValidation {
-  const predictedPace = prediction.predicted_seconds / prediction.distance_km
+  const predictedPaceMin = prediction.predicted_seconds / 60 / prediction.distance_km  // min/km
   // Normalize actual time to prediction distance using Riegel
   const normalizedSeconds = actualSeconds * (prediction.distance_km / actualDistanceKm) ** 1.06
-  const actualPace = normalizedSeconds / prediction.distance_km
+  const actualPaceMin = normalizedSeconds / 60 / prediction.distance_km  // min/km
 
-  const paceDiff = actualPace - predictedPace  // positive = slower than predicted
+  const paceDiff = actualPaceMin - predictedPaceMin  // positive = slower than predicted
   const timeDiff = normalizedSeconds - prediction.predicted_seconds
-  const pctDiff = paceDiff / predictedPace     // fractional
+  const pctDiff = paceDiff / predictedPaceMin     // fractional
 
   let result: PredictionValidationResult
   if (pctDiff <= -0.02) {
@@ -320,9 +320,9 @@ export function validatePrediction(
     prediction_distance_km: prediction.distance_km,
     prediction_distance_label: prediction.distance_label,
     predicted_seconds: prediction.predicted_seconds,
-    predicted_pace: Math.round(predictedPace * 100) / 100,
+    predicted_pace: Math.round(predictedPaceMin * 100) / 100,
     actual_seconds: Math.round(normalizedSeconds),
-    actual_pace: Math.round(actualPace * 100) / 100,
+    actual_pace: Math.round(actualPaceMin * 100) / 100,
     pace_diff: Math.round(paceDiff * 100) / 100,
     time_diff_seconds: Math.round(timeDiff),
     result,
