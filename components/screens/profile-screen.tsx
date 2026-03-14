@@ -61,12 +61,11 @@ export function ProfileScreen({
 
   const isSyncing = syncStatus.state === "syncing"
 
-  async function handleConnect() {
+  function handleConnect() {
     setConnecting(true)
     setConnectError(null)
-    const result = await onConnectStrava()
-    if (!result.ok) setConnectError(result.error ?? "Connection failed")
-    setConnecting(false)
+    // Always redirect to full OAuth — each user authorises their own Strava account
+    window.location.href = "/api/auth/strava"
   }
 
   function handleReconnect() {
