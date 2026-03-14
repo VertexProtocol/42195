@@ -6,6 +6,7 @@ import { useTheme } from "next-themes"
 import {
   RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw, Settings2,
+  Shield, Trash2,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { formatTimeAgo } from "@/lib/format"
@@ -47,6 +48,9 @@ export function ProfileScreen({
   const [connectError, setConnectError] = useState<string | null>(null)
   const [showResyncConfirm, setShowResyncConfirm] = useState(false)
   const [syncSuccess, setSyncSuccess] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
@@ -82,6 +86,25 @@ export function ProfileScreen({
     setShowResyncConfirm(false)
     setSyncSuccess(false)
     onFullSync()
+  }
+
+  async function handleDeleteAccount() {
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch("/api/account/delete", { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json()
+        setDeleteError(data.error ?? "Failed to delete account")
+        setIsDeleting(false)
+        return
+      }
+      // Redirect to login after successful deletion
+      window.location.href = "/auth/login"
+    } catch {
+      setDeleteError("Network error. Please try again.")
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -402,6 +425,72 @@ export function ProfileScreen({
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── LEGAL & DATA ───────────────────────────────────── */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("profile.legalData")}
+        </h3>
+        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          {/* Privacy Policy */}
+          <a
+            href="/privacy"
+            className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-sm font-medium text-card-foreground transition-colors active:bg-accent"
+          >
+            <Shield size={16} className="text-muted-foreground" />
+            {t("profile.privacyPolicy")}
+          </a>
+
+          {/* Delete Account */}
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-destructive transition-colors active:bg-destructive/5"
+            >
+              <Trash2 size={16} />
+              {t("profile.deleteAccount")}
+            </button>
+          ) : (
+            <div className="bg-destructive/5 p-4 ring-1 ring-destructive/20 rounded-b-2xl">
+              <div className="flex items-start gap-2 mb-3">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-destructive" />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t("profile.deleteAccountWarning")}
+                </p>
+              </div>
+              {deleteError && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
+                  <p className="text-xs text-destructive">{deleteError}</p>
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting}
+                  className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-opacity active:opacity-80 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      {t("profile.deleting")}
+                    </>
+                  ) : (
+                    t("profile.deleteAccountConfirm")
+                  )}
+                </button>
+                <button
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteError(null) }}
+                  disabled={isDeleting}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-opacity active:opacity-70 disabled:opacity-50"
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>
