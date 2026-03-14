@@ -67,7 +67,12 @@ export function useAppData(initialData?: InitialData | null) {
   useEffect(() => {
     async function loadData() {
       if (hasInitial) {
-        // SSR data already includes sync status — nothing to fetch
+        // After a fresh Strava OAuth connection the callback redirects to /.
+        // If Strava is connected but we have zero activities, auto-trigger a
+        // full sync so the user sees their data immediately.
+        if (initialData?.stravaConnected && initialData.activities.length === 0) {
+          doSync(true)
+        }
         return
       }
 
@@ -535,23 +540,14 @@ export function useAppData(initialData?: InitialData | null) {
   const sync = useCallback(() => doSync(false), [doSync])
   const fullSync = useCallback(() => doSync(true), [doSync])
 
-  // ----- Bootstrap Strava connection -----
+  // ----- Connect Strava via OAuth -----
   const connectStrava = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
-    const res = await fetch("/api/auth/strava/setup", { method: "POST" })
-    const json = await res.json()
-    if (!res.ok) {
-      // 403 = bootstrap token lacks activity:read scope; fall back to full OAuth
-      if (res.status === 403) {
-        window.location.href = "/api/auth/strava"
-        return { ok: true }
-      }
-      return { ok: false, error: json.error ?? "Setup failed" }
-    }
-    setStravaConnected(true)
-    // Kick off a full sync so activities load immediately
-    doSync(true)
+    // Always use the full OAuth flow so each user authorises their own Strava
+    // account. The old bootstrap endpoint (/api/auth/strava/setup) used a
+    // single shared refresh token and would bind the wrong athlete to new users.
+    window.location.href = "/api/auth/strava"
     return { ok: true }
-  }, [doSync])
+  }, [])
 
   const handleSignOut = useCallback(() => {
     startTransition(async () => {
