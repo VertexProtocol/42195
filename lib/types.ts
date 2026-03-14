@@ -162,6 +162,24 @@ export interface DerivedMetrics {
   aerobic_capacity: number | null     // distance × avg_hr product
 }
 
+export type PredictionValidationResult =
+  | "validated"
+  | "slightly_optimistic"
+  | "too_aggressive"
+  | "too_conservative"
+
+export interface PredictionValidation {
+  prediction_distance_km: number
+  prediction_distance_label: string
+  predicted_seconds: number
+  predicted_pace: number            // min/km
+  actual_seconds: number
+  actual_pace: number               // min/km
+  pace_diff: number                 // min/km (positive = slower than predicted)
+  time_diff_seconds: number         // positive = slower than predicted
+  result: PredictionValidationResult
+}
+
 export interface TestRun {
   id: string
   user_id: string
@@ -174,6 +192,7 @@ export interface TestRun {
   max_hr: number | null
   elevation_m: number | null
   derived_metrics: DerivedMetrics
+  prediction_validation: PredictionValidation | null
   notes: string | null
   created_at: string
 }
