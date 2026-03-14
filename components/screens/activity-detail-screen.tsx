@@ -165,7 +165,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [deleting, setDeleting] = useState(false)
   // Test run state
   const [testRun, setTestRun] = useState<TestRun | null>(null)
-  const [testRunLoading, setTestRunLoading] = useState(false)
+  const [testRunLoading, setTestRunLoading] = useState<TestRunType | "remove" | false>(false)
   const [showTestRunPicker, setShowTestRunPicker] = useState(false)
   const [testRunExpanded, setTestRunExpanded] = useState(false)
 
@@ -219,7 +219,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   }, [activity.id])
 
   const handleTagTestRun = useCallback(async (testType: TestRunType) => {
-    setTestRunLoading(true)
+    setTestRunLoading(testType)
     try {
       const res = await fetch("/api/test-runs", {
         method: "POST",
@@ -236,7 +236,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   }, [activity.id])
 
   const handleRemoveTestRun = useCallback(async () => {
-    setTestRunLoading(true)
+    setTestRunLoading("remove")
     try {
       const res = await fetch(`/api/test-runs?activity_id=${activity.id}`, { method: "DELETE" })
       if (res.ok) {
@@ -488,10 +488,10 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 {/* Remove button */}
                 <button
                   onClick={handleRemoveTestRun}
-                  disabled={testRunLoading}
+                  disabled={!!testRunLoading}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground active:opacity-70 disabled:opacity-50"
                 >
-                  <X size={12} />
+                  {testRunLoading === "remove" ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                   {t("testRun.remove")}
                 </button>
               </div>
@@ -523,10 +523,10 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     <button
                       key={tt.value}
                       onClick={() => handleTagTestRun(tt.value)}
-                      disabled={testRunLoading}
+                      disabled={!!testRunLoading}
                       className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-violet-500/5 active:bg-violet-500/10 disabled:opacity-50"
                     >
-                      {testRunLoading ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} className="text-violet-500/60" />}
+                      {testRunLoading === tt.value ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} className="text-violet-500/60" />}
                       {tt.label}
                     </button>
                   ))}
