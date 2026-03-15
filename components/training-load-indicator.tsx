@@ -362,22 +362,6 @@ function MomentumGraph({ data }: MomentumGraphProps) {
           </filter>
         </defs>
 
-        {/* Dotted grid background */}
-        <g opacity="0.15">
-          {Array.from({ length: 5 }).map((_, row) => (
-            Array.from({ length: Math.ceil(chartWidth / 20) }).map((_, col) => (
-              <circle
-                key={`${row}-${col}`}
-                cx={padding.left + col * 20}
-                cy={padding.top + row * (chartHeight / 4)}
-                r="0.8"
-                fill="currentColor"
-                className="text-muted-foreground"
-              />
-            ))
-          ))}
-        </g>
-
         {/* Zero line */}
         {minTsb < 0 && maxTsb > 0 && (
           <line
@@ -419,43 +403,36 @@ function MomentumGraph({ data }: MomentumGraphProps) {
           }}
         />
 
-        {/* Data point nodes */}
-        {points.map((p, i) => {
-          const isLast = i === points.length - 1
-          const isSelected = selectedPoint === i
-          const color = getColor(p.data.tsb)
-          const nodeSize = isLast ? 6 : 4
-          
+        {/* Current day indicator only */}
+        {points.length > 0 && (() => {
+          const lastPoint = points[points.length - 1]
+          const color = getColor(lastPoint.data.tsb)
           return (
-            <g key={i}>
+            <g>
               <circle
-                cx={p.x}
-                cy={p.y}
-                r={nodeSize}
+                cx={lastPoint.x}
+                cy={lastPoint.y}
+                r={6}
                 fill={color}
-                filter={isLast ? "url(#glow)" : undefined}
+                filter="url(#glow)"
                 style={{
                   opacity: animated ? 1 : 0,
-                  transition: `opacity 300ms ease-out ${100 + i * 30}ms`,
-                  cursor: "pointer",
+                  transition: "opacity 300ms ease-out 400ms",
                 }}
-                onPointerDown={() => setSelectedPoint(isSelected ? null : i)}
               />
-              {isLast && (
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={2.5}
-                  fill="white"
-                  style={{
-                    opacity: animated ? 1 : 0,
-                    transition: `opacity 300ms ease-out ${100 + i * 30}ms`,
-                  }}
-                />
-              )}
+              <circle
+                cx={lastPoint.x}
+                cy={lastPoint.y}
+                r={2.5}
+                fill="white"
+                style={{
+                  opacity: animated ? 1 : 0,
+                  transition: "opacity 300ms ease-out 400ms",
+                }}
+              />
             </g>
           )
-        })}
+        })()}
 
         {/* X-axis labels */}
         {getTickIndices().map((idx) => {
