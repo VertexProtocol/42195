@@ -40,6 +40,7 @@ import type {
 } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
+import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety"
 
 interface GoalDetailScreenProps {
   goal: Goal
@@ -940,6 +941,35 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     ? currentWeekIndex >= (aiPlan.plan.weeks.length)
     : false
 
+  // Pre-compute actual km per plan week for skip-load detection
+  const weeklyActualKm = useMemo(() => {
+    if (!aiPlan) return []
+    const blockMonday = toMonday(new Date(aiPlan.block_start_date))
+    return aiPlan.plan.weeks.map((_, i) => {
+      const weekStart = new Date(blockMonday)
+      weekStart.setDate(weekStart.getDate() + i * 7)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 7)
+      return activities
+        .filter((a) => { const d = new Date(a.date); return d >= weekStart && d < weekEnd })
+        .reduce((sum, a) => sum + a.distance_km, 0)
+    })
+  }, [aiPlan, activities])
+
+  // Detect unsafe volume spike from skipped sessions
+  const skipWarning: SkipLoadWarning | null = useMemo(() => {
+    if (!aiPlan || currentWeekIndex < 1 || isBlockExpired) return null
+    const prevWeekActual = weeklyActualKm[currentWeekIndex - 1]
+    if (prevWeekActual === undefined) return null
+    // Next week = the current week (it's upcoming relative to the completed week)
+    const nextIdx = currentWeekIndex
+    if (nextIdx >= aiPlan.plan.weeks.length) return null
+    const nextPlannedKm = aiPlan.plan.weeks[nextIdx].targetKm
+    const prevPlannedKm = nextIdx > 0 ? aiPlan.plan.weeks[nextIdx - 1].targetKm : undefined
+    const level = classifyAthleteLevel(activities as Parameters<typeof classifyAthleteLevel>[0])
+    return checkSkipLoadSpike(prevWeekActual, nextPlannedKm, level, prevPlannedKm)
+  }, [aiPlan, currentWeekIndex, weeklyActualKm, activities, isBlockExpired])
+
   return (
     <div className="flex flex-col gap-6 px-5 pb-8 pt-4">
       {/* Back */}
@@ -1129,6 +1159,30 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                   <p className="text-sm font-medium text-foreground">Training block ended</p>
                   <p className="text-xs text-muted-foreground">
                     This {aiPlan.plan.weeks.length}-week block has finished. Regenerate to get a fresh plan based on your latest training.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Skip-load spike warning */}
+            {skipWarning && !isBlockExpired && (
+              <div className={`flex gap-2.5 rounded-2xl px-4 py-3.5 ring-1 ${
+                skipWarning.severity === "danger"
+                  ? "bg-destructive/10 ring-destructive/30"
+                  : "bg-warning/10 ring-warning/30"
+              }`}>
+                <AlertCircle size={15} className={`mt-0.5 shrink-0 ${
+                  skipWarning.severity === "danger" ? "text-destructive" : "text-warning"
+                }`} />
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {skipWarning.severity === "danger" ? "Unsafe volume jump" : "Volume spike ahead"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {skipWarning.actualKm === 0
+                      ? `You had a rest week, but next week plans ${skipWarning.nextPlannedKm} km. Consider regenerating your plan to ease back in safely.`
+                      : `Last week you ran ${skipWarning.actualKm} km. Next week\u2019s plan calls for ${skipWarning.nextPlannedKm} km (+${skipWarning.spikePct}%). A safe target would be ~${skipWarning.safeMaxKm} km. Consider adjusting your plan.`
+                    }
                   </p>
                 </div>
               </div>
