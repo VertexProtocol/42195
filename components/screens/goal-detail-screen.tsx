@@ -49,6 +49,53 @@ interface GoalDetailScreenProps {
   onEditGoal: (goal: Goal) => void
 }
 
+// ---- Collapsible Section ----
+function CollapsibleSection({
+  title,
+  children,
+  defaultOpen = false,
+  variant = "default",
+}: {
+  title: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+  variant?: "default" | "warning"
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  
+  const baseStyles = variant === "warning"
+    ? "rounded-2xl bg-warning/10 ring-1 ring-warning/30"
+    : "rounded-2xl bg-card shadow-sm ring-1 ring-border"
+  
+  const iconColor = variant === "warning" ? "text-warning" : "text-muted-foreground"
+  
+  return (
+    <div className={baseStyles}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          {variant === "warning" && <AlertCircle size={15} className="text-warning" />}
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </span>
+        </div>
+        <ChevronDown 
+          size={16} 
+          className={`${iconColor} transition-transform ${isOpen ? "rotate-180" : ""}`} 
+        />
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- Preferences form ----
 function PreferencesForm({
   goalId,
@@ -1222,12 +1269,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               )
             })}
 
-            {/* Key principles */}
+            {/* Key principles - collapsible */}
             {aiPlan.plan.keyPrinciples?.length > 0 && (
-              <div className="rounded-2xl bg-card px-4 py-4 shadow-sm ring-1 ring-border">
-                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Key principles
-                </p>
+              <CollapsibleSection title="Key principles" defaultOpen={false}>
                 <ul className="flex flex-col gap-2">
                   {aiPlan.plan.keyPrinciples.map((p, i) => (
                     <li key={i} className="flex gap-2 text-sm text-card-foreground">
@@ -1236,15 +1280,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     </li>
                   ))}
                 </ul>
-              </div>
+              </CollapsibleSection>
             )}
 
-            {/* Watch out */}
+            {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
-              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
-                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+              <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
                 <p className="text-sm text-foreground">{aiPlan.plan.watchOut}</p>
-              </div>
+              </CollapsibleSection>
             )}
 
             {/* Adjust / Regenerate */}
