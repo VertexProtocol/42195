@@ -56,11 +56,23 @@ function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
 export function TrainingLoadIndicator({ activities, compact = false }: TrainingLoadIndicatorProps) {
   const { t } = useI18n()
   const [chartExpanded, setChartExpanded] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
 
-  const loadStatus = useMemo(() => computeTrainingLoadStatus(activities), [activities])
-  const chartData = useMemo(() => computeTrainingLoad(activities), [activities])
+  // Defer time-sensitive calculations until after hydration to avoid mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
-  if (activities.length < 4) return null
+  const loadStatus = useMemo(
+    () => (isMounted ? computeTrainingLoadStatus(activities) : null),
+    [activities, isMounted]
+  )
+  const chartData = useMemo(
+    () => (isMounted ? computeTrainingLoad(activities) : []),
+    [activities, isMounted]
+  )
+
+  if (activities.length < 4 || !loadStatus) return null
 
   const cfg = statusConfig(loadStatus.status, t)
   const { Icon } = cfg
