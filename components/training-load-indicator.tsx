@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { Activity as ActivityIcon, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
