@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, FlaskConical } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import { ActivityTypeBadge } from "@/components/activity-type-badge"
@@ -52,6 +52,40 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
 
   const isSyncing = syncStatus.state === "syncing"
 
+  // Pull-to-refresh for mobile
+  const containerRef = useRef<HTMLDivElement>(null)
+  const touchStartY = useRef(0)
+  const [pullDistance, setPullDistance] = useState(0)
+  const isPulling = useRef(false)
+  const PULL_THRESHOLD = 80
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    // Only enable pull-to-refresh when scrolled to top
+    const el = containerRef.current
+    if (!el || el.scrollTop > 0 || isSyncing) return
+    touchStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }, [isSyncing])
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isPulling.current) return
+    const dy = e.touches[0].clientY - touchStartY.current
+    if (dy > 0) {
+      // Diminishing returns past threshold
+      setPullDistance(Math.min(dy * 0.5, PULL_THRESHOLD * 1.5))
+    }
+  }, [])
+
+  const onTouchEnd = useCallback(() => {
+    if (!isPulling.current) return
+    isPulling.current = false
+    if (pullDistance >= PULL_THRESHOLD && stravaConnected && !isSyncing) {
+      setSyncSuccess(false)
+      onSync()
+    }
+    setPullDistance(0)
+  }, [pullDistance, stravaConnected, isSyncing, onSync])
+
   // Derive filter options from the actual activities — only show types that exist
   const activityTypes = useMemo(() => {
     const counts = new Map<string, number>()
@@ -86,7 +120,26 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
   const hasActiveFilters = searchQuery.trim() !== "" || selectedType !== "all"
 
   return (
-    <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
+    <div
+      ref={containerRef}
+      className="flex flex-col gap-4 px-5 pb-6 pt-4"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      {pullDistance > 0 && stravaConnected && (
+        <div
+          className="flex items-center justify-center overflow-hidden transition-opacity"
+          style={{ height: pullDistance, opacity: Math.min(pullDistance / PULL_THRESHOLD, 1) }}
+        >
+          <RefreshCw
+            size={20}
+            className={`text-muted-foreground transition-transform ${pullDistance >= PULL_THRESHOLD ? "text-primary" : ""}`}
+            style={{ transform: `rotate(${pullDistance * 3}deg)` }}
+          />
+        </div>
+      )}
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t("activities.title")}</h1>

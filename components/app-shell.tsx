@@ -205,6 +205,8 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             weeklySummary={data.weeklySummary}
             recentActivities={data.activities.slice(0, 5)}
+            syncStatus={data.syncStatus}
+            stravaConnected={data.stravaConnected}
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={() => handleTabChange("goals")}
             onViewInsights={() => handleTabChange("insights")}
