@@ -587,16 +587,9 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex w-full items-center justify-between px-5 py-4 text-left active:bg-secondary/50 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("timeline.title")}
-          </h3>
-          {!isExpanded && currentPhase && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-              {t(PHASE_LABEL_KEYS[currentPhase.type])}
-            </span>
-          )}
-        </div>
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("timeline.title")}
+        </h3>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
             {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
@@ -610,17 +603,20 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
 
       {/* Collapsed: show current phase summary */}
       {!isExpanded && currentPhase && (
-        <div className="px-5 pb-4 -mt-1">
-          <div className="flex items-center gap-3">
-            <div className="h-3 w-3 rounded-full border-2 border-primary bg-primary" />
-            <div>
-              <span className="text-sm font-semibold text-primary">
+        <div className="flex items-center gap-3 px-5 pb-4">
+          <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-semibold text-foreground">
                 {t(PHASE_LABEL_KEYS[currentPhase.type])}
               </span>
-              <p className="text-xs text-muted-foreground">
-                {currentWeeksLabel} · {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
-              </p>
+              <span className="text-xs text-muted-foreground">
+                {currentWeeksLabel}
+              </span>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
+            </p>
           </div>
         </div>
       )}
