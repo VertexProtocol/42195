@@ -122,6 +122,9 @@ const translations = {
     "goals.elevationGain": "Elevation Gain",
     "goals.perSession": "per session",
     "goals.events": "Events",
+    "goals.raceGoals": "Race Goals",
+    "goals.noRaceGoals": "No race goals",
+    "goals.setRaceGoals": "Add a race or time target to work towards",
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Race preparation and long-term training",
@@ -510,6 +513,9 @@ const translations = {
     "goals.elevationGain": "Høydemeter",
     "goals.perSession": "per økt",
     "goals.events": "Løp",
+    "goals.raceGoals": "Løpsmål",
+    "goals.noRaceGoals": "Ingen løpsmål",
+    "goals.setRaceGoals": "Legg til et løp eller tidsmål å jobbe mot",
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Løpsforberedelse og langsiktig trening",

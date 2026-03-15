@@ -5,7 +5,7 @@ import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
-  CalendarCheck, MapPin, Footprints, Sparkles,
+  CalendarCheck, MapPin, Footprints, Sparkles, ChevronDown,
 } from "lucide-react"
 import {
   formatDistance,
@@ -27,7 +27,7 @@ import {
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
-type GoalTab = "weekly" | "performance" | "events"
+type GoalTab = "weekly" | "race"
 
 const METRIC_ICONS: Record<string, typeof Flame> = {
   distance_km: TrendingUp,
@@ -111,6 +111,16 @@ export function GoalsScreen({
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("weekly")
+  const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
+
+  const toggleExpanded = (id: string) => {
+    setExpandedGoalIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const todayMondayStr = localMondayStr(new Date())
   const [selectedWeekStart, setSelectedWeekStart] = useState(todayMondayStr)
@@ -131,6 +141,15 @@ export function GoalsScreen({
     if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
     return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
   })
+
+  // All race goals: performance + events, sorted by active first, then by date
+  const raceGoals = useMemo(() => {
+    const all = [...performanceGoals, ...eventGoals]
+    return all.sort((a, b) => {
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
+    })
+  }, [performanceGoals, eventGoals])
 
   // Pre-compute performance goal evaluations (avoids O(goals * activities) inside JSX)
   const perfGoalStatuses = useMemo(
@@ -166,24 +185,14 @@ export function GoalsScreen({
           {t("goals.weekly")}
         </button>
         <button
-          onClick={() => setTab("performance")}
+          onClick={() => setTab("race")}
           className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-            tab === "performance"
+            tab === "race"
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground active:text-foreground"
           }`}
         >
-          {t("goals.performance")}
-        </button>
-        <button
-          onClick={() => setTab("events")}
-          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-            tab === "events"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground active:text-foreground"
-          }`}
-        >
-          {t("goals.events")}
+          {t("goals.raceGoals")}
         </button>
       </div>
 
@@ -338,268 +347,244 @@ export function GoalsScreen({
         </div>
       )}
 
-      {/* ── Performance tab ── */}
-      {tab === "performance" && (
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={onAddGoal}
-            className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
-          >
-            <Plus size={18} />
-            {t("goals.addPerfGoal")}
-          </button>
+      {/* ── Race Goals tab (merged Performance + Events) ── */}
+      {tab === "race" && (
+        <div className="flex flex-col gap-3">
+          {/* Add buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={onAddGoal}
+              className="flex flex-1 min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+            >
+              <Timer size={16} />
+              {t("goals.addPerfGoal")}
+            </button>
+            <button
+              onClick={onAddEventGoal}
+              className="flex flex-1 min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+            >
+              <CalendarCheck size={16} />
+              {t("plan.addEvent")}
+            </button>
+          </div>
 
-          {performanceGoals.length === 0 ? (
+          {/* Empty state */}
+          {raceGoals.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
-                <Timer size={28} className="text-muted-foreground" />
+                <Trophy size={28} className="text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-muted-foreground">{t("goals.noPerfGoals")}</p>
-              <p className="text-xs text-muted-foreground">
-                {t("goals.setPerfTargets")}
+              <p className="text-sm font-medium text-muted-foreground">{t("goals.noRaceGoals")}</p>
+              <p className="text-xs text-muted-foreground text-center max-w-[240px]">
+                {t("goals.setRaceGoals")}
               </p>
             </div>
           ) : (
-            performanceGoals.map((goal) => {
-              const status = perfGoalStatuses.get(goal.id) ?? { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 }
+            raceGoals.map((goal) => {
+              const isPerformance = goal.goal_category === "performance"
+              const isExpanded = expandedGoalIds.has(goal.id)
               const days = daysUntil(goal.target_date)
+              const isPast = isDatePast(goal.target_date)
+              
+              // Performance goal specific
+              const status = isPerformance 
+                ? (perfGoalStatuses.get(goal.id) ?? { reached: false, bestActivity: null, bestTimeSeconds: null, progress: 0 })
+                : null
+              
+              // Event goal specific
+              const phase = !isPerformance ? trainingPhaseKey(goal.start_date, goal.target_date) : null
+              const logged = !isPerformance ? computeDistanceInRange(activities, goal.start_date, goal.target_date) : 0
+              const timeProgress = !isPerformance ? timeElapsedPercentage(goal.start_date, goal.target_date) : 0
+              const best = !isPerformance ? bestRelevantRun(activities, goal.target_distance_km, goal.start_date, goal.target_date) : null
+              const longest = !isPerformance ? longestRun(activities, goal.start_date, goal.target_date) : null
 
               return (
                 <div
                   key={goal.id}
-                  className={`overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 transition-all ${
-                    status.reached
+                  className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
+                    status?.reached
                       ? "ring-success/40 ring-2"
                       : goal.is_active
                         ? "ring-primary/40 ring-2"
                         : "ring-border"
-                  }`}
+                  } ${isPast && !status?.reached ? "opacity-60" : ""}`}
                 >
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1 min-w-0 pr-3">
-                      {status.reached ? (
-                        <div className="flex items-center gap-1.5">
-                          <Trophy size={12} className="text-success" />
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-success">
-                            {t("goals.goalReached")}
-                          </span>
-                        </div>
-                      ) : goal.is_active ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-2 w-2 rounded-full bg-primary" />
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
-                            {t("goals.active")}
-                          </span>
-                        </div>
-                      ) : null}
-                      <h3 className="text-lg font-semibold text-card-foreground">
-                        {goal.name}
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => onEditGoal(goal)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
-                      aria-label={`Edit ${goal.name}`}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-
-                  {/* Goal details */}
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Target size={14} />
-                      <span>{formatDistance(goal.target_distance_km)}</span>
-                    </div>
-                    {goal.target_time_seconds && (
-                      <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                        <Timer size={12} />
-                        <span>{formatTargetTime(goal.target_time_seconds)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Calendar size={14} />
-                      <span>{formatDate(goal.target_date)}</span>
-                    </div>
-                  </div>
-
-                  {/* Progress toward goal */}
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-muted-foreground">
-                        {goal.target_time_seconds
-                          ? (status.bestActivity ? t("goals.bestTime") : t("goals.noQualifyingRuns"))
-                          : (status.bestActivity ? t("goals.longestRun") : t("goals.noRuns"))}
-                      </span>
-                      {status.bestActivity && (
-                        <span className={`font-semibold tabular-nums ${status.reached ? "text-success" : "text-foreground"}`}>
-                          {goal.target_time_seconds
-                            ? formatTargetTime(status.bestTimeSeconds!)
-                            : formatDistance(status.bestActivity.distance_km)}
-                        </span>
+                  {/* Collapsed header - always visible */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(goal.id)}
+                    className="flex w-full items-center gap-3 p-4 text-left active:bg-secondary/50 transition-colors"
+                  >
+                    {/* Icon */}
+                    <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                      isPerformance ? "bg-amber-500/10" : "bg-primary/10"
+                    }`}>
+                      {isPerformance ? (
+                        <Timer size={20} className="text-amber-500" />
+                      ) : (
+                        <Footprints size={20} className="text-primary" />
                       )}
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${status.reached ? "bg-success" : "bg-primary"}`}
-                        style={{ width: `${status.progress}%` }}
-                      />
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">
-                        {`${t("goals.target")}: `}
-                        {goal.target_time_seconds
-                          ? formatTargetTime(goal.target_time_seconds)
-                          : formatDistance(goal.target_distance_km)}
-                      </span>
-                      {status.reached && status.bestActivity && (
-                        <span className="font-medium text-success">
-                          {formatDateShort(status.bestActivity.date)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {days > 0 ? `${days} ${t("goals.daysRemaining")}` : t("goals.targetDatePassed")}
-                    </span>
-                    <button
-                      onClick={() => onToggleActive(goal.id)}
-                      className={`flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                        goal.is_active
-                          ? "bg-primary/10 text-primary active:bg-primary/20"
-                          : "bg-secondary text-secondary-foreground active:bg-accent"
-                      }`}
-                    >
-                      <Check size={14} />
-                      {goal.is_active ? t("goals.active") : t("goals.setActive")}
-                    </button>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      )}
-
-      {/* ── Events tab ───────────────────────────────────────────────────── */}
-      {tab === "events" && (
-        <div className="flex flex-col gap-4">
-          {/* Add Event Goal button */}
-          <button
-            onClick={onAddEventGoal}
-            className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors active:bg-secondary"
-          >
-            <Plus size={18} />
-            {t("plan.addEvent")}
-          </button>
-
-          {/* Event goal cards */}
-          {eventGoals.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-12 text-center">
-              <div className="flex size-14 items-center justify-center rounded-full bg-secondary">
-                <CalendarCheck size={24} className="text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground max-w-[240px]">
-                {t("plan.emptyState")}
-              </p>
-            </div>
-          ) : (
-            eventGoals.map((goal) => {
-              const days = daysUntil(goal.target_date)
-              const isPast = isDatePast(goal.target_date)
-              const phase = trainingPhaseKey(goal.start_date, goal.target_date)
-              const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-              const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
-              const best = bestRelevantRun(activities, goal.target_distance_km, goal.start_date, goal.target_date)
-              const longest = longestRun(activities, goal.start_date, goal.target_date)
-
-              return (
-                <button
-                  key={goal.id}
-                  onClick={() => onSelectGoal(goal)}
-                  className={`relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left transition-all active:scale-[0.98] ${
-                    goal.is_active ? "ring-2 ring-primary" : ""
-                  } ${isPast ? "opacity-60" : ""}`}
-                >
-                  {/* Active badge */}
-                  {goal.is_active && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5">
-                      <Sparkles size={12} className="text-primary" />
-                      <span className="text-[10px] font-semibold text-primary uppercase">
-                        {t("plan.active")}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Goal name and phase */}
-                  <div className="flex items-start gap-3 pr-16">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                      <Footprints size={20} className="text-primary" />
-                    </div>
+                    
+                    {/* Title and summary */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
-                      <p className={`text-xs font-medium ${phase.color}`}>
-                        {t(phase.labelKey)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar size={14} />
-                      <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <MapPin size={14} />
-                      <span>{formatDistance(goal.target_distance_km)}</span>
-                    </div>
-                    {goal.target_time_seconds && (
-                      <div className="flex items-center gap-1.5">
-                        <Timer size={14} />
-                        <span>{formatTargetTime(goal.target_time_seconds)}</span>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
+                        {goal.is_active && (
+                          <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                        )}
+                        {status?.reached && (
+                          <Trophy size={14} className="text-success shrink-0" />
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-muted-foreground">
-                        {formatDistance(logged)} {t("common.logged")}
-                      </span>
-                      <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{formatDistance(goal.target_distance_km)}</span>
+                        {goal.target_time_seconds && (
+                          <>
+                            <span>·</span>
+                            <span className="text-primary font-medium">{formatTargetTime(goal.target_time_seconds)}</span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
+                      </div>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${timeProgress}%` }}
-                      />
-                    </div>
-                  </div>
+                    
+                    {/* Chevron */}
+                    <ChevronDown 
+                      size={18} 
+                      className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+                    />
+                  </button>
 
-                  {/* Training stats */}
-                  {(best || longest) && (
-                    <div className="mt-3 pt-3 border-t border-border flex gap-4 text-xs">
-                      {best && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Trophy size={12} className="text-amber-500" />
-                          <span>{t("plan.bestRun")}: {formatDistance(best.distance_km)} in {formatDuration(best.duration_seconds)}</span>
-                        </div>
-                      )}
-                      {longest && !best && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <TrendingUp size={12} className="text-emerald-500" />
-                          <span>{t("plan.longestRun")}: {formatDistance(longest.distance_km)}</span>
-                        </div>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-border">
+                      {isPerformance && status ? (
+                        /* Performance goal expanded content */
+                        <>
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="text-muted-foreground">
+                                {goal.target_time_seconds
+                                  ? (status.bestActivity ? t("goals.bestTime") : t("goals.noQualifyingRuns"))
+                                  : (status.bestActivity ? t("goals.longestRun") : t("goals.noRuns"))}
+                              </span>
+                              {status.bestActivity && (
+                                <span className={`font-semibold tabular-nums ${status.reached ? "text-success" : "text-foreground"}`}>
+                                  {goal.target_time_seconds
+                                    ? formatTargetTime(status.bestTimeSeconds!)
+                                    : formatDistance(status.bestActivity.distance_km)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${status.reached ? "bg-success" : "bg-primary"}`}
+                                style={{ width: `${status.progress}%` }}
+                              />
+                            </div>
+                            <div className="mt-1 flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">
+                                {`${t("goals.target")}: `}
+                                {goal.target_time_seconds
+                                  ? formatTargetTime(goal.target_time_seconds)
+                                  : formatDistance(goal.target_distance_km)}
+                              </span>
+                              {status.reached && status.bestActivity && (
+                                <span className="font-medium text-success">
+                                  {formatDateShort(status.bestActivity.date)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Actions */}
+                          <div className="mt-4 flex items-center justify-between">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onToggleActive(goal.id); }}
+                              className={`flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                                goal.is_active
+                                  ? "bg-primary/10 text-primary active:bg-primary/20"
+                                  : "bg-secondary text-secondary-foreground active:bg-accent"
+                              }`}
+                            >
+                              <Check size={14} />
+                              {goal.is_active ? t("goals.active") : t("goals.setActive")}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        /* Event goal expanded content */
+                        <>
+                          {phase && (
+                            <p className={`mt-3 text-xs font-medium ${phase.color}`}>
+                              {t(phase.labelKey)}
+                            </p>
+                          )}
+                          
+                          {/* Progress bar */}
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="text-muted-foreground">
+                                {formatDistance(logged)} {t("common.logged")}
+                              </span>
+                              <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className="h-full rounded-full bg-primary transition-all duration-500"
+                                style={{ width: `${timeProgress}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Training stats */}
+                          {(best || longest) && (
+                            <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-3 text-xs">
+                              {best && (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <Trophy size={12} className="text-amber-500" />
+                                  <span>{t("plan.bestRun")}: {formatDistance(best.distance_km)} in {formatDuration(best.duration_seconds)}</span>
+                                </div>
+                              )}
+                              {longest && !best && (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <TrendingUp size={12} className="text-emerald-500" />
+                                  <span>{t("plan.longestRun")}: {formatDistance(longest.distance_km)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Actions */}
+                          <div className="mt-4 flex items-center justify-between">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onSelectGoal(goal); }}
+                              className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary active:bg-primary/20 transition-colors"
+                            >
+                              View Plan
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
-                </button>
+                </div>
               )
             })
           )}
