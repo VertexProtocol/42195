@@ -5,7 +5,7 @@ import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
-  CalendarCheck, MapPin, Footprints, Sparkles, GripVertical,
+  CalendarCheck, MapPin, Footprints, Sparkles, ChevronUp, ChevronDown,
 } from "lucide-react"
 import {
   formatDistance,
@@ -569,7 +569,21 @@ export function GoalsScreen({
                 setDragOverId(null)
               }
 
-              return orderedGoals.map((goal) => {
+              const moveGoal = (id: string, direction: "up" | "down") => {
+                const currentOrder = orderedGoals.map(g => g.id)
+                const idx = currentOrder.indexOf(id)
+                if (direction === "up" && idx > 0) {
+                  const newOrder = [...currentOrder]
+                  ;[newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]
+                  saveOrder(newOrder)
+                } else if (direction === "down" && idx < currentOrder.length - 1) {
+                  const newOrder = [...currentOrder]
+                  ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
+                  saveOrder(newOrder)
+                }
+              }
+
+              return orderedGoals.map((goal, index) => {
                 const days = daysUntil(goal.target_date)
                 const isPast = isDatePast(goal.target_date)
                 const phase = trainingPhaseKey(goal.start_date, goal.target_date)
@@ -579,22 +593,29 @@ export function GoalsScreen({
                 return (
                   <div
                     key={goal.id}
-                    draggable
-                    onDragStart={() => handleDragStart(goal.id)}
-                    onDragOver={(e) => handleDragOver(e, goal.id)}
-                    onDragEnd={handleDragEnd}
-                    onDragLeave={() => setDragOverId(null)}
                     className={`relative overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border text-left transition-all ${
                       goal.is_active ? "ring-2 ring-primary" : ""
-                    } ${isPast ? "opacity-60" : ""} ${
-                      draggedId === goal.id ? "opacity-50 scale-[0.98]" : ""
-                    } ${dragOverId === goal.id ? "ring-2 ring-primary/50" : ""}`}
+                    } ${isPast ? "opacity-60" : ""}`}
                   >
-                    {/* Drag handle + main content wrapper */}
+                    {/* Reorder buttons + main content wrapper */}
                     <div className="flex">
-                      {/* Drag handle */}
-                      <div className="flex items-center justify-center w-8 shrink-0 cursor-grab active:cursor-grabbing touch-none bg-secondary/30 border-r border-border/50">
-                        <GripVertical size={16} className="text-muted-foreground/50" />
+                      {/* Reorder buttons */}
+                      <div className="flex flex-col items-center justify-center w-10 shrink-0 bg-secondary/30 border-r border-border/50">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); moveGoal(goal.id, "up") }}
+                          disabled={index === 0}
+                          className="flex-1 flex items-center justify-center w-full active:bg-secondary/50 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronUp size={18} className="text-muted-foreground" />
+                        </button>
+                        <div className="w-5 h-px bg-border/50" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); moveGoal(goal.id, "down") }}
+                          disabled={index === orderedGoals.length - 1}
+                          className="flex-1 flex items-center justify-center w-full active:bg-secondary/50 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronDown size={18} className="text-muted-foreground" />
+                        </button>
                       </div>
                       
                       {/* Main content - clickable area */}
