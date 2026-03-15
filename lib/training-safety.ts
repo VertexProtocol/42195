@@ -126,6 +126,64 @@ export function checkWeeklyLoadProgression(
   return violations
 }
 
+// ── Cumulative load progression check ─────────────────────────────────────────
+
+/** Maximum cumulative increase over a rolling window (as a fraction) */
+const MAX_CUMULATIVE_INCREASE: Record<AthleteLevel, number> = {
+  beginner: 0.20,     // max 20% over 3 weeks
+  intermediate: 0.25, // max 25% over 3 weeks
+  advanced: 0.30,     // max 30% over 3 weeks
+}
+
+export interface CumulativeLoadViolation {
+  weekNumber: number
+  targetKm: number
+  referenceKm: number
+  cumulativePct: number
+  maxAllowedPct: number
+  adjustedKm: number
+}
+
+/**
+ * Checks that cumulative volume increase over a 3-week rolling window
+ * doesn't exceed level-appropriate limits. This catches scenarios where
+ * 3 consecutive small increases compound to a dangerous total increase.
+ */
+export function checkCumulativeProgression(
+  weekTargets: number[],
+  level: AthleteLevel,
+): CumulativeLoadViolation[] {
+  const maxCumulative = MAX_CUMULATIVE_INCREASE[level]
+  const violations: CumulativeLoadViolation[] = []
+  const windowSize = 3
+
+  for (let i = windowSize; i < weekTargets.length; i++) {
+    const reference = weekTargets[i - windowSize]
+    const current = weekTargets[i]
+
+    // Skip if reference week was a recovery week (very low volume)
+    if (reference < 5) continue
+
+    // Skip if current week is a recovery/taper (lower than reference)
+    if (current <= reference) continue
+
+    const pctIncrease = (current - reference) / reference
+    if (pctIncrease > maxCumulative) {
+      const maxAllowed = Math.round(reference * (1 + maxCumulative))
+      violations.push({
+        weekNumber: i + 1,
+        targetKm: current,
+        referenceKm: reference,
+        cumulativePct: Math.round(pctIncrease * 100),
+        maxAllowedPct: Math.round(maxCumulative * 100),
+        adjustedKm: maxAllowed,
+      })
+    }
+  }
+
+  return violations
+}
+
 // ── ACWR load safety ──────────────────────────────────────────────────────────
 
 export interface AcwrSafety {
@@ -508,6 +566,19 @@ export function validateAndAdjustPlan(
     }
   }
 
+  // Step 2b: Clamp cumulative progression over 3-week windows
+  const updatedTargets = adjustedWeeks.map((w) => w.targetKm)
+  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel)
+  for (const v of cumulativeViolations) {
+    const idx = v.weekNumber - 1
+    if (idx >= 0 && idx < adjustedWeeks.length) {
+      adjustedWeeks[idx].targetKm = v.adjustedKm
+      const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (cumulative ${v.cumulativePct}% over 3 weeks exceeds ${v.maxAllowedPct}% cap for ${athleteLevel})`
+      safetyNotes.push(note)
+      console.warn(`[safety] ${note}`)
+    }
+  }
+
   // Step 3: Long run protection — re-check after target adjustments
   const adjustedPlanForLongRun: TrainingPlan = { ...plan, weeks: adjustedWeeks }
   const longRunViolations = checkLongRunProtection(adjustedPlanForLongRun)
@@ -543,6 +614,7 @@ export function validateAndAdjustPlan(
 
   const passed =
     weeklyViolations.length === 0 &&
+    cumulativeViolations.length === 0 &&
     longRunViolations.length === 0 &&
     !frequencyWarning &&
     acwrSafety.weekOneMultiplier === 1.0 &&

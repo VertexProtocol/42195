@@ -302,8 +302,10 @@ export async function syncUserActivities(
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 
+  // Subtract 1 second to avoid missing activities recorded at the exact same
+  // second as last_sync_at (Strava's `after` param is exclusive).
   const afterTimestamp = !fullSync && lastSyncAt
-    ? Math.floor(new Date(lastSyncAt).getTime() / 1000)
+    ? Math.floor(new Date(lastSyncAt).getTime() / 1000) - 1
     : undefined
 
   const stravaActivities = await withStravaRetry(userId, (token) =>
