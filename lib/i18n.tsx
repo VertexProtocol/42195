@@ -124,7 +124,7 @@ const translations = {
     "goals.events": "Events",
     "goals.targets": "Targets",
     "goals.noTargets": "No targets",
-    "goals.setTargets": "Add a race or time target to work towards",
+    "goals.setEventTargets": "Add a race or time target to work towards",
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Race preparation and long-term training",
@@ -515,7 +515,7 @@ const translations = {
     "goals.events": "Løp",
     "goals.targets": "Mål",
     "goals.noTargets": "Ingen mål",
-    "goals.setTargets": "Legg til et løp eller tidsmål å jobbe mot",
+    "goals.setEventTargets": "Legg til et løp eller tidsmål å jobbe mot",
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Løpsforberedelse og langsiktig trening",
