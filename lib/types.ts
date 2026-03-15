@@ -76,11 +76,17 @@ export interface UserProfile {
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"
 
+/** Second-by-second activity data point from Strava streams */
 export interface StreamPoint {
+  /** Elapsed time in seconds since activity start */
   time: number
+  /** Heart rate in beats per minute (bpm) */
   hr: number | null
+  /** Pace in minutes per kilometre (min/km) — lower = faster */
   pace: number | null
+  /** Altitude in metres above sea level */
   altitude: number | null
+  /** Running cadence in steps per minute (spm) */
   cadence: number | null
 }
 
@@ -158,8 +164,8 @@ export interface DerivedMetrics {
   estimated_vo2max: number | null
   threshold_pace: number | null       // min/km
   threshold_hr: number | null         // bpm
-  running_efficiency: number | null   // pace / hr ratio (lower = more efficient)
-  aerobic_capacity: number | null     // distance × avg_hr product
+  running_efficiency: number | null   // speed per bpm: (m/min)/bpm × 1000 — higher = more efficient
+  aerobic_capacity: number | null     // km per hour per bpm × 100 — higher = better aerobic fitness
 }
 
 export type PredictionValidationResult =

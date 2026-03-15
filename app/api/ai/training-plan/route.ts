@@ -670,8 +670,16 @@ export async function POST(req: NextRequest) {
           : []
 
         if (currentPlan?.plan) {
+          // Archive only summary data to avoid JSONB bloat — strip full session details
+          const prevPlan = currentPlan.plan as TrainingPlan
           previousPlans.unshift({
-            plan: currentPlan.plan,
+            summary: prevPlan.summary,
+            weeks: prevPlan.weeks.map((w: TrainingWeek) => ({
+              weekNumber: w.weekNumber,
+              theme: w.theme,
+              targetKm: w.targetKm,
+              sessionCount: w.sessions.length,
+            })),
             generated_at: currentPlan.generated_at,
             adjust_note: currentPlan.adjust_note ?? null,
             block_start_date: currentPlan.block_start_date,
@@ -699,6 +707,15 @@ export async function POST(req: NextRequest) {
           console.error("Failed to cache training plan:", upsertError)
           send({ status: "error", error: "Plan was generated but failed to save. Please try again." })
           return
+        }
+
+        // Clean up orphaned session completions from the previous plan
+        const { error: deleteError } = await service
+          .from("session_completions")
+          .delete()
+          .eq("goal_id", goalId)
+        if (deleteError) {
+          console.warn(`[plan] Failed to clean up session completions for goal ${goalId}:`, deleteError)
         }
 
         send({
@@ -759,6 +776,17 @@ export async function GET(req: NextRequest) {
   })
 }
 
+const PreferencesSchema = z.object({
+  goalId: z.string().uuid(),
+  sessions_per_week: z.number().int().min(1).max(14),
+  focus: z.enum(["volume", "workouts", "balanced"]),
+  notes: z.string().max(500).nullable().optional(),
+  weekly_increase_pct: z.number().min(0).max(25).default(10),
+  block_weeks: z.number().int().min(1).max(20).default(4),
+  regenerate_every_weeks: z.number().int().min(1).max(12).default(4),
+  plan_mode: z.enum(["block", "full_cycle"]).default("block"),
+})
+
 // PUT — save/update preferences for a goal
 export async function PUT(req: NextRequest) {
   const supabase = await createClient()
@@ -768,10 +796,19 @@ export async function PUT(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json()
-  const { goalId, sessions_per_week, focus, notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = body
+  let rawBody: unknown
+  try {
+    rawBody = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
 
-  if (!goalId) return NextResponse.json({ error: "goalId is required" }, { status: 400 })
+  const parsed = PreferencesSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 })
+  }
+
+  const { goalId, sessions_per_week, focus, notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = parsed.data
 
   const { error } = await supabase.from("goal_preferences").upsert(
     {
