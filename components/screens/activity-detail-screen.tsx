@@ -264,13 +264,13 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     if (validPaces.length === 0) return streams
     validPaces.sort((a, b) => a - b)
     const medianPace = validPaces[Math.floor(validPaces.length / 2)]
-    const upperBound = medianPace * 1.6
+    const upperBound = medianPace * 1.5
     const lowerBound = medianPace * 0.5
-    // Null out the first 5 points if they're outliers (GPS warmup)
+    // Null out the first 8 points if they deviate from median (GPS warmup)
     // and any mid-run outliers beyond the bounds
     return streams.map((point, i) => {
       if (point.pace === null) return point
-      if (i < 5 && (point.pace > medianPace * 1.3 || point.pace < lowerBound)) return { ...point, pace: null }
+      if (i < 8 && (point.pace > medianPace * 1.15 || point.pace < lowerBound)) return { ...point, pace: null }
       if (point.pace > upperBound || point.pace < lowerBound) return { ...point, pace: null }
       return point
     })
