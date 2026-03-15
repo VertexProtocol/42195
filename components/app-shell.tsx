@@ -208,8 +208,10 @@ export function AppShell({ initialData }: AppShellProps) {
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
             onViewActivities={() => handleTabChange("activities")}
-            onViewGoal={() => handleTabChange("goals")}
+            onViewGoal={(goal) => { navigate({ tab: "goals", goal: goal.id }) }}
+            onViewGoals={() => handleTabChange("goals")}
             onViewInsights={() => handleTabChange("insights")}
+            onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
           />
         )}
 
