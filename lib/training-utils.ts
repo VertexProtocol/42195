@@ -110,7 +110,9 @@ export interface TrainingLoadPoint {
 
 /**
  * Computes daily ATL/CTL/TSB using exponentially weighted moving averages.
- * ATL decay constant = 7 days, CTL decay constant = 42 days.
+ * ATL time constant = 7 days, CTL time constant = 42 days.
+ * Decay factors use the correct formula α = 1 - e^(-ln(2)/n) so that
+ * the half-life equals the stated number of days.
  * Returns the last 90 days of data points.
  */
 export function computeTrainingLoad(activities: Array<{ date: string; distance_km: number }>): TrainingLoadPoint[] {
@@ -129,8 +131,9 @@ export function computeTrainingLoad(activities: Array<{ date: string; distance_k
   }
 
   const points: TrainingLoadPoint[] = []
-  const atlDecay = 2 / (7 + 1)
-  const ctlDecay = 2 / (42 + 1)
+  // α = 1 - e^(-ln(2)/n) gives true n-day half-life
+  const atlDecay = 1 - Math.exp(-Math.LN2 / 7)   // ≈ 0.0943 (7-day half-life)
+  const ctlDecay = 1 - Math.exp(-Math.LN2 / 42)  // ≈ 0.0164 (42-day half-life)
 
   let atl = 0
   let ctl = 0

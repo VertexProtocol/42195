@@ -170,79 +170,111 @@ async function fetchSingleStravaActivity(
 
 export async function recalculateGoals(userId: string) {
   const service = createServiceClient()
+  const errors: string[] = []
 
   // Recalculate lifetime goals
-  const { data: activeGoals } = await service
-    .from("goals")
-    .select("id, start_date, target_date")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-
-  if (activeGoals && activeGoals.length > 0) {
-    const { data: allActivities } = await service
-      .from("activities")
-      .select("date, distance_km")
+  try {
+    const { data: activeGoals } = await service
+      .from("goals")
+      .select("id, start_date, target_date")
       .eq("user_id", userId)
+      .eq("is_active", true)
 
-    const acts = allActivities ?? []
+    if (activeGoals && activeGoals.length > 0) {
+      // Fetch activities once, compute all goal totals, then batch update
+      const { data: allActivities } = await service
+        .from("activities")
+        .select("date, distance_km")
+        .eq("user_id", userId)
 
-    for (const goal of activeGoals) {
-      const totalKm = acts
-        .filter((a) => {
-          if (a.date > goal.target_date) return false
-          if (goal.start_date && a.date < goal.start_date) return false
-          return true
+      const acts = allActivities ?? []
+
+      const updates = activeGoals.map((goal) => {
+        const totalKm = acts
+          .filter((a) => {
+            if (a.date > goal.target_date) return false
+            if (goal.start_date && a.date < goal.start_date) return false
+            return true
+          })
+          .reduce((sum, a) => sum + Number(a.distance_km), 0)
+        return { id: goal.id, totalKm }
+      })
+
+      // Update each goal (individual updates to avoid partial failure blocking all)
+      await Promise.all(
+        updates.map(async ({ id, totalKm }) => {
+          const { error } = await service
+            .from("goals")
+            .update({ current_distance_km: totalKm })
+            .eq("id", id)
+          if (error) {
+            console.error(`[recalcGoals] Failed to update goal ${id}:`, error)
+            errors.push(`goal ${id}: ${error.message}`)
+          }
         })
-        .reduce((sum, a) => sum + Number(a.distance_km), 0)
-
-      await service
-        .from("goals")
-        .update({ current_distance_km: totalKm })
-        .eq("id", goal.id)
+      )
     }
+  } catch (err) {
+    console.error("[recalcGoals] Lifetime goal recalculation failed:", err)
+    errors.push(`lifetime goals: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   // Recalculate weekly goals for the current week
-  const now = new Date()
-  const weekStart = startOfWeek(now, { weekStartsOn: 1 })
-  const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
-  const weekStartStr = weekStart.toISOString().split("T")[0]
+  try {
+    const now = new Date()
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+    const weekStartStr = weekStart.toISOString().split("T")[0]
 
-  const { data: weeklyGoals } = await service
-    .from("weekly_goals")
-    .select("id, metric, is_recurring, session_min_duration_minutes, session_min_distance_km")
-    .eq("user_id", userId)
-    .or(`week_start.eq.${weekStartStr},is_recurring.eq.true`)
-
-  if (weeklyGoals && weeklyGoals.length > 0) {
-    const { data: weekActivities } = await service
-      .from("activities")
-      .select("distance_km, duration_seconds, elevation_gain_m")
+    const { data: weeklyGoals } = await service
+      .from("weekly_goals")
+      .select("id, metric, is_recurring, session_min_duration_minutes, session_min_distance_km")
       .eq("user_id", userId)
-      .gte("date", weekStart.toISOString())
-      .lte("date", weekEnd.toISOString())
+      .or(`week_start.eq.${weekStartStr},is_recurring.eq.true`)
 
-    const acts = weekActivities ?? []
+    if (weeklyGoals && weeklyGoals.length > 0) {
+      const { data: weekActivities } = await service
+        .from("activities")
+        .select("distance_km, duration_seconds, elevation_gain_m")
+        .eq("user_id", userId)
+        .gte("date", weekStart.toISOString())
+        .lte("date", weekEnd.toISOString())
 
-    for (const wg of weeklyGoals) {
-      let current = 0
+      const acts = weekActivities ?? []
 
-      if (wg.metric === "sessions") {
-        current = acts.filter((a) => {
-          if (wg.session_min_duration_minutes && a.duration_seconds / 60 < wg.session_min_duration_minutes) return false
-          if (wg.session_min_distance_km && Number(a.distance_km) < Number(wg.session_min_distance_km)) return false
-          return true
-        }).length
-      } else if (wg.metric === "distance_km") {
-        current = acts.reduce((sum: number, a) => sum + Number(a.distance_km), 0)
-      } else if (wg.metric === "duration_minutes") {
-        current = acts.reduce((sum: number, a) => sum + a.duration_seconds / 60, 0)
-      } else if (wg.metric === "elevation_m") {
-        current = acts.reduce((sum: number, a) => sum + Number(a.elevation_gain_m ?? 0), 0)
-      }
+      await Promise.all(
+        weeklyGoals.map(async (wg) => {
+          let current = 0
 
-      await service.from("weekly_goals").update({ current }).eq("id", wg.id)
+          if (wg.metric === "sessions") {
+            current = acts.filter((a) => {
+              if (wg.session_min_duration_minutes && a.duration_seconds / 60 < wg.session_min_duration_minutes) return false
+              if (wg.session_min_distance_km && Number(a.distance_km) < Number(wg.session_min_distance_km)) return false
+              return true
+            }).length
+          } else if (wg.metric === "distance_km") {
+            current = acts.reduce((sum: number, a) => sum + Number(a.distance_km), 0)
+          } else if (wg.metric === "duration_minutes") {
+            current = acts.reduce((sum: number, a) => sum + a.duration_seconds / 60, 0)
+          } else if (wg.metric === "elevation_m") {
+            current = acts.reduce((sum: number, a) => sum + Number(a.elevation_gain_m ?? 0), 0)
+          }
+
+          const { error } = await service.from("weekly_goals").update({ current }).eq("id", wg.id)
+          if (error) {
+            console.error(`[recalcGoals] Failed to update weekly goal ${wg.id}:`, error)
+            errors.push(`weekly goal ${wg.id}: ${error.message}`)
+          }
+        })
+      )
     }
+  } catch (err) {
+    console.error("[recalcGoals] Weekly goal recalculation failed:", err)
+    errors.push(`weekly goals: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  if (errors.length > 0) {
+    console.warn(`[recalcGoals] Completed with ${errors.length} error(s):`, errors)
   }
 }
 
