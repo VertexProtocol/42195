@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
-// import { Toaster } from '@/components/ui/sonner' // Temporarily disabled
+import { Toaster } from '@/components/ui/sonner'
 import { I18nProvider } from '@/lib/i18n'
 import { ServiceWorkerRegistration } from '@/components/sw-register'
 import { AuthListener } from '@/components/auth-listener'
@@ -50,7 +50,7 @@ export default function RootLayout({
           <I18nProvider>
             {children}
           </I18nProvider>
-          {/* <Toaster position="top-center" richColors closeButton /> */}
+          <Toaster position="top-center" richColors closeButton />
         </ThemeProvider>
         <AuthListener />
         <ServiceWorkerRegistration />

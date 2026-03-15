@@ -41,9 +41,11 @@ const MAX_WEEKLY_INCREASE: Record<AthleteLevel, number> = {
 
 /**
  * Classifies an athlete based on their 12-week activity history.
- * - Beginner:     avg weekly km < 20  OR  avg sessions/week < 2
- * - Intermediate: avg weekly km 20–50 OR  avg sessions/week 2–4
- * - Advanced:     avg weekly km > 50  OR  avg sessions/week > 4
+ * Both volume AND frequency must qualify for a given level to prevent
+ * misclassification (e.g. 5×4km/week is not advanced despite high frequency).
+ * - Advanced:     avg weekly km > 50  AND avg sessions/week > 4
+ * - Intermediate: avg weekly km > 20  AND avg sessions/week >= 2
+ * - Beginner:     everything else
  */
 export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel {
   if (activities.length === 0) return "beginner"
@@ -58,8 +60,8 @@ export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel
   const avgWeeklyKm = totalKm / 12
   const avgSessionsPerWeek = recent.length / 12
 
-  if (avgWeeklyKm > 50 || avgSessionsPerWeek > 4) return "advanced"
-  if (avgWeeklyKm > 20 || avgSessionsPerWeek >= 2) return "intermediate"
+  if (avgWeeklyKm > 50 && avgSessionsPerWeek > 4) return "advanced"
+  if (avgWeeklyKm > 20 && avgSessionsPerWeek >= 2) return "intermediate"
   return "beginner"
 }
 
@@ -447,14 +449,20 @@ export function validateAndAdjustPlan(
     sessions: w.sessions.map((s) => ({ ...s })),
   }))
 
-  // Step 1: Apply ACWR week-1 multiplier + prolonged fatigue deload
-  const combinedWeek1Multiplier = Math.min(
+  // Step 1: Apply ACWR + prolonged fatigue deload across first 3 weeks (graduated)
+  // Week 1 gets full adjustment, week 2 gets 50%, week 3 gets 25%
+  const combinedMultiplier = Math.min(
     acwrSafety.weekOneMultiplier,
     prolongedFatigue.deloadMultiplier,
   )
-  if (combinedWeek1Multiplier < 1.0 && adjustedWeeks.length > 0) {
-    const original = adjustedWeeks[0].targetKm
-    adjustedWeeks[0].targetKm = Math.round(original * combinedWeek1Multiplier)
+  if (combinedMultiplier < 1.0 && adjustedWeeks.length > 0) {
+    const graduationFactors = [1.0, 0.5, 0.25] // how much of the reduction to apply
+    for (let i = 0; i < Math.min(graduationFactors.length, adjustedWeeks.length); i++) {
+      const reduction = 1 - combinedMultiplier // e.g. 0.25 for a 25% cut
+      const weekMultiplier = 1 - (reduction * graduationFactors[i])
+      const original = adjustedWeeks[i].targetKm
+      adjustedWeeks[i].targetKm = Math.round(original * weekMultiplier)
+    }
     if (acwrSafety.message) safetyNotes.push(acwrSafety.message)
     if (prolongedFatigue.message) safetyNotes.push(prolongedFatigue.message)
   }

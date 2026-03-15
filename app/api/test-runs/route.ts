@@ -122,13 +122,16 @@ export async function POST(request: Request) {
   // Compute prediction validation if a prediction distance is specified
   let predictionValidation = null
   if (prediction_distance_km != null) {
-    // Fetch all activities for prediction calculation
+    // Fetch recent activities for prediction calculation (90-day window matches predictRaceTimes)
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const { data: allActivities } = await supabase
       .from("activities")
       .select(
         "id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at",
       )
       .eq("user_id", user.id)
+      .gte("date", ninetyDaysAgo.toISOString())
       .order("date", { ascending: false })
       .limit(200)
 
