@@ -564,14 +564,56 @@ export async function POST(req: NextRequest) {
     testRunSection = `## Test Run Benchmarks (high-confidence fitness data)\nThese are user-tagged benchmark efforts. Use them as strong calibration signals for pace targets and training intensity.\n${lines.join("\n")}`
   }
 
-  // Build previous plan summary for continuity
+  // Build previous plan summary for continuity — include actual vs planned per week
   let previousPlanSummary: string | null = null
   if (existingPlan?.plan) {
     const prevPlan = existingPlan.plan as TrainingPlan
     const totalKm = prevPlan.weeks.reduce((s: number, w: TrainingWeek) => s + w.targetKm, 0)
     const peakKm = Math.max(...prevPlan.weeks.map((w: TrainingWeek) => w.targetKm))
-    const weekThemes = prevPlan.weeks.map((w: TrainingWeek) => `Week ${w.weekNumber}: ${w.theme} (${w.targetKm} km)`).join("\n  ")
-    previousPlanSummary = `Previous block (generated ${existingPlan.generated_at?.split("T")[0] ?? "recently"}):\n  ${weekThemes}\n  Total: ${totalKm} km, Peak week: ${peakKm} km\n  Summary: ${prevPlan.summary}`
+
+    // Compute actual km per plan week from activities
+    const blockStart = existingPlan.block_start_date
+      ? new Date(existingPlan.block_start_date)
+      : null
+    const acts12 = activities ?? []
+
+    const weekLines = prevPlan.weeks.map((w: TrainingWeek, i: number) => {
+      let actualStr = ""
+      if (blockStart) {
+        const weekStartDate = new Date(blockStart)
+        // Align to Monday
+        const bDay = weekStartDate.getDay()
+        const bDiff = bDay === 0 ? -6 : 1 - bDay
+        weekStartDate.setDate(weekStartDate.getDate() + bDiff + i * 7)
+        const weekEndDate = new Date(weekStartDate)
+        weekEndDate.setDate(weekEndDate.getDate() + 7)
+        const actualKm = acts12
+          .filter((a) => {
+            const d = new Date(a.date)
+            return d >= weekStartDate && d < weekEndDate
+          })
+          .reduce((s, a) => s + a.distance_km, 0)
+        const pct = w.targetKm > 0 ? Math.round((actualKm / w.targetKm) * 100) : 0
+        actualStr = ` → actual ${actualKm.toFixed(1)} km (${pct}%)`
+      }
+      return `Week ${w.weekNumber}: ${w.theme} (planned ${w.targetKm} km${actualStr})`
+    })
+
+    const totalActualKm = blockStart
+      ? prevPlan.weeks.reduce((sum: number, _w: TrainingWeek, i: number) => {
+          const ws = new Date(blockStart)
+          const bDay = ws.getDay()
+          const bDiff = bDay === 0 ? -6 : 1 - bDay
+          ws.setDate(ws.getDate() + bDiff + i * 7)
+          const we = new Date(ws)
+          we.setDate(we.getDate() + 7)
+          return sum + acts12
+            .filter((a) => { const d = new Date(a.date); return d >= ws && d < we })
+            .reduce((s, a) => s + a.distance_km, 0)
+        }, 0)
+      : null
+
+    previousPlanSummary = `Previous block (generated ${existingPlan.generated_at?.split("T")[0] ?? "recently"}):\n  ${weekLines.join("\n  ")}\n  Planned total: ${totalKm} km${totalActualKm !== null ? `, Actual total: ${totalActualKm.toFixed(1)} km (${Math.round((totalActualKm / totalKm) * 100)}% adherence)` : ""}, Peak week: ${peakKm} km\n  Summary: ${prevPlan.summary}`
     if (existingPlan.adjust_note) {
       previousPlanSummary += `\n  Last adjustment note: "${existingPlan.adjust_note}"`
     }
@@ -676,24 +718,58 @@ export async function POST(req: NextRequest) {
         // have lost its auth context inside the ReadableStream callback
         // (cookies() from next/headers is only available during initial request handling).
         const service = createServiceClient()
-        const blockStartDate = new Date().toISOString().split("T")[0]
         const generatedAt = new Date().toISOString()
 
         // Re-fetch existing plan via service client for archiving
         const { data: currentPlan } = await service
           .from("ai_training_plans")
-          .select("plan, generated_at, adjust_note, block_start_date, previous_plans")
+          .select("plan, generated_at, adjust_note, block_start_date, previous_plans, session_completions:session_completions(session_key, status)")
           .eq("goal_id", goalId)
           .eq("user_id", user.id)
           .maybeSingle()
+
+        // Compute block start date:
+        // - If a previous plan exists, start the Monday after its last week ends
+        // - Otherwise, use the Monday of the current week
+        let blockStartDate: string
+        if (currentPlan?.block_start_date && currentPlan?.plan) {
+          const prevBlockStart = new Date(currentPlan.block_start_date)
+          // Align to Monday
+          const day = prevBlockStart.getDay()
+          const diff = day === 0 ? -6 : 1 - day
+          prevBlockStart.setDate(prevBlockStart.getDate() + diff)
+          const prevWeekCount = (currentPlan.plan as TrainingPlan).weeks.length
+          const nextBlockStart = new Date(prevBlockStart)
+          nextBlockStart.setDate(nextBlockStart.getDate() + prevWeekCount * 7)
+          // If the computed next start is in the past, use this Monday instead
+          const today = new Date()
+          const todayMonday = new Date(today)
+          const todayDay = todayMonday.getDay()
+          const todayDiff = todayDay === 0 ? -6 : 1 - todayDay
+          todayMonday.setDate(todayMonday.getDate() + todayDiff)
+          blockStartDate = (nextBlockStart >= todayMonday ? nextBlockStart : todayMonday)
+            .toISOString().split("T")[0]
+        } else {
+          const today = new Date()
+          const day = today.getDay()
+          const diff = day === 0 ? -6 : 1 - day
+          today.setDate(today.getDate() + diff)
+          blockStartDate = today.toISOString().split("T")[0]
+        }
 
         const previousPlans = Array.isArray(currentPlan?.previous_plans)
           ? currentPlan.previous_plans
           : []
 
         if (currentPlan?.plan) {
-          // Archive only summary data to avoid JSONB bloat — strip full session details
+          // Archive summary data + session completion statuses to preserve adherence history
           const prevPlan = currentPlan.plan as TrainingPlan
+          const sessionCompletions = Array.isArray(currentPlan.session_completions)
+            ? Object.fromEntries(
+                (currentPlan.session_completions as Array<{ session_key: string; status: string }>)
+                  .map((sc) => [sc.session_key, sc.status])
+              )
+            : {}
           previousPlans.unshift({
             summary: prevPlan.summary,
             weeks: prevPlan.weeks.map((w: TrainingWeek) => ({
@@ -705,6 +781,7 @@ export async function POST(req: NextRequest) {
             generated_at: currentPlan.generated_at,
             adjust_note: currentPlan.adjust_note ?? null,
             block_start_date: currentPlan.block_start_date,
+            sessionCompletions,
           })
           // Keep at most 5 previous plans
           if (previousPlans.length > 5) previousPlans.length = 5
