@@ -20,13 +20,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Fetch all activities with HR data
+  // Fetch activities that have HR data (filter at DB level to avoid fetching useless rows)
   const { data: rawActivities, error: actError } = await supabase
     .from("activities")
     .select(
       "id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at",
     )
     .eq("user_id", user.id)
+    .not("avg_heart_rate", "is", null)
+    .gt("avg_heart_rate", 0)
     .order("date", { ascending: false })
     .limit(300)
 

@@ -167,10 +167,10 @@ function calcFullCycleTargets(
     }
   }
 
-  // Taper: reduce volume progressively
+  // Taper: reduce volume progressively from peak down to 60%
   const peakKm = current
   for (let i = 0; i < taperWeeks; i++) {
-    const taperPct = 1 - ((i + 1) / taperWeeks) * 0.4 // 60% to 100% of peak
+    const taperPct = 1 - ((i + 1) / taperWeeks) * 0.4 // 100% → 60% of peak
     targets.push(Math.round(peakKm * taperPct))
   }
 
