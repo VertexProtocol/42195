@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useRef } from "react"
 import { Activity as ActivityIcon, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
@@ -56,23 +56,11 @@ function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
 export function TrainingLoadIndicator({ activities, compact = false }: TrainingLoadIndicatorProps) {
   const { t } = useI18n()
   const [chartExpanded, setChartExpanded] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
 
-  // Defer time-sensitive calculations until after hydration to avoid mismatch
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
+  const loadStatus = useMemo(() => computeTrainingLoadStatus(activities), [activities])
+  const chartData = useMemo(() => computeTrainingLoad(activities), [activities])
 
-  const loadStatus = useMemo(
-    () => (isMounted ? computeTrainingLoadStatus(activities) : null),
-    [activities, isMounted]
-  )
-  const chartData = useMemo(
-    () => (isMounted ? computeTrainingLoad(activities) : []),
-    [activities, isMounted]
-  )
-
-  if (activities.length < 4 || !loadStatus) return null
+  if (activities.length < 4) return null
 
   const cfg = statusConfig(loadStatus.status, t)
   const { Icon } = cfg
@@ -96,13 +84,8 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
   const latest = hasChartData ? chartData[chartData.length - 1] : null
   const twoWeeksAgo = hasChartData ? chartData[Math.max(0, chartData.length - 15)] : null
   
-  const fitnessDelta = useMemo(() => {
-    return latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
-  }, [latest?.ctl, twoWeeksAgo?.ctl])
-  
-  const fitnessArrow = useMemo(() => {
-    return fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
-  }, [fitnessDelta])
+  const fitnessDelta = latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
+  const fitnessArrow = fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
 
   const formatDate = (d: string) => {
     const date = new Date(d + "T12:00:00")
