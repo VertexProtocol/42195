@@ -129,13 +129,21 @@ function distributeWeeks(total: number): Map<TrainingPhaseType, number> {
   return result
 }
 
+/** Parse a date string that may be date-only ("2026-09-12") or full ISO datetime */
+function parseDate(s: string): Date {
+  // If it already contains a time component, parse directly
+  if (s.includes("T") || s.includes(" ")) return new Date(s)
+  // Date-only: add noon to avoid timezone drift
+  return new Date(s + "T12:00:00")
+}
+
 export function computeTrainingTimeline(
   goal: Goal,
   _aiPlan?: AiTrainingPlan | null,
 ): TrainingTimeline | null {
-  const raceDate = new Date(goal.target_date + "T12:00:00")
+  const raceDate = parseDate(goal.target_date)
   const startDate = goal.start_date
-    ? new Date(goal.start_date + "T12:00:00")
+    ? parseDate(goal.start_date)
     : new Date(goal.created_at)
 
   const raceMonday = toMonday(raceDate)
