@@ -21,6 +21,7 @@ import {
   formatDistance
 } from "@/lib/format"
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
+import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
 import { useI18n } from "@/lib/i18n"
 import type { Activity, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
@@ -53,7 +54,12 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   const [testRunsLoading, setTestRunsLoading] = useState(true)
 
   const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
-  const racePredictions = useMemo(() => predictRaceTimes(activities), [activities])
+  // Apply prediction adjustment from test run validation feedback
+  const predictionAdjustment = useMemo(() => {
+    if (testRuns.length === 0) return 0
+    return computePredictionAdjustment(testRuns).exponentAdjustment
+  }, [testRuns])
+  const racePredictions = useMemo(() => predictRaceTimes(activities, predictionAdjustment), [activities, predictionAdjustment])
 
   // Fetch test runs for benchmarks section
   useEffect(() => {

@@ -1,4 +1,3 @@
-import { startOfWeek, endOfWeek } from "date-fns"
 import { createServiceClient } from "@/lib/supabase/service"
 import { withStravaRetry, stravaApiFetch } from "@/lib/strava"
 
@@ -220,10 +219,14 @@ export async function recalculateGoals(userId: string) {
   }
 
   // Recalculate weekly goals for the current week
+  // Use UTC-based week boundaries for consistency regardless of server timezone
   try {
     const now = new Date()
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 })
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+    // Compute Monday of the current week in UTC
+    const utcDay = now.getUTCDay() // 0=Sun, 1=Mon, ..., 6=Sat
+    const daysSinceMonday = utcDay === 0 ? 6 : utcDay - 1
+    const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday))
+    const weekEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday + 6, 23, 59, 59, 999))
     const weekStartStr = weekStart.toISOString().split("T")[0]
 
     const { data: weeklyGoals } = await service
@@ -330,7 +333,7 @@ export async function syncUserActivities(
   if (rows.length > 0) {
     const { error: upsertError } = await service
       .from("activities")
-      .upsert(rows, { onConflict: "strava_id" })
+      .upsert(rows, { onConflict: "user_id,strava_id" })
     if (upsertError) throw upsertError
   }
 
@@ -377,7 +380,7 @@ export async function syncSingleActivity(
 
   const { error } = await service
     .from("activities")
-    .upsert([row], { onConflict: "strava_id" })
+    .upsert([row], { onConflict: "user_id,strava_id" })
   if (error) throw error
 
   // Update sync timestamp
