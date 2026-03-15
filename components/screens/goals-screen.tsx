@@ -376,7 +376,7 @@ export function GoalsScreen({
               </div>
               <p className="text-sm font-medium text-muted-foreground">{t("goals.noTargets")}</p>
               <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-                {t("goals.setTargets")}
+                {t("goals.setEventTargets")}
               </p>
             </div>
           ) : (
