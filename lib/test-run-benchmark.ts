@@ -118,26 +118,36 @@ function estimateThresholdHr(
  * Lower values = more efficient (faster at lower HR).
  * Calculated as pace_min_per_km / avg_hr * 100
  */
+/**
+ * Running efficiency: speed per unit heart rate.
+ * Formula: (60 / pace_min_per_km) / avgHR × 1000
+ * Units: (m/min) per bpm — higher = more efficient (faster at lower HR).
+ * Typical range: ~4-8 for recreational, 8-12+ for elite.
+ */
 function computeRunningEfficiency(
   paceMinPerKm: number | null,
   avgHr: number | null,
 ): number | null {
   if (!paceMinPerKm || !avgHr || paceMinPerKm <= 0 || avgHr <= 0) return null
-  return Math.round((paceMinPerKm / avgHr) * 10000) / 100
+  const speedMPerMin = 1000 / paceMinPerKm
+  return Math.round((speedMPerMin / avgHr) * 1000) / 100
 }
 
 /**
- * Aerobic capacity indicator: a composite of duration and HR response.
- * Higher distance at controlled HR = better aerobic capacity.
- * Simple metric: distance_km * (220 - avg_hr) / 100
+ * Aerobic capacity indicator: speed-based cardiac efficiency.
+ * Formula: distance_km / (duration_hours × avgHR) × 100
+ * Measures km covered per hour per bpm — higher is better.
+ * Typical range: ~0.5-1.5 for recreational, 1.5-2.5+ for trained runners.
  */
 function computeAerobicCapacity(
   distanceKm: number,
   avgHr: number | null,
+  durationSeconds?: number,
 ): number | null {
   if (!avgHr || avgHr <= 0 || distanceKm <= 0) return null
-  // HR reserve proxy (assuming max ~220 for normalization)
-  return Math.round(distanceKm * (220 - avgHr) / 10) / 10
+  if (!durationSeconds || durationSeconds <= 0) return null
+  const durationHours = durationSeconds / 3600
+  return Math.round((distanceKm / (durationHours * avgHr)) * 1000) / 10
 }
 
 /**
@@ -166,6 +176,7 @@ export function extractDerivedMetrics(
     aerobic_capacity: computeAerobicCapacity(
       activity.distance_km,
       activity.avg_heart_rate,
+      activity.duration_seconds,
     ),
   }
 }

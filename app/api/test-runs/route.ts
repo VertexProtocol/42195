@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { extractDerivedMetrics, validatePrediction } from "@/lib/test-run-benchmark"
 import { predictRaceTimes } from "@/lib/training-utils"
 import type { Activity, TestRunType } from "@/lib/types"
+
+const CreateTestRunSchema = z.object({
+  activity_id: z.string().uuid(),
+  test_type: z.enum(["5k_time_trial", "10k_time_trial", "max_effort", "threshold_test", "custom"]).default("custom"),
+  notes: z.string().max(500).nullable().optional(),
+  prediction_distance_km: z.number().positive().max(200).nullable().optional(),
+})
 
 /**
  * GET /api/test-runs
@@ -66,22 +74,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const body = await request.json()
-  const {
-    activity_id,
-    test_type = "custom",
-    notes = null,
-    prediction_distance_km = null,
-  } = body as {
-    activity_id: string
-    test_type?: TestRunType
-    notes?: string | null
-    prediction_distance_km?: number | null
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  if (!activity_id) {
-    return NextResponse.json({ error: "activity_id is required" }, { status: 400 })
+  const parsed = CreateTestRunSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 })
   }
+
+  const { activity_id, test_type, notes = null, prediction_distance_km = null } = parsed.data
 
   // Fetch the activity and verify ownership
   const { data: activity, error: activityError } = await supabase
