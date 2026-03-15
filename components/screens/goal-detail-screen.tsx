@@ -570,78 +570,122 @@ const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
 // ---- Training Timeline visual ----
 function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
   const { t } = useI18n()
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const currentPhase = timeline.currentPhase
+  const currentWeeksLabel = currentPhase
+    ? currentPhase.totalWeeks === 1
+      ? `1 ${t("timeline.week")}`
+      : `${currentPhase.totalWeeks} ${t("timeline.weeks")}`
+    : null
 
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("timeline.title")}
-        </h3>
-        <span className="text-xs text-muted-foreground">
-          {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
-        </span>
-      </div>
-
-      {/* Phase list - vertical timeline */}
-      <div className="flex flex-col px-5 pb-4">
-        {timeline.phases.map((phase, index) => {
-          const isCurrent = timeline.currentPhase?.type === phase.type
-          const isPast = phase.endDate < new Date()
-          const isLast = index === timeline.phases.length - 1
-          const weeksLabel = phase.totalWeeks === 1
-            ? `1 ${t("timeline.week")}`
-            : `${phase.totalWeeks} ${t("timeline.weeks")}`
-
-          return (
-            <div key={phase.type} className="flex gap-3">
-              {/* Timeline indicator */}
-              <div className="flex flex-col items-center">
-                <div className={`h-3 w-3 rounded-full border-2 ${
-                  isCurrent 
-                    ? "border-primary bg-primary" 
-                    : isPast 
-                      ? "border-muted-foreground/40 bg-muted-foreground/40" 
-                      : "border-border bg-card"
-                }`} />
-                {!isLast && (
-                  <div className={`w-0.5 flex-1 min-h-[2.5rem] ${
-                    isPast ? "bg-muted-foreground/20" : "bg-border"
-                  }`} />
-                )}
-              </div>
-              
-              {/* Phase content */}
-              <div className={`flex-1 pb-3 ${isPast && !isCurrent ? "opacity-50" : ""}`}>
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
-                    {t(PHASE_LABEL_KEYS[phase.type])}
-                  </span>
-                  {isCurrent && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                      {t("timeline.currentPhase")}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
-                </p>
-              </div>
-            </div>
-          )
-        })}
-
-        {/* Race day indicator */}
-        <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
-          <Flag size={14} className="text-destructive shrink-0" />
-          <div className="flex-1">
-            <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+      {/* Header - clickable to toggle */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between px-5 py-4 text-left active:bg-secondary/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("timeline.title")}
+          </h3>
+          {!isExpanded && currentPhase && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              {t(PHASE_LABEL_KEYS[currentPhase.type])}
             </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
+          </span>
+          <ChevronDown 
+            size={16} 
+            className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+          />
+        </div>
+      </button>
+
+      {/* Collapsed: show current phase summary */}
+      {!isExpanded && currentPhase && (
+        <div className="px-5 pb-4 -mt-1">
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-3 rounded-full border-2 border-primary bg-primary" />
+            <div>
+              <span className="text-sm font-semibold text-primary">
+                {t(PHASE_LABEL_KEYS[currentPhase.type])}
+              </span>
+              <p className="text-xs text-muted-foreground">
+                {currentWeeksLabel} · {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Expanded: full phase list */}
+      {isExpanded && (
+        <div className="flex flex-col px-5 pb-4">
+          {timeline.phases.map((phase, index) => {
+            const isCurrent = timeline.currentPhase?.type === phase.type
+            const isPast = phase.endDate < new Date()
+            const isLast = index === timeline.phases.length - 1
+            const weeksLabel = phase.totalWeeks === 1
+              ? `1 ${t("timeline.week")}`
+              : `${phase.totalWeeks} ${t("timeline.weeks")}`
+
+            return (
+              <div key={phase.type} className="flex gap-3">
+                {/* Timeline indicator */}
+                <div className="flex flex-col items-center">
+                  <div className={`h-3 w-3 rounded-full border-2 ${
+                    isCurrent 
+                      ? "border-primary bg-primary" 
+                      : isPast 
+                        ? "border-muted-foreground/40 bg-muted-foreground/40" 
+                        : "border-border bg-card"
+                  }`} />
+                  {!isLast && (
+                    <div className={`w-0.5 flex-1 min-h-[2.5rem] ${
+                      isPast ? "bg-muted-foreground/20" : "bg-border"
+                    }`} />
+                  )}
+                </div>
+                
+                {/* Phase content */}
+                <div className={`flex-1 pb-3 ${isPast && !isCurrent ? "opacity-50" : ""}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
+                      {t(PHASE_LABEL_KEYS[phase.type])}
+                    </span>
+                    {isCurrent && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        {t("timeline.currentPhase")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Race day indicator */}
+          <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
+            <Flag size={14} className="text-destructive shrink-0" />
+            <div className="flex-1">
+              <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
