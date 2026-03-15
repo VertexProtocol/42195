@@ -264,14 +264,27 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     if (validPaces.length === 0) return streams
     validPaces.sort((a, b) => a - b)
     const medianPace = validPaces[Math.floor(validPaces.length / 2)]
-    const upperBound = medianPace * 2
-    const lowerBound = medianPace * 0.4
+    const upperBound = medianPace * 1.6
+    const lowerBound = medianPace * 0.5
+    // Null out the first 5 points if they're outliers (GPS warmup)
+    // and any mid-run outliers beyond the bounds
     return streams.map((point, i) => {
-      if (i < 3 && point.pace !== null && point.pace > upperBound) return { ...point, pace: null }
-      if (point.pace !== null && (point.pace > upperBound || point.pace < lowerBound)) return { ...point, pace: null }
+      if (point.pace === null) return point
+      if (i < 5 && (point.pace > medianPace * 1.3 || point.pace < lowerBound)) return { ...point, pace: null }
+      if (point.pace > upperBound || point.pace < lowerBound) return { ...point, pace: null }
       return point
     })
   }, [streams])
+
+  // Compute Y-axis domain for pace chart — clamp to reasonable range
+  const paceDomain = useMemo(() => {
+    if (!smoothedStreams) return [0, 10] as [number, number]
+    const paces = smoothedStreams.map(p => p.pace).filter((p): p is number => p !== null && p > 0)
+    if (paces.length === 0) return [0, 10] as [number, number]
+    const min = Math.min(...paces)
+    const max = Math.max(...paces)
+    return [Math.floor((min - 0.3) * 10) / 10, Math.ceil((max + 0.3) * 10) / 10] as [number, number]
+  }, [smoothedStreams])
 
   // Compute global max HR from all activities for consistent zone boundaries
   const globalMaxHr = useMemo(() => {
@@ -730,7 +743,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       <Label value="Time" position="insideBottom" offset={-12} style={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
                     </XAxis>
                     <YAxis
-                      domain={["dataMin - 0.5", "dataMax + 0.5"]}
+                      domain={paceDomain}
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
