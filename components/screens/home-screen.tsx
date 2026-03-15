@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { ChevronRight, TrendingUp, Clock, Footprints } from "lucide-react"
+import { ChevronRight, TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -14,7 +14,7 @@ import {
   formatTargetTime,
   computeDistanceInRange,
 } from "@/lib/format"
-import type { Goal, WeeklySummary, Activity } from "@/lib/types"
+import type { Goal, WeeklySummary, Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
@@ -24,6 +24,8 @@ interface HomeScreenProps {
   activities: Activity[]
   weeklySummary: WeeklySummary
   recentActivities: Activity[]
+  syncStatus?: SyncStatus
+  stravaConnected?: boolean
   onViewActivities: () => void
   onViewGoal: () => void
   onViewInsights: () => void
@@ -34,6 +36,8 @@ export function HomeScreen({
   activities,
   weeklySummary,
   recentActivities,
+  syncStatus,
+  stravaConnected,
   onViewActivities,
   onViewGoal,
   onViewInsights,
@@ -72,6 +76,24 @@ export function HomeScreen({
           <p className="mt-0.5 text-sm text-muted-foreground">{t("app.tagline")}</p>
         </div>
       </header>
+
+      {/* Sync status feedback */}
+      {syncStatus && stravaConnected && syncStatus.state !== "never" && (
+        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${
+          syncStatus.state === "syncing" ? "bg-primary/5 text-primary" :
+          syncStatus.state === "error" ? "bg-destructive/5 text-destructive ring-1 ring-destructive/20" :
+          "bg-success/5 text-success"
+        }`}>
+          {syncStatus.state === "syncing" && <RefreshCw size={12} className="animate-spin" />}
+          {syncStatus.state === "error" && <AlertCircle size={12} />}
+          {syncStatus.state === "success" && <CheckCircle2 size={12} />}
+          <span>
+            {syncStatus.state === "syncing" ? t("profile.syncing") :
+             syncStatus.state === "error" ? (syncStatus.error_message ?? "Sync failed") :
+             t("profile.synced")}
+          </span>
+        </div>
+      )}
 
       {/* Training Load Indicator (Optimal / High Load / Overtraining Risk) */}
       {activities.length >= 7 && (

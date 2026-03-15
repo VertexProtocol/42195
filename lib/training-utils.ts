@@ -181,11 +181,13 @@ export const PREDICTION_DISTANCES = [
 
 /**
  * Predicts race times using the Riegel formula:
- * T2 = T1 * (D2 / D1)^1.06
+ * T2 = T1 * (D2 / D1)^exponent
  *
  * Uses the best recent activity (last 90 days, >= 3km) as the reference.
+ * If an exponentAdjustment is provided (from test run validation feedback),
+ * it shifts the base exponent (1.06) to produce more personalized predictions.
  */
-export function predictRaceTimes(activities: Activity[]): {
+export function predictRaceTimes(activities: Activity[], exponentAdjustment?: number): {
   predictions: RacePrediction[]
   referenceActivity: Activity | null
 } {
@@ -199,22 +201,30 @@ export function predictRaceTimes(activities: Activity[]): {
 
   if (recent.length === 0) return { predictions: [], referenceActivity: null }
 
-  // Find best "VDOT" equivalent — fastest pace-adjusted 5k equivalent
+  // Find best "VDOT" equivalent — fastest pace-adjusted 5k equivalent,
+  // with recency weighting: activities within 30 days get full weight,
+  // older activities are penalized by up to 5% to prefer recent fitness.
+  const now = Date.now()
   let bestRef = recent[0]
-  let bestEquiv = (5 / bestRef.distance_km) ** 1.06 * bestRef.duration_seconds
+  let bestScore = Infinity
 
   for (const a of recent) {
     const equiv = (5 / a.distance_km) ** 1.06 * a.duration_seconds
-    if (equiv < bestEquiv) {
+    const daysOld = (now - new Date(a.date).getTime()) / (24 * 60 * 60 * 1000)
+    // No penalty for first 30 days, then up to 5% penalty at 90 days
+    const recencyPenalty = daysOld <= 30 ? 1.0 : 1.0 + ((daysOld - 30) / 60) * 0.05
+    const score = equiv * recencyPenalty
+    if (score < bestScore) {
       bestRef = a
-      bestEquiv = equiv
+      bestScore = score
     }
   }
 
   // Riegel exponent variance: 1.06 is the standard, but real-world values
   // range from ~1.01 (well-trained) to ~1.12 (less trained). We use ±0.03
   // to produce a practical confidence band.
-  const exponent = 1.06
+  // If test run validation data suggests an adjustment, apply it.
+  const exponent = Math.max(1.01, Math.min(1.12, 1.06 + (exponentAdjustment ?? 0)))
   const exponentLow = 1.03  // optimistic (well-trained)
   const exponentHigh = 1.09 // conservative (less trained)
 

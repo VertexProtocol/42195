@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
+import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -458,7 +459,7 @@ export async function POST(req: NextRequest) {
 
   const { data: activities } = await supabase
     .from("activities")
-    .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+    .select("name, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
     .eq("user_id", user.id)
     .gte("date", twelveWeeksAgo.toISOString())
     .order("date", { ascending: false })
@@ -510,7 +511,7 @@ export async function POST(req: NextRequest) {
     ? Math.min(...actsWithPace.map((a) => Number(a.pace_min_per_km)))
     : null
 
-  // Build heart rate summary for the prompt
+  // Build heart rate summary for the prompt, including HR zone boundaries
   const actsWithHr = acts.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
   let hrSummary: string | null = null
   if (actsWithHr.length > 0) {
@@ -520,6 +521,27 @@ export async function POST(req: NextRequest) {
     const recentAvgHr = Math.round(recentHrs.reduce((s, h) => s + h, 0) / recentHrs.length)
     const hrTrend = recentAvgHr > avgHr + 5 ? "elevated (possible fatigue)" : recentAvgHr < avgHr - 5 ? "lower than average (good fitness)" : "stable"
     hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}\n- Estimated max HR: ~${Math.round(maxHr * 1.1)} bpm (from activity data)`
+
+    // Add HR zone boundaries from the analysis engine if we have enough data
+    if (actsWithHr.length >= 5) {
+      const hrAnalysis = analyzeHeartRateZones(
+        acts.map((a) => ({
+          id: "", user_id: "", strava_id: 0, type: "Run", created_at: "",
+          name: a.name ?? "Activity", date: a.date,
+          distance_km: Number(a.distance_km), duration_seconds: a.duration_seconds,
+          pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
+          elevation_gain_m: null, avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+          avg_cadence: null, calories: null, map_polyline: null,
+        })),
+        Math.round(maxHr * 1.1),
+      )
+      if (hrAnalysis.calibrationStatus !== "insufficient_data") {
+        const zoneLines = hrAnalysis.recommendedZones
+          .map((z) => `  Z${z.zone} ${z.label}: ${z.min}–${z.max} bpm`)
+          .join("\n")
+        hrSummary += `\n- HR Zones (use these for prescribing effort levels):\n${zoneLines}`
+      }
+    }
   }
 
   // Fetch test run benchmarks for calibration

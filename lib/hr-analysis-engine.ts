@@ -80,7 +80,22 @@ const ZONE_MATCH_TOLERANCE = 3
 
 // ─── Core Engine ────────────────────────────────────
 
-function buildZones(maxHr: number): HrZoneBoundary[] {
+/**
+ * Builds HR zones. If restingHr is provided, uses Karvonen (HR reserve) model
+ * which is more accurate for individual athletes:
+ *   target = restingHR + (maxHR - restingHR) × intensity%
+ * Otherwise falls back to simple percentage-of-max model.
+ */
+function buildZones(maxHr: number, restingHr?: number | null): HrZoneBoundary[] {
+  if (restingHr && restingHr > 30 && restingHr < maxHr * 0.5) {
+    const reserve = maxHr - restingHr
+    return ZONE_LABELS.map((label, i) => ({
+      zone: i + 1,
+      label,
+      min: Math.round(restingHr + reserve * ZONE_PCTS[i][0]),
+      max: Math.round(restingHr + reserve * ZONE_PCTS[i][1]),
+    }))
+  }
   return ZONE_LABELS.map((label, i) => ({
     zone: i + 1,
     label,
@@ -365,17 +380,15 @@ export function analyzeHeartRateZones(
   // Current max HR: use provided value or fallback to same estimation the app does
   const effectiveCurrentMaxHr = currentMaxHr ?? Math.round(observedMax * 1.2)
 
-  // Build current zones (what the app currently uses)
+  // Estimate threshold HR and resting HR first (needed for Karvonen zones)
+  const thresholdHr = estimateThresholdHr(withHr)
+  const restingHr = estimateRestingHr(withHr)
+
+  // Build current zones (what the app currently uses — without resting HR)
   const currentZones = buildZones(effectiveCurrentMaxHr)
 
-  // Build recommended zones from our analysis
-  const recommendedZones = buildZones(estimatedMax)
-
-  // Estimate threshold HR
-  const thresholdHr = estimateThresholdHr(withHr)
-
-  // Estimate resting HR
-  const restingHr = estimateRestingHr(withHr)
+  // Build recommended zones using Karvonen model when resting HR is available
+  const recommendedZones = buildZones(estimatedMax, restingHr)
 
   // Detect misalignment
   const { status, explanations } = detectMisalignment(
