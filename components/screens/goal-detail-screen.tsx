@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Lightbulb,
   Pencil,
+  Flag,
 } from "lucide-react"
 import {
   formatDistance,
@@ -37,6 +38,8 @@ import type {
   TrainingWeek,
   PlanSnapshot,
 } from "@/lib/types"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 
 interface GoalDetailScreenProps {
   goal: Goal
@@ -546,6 +549,146 @@ function WeekCard({
   )
 }
 
+// ---- Phase colors & i18n keys ----
+const PHASE_COLORS: Record<TrainingPhaseType, { bg: string; text: string; ring: string; bar: string }> = {
+  base_building:         { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-500/30", bar: "bg-emerald-500" },
+  endurance_development: { bg: "bg-blue-500/10",    text: "text-blue-600 dark:text-blue-400",    ring: "ring-blue-500/30",    bar: "bg-blue-500" },
+  peak_training:         { bg: "bg-amber-500/10",   text: "text-amber-600 dark:text-amber-400",  ring: "ring-amber-500/30",   bar: "bg-amber-500" },
+  taper:                 { bg: "bg-purple-500/10",  text: "text-purple-600 dark:text-purple-400", ring: "ring-purple-500/30",  bar: "bg-purple-500" },
+  race_week:             { bg: "bg-red-500/10",     text: "text-red-600 dark:text-red-400",      ring: "ring-red-500/30",     bar: "bg-red-500" },
+}
+
+const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
+  base_building: "timeline.phase_base_building",
+  endurance_development: "timeline.phase_endurance_development",
+  peak_training: "timeline.phase_peak_training",
+  taper: "timeline.phase_taper",
+  race_week: "timeline.phase_race_week",
+}
+
+// ---- Training Timeline visual ----
+function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
+  const { t } = useI18n()
+
+  return (
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("timeline.title")}
+        </h3>
+        <span className="text-xs font-semibold text-foreground">
+          {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
+        </span>
+      </div>
+
+      {/* Visual bar */}
+      <div className="px-5 py-3">
+        <div className="relative flex h-3 w-full overflow-hidden rounded-full bg-secondary">
+          {timeline.phases.map((phase) => {
+            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
+            const colors = PHASE_COLORS[phase.type]
+            return (
+              <div
+                key={phase.type}
+                className={`${colors.bar} relative h-full transition-all`}
+                style={{ width: `${widthPct}%`, opacity: phase.endDate < new Date() ? 0.4 : 1 }}
+              />
+            )
+          })}
+          {/* Current position marker */}
+          {timeline.progressPct > 0 && timeline.progressPct < 100 && (
+            <div
+              className="absolute top-0 h-full w-0.5 bg-foreground shadow-sm"
+              style={{ left: `${timeline.progressPct}%` }}
+            >
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-foreground ring-2 ring-card" />
+            </div>
+          )}
+        </div>
+
+        {/* Phase labels below bar */}
+        <div className="relative mt-1.5 flex">
+          {timeline.phases.map((phase) => {
+            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
+            return (
+              <div
+                key={phase.type}
+                className="flex flex-col items-center overflow-hidden"
+                style={{ width: `${widthPct}%` }}
+              >
+                <span className={`text-[9px] font-medium truncate max-w-full px-0.5 ${PHASE_COLORS[phase.type].text}`}>
+                  {t(PHASE_LABEL_KEYS[phase.type])}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Phase cards */}
+      <div className="flex flex-col gap-2 px-5 pb-4">
+        {timeline.phases.map((phase) => {
+          const colors = PHASE_COLORS[phase.type]
+          const isCurrent = timeline.currentPhase?.type === phase.type
+          const isPast = phase.endDate < new Date()
+          const weeksLabel = phase.totalWeeks === 1
+            ? `1 ${t("timeline.week")}`
+            : `${phase.totalWeeks} ${t("timeline.weeks")}`
+
+          return (
+            <div
+              key={phase.type}
+              className={`rounded-xl px-3.5 py-3 ring-1 transition-all ${
+                isCurrent
+                  ? `${colors.bg} ${colors.ring} ring-2`
+                  : isPast
+                    ? "bg-secondary/50 ring-border opacity-60"
+                    : "bg-secondary/50 ring-border"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isCurrent && (
+                    <div className={`h-2 w-2 rounded-full ${colors.bar}`} />
+                  )}
+                  <span className={`text-sm font-semibold ${isCurrent ? colors.text : "text-foreground"}`}>
+                    {t(PHASE_LABEL_KEYS[phase.type])}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
+                </span>
+              </div>
+              <p className={`mt-1 text-xs leading-relaxed ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
+                {phase.description}
+              </p>
+              {isCurrent && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
+                    {t("timeline.currentPhase")}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Race day indicator */}
+        <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
+          <Flag size={14} className="text-destructive shrink-0" />
+          <div className="flex-1">
+            <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ---- Main screen ----
 export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalDetailScreenProps) {
   const [prefs, setPrefs] = useState<GoalPreferences>({
@@ -786,6 +929,12 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     ? generatedAgo !== null && generatedAgo >= prefs.regenerate_every_weeks * 7
     : false
 
+  // Training timeline phases
+  const timeline = useMemo(
+    () => computeTrainingTimeline(goal, aiPlan),
+    [goal, aiPlan]
+  )
+
   // Check if the training block has ended (all weeks are in the past)
   const isBlockExpired = aiPlan
     ? currentWeekIndex >= (aiPlan.plan.weeks.length)
@@ -880,6 +1029,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           </div>
         </div>
       </div>
+
+      {/* Training Timeline */}
+      {timeline && !past && (
+        <TrainingTimelineView timeline={timeline} />
+      )}
 
       {/* ---- AI Training Plan section ---- */}
       <section>
