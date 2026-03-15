@@ -371,7 +371,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
             <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {t("insights.racePredictions")}
             </h3>
-            <InfoTooltip content="Estimated finish times for common race distances, based on your recent best run." side="right" />
+            <InfoTooltip content="Estimated finish times for common race distances, based on your recent best run." />
           </div>
           <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
             {racePredictions.predictions.map((pred, i) => (

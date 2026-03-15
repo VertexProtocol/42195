@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { Activity as ActivityIcon, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
@@ -84,13 +84,8 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
   const latest = hasChartData ? chartData[chartData.length - 1] : null
   const twoWeeksAgo = hasChartData ? chartData[Math.max(0, chartData.length - 15)] : null
   
-  const fitnessDelta = useMemo(() => {
-    return latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
-  }, [latest?.ctl, twoWeeksAgo?.ctl])
-  
-  const fitnessArrow = useMemo(() => {
-    return fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
-  }, [fitnessDelta])
+  const fitnessDelta = latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
+  const fitnessArrow = fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
 
   const formatDate = (d: string) => {
     const date = new Date(d + "T12:00:00")
@@ -234,15 +229,19 @@ function MomentumGraph({ data }: MomentumGraphProps) {
 
   // Chart dimensions
   const width = 320
-  const height = 140
-  const padding = { top: 20, right: 16, bottom: 28, left: 16 }
+  const height = 180
+  const padding = { top: 16, right: 16, bottom: 28, left: 16 }
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
 
   // Normalize TSB (form) values for the momentum curve
+  // Use actual data range + small padding instead of fixed ±5 clamp
   const tsbValues = displayData.map(d => d.tsb)
-  const minTsb = Math.min(...tsbValues, -5)
-  const maxTsb = Math.max(...tsbValues, 5)
+  const datMin = Math.min(...tsbValues)
+  const datMax = Math.max(...tsbValues)
+  const datPad = Math.max((datMax - datMin) * 0.15, 1.5)
+  const minTsb = datMin - datPad
+  const maxTsb = datMax + datPad
   const tsbRange = Math.max(maxTsb - minTsb, 1)
 
   // Calculate points

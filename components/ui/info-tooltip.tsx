@@ -5,22 +5,48 @@ import { HelpCircle } from "lucide-react"
 
 interface InfoTooltipProps {
   content: string
-  side?: "top" | "bottom" | "left" | "right"
 }
 
 /**
- * A small inline ? icon that shows a tooltip on hover (desktop) or tap (mobile).
- * Uses a custom implementation instead of Radix Tooltip to work reliably on touch devices.
+ * A small inline ? icon that shows a tooltip on tap (mobile-first).
+ * Always shows BELOW the icon to avoid top cutoff on mobile.
+ * Uses fixed positioning to avoid any overflow/clipping issues.
  */
-export function InfoTooltip({ content, side = "top" }: InfoTooltipProps) {
+export function InfoTooltip({ content }: InfoTooltipProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Calculate position when opening
+  useEffect(() => {
+    if (!open || !buttonRef.current) return
+    
+    const button = buttonRef.current
+    const rect = button.getBoundingClientRect()
+    const padding = 16
+    const tooltipWidth = Math.min(220, window.innerWidth - padding * 2)
+    
+    // Position below the button, centered
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2
+    
+    // Keep within horizontal bounds
+    if (left < padding) {
+      left = padding
+    } else if (left + tooltipWidth > window.innerWidth - padding) {
+      left = window.innerWidth - padding - tooltipWidth
+    }
+    
+    setPosition({
+      top: rect.bottom + 8, // 8px below the icon
+      left,
+    })
+  }, [open])
 
   // Close on outside tap / click
   useEffect(() => {
     if (!open) return
     function handleOutside(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
         setOpen(false)
       }
     }
@@ -32,23 +58,17 @@ export function InfoTooltip({ content, side = "top" }: InfoTooltipProps) {
     }
   }, [open])
 
-  // Auto-dismiss after 3 seconds on mobile
+  // Auto-dismiss after 4 seconds
   useEffect(() => {
     if (!open) return
-    const timer = setTimeout(() => setOpen(false), 3000)
+    const timer = setTimeout(() => setOpen(false), 4000)
     return () => clearTimeout(timer)
   }, [open])
 
-  const positionClasses = {
-    top: "bottom-full left-1/2 -translate-x-1/2 mb-1.5",
-    bottom: "top-full left-1/2 -translate-x-1/2 mt-1.5",
-    left: "right-full top-1/2 -translate-y-1/2 mr-1.5",
-    right: "left-full top-1/2 -translate-y-1/2 ml-1.5",
-  }
-
   return (
-    <div ref={ref} className="relative inline-flex">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
         className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-muted-foreground active:text-muted-foreground transition-colors"
@@ -58,12 +78,16 @@ export function InfoTooltip({ content, side = "top" }: InfoTooltipProps) {
       </button>
       {open && (
         <div
-          className={`absolute z-50 ${positionClasses[side]} w-max max-w-[200px] rounded-md bg-foreground px-3 py-1.5 text-xs text-background text-center animate-in fade-in-0 zoom-in-95`}
+          className="fixed z-[100] w-[220px] max-w-[calc(100vw-32px)] rounded-lg bg-foreground px-3 py-2 text-xs text-background shadow-lg animate-in fade-in-0 zoom-in-95"
+          style={{
+            top: position.top,
+            left: position.left,
+          }}
           role="tooltip"
         >
           {content}
         </div>
       )}
-    </div>
+    </>
   )
 }

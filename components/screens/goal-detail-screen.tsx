@@ -49,6 +49,53 @@ interface GoalDetailScreenProps {
   onEditGoal: (goal: Goal) => void
 }
 
+// ---- Collapsible Section ----
+function CollapsibleSection({
+  title,
+  children,
+  defaultOpen = false,
+  variant = "default",
+}: {
+  title: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+  variant?: "default" | "warning"
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  
+  const baseStyles = variant === "warning"
+    ? "rounded-2xl bg-warning/10 ring-1 ring-warning/30"
+    : "rounded-2xl bg-card shadow-sm ring-1 ring-border"
+  
+  const iconColor = variant === "warning" ? "text-warning" : "text-muted-foreground"
+  
+  return (
+    <div className={baseStyles}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          {variant === "warning" && <AlertCircle size={15} className="text-warning" />}
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </span>
+        </div>
+        <ChevronDown 
+          size={16} 
+          className={`${iconColor} transition-transform ${isOpen ? "rotate-180" : ""}`} 
+        />
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- Preferences form ----
 function PreferencesForm({
   goalId,
@@ -570,122 +617,118 @@ const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
 // ---- Training Timeline visual ----
 function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
   const { t } = useI18n()
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const currentPhase = timeline.currentPhase
+  const currentWeeksLabel = currentPhase
+    ? currentPhase.totalWeeks === 1
+      ? `1 ${t("timeline.week")}`
+      : `${currentPhase.totalWeeks} ${t("timeline.weeks")}`
+    : null
 
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      {/* Header - clickable to toggle */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between px-5 py-4 text-left active:bg-secondary/50 transition-colors"
+      >
         <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("timeline.title")}
         </h3>
-        <span className="text-xs font-semibold text-foreground">
-          {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
-        </span>
-      </div>
-
-      {/* Visual bar */}
-      <div className="px-5 py-3">
-        <div className="relative flex h-3 w-full overflow-hidden rounded-full bg-secondary">
-          {timeline.phases.map((phase) => {
-            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
-            const colors = PHASE_COLORS[phase.type]
-            return (
-              <div
-                key={phase.type}
-                className={`${colors.bar} relative h-full transition-all`}
-                style={{ width: `${widthPct}%`, opacity: phase.endDate < new Date() ? 0.4 : 1 }}
-              />
-            )
-          })}
-          {/* Current position marker */}
-          {timeline.progressPct > 0 && timeline.progressPct < 100 && (
-            <div
-              className="absolute top-0 h-full w-0.5 bg-foreground shadow-sm"
-              style={{ left: `${timeline.progressPct}%` }}
-            >
-              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-foreground ring-2 ring-card" />
-            </div>
-          )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
+          </span>
+          <ChevronDown 
+            size={16} 
+            className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+          />
         </div>
+      </button>
 
-        {/* Phase labels below bar */}
-        <div className="relative mt-1.5 flex">
-          {timeline.phases.map((phase) => {
-            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
-            return (
-              <div
-                key={phase.type}
-                className="flex flex-col items-center overflow-hidden"
-                style={{ width: `${widthPct}%` }}
-              >
-                <span className={`text-[9px] font-medium truncate max-w-full px-0.5 ${PHASE_COLORS[phase.type].text}`}>
-                  {t(PHASE_LABEL_KEYS[phase.type])}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Phase cards */}
-      <div className="flex flex-col gap-2 px-5 pb-4">
-        {timeline.phases.map((phase) => {
-          const colors = PHASE_COLORS[phase.type]
-          const isCurrent = timeline.currentPhase?.type === phase.type
-          const isPast = phase.endDate < new Date()
-          const weeksLabel = phase.totalWeeks === 1
-            ? `1 ${t("timeline.week")}`
-            : `${phase.totalWeeks} ${t("timeline.weeks")}`
-
-          return (
-            <div
-              key={phase.type}
-              className={`rounded-xl px-3.5 py-3 ring-1 transition-all ${
-                isCurrent
-                  ? `${colors.bg} ${colors.ring} ring-2`
-                  : isPast
-                    ? "bg-secondary/50 ring-border opacity-60"
-                    : "bg-secondary/50 ring-border"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {isCurrent && (
-                    <div className={`h-2 w-2 rounded-full ${colors.bar}`} />
-                  )}
-                  <span className={`text-sm font-semibold ${isCurrent ? colors.text : "text-foreground"}`}>
-                    {t(PHASE_LABEL_KEYS[phase.type])}
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
-                </span>
-              </div>
-              <p className={`mt-1 text-xs leading-relaxed ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
-                {phase.description}
-              </p>
-              {isCurrent && (
-                <div className="mt-2 flex items-center gap-1.5">
-                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
-                    {t("timeline.currentPhase")}
-                  </div>
-                </div>
-              )}
+      {/* Collapsed: show current phase summary */}
+      {!isExpanded && currentPhase && (
+        <div className="flex items-center gap-3 px-5 pb-4">
+          <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                {t(PHASE_LABEL_KEYS[currentPhase.type])}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {currentWeeksLabel}
+              </span>
             </div>
-          )
-        })}
-
-        {/* Race day indicator */}
-        <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
-          <Flag size={14} className="text-destructive shrink-0" />
-          <div className="flex-1">
-            <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
+            <p className="text-xs text-muted-foreground">
+              {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
+            </p>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Expanded: full phase list */}
+      {isExpanded && (
+        <div className="flex flex-col px-5 pb-4">
+          {timeline.phases.map((phase, index) => {
+            const isCurrent = timeline.currentPhase?.type === phase.type
+            const isPast = phase.endDate < new Date()
+            const isLast = index === timeline.phases.length - 1
+            const weeksLabel = phase.totalWeeks === 1
+              ? `1 ${t("timeline.week")}`
+              : `${phase.totalWeeks} ${t("timeline.weeks")}`
+
+            return (
+              <div key={phase.type} className="flex gap-3">
+                {/* Timeline indicator */}
+                <div className="flex flex-col items-center">
+                  <div className={`h-3 w-3 rounded-full border-2 ${
+                    isCurrent 
+                      ? "border-primary bg-primary" 
+                      : isPast 
+                        ? "border-muted-foreground/40 bg-muted-foreground/40" 
+                        : "border-border bg-card"
+                  }`} />
+                  {!isLast && (
+                    <div className={`w-0.5 flex-1 min-h-[2.5rem] ${
+                      isPast ? "bg-muted-foreground/20" : "bg-border"
+                    }`} />
+                  )}
+                </div>
+                
+                {/* Phase content */}
+                <div className={`flex-1 pb-3 ${isPast && !isCurrent ? "opacity-50" : ""}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
+                      {t(PHASE_LABEL_KEYS[phase.type])}
+                    </span>
+                    {isCurrent && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        {t("timeline.currentPhase")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Race day indicator */}
+          <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
+            <Flag size={14} className="text-destructive shrink-0" />
+            <div className="flex-1">
+              <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1226,12 +1269,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               )
             })}
 
-            {/* Key principles */}
+            {/* Key principles - collapsible */}
             {aiPlan.plan.keyPrinciples?.length > 0 && (
-              <div className="rounded-2xl bg-card px-4 py-4 shadow-sm ring-1 ring-border">
-                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Key principles
-                </p>
+              <CollapsibleSection title="Key principles" defaultOpen={false}>
                 <ul className="flex flex-col gap-2">
                   {aiPlan.plan.keyPrinciples.map((p, i) => (
                     <li key={i} className="flex gap-2 text-sm text-card-foreground">
@@ -1240,15 +1280,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     </li>
                   ))}
                 </ul>
-              </div>
+              </CollapsibleSection>
             )}
 
-            {/* Watch out */}
+            {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
-              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
-                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+              <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
                 <p className="text-sm text-foreground">{aiPlan.plan.watchOut}</p>
-              </div>
+              </CollapsibleSection>
             )}
 
             {/* Adjust / Regenerate */}
