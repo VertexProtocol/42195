@@ -17,6 +17,23 @@ import type { TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
 import { computeACWR, computeTrainingLoad } from "@/lib/training-utils"
 
 /**
+ * Extracts km from a session distance string.
+ * Handles ranges like "8-10 km" (returns max), single values like "10 km",
+ * and "10.5km" (no space).
+ */
+export function parseSessionDistanceKm(distance: string): number {
+  // Try range first: "8-10 km" or "8–10 km"
+  const rangeMatch = distance.match(/([\d.]+)\s*[–\-]\s*([\d.]+)\s*km/i)
+  if (rangeMatch) return parseFloat(rangeMatch[2]) // use max of range
+
+  // Single value: "10 km" or "10.5km"
+  const singleMatch = distance.match(/([\d.]+)\s*km/i)
+  if (singleMatch) return parseFloat(singleMatch[1])
+
+  return 0
+}
+
+/**
  * Minimal activity shape required by the safety engine.
  * Accepts both full Activity objects and the partial selects used in API routes.
  */
@@ -301,13 +318,10 @@ export function checkLongRunProtection(plan: TrainingPlan): LongRunViolation[] {
     let longestSessionKm = 0
     let longestSessionType = ""
     for (const session of week.sessions) {
-      const match = session.distance.match(/([\d.]+)\s*km/i)
-      if (match) {
-        const km = parseFloat(match[1])
-        if (km > longestSessionKm) {
-          longestSessionKm = km
-          longestSessionType = session.type
-        }
+      const km = parseSessionDistanceKm(session.distance)
+      if (km > longestSessionKm) {
+        longestSessionKm = km
+        longestSessionType = session.type
       }
     }
 
@@ -505,11 +519,8 @@ export function validateAndAdjustPlan(
     let maxKm = 0
     let maxIdx = -1
     week.sessions.forEach((s, i) => {
-      const match = s.distance.match(/([\d.]+)\s*km/i)
-      if (match) {
-        const km = parseFloat(match[1])
-        if (km > maxKm) { maxKm = km; maxIdx = i }
-      }
+      const km = parseSessionDistanceKm(s.distance)
+      if (km > maxKm) { maxKm = km; maxIdx = i }
     })
     if (maxIdx >= 0) {
       week.sessions[maxIdx].distance = `${v.adjustedKm} km`

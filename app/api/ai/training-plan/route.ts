@@ -4,7 +4,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
-import { validateAndAdjustPlan } from "@/lib/training-safety"
+import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -629,8 +629,7 @@ export async function POST(req: NextRequest) {
             )
           }
           const sessionKmTotal = week.sessions.reduce((sum: number, s: { distance: string }) => {
-            const match = s.distance.match(/([\d.]+)\s*km/i)
-            return sum + (match ? parseFloat(match[1]) : 0)
+            return sum + parseSessionDistanceKm(s.distance)
           }, 0)
           if (sessionKmTotal > 0 && Math.abs(sessionKmTotal - week.targetKm) > week.targetKm * 0.2) {
             console.warn(

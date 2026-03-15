@@ -166,6 +166,10 @@ export interface RacePrediction {
   distance_label: string
   distance_km: number
   predicted_seconds: number
+  /** Lower bound (optimistic) — ~3% faster based on Riegel exponent variance */
+  low_seconds: number
+  /** Upper bound (conservative) — ~3% slower based on Riegel exponent variance */
+  high_seconds: number
 }
 
 export const PREDICTION_DISTANCES = [
@@ -207,13 +211,23 @@ export function predictRaceTimes(activities: Activity[]): {
     }
   }
 
-  const predictions: RacePrediction[] = PREDICTION_DISTANCES.map(({ label, km }) => ({
-    distance_label: label,
-    distance_km: km,
-    predicted_seconds: Math.round(
-      bestRef.duration_seconds * (km / bestRef.distance_km) ** 1.06,
-    ),
-  }))
+  // Riegel exponent variance: 1.06 is the standard, but real-world values
+  // range from ~1.01 (well-trained) to ~1.12 (less trained). We use ±0.03
+  // to produce a practical confidence band.
+  const exponent = 1.06
+  const exponentLow = 1.03  // optimistic (well-trained)
+  const exponentHigh = 1.09 // conservative (less trained)
+
+  const predictions: RacePrediction[] = PREDICTION_DISTANCES.map(({ label, km }) => {
+    const ratio = km / bestRef.distance_km
+    return {
+      distance_label: label,
+      distance_km: km,
+      predicted_seconds: Math.round(bestRef.duration_seconds * ratio ** exponent),
+      low_seconds: Math.round(bestRef.duration_seconds * ratio ** exponentLow),
+      high_seconds: Math.round(bestRef.duration_seconds * ratio ** exponentHigh),
+    }
+  })
 
   return { predictions, referenceActivity: bestRef }
 }

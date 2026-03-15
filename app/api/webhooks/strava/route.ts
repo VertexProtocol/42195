@@ -57,6 +57,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
+  // Validate subscription_id to reject forged webhook calls.
+  // Strava assigns a subscription_id when you create the webhook subscription.
+  const expectedSubId = process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID
+  if (expectedSubId && String(event.subscription_id) !== expectedSubId) {
+    console.warn(`Strava webhook: subscription_id mismatch (got ${event.subscription_id}, expected ${expectedSubId})`)
+    return NextResponse.json({ error: "Invalid subscription" }, { status: 403 })
+  }
+
   // We only care about activity events
   if (event.object_type !== "activity") {
     return NextResponse.json({ ok: true })

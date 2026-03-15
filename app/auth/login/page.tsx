@@ -92,6 +92,12 @@ export default function LoginPage() {
           >
             {isPending ? "Signing in…" : "Sign in"}
           </button>
+
+          <div className="text-center">
+            <Link href="/auth/forgot-password" className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline">
+              Forgot your password?
+            </Link>
+          </div>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
