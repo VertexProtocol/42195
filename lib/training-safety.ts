@@ -198,42 +198,56 @@ export interface FatigueResult {
   intensityMultiplier: number
 }
 
+/** Returns the median of a sorted-ascending numeric array */
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
 /**
- * Detects fatigue by examining HR and pace drift over the last N runs.
- * - HR elevated: recent avg HR > overall avg + 5 bpm at the same distance
- * - Pace declining: recent avg pace worse than overall avg by >5%
+ * Detects fatigue by examining HR and pace drift over recent runs vs baseline.
+ * Uses median (not mean) for robustness against outlier sessions.
+ * - HR elevated: recent median HR > baseline median + 5 bpm
+ * - Pace declining: recent median pace worse than baseline median by >5%
+ *
+ * Requires 8+ qualifying runs (4 recent + 4 baseline minimum).
  */
 export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
   const runs = activities
     .filter((a) => a.distance_km > 3 && a.duration_seconds > 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  if (runs.length < 6) {
+  if (runs.length < 8) {
     return { signal: "none", description: null, intensityMultiplier: 1.0 }
   }
 
-  const recent = runs.slice(0, 3)
-  const baseline = runs.slice(3, 10)
+  const recent = runs.slice(0, 4)
+  const baseline = runs.slice(4, 12)
 
-  // HR fatigue signal
-  const recentWithHr = recent.filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0)
-  const baselineWithHr = baseline.filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0)
+  // HR fatigue signal (using median for outlier resistance)
+  const recentHrs = recent
+    .filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0)
+    .map((a) => a.avg_heart_rate!)
+  const baselineHrs = baseline
+    .filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0)
+    .map((a) => a.avg_heart_rate!)
   let hrElevated = false
-  if (recentWithHr.length >= 2 && baselineWithHr.length >= 3) {
-    const recentAvgHr = recentWithHr.reduce((s, a) => s + a.avg_heart_rate!, 0) / recentWithHr.length
-    const baselineAvgHr = baselineWithHr.reduce((s, a) => s + a.avg_heart_rate!, 0) / baselineWithHr.length
-    hrElevated = recentAvgHr > baselineAvgHr + 5
+  if (recentHrs.length >= 3 && baselineHrs.length >= 4) {
+    hrElevated = median(recentHrs) > median(baselineHrs) + 5
   }
 
-  // Pace fatigue signal (higher pace value = slower)
-  const recentWithPace = recent.filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
-  const baselineWithPace = baseline.filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
+  // Pace fatigue signal (higher pace value = slower, using median)
+  const recentPaces = recent
+    .filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
+    .map((a) => a.pace_min_per_km!)
+  const baselinePaces = baseline
+    .filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
+    .map((a) => a.pace_min_per_km!)
   let paceDeclining = false
-  if (recentWithPace.length >= 2 && baselineWithPace.length >= 3) {
-    const recentAvgPace = recentWithPace.reduce((s, a) => s + a.pace_min_per_km!, 0) / recentWithPace.length
-    const baselineAvgPace = baselineWithPace.reduce((s, a) => s + a.pace_min_per_km!, 0) / baselineWithPace.length
+  if (recentPaces.length >= 3 && baselinePaces.length >= 4) {
     // Pace declining = getting slower (higher pace value) by more than 5%
-    paceDeclining = recentAvgPace > baselineAvgPace * 1.05
+    paceDeclining = median(recentPaces) > median(baselinePaces) * 1.05
   }
 
   if (hrElevated && paceDeclining) {
