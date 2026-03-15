@@ -1,17 +1,18 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
   RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw, Settings2,
-  Shield, Trash2,
+  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
+import type { HrAnalysisResult } from "@/lib/hr-analysis-engine"
 
 interface ProfileScreenProps {
   user: UserProfile
@@ -51,6 +52,22 @@ export function ProfileScreen({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  // HR analysis state
+  const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(null)
+  const [hrLoading, setHrLoading] = useState(false)
+  const [hrExpanded, setHrExpanded] = useState(false)
+
+  const fetchHrAnalysis = useCallback(async () => {
+    setHrLoading(true)
+    try {
+      const res = await fetch("/api/hr-analysis")
+      if (res.ok) {
+        const data = await res.json()
+        setHrAnalysis(data.analysis)
+      }
+    } catch {}
+    setHrLoading(false)
+  }, [])
 
   // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
@@ -332,24 +349,165 @@ export function ProfileScreen({
           {t("profile.trainingSettings")}
         </h3>
         <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
-          {/* HR Zones */}
+          {/* HR Zone Calibration */}
           <div className="border-b border-border px-4 py-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Settings2 size={15} className="text-muted-foreground" />
-              <span className="text-sm font-medium text-card-foreground">{t("profile.hrZones")}</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Heart size={15} className="text-muted-foreground" />
+                <span className="text-sm font-medium text-card-foreground">{t("profile.hrZones")}</span>
+              </div>
+              {!hrAnalysis && !hrLoading && (
+                <button
+                  onClick={fetchHrAnalysis}
+                  className="text-xs font-medium text-primary active:opacity-70"
+                >
+                  {t("profile.hrAnalyze")}
+                </button>
+              )}
+              {hrLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
             </div>
             <p className="text-xs text-muted-foreground mb-3">{t("profile.hrZonesDesc")}</p>
-            <div className="flex gap-1">
-              {HR_ZONES.map((z) => (
-                <div key={z.zone} className="flex flex-1 flex-col items-center gap-1">
-                  <div
-                    className="h-6 w-full rounded-md"
-                    style={{ backgroundColor: z.color, opacity: 0.7 }}
-                  />
-                  <span className="text-[9px] text-muted-foreground font-medium">Z{z.zone}</span>
+
+            {/* Default zone reference when no analysis */}
+            {!hrAnalysis && !hrLoading && (
+              <div className="flex gap-1">
+                {HR_ZONES.map((z) => (
+                  <div key={z.zone} className="flex flex-1 flex-col items-center gap-1">
+                    <div
+                      className="h-6 w-full rounded-md"
+                      style={{ backgroundColor: z.color, opacity: 0.7 }}
+                    />
+                    <span className="text-[9px] text-muted-foreground font-medium">Z{z.zone}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Analysis Results */}
+            {hrAnalysis && (
+              <div className="flex flex-col gap-3">
+                {/* Calibration Status Badge */}
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    hrAnalysis.calibrationStatus === "well_calibrated"
+                      ? "bg-success/10 text-success"
+                      : hrAnalysis.calibrationStatus === "slightly_misaligned"
+                        ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        : hrAnalysis.calibrationStatus === "likely_misconfigured"
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-muted text-muted-foreground"
+                  }`}>
+                    {t(`profile.hrStatus_${hrAnalysis.calibrationStatus}` as any)}
+                  </span>
+                  {hrAnalysis.zonesMatch && hrAnalysis.calibrationStatus !== "insufficient_data" && (
+                    <span className="text-[10px] text-success flex items-center gap-0.5">
+                      <Check size={10} /> {t("profile.hrZonesMatch")}
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
+
+                {/* Key Metrics */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.estimatedMaxHr}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrEstMaxHr")}</p>
+                  </div>
+                  {hrAnalysis.estimatedThresholdHr != null && (
+                    <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                      <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.estimatedThresholdHr}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrThreshold")}</p>
+                    </div>
+                  )}
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.dataQuality.activitiesWithHr}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrActivities")}</p>
+                  </div>
+                </div>
+
+                {/* Recommended Zones */}
+                {hrAnalysis.calibrationStatus !== "insufficient_data" && (
+                  <div>
+                    <button
+                      onClick={() => setHrExpanded(!hrExpanded)}
+                      className="flex w-full items-center justify-between py-1 text-xs font-medium text-card-foreground active:opacity-70"
+                    >
+                      <span>{t("profile.hrRecommendedZones")}</span>
+                      {hrExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+
+                    {hrExpanded && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {/* Zone comparison table */}
+                        <div className="overflow-hidden rounded-xl ring-1 ring-border">
+                          <div className="grid grid-cols-4 gap-0 bg-secondary/30 px-3 py-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span>{t("profile.hrZone")}</span>
+                            <span className="text-center">{t("profile.hrCurrent")}</span>
+                            <span className="text-center">{t("profile.hrRecommended")}</span>
+                            <span className="text-right">{t("profile.hrDiff")}</span>
+                          </div>
+                          {hrAnalysis.recommendedZones.map((rec, i) => {
+                            const cur = hrAnalysis.currentZones[i]
+                            const diff = rec.min - cur.min
+                            const hasDiff = Math.abs(diff) > 2
+                            return (
+                              <div
+                                key={rec.zone}
+                                className={`grid grid-cols-4 gap-0 px-3 py-2 text-xs ${
+                                  i < 4 ? "border-b border-border" : ""
+                                }`}
+                              >
+                                <span className="font-medium text-card-foreground">Z{rec.zone} {rec.label}</span>
+                                <span className="text-center text-muted-foreground font-mono">{cur.min}–{cur.max}</span>
+                                <span className="text-center font-mono text-card-foreground">{rec.min}–{rec.max}</span>
+                                <span className={`text-right font-mono ${
+                                  hasDiff
+                                    ? diff > 0 ? "text-destructive" : "text-success"
+                                    : "text-muted-foreground"
+                                }`}>
+                                  {hasDiff ? (diff > 0 ? `+${diff}` : `${diff}`) : "—"}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Explanations */}
+                        {hrAnalysis.explanations.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {hrAnalysis.explanations.map((exp, i) => (
+                              <div key={i} className="flex gap-2 rounded-lg bg-secondary/30 p-2.5">
+                                <Info size={12} className="shrink-0 mt-0.5 text-muted-foreground" />
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">{exp}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Strava manual update guidance */}
+                        {hrAnalysis.calibrationStatus !== "well_calibrated" && !hrAnalysis.zonesMatch && (
+                          <div className="rounded-lg bg-primary/5 p-3 ring-1 ring-primary/10">
+                            <p className="text-[11px] font-medium text-card-foreground mb-1">{t("profile.hrStravaGuide")}</p>
+                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                              {t("profile.hrStravaGuideDesc")}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Re-analyze button */}
+                        <button
+                          onClick={fetchHrAnalysis}
+                          disabled={hrLoading}
+                          className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium text-primary active:opacity-70 disabled:opacity-50"
+                        >
+                          {hrLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {t("profile.hrReanalyze")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Training Preferences */}
