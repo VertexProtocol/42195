@@ -83,8 +83,14 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
   const hasChartData = chartData.length >= 7
   const latest = hasChartData ? chartData[chartData.length - 1] : null
   const twoWeeksAgo = hasChartData ? chartData[Math.max(0, chartData.length - 15)] : null
-  const fitnessDelta = latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
-  const fitnessArrow = fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
+  
+  const fitnessDelta = useMemo(() => {
+    return latest && twoWeeksAgo ? latest.ctl - twoWeeksAgo.ctl : 0
+  }, [latest?.ctl, twoWeeksAgo?.ctl])
+  
+  const fitnessArrow = useMemo(() => {
+    return fitnessDelta > 0.3 ? "↑" : fitnessDelta < -0.3 ? "↓" : "→"
+  }, [fitnessDelta])
 
   const formatDate = (d: string) => {
     const date = new Date(d + "T12:00:00")
