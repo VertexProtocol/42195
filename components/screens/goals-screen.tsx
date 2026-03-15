@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
-  CalendarCheck, MapPin, Footprints, Sparkles,
+  CalendarCheck, MapPin, Footprints, Sparkles, GripVertical,
 } from "lucide-react"
 import {
   formatDistance,
@@ -111,6 +111,29 @@ export function GoalsScreen({
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("weekly")
+  
+  // Drag-and-drop state for event goals
+  const [goalOrder, setGoalOrder] = useState<string[]>([])
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  // Load goal order from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("eventGoalOrder")
+    if (stored) {
+      try {
+        setGoalOrder(JSON.parse(stored))
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+  }, [])
+
+  // Save goal order to localStorage when it changes
+  const saveOrder = useCallback((newOrder: string[]) => {
+    setGoalOrder(newOrder)
+    localStorage.setItem("eventGoalOrder", JSON.stringify(newOrder))
+  }, [])
 
   const todayMondayStr = localMondayStr(new Date())
   const [selectedWeekStart, setSelectedWeekStart] = useState(todayMondayStr)
@@ -508,100 +531,139 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            eventGoals.map((goal) => {
-              const days = daysUntil(goal.target_date)
-              const isPast = isDatePast(goal.target_date)
-              const phase = trainingPhaseKey(goal.start_date, goal.target_date)
-              const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
-              const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
-              const best = bestRelevantRun(activities, goal.target_distance_km, goal.start_date, goal.target_date)
-              const longest = longestRun(activities, goal.start_date, goal.target_date)
+            (() => {
+              // Sort goals by stored order, with unordered goals at the end
+              const orderedGoals = [...eventGoals].sort((a, b) => {
+                const aIdx = goalOrder.indexOf(a.id)
+                const bIdx = goalOrder.indexOf(b.id)
+                if (aIdx === -1 && bIdx === -1) return 0
+                if (aIdx === -1) return 1
+                if (bIdx === -1) return -1
+                return aIdx - bIdx
+              })
 
-              return (
-                <button
-                  key={goal.id}
-                  onClick={() => onSelectGoal(goal)}
-                  className={`relative overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left transition-all active:scale-[0.98] ${
-                    goal.is_active ? "ring-2 ring-primary" : ""
-                  } ${isPast ? "opacity-60" : ""}`}
-                >
-                  {/* Active badge */}
-                  {goal.is_active && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5">
-                      <Sparkles size={12} className="text-primary" />
-                      <span className="text-[10px] font-semibold text-primary uppercase">
-                        {t("plan.active")}
-                      </span>
-                    </div>
-                  )}
+              const handleDragStart = (id: string) => {
+                setDraggedId(id)
+              }
 
-                  {/* Goal name and phase */}
-                  <div className="flex items-start gap-3 pr-16">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                      <Footprints size={20} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
-                      <p className={`text-xs font-medium ${phase.color}`}>
-                        {t(phase.labelKey)}
-                      </p>
-                    </div>
-                  </div>
+              const handleDragOver = (e: React.DragEvent, id: string) => {
+                e.preventDefault()
+                if (id !== draggedId) {
+                  setDragOverId(id)
+                }
+              }
 
-                  {/* Stats row */}
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar size={14} />
-                      <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <MapPin size={14} />
-                      <span>{formatDistance(goal.target_distance_km)}</span>
-                    </div>
-                    {goal.target_time_seconds && (
-                      <div className="flex items-center gap-1.5">
-                        <Timer size={14} />
-                        <span>{formatTargetTime(goal.target_time_seconds)}</span>
+              const handleDragEnd = () => {
+                if (draggedId && dragOverId && draggedId !== dragOverId) {
+                  const currentOrder = orderedGoals.map(g => g.id)
+                  const draggedIndex = currentOrder.indexOf(draggedId)
+                  const targetIndex = currentOrder.indexOf(dragOverId)
+                  
+                  const newOrder = [...currentOrder]
+                  newOrder.splice(draggedIndex, 1)
+                  newOrder.splice(targetIndex, 0, draggedId)
+                  
+                  saveOrder(newOrder)
+                }
+                setDraggedId(null)
+                setDragOverId(null)
+              }
+
+              return orderedGoals.map((goal) => {
+                const days = daysUntil(goal.target_date)
+                const isPast = isDatePast(goal.target_date)
+                const phase = trainingPhaseKey(goal.start_date, goal.target_date)
+                const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date)
+                const timeProgress = timeElapsedPercentage(goal.start_date, goal.target_date)
+
+                return (
+                  <div
+                    key={goal.id}
+                    draggable
+                    onDragStart={() => handleDragStart(goal.id)}
+                    onDragOver={(e) => handleDragOver(e, goal.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragLeave={() => setDragOverId(null)}
+                    className={`relative overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border text-left transition-all ${
+                      goal.is_active ? "ring-2 ring-primary" : ""
+                    } ${isPast ? "opacity-60" : ""} ${
+                      draggedId === goal.id ? "opacity-50 scale-[0.98]" : ""
+                    } ${dragOverId === goal.id ? "ring-2 ring-primary/50" : ""}`}
+                  >
+                    {/* Drag handle + main content wrapper */}
+                    <div className="flex">
+                      {/* Drag handle */}
+                      <div className="flex items-center justify-center w-8 shrink-0 cursor-grab active:cursor-grabbing touch-none bg-secondary/30 border-r border-border/50">
+                        <GripVertical size={16} className="text-muted-foreground/50" />
                       </div>
-                    )}
-                  </div>
+                      
+                      {/* Main content - clickable area */}
+                      <button
+                        onClick={() => onSelectGoal(goal)}
+                        className="flex-1 p-5 text-left active:bg-secondary/20 transition-colors min-h-[160px] flex flex-col"
+                      >
+                        {/* Active badge */}
+                        {goal.is_active && (
+                          <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5">
+                            <Sparkles size={12} className="text-primary" />
+                            <span className="text-[10px] font-semibold text-primary uppercase">
+                              {t("plan.active")}
+                            </span>
+                          </div>
+                        )}
 
-                  {/* Progress bar */}
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-muted-foreground">
-                        {formatDistance(logged)} {t("common.logged")}
-                      </span>
-                      <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${timeProgress}%` }}
-                      />
+                        {/* Goal name and phase */}
+                        <div className="flex items-start gap-3 pr-16">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                            <Footprints size={20} className="text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
+                            <p className={`text-xs font-medium ${phase.color}`}>
+                              {t(phase.labelKey)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Stats row */}
+                        <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={14} />
+                            <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={14} />
+                            <span>{formatDistance(goal.target_distance_km)}</span>
+                          </div>
+                          {goal.target_time_seconds && (
+                            <div className="flex items-center gap-1.5">
+                              <Timer size={14} />
+                              <span>{formatTargetTime(goal.target_time_seconds)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Progress bar - pushed to bottom with flex-1 spacer */}
+                        <div className="mt-auto pt-4">
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-muted-foreground">
+                              {formatDistance(logged)} {t("common.logged")}
+                            </span>
+                            <span className="font-medium text-foreground">{timeProgress}% {t("plan.timeElapsed")}</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all duration-500"
+                              style={{ width: `${timeProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Training stats */}
-                  {(best || longest) && (
-                    <div className="mt-3 pt-3 border-t border-border flex gap-4 text-xs">
-                      {best && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Trophy size={12} className="text-amber-500" />
-                          <span>{t("plan.bestRun")}: {formatDistance(best.distance_km)} in {formatDuration(best.duration_seconds)}</span>
-                        </div>
-                      )}
-                      {longest && !best && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <TrendingUp size={12} className="text-emerald-500" />
-                          <span>{t("plan.longestRun")}: {formatDistance(longest.distance_km)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </button>
-              )
-            })
+                )
+              })
+            })()
           )}
         </div>
       )}
