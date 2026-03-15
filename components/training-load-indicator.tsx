@@ -434,6 +434,19 @@ function MomentumGraph({ data }: MomentumGraphProps) {
           )
         })()}
 
+        {/* Invisible touch targets for interactivity */}
+        {points.map((p, i) => (
+          <circle
+            key={`touch-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={12}
+            fill="transparent"
+            style={{ cursor: "pointer" }}
+            onPointerDown={() => setSelectedPoint(selectedPoint === i ? null : i)}
+          />
+        ))}
+
         {/* X-axis labels */}
         {getTickIndices().map((idx) => {
           const p = points[idx]
