@@ -101,8 +101,10 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
 
   const filteredActivities = useMemo(() => {
     return activities.filter((activity) => {
-      // Type filter
-      if (selectedType !== "all" && activity.type !== selectedType) {
+      // Test run filter
+      if (selectedType === "__test_run__") {
+        if (!testRunActivityIds.has(activity.id)) return false
+      } else if (selectedType !== "all" && activity.type !== selectedType) {
         return false
       }
       // Search filter
@@ -115,7 +117,7 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
       }
       return true
     })
-  }, [activities, searchQuery, selectedType])
+  }, [activities, searchQuery, selectedType, testRunActivityIds])
 
   const hasActiveFilters = searchQuery.trim() !== "" || selectedType !== "all"
 
@@ -238,6 +240,19 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
               >
                 {t("activities.allTypes")}
               </button>
+              {testRunActivityIds.size > 0 && (
+                <button
+                  onClick={() => setSelectedType("__test_run__")}
+                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selectedType === "__test_run__"
+                      ? "bg-violet-500 text-white"
+                      : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                  }`}
+                >
+                  <FlaskConical size={10} />
+                  {t("testRun.badge")}
+                </button>
+              )}
               {activityTypes.map((type) => (
                 <button
                   key={type}
