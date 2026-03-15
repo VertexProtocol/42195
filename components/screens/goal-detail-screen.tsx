@@ -574,103 +574,59 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("timeline.title")}
         </h3>
-        <span className="text-xs font-semibold text-foreground">
+        <span className="text-xs text-muted-foreground">
           {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
         </span>
       </div>
 
-      {/* Visual bar */}
-      <div className="px-5 py-3">
-        <div className="relative flex h-3 w-full overflow-hidden rounded-full bg-secondary">
-          {timeline.phases.map((phase) => {
-            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
-            const colors = PHASE_COLORS[phase.type]
-            return (
-              <div
-                key={phase.type}
-                className={`${colors.bar} relative h-full transition-all`}
-                style={{ width: `${widthPct}%`, opacity: phase.endDate < new Date() ? 0.4 : 1 }}
-              />
-            )
-          })}
-          {/* Current position marker */}
-          {timeline.progressPct > 0 && timeline.progressPct < 100 && (
-            <div
-              className="absolute top-0 h-full w-0.5 bg-foreground shadow-sm"
-              style={{ left: `${timeline.progressPct}%` }}
-            >
-              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-foreground ring-2 ring-card" />
-            </div>
-          )}
-        </div>
-
-        {/* Phase labels below bar */}
-        <div className="relative mt-1.5 flex">
-          {timeline.phases.map((phase) => {
-            const widthPct = (phase.totalWeeks / timeline.totalWeeks) * 100
-            return (
-              <div
-                key={phase.type}
-                className="flex flex-col items-center overflow-hidden"
-                style={{ width: `${widthPct}%` }}
-              >
-                <span className={`text-[9px] font-medium truncate max-w-full px-0.5 ${PHASE_COLORS[phase.type].text}`}>
-                  {t(PHASE_LABEL_KEYS[phase.type])}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Phase cards */}
-      <div className="flex flex-col gap-2 px-5 pb-4">
-        {timeline.phases.map((phase) => {
-          const colors = PHASE_COLORS[phase.type]
+      {/* Phase list - vertical timeline */}
+      <div className="flex flex-col px-5 pb-4">
+        {timeline.phases.map((phase, index) => {
           const isCurrent = timeline.currentPhase?.type === phase.type
           const isPast = phase.endDate < new Date()
+          const isLast = index === timeline.phases.length - 1
           const weeksLabel = phase.totalWeeks === 1
             ? `1 ${t("timeline.week")}`
             : `${phase.totalWeeks} ${t("timeline.weeks")}`
 
           return (
-            <div
-              key={phase.type}
-              className={`rounded-xl px-3.5 py-3 ring-1 transition-all ${
-                isCurrent
-                  ? `${colors.bg} ${colors.ring} ring-2`
-                  : isPast
-                    ? "bg-secondary/50 ring-border opacity-60"
-                    : "bg-secondary/50 ring-border"
-              }`}
-            >
-              <div className="flex items-center justify-between">
+            <div key={phase.type} className="flex gap-3">
+              {/* Timeline indicator */}
+              <div className="flex flex-col items-center">
+                <div className={`h-3 w-3 rounded-full border-2 ${
+                  isCurrent 
+                    ? "border-primary bg-primary" 
+                    : isPast 
+                      ? "border-muted-foreground/40 bg-muted-foreground/40" 
+                      : "border-border bg-card"
+                }`} />
+                {!isLast && (
+                  <div className={`w-0.5 flex-1 min-h-[2.5rem] ${
+                    isPast ? "bg-muted-foreground/20" : "bg-border"
+                  }`} />
+                )}
+              </div>
+              
+              {/* Phase content */}
+              <div className={`flex-1 pb-3 ${isPast && !isCurrent ? "opacity-50" : ""}`}>
                 <div className="flex items-center gap-2">
-                  {isCurrent && (
-                    <div className={`h-2 w-2 rounded-full ${colors.bar}`} />
-                  )}
-                  <span className={`text-sm font-semibold ${isCurrent ? colors.text : "text-foreground"}`}>
+                  <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
                     {t(PHASE_LABEL_KEYS[phase.type])}
                   </span>
+                  {isCurrent && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      {t("timeline.currentPhase")}
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
-                </span>
+                </p>
               </div>
-              <p className={`mt-1 text-xs leading-relaxed ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
-                {phase.description}
-              </p>
-              {isCurrent && (
-                <div className="mt-2 flex items-center gap-1.5">
-                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
-                    {t("timeline.currentPhase")}
-                  </div>
-                </div>
-              )}
             </div>
           )
         })}
