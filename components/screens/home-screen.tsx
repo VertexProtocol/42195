@@ -130,17 +130,17 @@ export function HomeScreen({
                   >
                     <button
                       onClick={() => onViewGoal(goal)}
-                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform min-h-[120px]"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 pr-4">
+                      <div className="flex items-start justify-between h-full">
+                        <div className="flex-1 pr-4 flex flex-col">
                           <p className="text-xs font-medium uppercase tracking-wider text-primary">
                             {t("home.activeGoal")}
                           </p>
-                          <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance">
+                          <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance line-clamp-1">
                             {goal.name}
                           </h2>
-                          <div className="mt-2.5 flex flex-col gap-1">
+                          <div className="mt-auto pt-2.5 flex flex-col gap-1">
                             <div className="flex items-center gap-4">
                               <span className="text-sm text-muted-foreground">
                                 {m.days} {t("home.daysLeft")}
@@ -149,11 +149,11 @@ export function HomeScreen({
                                 {formatDistance(m.logged)} {t("home.logged")}
                               </span>
                             </div>
-                            {goal.target_time_seconds && (
-                              <span className="text-xs text-muted-foreground">
-                                {t("home.target")}: {formatTargetTime(goal.target_time_seconds)}
-                              </span>
-                            )}
+                            <span className="text-xs text-muted-foreground h-4">
+                              {goal.target_time_seconds 
+                                ? `${t("home.target")}: ${formatTargetTime(goal.target_time_seconds)}`
+                                : "\u00A0"}
+                            </span>
                           </div>
                         </div>
                         <div className="relative flex shrink-0 items-center justify-center">
