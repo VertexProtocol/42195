@@ -110,7 +110,7 @@ export function GoalsScreen({
   onSelectGoal,
 }: GoalsScreenProps) {
   const { t } = useI18n()
-  const [tab, setTab] = useState<GoalTab>("weekly")
+  const [tab, setTab] = useState<GoalTab>("race")
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
 
   const toggleExpanded = (id: string) => {
@@ -175,6 +175,16 @@ export function GoalsScreen({
       {/* Segmented control */}
       <div className="flex rounded-xl bg-secondary p-1">
         <button
+          onClick={() => setTab("race")}
+          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+            tab === "race"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground active:text-foreground"
+          }`}
+        >
+          {t("goals.targets")}
+        </button>
+        <button
           onClick={() => setTab("weekly")}
           className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
             tab === "weekly"
@@ -183,16 +193,6 @@ export function GoalsScreen({
           }`}
         >
           {t("goals.weekly")}
-        </button>
-        <button
-          onClick={() => setTab("race")}
-          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-            tab === "race"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground active:text-foreground"
-          }`}
-        >
-          {t("goals.raceGoals")}
         </button>
       </div>
 
@@ -374,9 +374,9 @@ export function GoalsScreen({
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
                 <Trophy size={28} className="text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-muted-foreground">{t("goals.noRaceGoals")}</p>
+              <p className="text-sm font-medium text-muted-foreground">{t("goals.noTargets")}</p>
               <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-                {t("goals.setRaceGoals")}
+                {t("goals.setTargets")}
               </p>
             </div>
           ) : (
