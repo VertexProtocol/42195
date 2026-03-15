@@ -27,8 +27,10 @@ interface HomeScreenProps {
   syncStatus?: SyncStatus
   stravaConnected?: boolean
   onViewActivities: () => void
-  onViewGoal: () => void
+  onViewGoal: (goal: Goal) => void
+  onViewGoals: () => void
   onViewInsights: () => void
+  onSelectActivity: (activity: Activity) => void
 }
 
 export function HomeScreen({
@@ -40,7 +42,9 @@ export function HomeScreen({
   stravaConnected,
   onViewActivities,
   onViewGoal,
+  onViewGoals,
   onViewInsights,
+  onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
 
@@ -125,7 +129,7 @@ export function HomeScreen({
                     className={`pl-3 ${activeGoals.length > 1 ? "basis-[88%]" : "basis-full"}`}
                   >
                     <button
-                      onClick={onViewGoal}
+                      onClick={() => onViewGoal(goal)}
                       className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
                     >
                       <div className="flex items-start justify-between">
@@ -176,7 +180,7 @@ export function HomeScreen({
         <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
           <p className="text-sm text-muted-foreground">{t("home.noActiveGoals")}</p>
           <button
-            onClick={onViewGoal}
+            onClick={onViewGoals}
             className="mt-2 text-sm font-medium text-primary active:opacity-70"
           >
             {t("home.setGoal")}
@@ -239,7 +243,10 @@ export function HomeScreen({
             <CarouselContent className="-ml-3">
               {recentActivities.map((activity) => (
                 <CarouselItem key={activity.id} className="pl-3 basis-[72%]">
-                  <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                  <button
+                    onClick={() => onSelectActivity(activity)}
+                    className="w-full rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+                  >
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                       {activity.type}
                     </p>
@@ -257,7 +264,7 @@ export function HomeScreen({
                         {formatDuration(activity.duration_seconds)}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 </CarouselItem>
               ))}
             </CarouselContent>
