@@ -75,25 +75,24 @@ export function HomeScreen({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{t("app.tagline")}</p>
         </div>
+        {/* Sync status pill */}
+        {syncStatus && stravaConnected && syncStatus.state !== "never" && (
+          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+            syncStatus.state === "syncing" ? "bg-primary/10 text-primary" :
+            syncStatus.state === "error" ? "bg-destructive/10 text-destructive" :
+            "bg-success/10 text-success"
+          }`}>
+            {syncStatus.state === "syncing" && <RefreshCw size={10} className="animate-spin" />}
+            {syncStatus.state === "error" && <AlertCircle size={10} />}
+            {syncStatus.state === "success" && <CheckCircle2 size={10} />}
+            <span>
+              {syncStatus.state === "syncing" ? t("profile.syncing") :
+               syncStatus.state === "error" ? "Sync failed" :
+               t("profile.synced")}
+            </span>
+          </div>
+        )}
       </header>
-
-      {/* Sync status feedback */}
-      {syncStatus && stravaConnected && syncStatus.state !== "never" && (
-        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${
-          syncStatus.state === "syncing" ? "bg-primary/5 text-primary" :
-          syncStatus.state === "error" ? "bg-destructive/5 text-destructive ring-1 ring-destructive/20" :
-          "bg-success/5 text-success"
-        }`}>
-          {syncStatus.state === "syncing" && <RefreshCw size={12} className="animate-spin" />}
-          {syncStatus.state === "error" && <AlertCircle size={12} />}
-          {syncStatus.state === "success" && <CheckCircle2 size={12} />}
-          <span>
-            {syncStatus.state === "syncing" ? t("profile.syncing") :
-             syncStatus.state === "error" ? (syncStatus.error_message ?? "Sync failed") :
-             t("profile.synced")}
-          </span>
-        </div>
-      )}
 
       {/* Training Load Indicator (Optimal / High Load / Overtraining Risk) */}
       {activities.length >= 7 && (
