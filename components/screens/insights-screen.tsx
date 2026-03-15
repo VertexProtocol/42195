@@ -379,12 +379,17 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                   <Timer size={14} className="text-muted-foreground" />
                   <span className="text-sm text-card-foreground">{pred.distance_label}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-muted-foreground font-mono">
-                    {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}
-                  </span>
-                  <span className="text-sm font-bold font-mono text-foreground">
-                    {formatTargetTime(pred.predicted_seconds)}
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}
+                    </span>
+                    <span className="text-sm font-bold font-mono text-foreground">
+                      {formatTargetTime(pred.predicted_seconds)}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {formatTargetTime(pred.low_seconds)} – {formatTargetTime(pred.high_seconds)}
                   </span>
                 </div>
               </div>

@@ -287,20 +287,36 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   }, [smoothedStreams])
 
   // Compute global max HR from all activities for consistent zone boundaries
-  const globalMaxHr = useMemo(() => {
-    if (!allActivities) return undefined
-    const hrs = allActivities
-      .map((a) => a.avg_heart_rate)
-      .filter((hr): hr is number => hr !== null && hr > 0)
-    if (hrs.length === 0) return undefined
-    // Avg HR × 1.2 approximates max HR better than using avg HR directly.
-    // A more accurate approach would use stream data, but avg_heart_rate is available for all activities.
-    return Math.max(...hrs) * 1.2
-  }, [allActivities])
+  const estimatedMaxHr = useMemo(() => {
+    // Best source: actual max HR from stream data (second-by-second readings)
+    const streamMax = streams
+      ? Math.max(...streams.filter((p) => p.hr !== null && p.hr > 0).map((p) => p.hr!), 0)
+      : 0
+
+    // Fallback: highest avg HR across all activities × 1.1 (smaller multiplier since
+    // avg HR is already close to max on hard efforts)
+    const activityMax = allActivities
+      ? Math.max(
+          ...allActivities
+            .map((a) => a.avg_heart_rate)
+            .filter((hr): hr is number => hr !== null && hr > 0),
+          0,
+        )
+      : 0
+
+    // Use stream max directly if available (most accurate), otherwise estimate from avg HR
+    if (streamMax > 0 && activityMax > 0) {
+      // Use the higher of: stream max from this activity, or highest avg HR × 1.1
+      return Math.max(streamMax, activityMax * 1.1)
+    }
+    if (streamMax > 0) return streamMax
+    if (activityMax > 0) return activityMax * 1.1
+    return undefined
+  }, [streams, allActivities])
 
   const hrZones = useMemo(
-    () => (streams ? analyzeHrZones(streams, globalMaxHr) : []),
-    [streams, globalMaxHr],
+    () => (streams ? analyzeHrZones(streams, estimatedMaxHr) : []),
+    [streams, estimatedMaxHr],
   )
 
   const paceZones = useMemo(
@@ -620,6 +636,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                               </div>
                               <span className="text-xs font-mono text-muted-foreground">
                                 {formatPace(targetPace)} · {formatTargetTime(pred.predicted_seconds)}
+                                <span className="text-[10px] opacity-70"> ({formatTargetTime(pred.low_seconds)}–{formatTargetTime(pred.high_seconds)})</span>
                               </span>
                             </button>
                           )

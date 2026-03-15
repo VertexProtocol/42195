@@ -4,7 +4,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
-import { validateAndAdjustPlan } from "@/lib/training-safety"
+import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -146,24 +146,29 @@ function calcFullCycleTargets(
   const buildWeeks = Math.max(2, Math.floor(totalWeeks * 0.25))
   const baseWeeks = totalWeeks - buildWeeks - taperWeeks
 
-  // Base phase: gradual increase ~5-8% per week, recovery every 3 weeks
+  // Base phase: gradual increase ~5-8% per week, recovery after every 2 hard weeks
   let current = base
+  let hardWeeksSinceRecovery = 0
   for (let i = 0; i < baseWeeks; i++) {
-    if (i > 0 && i % 3 === 2) {
+    if (hardWeeksSinceRecovery >= 2 && i > 0) {
       targets.push(Math.round(current * 0.7)) // Recovery week
+      hardWeeksSinceRecovery = 0
     } else {
       targets.push(Math.round(current))
       current = Math.min(current * 1.07, base * 2.0) // Cap at 2x baseline
+      hardWeeksSinceRecovery++
     }
   }
 
   // Build phase: higher intensity weeks with steeper progression
   for (let i = 0; i < buildWeeks; i++) {
-    if (i > 0 && i % 3 === 2) {
+    if (hardWeeksSinceRecovery >= 2 && i > 0) {
       targets.push(Math.round(current * 0.7))
+      hardWeeksSinceRecovery = 0
     } else {
       targets.push(Math.round(current))
       current = Math.min(current * 1.05, base * 2.2)
+      hardWeeksSinceRecovery++
     }
   }
 
@@ -624,8 +629,7 @@ export async function POST(req: NextRequest) {
             )
           }
           const sessionKmTotal = week.sessions.reduce((sum: number, s: { distance: string }) => {
-            const match = s.distance.match(/([\d.]+)\s*km/i)
-            return sum + (match ? parseFloat(match[1]) : 0)
+            return sum + parseSessionDistanceKm(s.distance)
           }, 0)
           if (sessionKmTotal > 0 && Math.abs(sessionKmTotal - week.targetKm) > week.targetKm * 0.2) {
             console.warn(
