@@ -634,3 +634,64 @@ export function validateAndAdjustPlan(
     safetyNotes,
   }
 }
+
+// ── Reactive skip-load spike detection ────────────────────────────────────────
+
+export interface SkipLoadWarning {
+  actualKm: number
+  nextPlannedKm: number
+  safeMaxKm: number
+  spikePct: number
+  maxAllowedPct: number
+  severity: "caution" | "danger"
+}
+
+/**
+ * Compares the runner's actual km from a recently completed week against the
+ * next planned week's target. Returns a warning when the jump exceeds the
+ * level-appropriate progression cap, indicating a potential injury risk
+ * caused by skipped sessions.
+ *
+ * Pure, deterministic, no API calls.
+ */
+export function checkSkipLoadSpike(
+  recentActualKm: number,
+  nextPlannedKm: number,
+  level: AthleteLevel,
+  previousPlannedKm?: number,
+): SkipLoadWarning | null {
+  // If next week is a recovery week (planned drop ≥15% from previous planned), skip check
+  if (previousPlannedKm && nextPlannedKm < previousPlannedKm * 0.85) return null
+
+  // If actual >= planned (runner is on track or ahead), no spike
+  if (recentActualKm >= nextPlannedKm) return null
+
+  const maxAllowedPct = MAX_WEEKLY_INCREASE[level]
+
+  // Complete rest week — any meaningful next week is dangerous
+  if (recentActualKm === 0 && nextPlannedKm > 0) {
+    return {
+      actualKm: 0,
+      nextPlannedKm,
+      safeMaxKm: 0,
+      spikePct: 100,
+      maxAllowedPct: Math.round(maxAllowedPct * 100),
+      severity: "danger",
+    }
+  }
+
+  const spikeFraction = (nextPlannedKm - recentActualKm) / recentActualKm
+  if (spikeFraction <= maxAllowedPct) return null
+
+  const safeMaxKm = Math.round(recentActualKm * (1 + maxAllowedPct))
+  const spikePct = Math.round(spikeFraction * 100)
+
+  return {
+    actualKm: Math.round(recentActualKm * 10) / 10,
+    nextPlannedKm,
+    safeMaxKm,
+    spikePct,
+    maxAllowedPct: Math.round(maxAllowedPct * 100),
+    severity: spikePct > 30 ? "danger" : "caution",
+  }
+}
