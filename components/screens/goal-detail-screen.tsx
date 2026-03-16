@@ -765,6 +765,7 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
 
 // ---- Main screen ----
 export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalDetailScreenProps) {
+  const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
     goal_id: goal.id,
     sessions_per_week: 3,
