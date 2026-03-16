@@ -38,9 +38,11 @@ export async function POST(req: NextRequest) {
   }
 
   let goalId: string
+  let dryRun = false
   try {
     const body = await req.json()
     goalId = body.goalId
+    dryRun = body.dryRun === true
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
@@ -139,6 +141,16 @@ export async function POST(req: NextRequest) {
     direction,
     adjustmentApplied,
     adjustmentNote,
+  }
+
+  // Dry-run: return analysis without persisting
+  if (dryRun) {
+    return NextResponse.json({
+      checkpointDue: true,
+      checkpoint,
+      adjustmentApplied,
+      dryRun: true,
+    })
   }
 
   // Persist updated plan + checkpoint using service client for reliability
