@@ -480,15 +480,67 @@ describe("adjustRemainingWeeks", () => {
     expect(adjustedWeeks[4].targetKm).toBe(Math.round(50 * 0.6))
   })
 
-  it("scales session distances proportionally", () => {
+  it("scales session distances to exact numeric values", () => {
+    // Plan: 60 km/week, sessions are "20 km" (60/3).
+    // actualAvgKm = 36 → scale = 36/60 = 0.60 (not clamped)
+    // newTargetKm = round(60 * 0.60) = 36; sessionScale = 36/60 = 0.60
+    // 20 * 0.60 = 12.0 → "12 km"
     const plan = makePlan(4, 60)
-    // sessions each have distance = "20 km" (60/3)
-    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 33)
-    const scaledKm = adjustedWeeks[2].sessions[0].distance
-    expect(scaledKm).toMatch(/km/)
-    // The session should have a smaller number than 20
-    const km = parseFloat(scaledKm)
-    expect(km).toBeLessThan(20)
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 36)
+    expect(adjustedWeeks[2].sessions[0].distance).toBe("12 km")
+    expect(adjustedWeeks[2].sessions[1].distance).toBe("12 km")
+    expect(adjustedWeeks[2].sessions[2].distance).toBe("12 km")
+  })
+
+  it("scales range-format session distances (e.g. '8-10 km')", () => {
+    // Construct a plan manually with a range session distance
+    const plan: TrainingPlan = {
+      weeks: [
+        { weekNumber: 1, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
+        { weekNumber: 2, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
+        { weekNumber: 3, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
+        { weekNumber: 4, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
+      ],
+      goalRaceDate: "2026-06-01",
+      goalRaceType: "10K",
+    }
+    // actualAvgKm = 27.5 → scale = 27.5/50 = 0.55 (exactly at clamp floor)
+    // newTargetKm = round(50 * 0.55) = round(27.5) = 28; sessionScale = 28/50 = 0.56
+    // low: round(8 * 0.56 * 10) / 10 = round(4.48) / 10 = 4.5
+    // high: round(10 * 0.56 * 10) / 10 = round(5.6) / 10 = 5.6 → "4.5–5.6 km"
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 27.5)
+    expect(adjustedWeeks[2].sessions[0].distance).toMatch(/^\d[\d.]*–\d[\d.]* km$/)
+    const parts = adjustedWeeks[2].sessions[0].distance.replace(" km", "").split("–").map(Number)
+    expect(parts[0]).toBeLessThan(8)
+    expect(parts[1]).toBeLessThan(10)
+  })
+
+  it("coachNote records the exact old and new targetKm", () => {
+    // scale = 36/60 = 0.60; newTargetKm = 36
+    const plan = makePlan(4, 60)
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 36)
+    expect(adjustedWeeks[2].coachNote).toBe(
+      "Mid-block adjustment: target updated from 60 km to 36 km based on recent training load.",
+    )
+  })
+
+  it("appends existing coachNote after the adjustment note", () => {
+    const plan = makePlan(4, 60)
+    // Give week 2 a pre-existing coachNote
+    plan.weeks[2] = { ...plan.weeks[2], coachNote: "Focus on form this week." }
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 36)
+    expect(adjustedWeeks[2].coachNote).toBe(
+      "Mid-block adjustment: target updated from 60 km to 36 km based on recent training load. Focus on form this week.",
+    )
+  })
+
+  it("returns plan unchanged and scaleFactor 1.0 when all remaining weeks are deload", () => {
+    // [50, 50, 15, 15] — completedAvg = 50, threshold = 37.5; both remaining are deload
+    const plan = makePlan(4, [50, 50, 15, 15])
+    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, 2, 30)
+    expect(scaleFactor).toBe(1.0)
+    expect(adjustedWeeks[2].targetKm).toBe(15) // unchanged
+    expect(adjustedWeeks[3].targetKm).toBe(15) // unchanged
   })
 
   it("does not modify completed weeks", () => {
@@ -498,19 +550,154 @@ describe("adjustRemainingWeeks", () => {
     expect(adjustedWeeks[1]).toStrictEqual(plan.weeks[1])
   })
 
-  it("adds a coachNote to adjusted weeks", () => {
-    const plan = makePlan(4, 60)
-    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 30)
-    expect(adjustedWeeks[2].coachNote).toContain("Mid-block adjustment")
-    expect(adjustedWeeks[3].coachNote).toContain("Mid-block adjustment")
-  })
-
   it("targetKm never falls below 5 km", () => {
     // 8 km weeks; actualAvgKm = 1 → scaleFactor clamped to 0.55 → 8*0.55 = 4.4 → floor to 5
     const smallPlan = makePlan(4, 8)
     const { adjustedWeeks } = adjustRemainingWeeks(smallPlan, 2, 1)
     expect(adjustedWeeks[2].targetKm).toBeGreaterThanOrEqual(5)
     expect(adjustedWeeks[3].targetKm).toBeGreaterThanOrEqual(5)
+  })
+
+  it("skips session scaling when skipSessionScaling is true", () => {
+    const plan = makePlan(4, 60)
+    const originalDistance = plan.weeks[2].sessions[0].distance
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 36, { skipSessionScaling: true })
+    // targetKm is still updated (36 not 60)
+    expect(adjustedWeeks[2].targetKm).toBe(36)
+    // session distances unchanged
+    expect(adjustedWeeks[2].sessions[0].distance).toBe(originalDistance)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Adjustment pipeline — integration (analyzeBlockAdherence + adjustRemainingWeeks)
+//
+// These tests exercise the full data flow from raw activities → adherence
+// analysis → scale factor → adjusted plan. They prove that sick weeks are
+// correctly excluded from the calculation that drives the adjustment.
+// ---------------------------------------------------------------------------
+
+describe("adjustment pipeline — integration", () => {
+  beforeEach(() => vi.setSystemTime(NOW))
+  afterEach(() => vi.useRealTimers())
+
+  it("sick week + on-track week → no adjustment (main regression)", () => {
+    // Before the fix, (0+50)/2 = 25 km avg → scale 0.55 → plan wrongly cut.
+    // After the fix, active avg = 50 km → on_track → no adjustment.
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(2, NOW)
+    const acts = [
+      // week 0: sick (0 km)
+      // week 1: exactly on target (50 km)
+      ...activitiesForWeek(start, 1, 50),
+    ]
+    const { isWayOff, activeWeeks, missedWeekCount } = analyzeBlockAdherence(plan, acts, start)
+
+    expect(missedWeekCount).toBe(1)
+    expect(isWayOff).toBe(false) // no adjustment should fire
+
+    // Confirm that if we were to call adjustRemainingWeeks with the active avg,
+    // the scale factor is 1.0 (on target)
+    const activeAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
+    const { scaleFactor } = adjustRemainingWeeks(plan, 2, activeAvgKm)
+    expect(scaleFactor).toBeCloseTo(1.0)
+  })
+
+  it("sick week + undertrained week → scale uses active avg, not diluted avg", () => {
+    // Completed: week 0 = 0 km (sick), week 1 = 30 km (60% of 50)
+    //
+    // Diluted (wrong): (0+30)/2 = 15 km → scale = max(0.55, 15/50) = 0.55 → 28 km remaining
+    // Active (correct):          30 km → scale = 30/50 = 0.60             → 30 km remaining
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(2, NOW)
+    const acts = [
+      ...activitiesForWeek(start, 1, 30), // week 0 has no activities (sick)
+    ]
+    const { isWayOff, activeWeeks, missedWeekCount } = analyzeBlockAdherence(plan, acts, start)
+
+    expect(missedWeekCount).toBe(1)
+    expect(isWayOff).toBe(true)
+
+    const activeAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
+    expect(activeAvgKm).toBeCloseTo(30)
+
+    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, 2, activeAvgKm)
+    expect(scaleFactor).toBeCloseTo(0.60) // NOT 0.55
+    expect(adjustedWeeks[2].targetKm).toBe(30) // NOT 28
+    expect(adjustedWeeks[3].targetKm).toBe(30)
+  })
+
+  it("no sick weeks, consistent undertraining → scale factor and adjusted plan are correct", () => {
+    // Both weeks at 30/50 km (60%) — no sick weeks, straightforward scale-down
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(2, NOW)
+    const acts = [
+      ...activitiesForWeek(start, 0, 30),
+      ...activitiesForWeek(start, 1, 30),
+    ]
+    const { isWayOff, activeWeeks, missedWeekCount, overallAdherencePct } =
+      analyzeBlockAdherence(plan, acts, start)
+
+    expect(missedWeekCount).toBe(0)
+    expect(overallAdherencePct).toBe(60)
+    expect(isWayOff).toBe(true)
+
+    const activeAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
+    expect(activeAvgKm).toBeCloseTo(30)
+
+    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, 2, activeAvgKm)
+    expect(scaleFactor).toBeCloseTo(0.60)
+    expect(adjustedWeeks[2].targetKm).toBe(30)
+    expect(adjustedWeeks[3].targetKm).toBe(30)
+    // Completed weeks untouched
+    expect(adjustedWeeks[0].targetKm).toBe(50)
+    expect(adjustedWeeks[1].targetKm).toBe(50)
+  })
+
+  it("no sick weeks, consistent overtraining → scale capped at 1.30", () => {
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(2, NOW)
+    const acts = [
+      ...activitiesForWeek(start, 0, 80), // 160%
+      ...activitiesForWeek(start, 1, 80),
+    ]
+    const { isWayOff, activeWeeks } = analyzeBlockAdherence(plan, acts, start)
+    expect(isWayOff).toBe(true)
+
+    const activeAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
+    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, 2, activeAvgKm)
+    expect(scaleFactor).toBeCloseTo(1.30) // clamped
+    expect(adjustedWeeks[2].targetKm).toBe(65) // 50 * 1.30
+  })
+
+  it("all completed weeks missed → isWayOff false → adjustment never fires", () => {
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(2, NOW)
+    // No activities at all for the two completed weeks
+    const { isWayOff, missedWeekCount, activeWeeks } = analyzeBlockAdherence(plan, [], start)
+
+    expect(missedWeekCount).toBe(2)
+    expect(activeWeeks).toHaveLength(0)
+    expect(isWayOff).toBe(false) // route checks isWayOff && activeWeeks.length > 0
+  })
+
+  it("deload week in remaining is preserved during a scale-down adjustment", () => {
+    // Plan: [50, 50, 50, 15(deload), 50]; running at 60% → scale-down
+    const plan = makePlan(5, [50, 50, 50, 15, 50])
+    const start = blockStartForWeek(2, NOW)
+    const acts = [
+      ...activitiesForWeek(start, 0, 30),
+      ...activitiesForWeek(start, 1, 30),
+    ]
+    const { isWayOff, activeWeeks } = analyzeBlockAdherence(plan, acts, start)
+    expect(isWayOff).toBe(true)
+
+    const activeAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
+    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, activeAvgKm)
+
+    expect(adjustedWeeks[3].targetKm).toBe(15) // deload untouched
+    expect(adjustedWeeks[4].targetKm).toBeLessThan(50) // normal week scaled down
+    expect(adjustedWeeks[4].targetKm).toBeGreaterThan(15)
   })
 })
 
