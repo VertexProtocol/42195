@@ -162,6 +162,21 @@ describe("getWeekActualKm", () => {
     expect(getWeekActualKm([], start, 1)).toBe(0)
   })
 
+  it("sums multiple activities within the same week", () => {
+    const start = blockStartForWeek(3, NOW)
+    // Two runs in week 1: 15 + 20 = 35
+    const [y, m, d] = start.split("-").map(Number)
+    const blockStart = new Date(Date.UTC(y, m - 1, d))
+    const weekStart = new Date(blockStart.getTime() + 1 * 7 * 24 * 60 * 60 * 1000)
+    const monday = new Date(weekStart.getTime() + 0 * 24 * 60 * 60 * 1000)
+    const thursday = new Date(weekStart.getTime() + 3 * 24 * 60 * 60 * 1000)
+    const acts = [
+      { date: isoDate(monday), distance_km: 15 },
+      { date: isoDate(thursday), distance_km: 20 },
+    ]
+    expect(getWeekActualKm(acts, start, 1)).toBeCloseTo(35)
+  })
+
   it("does not include activities from adjacent weeks", () => {
     const start = blockStartForWeek(3, NOW)
     const acts = activitiesForWeek(start, 0, 50)
@@ -208,6 +223,13 @@ describe("isCheckpointDue", () => {
     const plan = makePlan(4, 50)
     const start = blockStartForWeek(4, NOW) // currentWeekIndex === 4 === totalWeeks
     expect(isCheckpointDue(plan, start, null)).toBe(false)
+  })
+
+  it("returns false when block has not started yet", () => {
+    const plan = makePlan(4, 50)
+    // Start date one week in the future → currentWeekIndex = -1
+    const futureStart = isoDate(new Date(NOW + 7 * 24 * 60 * 60 * 1000))
+    expect(isCheckpointDue(plan, futureStart, null)).toBe(false)
   })
 
   it("returns false when checkpoint already applied for this block", () => {
@@ -288,12 +310,12 @@ describe("analyzeBlockAdherence — missed week exclusion", () => {
     expect(result.isWayOff).toBe(false)
   })
 
-  it("classifies a zero-km week as missed and excludes it from adherence", () => {
-    // 3 completed weeks: week 0 = sick (0 km of 50), week 1+2 = on target
+  it("classifies a zero-km activity week as missed and excludes it from adherence", () => {
+    // Week 0: one logged activity with 0 km (e.g. Garmin sync glitch)
     const plan = makePlan(4, 50)
     const start = blockStartForWeek(3, NOW)
     const acts = [
-      ...activitiesForWeek(start, 0, 0),   // missed
+      ...activitiesForWeek(start, 0, 0),   // 0 km logged — missed
       ...activitiesForWeek(start, 1, 50),  // 100%
       ...activitiesForWeek(start, 2, 50),  // 100%
     ]
@@ -303,6 +325,21 @@ describe("analyzeBlockAdherence — missed week exclusion", () => {
     expect(result.overallAdherencePct).toBe(100)
     expect(result.direction).toBe("on_track")
     expect(result.isWayOff).toBe(false)
+  })
+
+  it("classifies a week with no activities at all as missed", () => {
+    // Week 0: runner didn't log anything (truly sick/away)
+    const plan = makePlan(4, 50)
+    const start = blockStartForWeek(3, NOW)
+    const acts = [
+      // No activities for week 0
+      ...activitiesForWeek(start, 1, 50),
+      ...activitiesForWeek(start, 2, 50),
+    ]
+    const result = analyzeBlockAdherence(plan, acts, start)
+    expect(result.missedWeekCount).toBe(1)
+    expect(result.overallAdherencePct).toBe(100)
+    expect(result.direction).toBe("on_track")
   })
 
   it("classifies a <20% week as missed even with some km logged", () => {
@@ -469,14 +506,11 @@ describe("adjustRemainingWeeks", () => {
   })
 
   it("targetKm never falls below 5 km", () => {
-    // Extreme case: actualAvgKm is near zero
-    const plan = makePlan(4, 60)
-    const { adjustedWeeks } = adjustRemainingWeeks(plan, 2, 1)
-    // scaleFactor clamped to 0.55, so 60*0.55 = 33 — but let's use a plan with small targetKm
-    const smallPlan = makePlan(4, 8) // 8 km weeks
-    const { adjustedWeeks: adj2 } = adjustRemainingWeeks(smallPlan, 2, 1)
-    // 1/8 = 0.125, clamped to 0.55, 8*0.55=4.4 → floor to max(5, 4) = 5
-    expect(adj2[2].targetKm).toBeGreaterThanOrEqual(5)
+    // 8 km weeks; actualAvgKm = 1 → scaleFactor clamped to 0.55 → 8*0.55 = 4.4 → floor to 5
+    const smallPlan = makePlan(4, 8)
+    const { adjustedWeeks } = adjustRemainingWeeks(smallPlan, 2, 1)
+    expect(adjustedWeeks[2].targetKm).toBeGreaterThanOrEqual(5)
+    expect(adjustedWeeks[3].targetKm).toBeGreaterThanOrEqual(5)
   })
 })
 
