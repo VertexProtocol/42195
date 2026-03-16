@@ -30,7 +30,7 @@ export default async function Page() {
       supabase
         .from("goals")
         .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, display_order, created_at")
-        .order("display_order", { ascending: true }),
+        .order("created_at", { ascending: false }),
       supabase
         .from("weekly_goals")
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
