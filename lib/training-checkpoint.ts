@@ -220,13 +220,15 @@ export function adjustRemainingWeeks(
     return { adjustedWeeks: plan.weeks, scaleFactor: 1.0 }
   }
 
-  // Detect deload weeks: any week whose targetKm is below DELOAD_WEEK_THRESHOLD
-  // of the block average is a recovery week and should not be scaled.
-  const blockAvgKm =
-    plan.weeks.reduce((s, w) => s + w.targetKm, 0) / plan.weeks.length
+  // Detect deload weeks using the average of *completed* weeks as the reference.
+  // This avoids the deload week itself pulling down the average and masking other weeks.
+  const completedPlannedAvg =
+    currentWeekIndex > 0
+      ? plan.weeks.slice(0, currentWeekIndex).reduce((s, w) => s + w.targetKm, 0) / currentWeekIndex
+      : 0
 
   const isDeload = (week: TrainingWeek) =>
-    blockAvgKm > 0 && week.targetKm < blockAvgKm * DELOAD_WEEK_THRESHOLD
+    completedPlannedAvg > 0 && week.targetKm < completedPlannedAvg * DELOAD_WEEK_THRESHOLD
 
   // Use the first non-deload remaining week as the scaling anchor
   const anchorWeek = remainingWeeks.find((w) => !isDeload(w))
