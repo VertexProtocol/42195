@@ -108,16 +108,16 @@ export async function POST(req: NextRequest) {
   }))
 
   // Run adherence analysis
-  const { currentWeekIndex, completedWeeks, overallAdherencePct, isWayOff, direction } =
+  const { currentWeekIndex, completedWeeks, activeWeeks, missedWeekCount, overallAdherencePct, isWayOff, direction } =
     analyzeBlockAdherence(plan, acts, blockStartDate)
 
   let adjustmentApplied = false
   let adjustmentNote: string | null = null
   let updatedPlan = plan
 
-  if (isWayOff && completedWeeks.length > 0) {
-    const actualAvgKm =
-      completedWeeks.reduce((s, w) => s + w.actualKm, 0) / completedWeeks.length
+  if (isWayOff && activeWeeks.length > 0) {
+    // Base the scale factor on active weeks only — sick/missed weeks are excluded
+    const actualAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
 
     const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, currentWeekIndex, actualAvgKm, {
       skipSessionScaling: prefsRow?.focus === "workouts",
@@ -135,7 +135,8 @@ export async function POST(req: NextRequest) {
         overallAdherencePct,
         direction,
         scaleFactor,
-        completedWeeks.length,
+        activeWeeks.length,
+        missedWeekCount,
       )
     }
   }
@@ -146,6 +147,7 @@ export async function POST(req: NextRequest) {
     blockWeeks: plan.weeks.length,
     checkpointWeek: currentWeekIndex + 1, // 1-based
     completedWeeks,
+    missedWeekCount,
     overallAdherencePct,
     isWayOff,
     direction,

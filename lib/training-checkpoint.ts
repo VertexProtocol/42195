@@ -29,6 +29,13 @@ const MIN_BLOCK_WEEKS_FOR_CHECKPOINT = 4
 const DELOAD_WEEK_THRESHOLD = 0.75
 
 /**
+ * A completed week where actual km is below this fraction of planned is treated
+ * as a missed week (sickness, travel, life) and excluded from the adherence
+ * average used to compute the scale factor.
+ */
+const MISSED_WEEK_THRESHOLD = 0.20
+
+/**
  * Returns the 0-based index of the current week within the training block.
  * Week 0 = first week of the block. Returns -1 if block hasn't started yet.
  */
@@ -125,6 +132,8 @@ export function analyzeBlockAdherence(
 ): {
   currentWeekIndex: number
   completedWeeks: WeekAdherence[]
+  activeWeeks: WeekAdherence[]
+  missedWeekCount: number
   overallAdherencePct: number
   isWayOff: boolean
   direction: "under" | "over" | "on_track"
@@ -150,14 +159,24 @@ export function analyzeBlockAdherence(
     return {
       currentWeekIndex,
       completedWeeks: [],
+      activeWeeks: [],
+      missedWeekCount: 0,
       overallAdherencePct: 100,
       isWayOff: false,
       direction: "on_track",
     }
   }
 
-  const totalPlanned = completedWeeks.reduce((s, w) => s + w.plannedKm, 0)
-  const totalActual = completedWeeks.reduce((s, w) => s + w.actualKm, 0)
+  // Split into active weeks and missed weeks (sick/travel/life).
+  // Missed weeks are excluded from the adherence calculation so a single
+  // illness doesn't cause the whole remaining block to be scaled down.
+  const activeWeeks = completedWeeks.filter(
+    (w) => w.plannedKm === 0 || w.actualKm / w.plannedKm >= MISSED_WEEK_THRESHOLD,
+  )
+  const missedWeekCount = completedWeeks.length - activeWeeks.length
+
+  const totalPlanned = activeWeeks.reduce((s, w) => s + w.plannedKm, 0)
+  const totalActual = activeWeeks.reduce((s, w) => s + w.actualKm, 0)
   const overallAdherencePct = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 100
   const adherenceFraction = overallAdherencePct / 100
 
@@ -166,12 +185,18 @@ export function analyzeBlockAdherence(
     : adherenceFraction > OVER_THRESHOLD ? "over"
     : "on_track"
 
+  // If all completed weeks were missed (e.g. two sick weeks), there's no
+  // training signal to act on — treat as on_track.
+  const effectiveDirection = activeWeeks.length === 0 ? "on_track" : direction
+
   return {
     currentWeekIndex,
     completedWeeks,
-    overallAdherencePct,
-    isWayOff: direction !== "on_track",
-    direction,
+    activeWeeks,
+    missedWeekCount,
+    overallAdherencePct: activeWeeks.length === 0 ? 100 : overallAdherencePct,
+    isWayOff: effectiveDirection !== "on_track",
+    direction: effectiveDirection,
   }
 }
 
@@ -283,15 +308,19 @@ export function buildAdjustmentNote(
   adherencePct: number,
   direction: "under" | "over" | "on_track",
   scaleFactor: number,
-  completedCount: number,
+  activeCount: number,
+  missedWeekCount = 0,
 ): string {
   const pct = Math.round((scaleFactor - 1) * 100)
   const sign = pct >= 0 ? "+" : ""
+  const missedNote = missedWeekCount > 0
+    ? ` (${missedWeekCount} missed week${missedWeekCount !== 1 ? "s" : ""} excluded)`
+    : ""
   if (direction === "under") {
-    return `After ${completedCount} completed week${completedCount !== 1 ? "s" : ""} at ${adherencePct}% of planned volume, the remaining weeks have been scaled down by ${Math.abs(pct)}% to better match your current training load.`
+    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled down by ${Math.abs(pct)}% to better match your current training load.`
   }
   if (direction === "over") {
-    return `After ${completedCount} completed week${completedCount !== 1 ? "s" : ""} at ${adherencePct}% of planned volume, the remaining weeks have been scaled up by ${sign}${pct}% to reflect your stronger-than-expected performance.`
+    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled up by ${sign}${pct}% to reflect your stronger-than-expected performance.`
   }
   return `Training is on track at ${adherencePct}% adherence — no adjustment needed.`
 }

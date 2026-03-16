@@ -228,6 +228,8 @@ export interface MidBlockCheckpoint {
   /** 1-based week number when the checkpoint was evaluated */
   checkpointWeek: number
   completedWeeks: WeekAdherence[]
+  /** Weeks excluded from adherence calculation (actual km < 20% of planned) */
+  missedWeekCount: number
   overallAdherencePct: number
   isWayOff: boolean
   direction: "under" | "over" | "on_track"
