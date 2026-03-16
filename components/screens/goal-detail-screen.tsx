@@ -114,10 +114,13 @@ function PreferencesForm({
   const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
   const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
   const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
+  const [planMode] = useState<"block" | "full_cycle">(initial.plan_mode ?? "block")
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function handleSave() {
     setSaving(true)
+    setSaveError(null)
     try {
       const res = await fetch("/api/ai/training-plan", {
         method: "PUT",
@@ -130,10 +133,12 @@ function PreferencesForm({
           weekly_increase_pct: increasePct,
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
+          plan_mode: planMode,
         }),
       })
       if (!res.ok) {
-        console.error("Failed to save preferences:", res.status)
+        const body = await res.json().catch(() => ({}))
+        setSaveError(body.error ?? "Failed to save — please try again.")
         return
       }
       onSaved({
@@ -144,9 +149,10 @@ function PreferencesForm({
         weekly_increase_pct: increasePct,
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
+        plan_mode: planMode,
       })
-    } catch (err) {
-      console.error("Failed to save preferences:", err)
+    } catch {
+      setSaveError("Network error — please check your connection and try again.")
     } finally {
       setSaving(false)
     }
@@ -304,6 +310,9 @@ function PreferencesForm({
         />
       </div>
 
+      {saveError && (
+        <p className="text-xs text-destructive">{saveError}</p>
+      )}
       <button
         onClick={handleSave}
         disabled={saving}
