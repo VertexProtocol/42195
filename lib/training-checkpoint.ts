@@ -23,6 +23,12 @@ const OVER_THRESHOLD = 1.35
 const MIN_BLOCK_WEEKS_FOR_CHECKPOINT = 4
 
 /**
+ * A week whose targetKm is below this fraction of the block average is treated
+ * as a deload/recovery week and left untouched by the checkpoint adjustment.
+ */
+const DELOAD_WEEK_THRESHOLD = 0.75
+
+/**
  * Returns the 0-based index of the current week within the training block.
  * Week 0 = first week of the block. Returns -1 if block hasn't started yet.
  */
@@ -206,6 +212,7 @@ export function adjustRemainingWeeks(
   plan: TrainingPlan,
   currentWeekIndex: number,
   actualAvgKm: number,
+  { skipSessionScaling = false }: { skipSessionScaling?: boolean } = {},
 ): { adjustedWeeks: TrainingWeek[]; scaleFactor: number } {
   const completedWeeks = plan.weeks.slice(0, currentWeekIndex)
   const remainingWeeks = plan.weeks.slice(currentWeekIndex)
@@ -214,21 +221,43 @@ export function adjustRemainingWeeks(
     return { adjustedWeeks: plan.weeks, scaleFactor: 1.0 }
   }
 
-  // Use first remaining week's planned target as the anchor
-  const firstRemainingTarget = remainingWeeks[0].targetKm
+  // Detect deload weeks using the average of *completed* weeks as the reference.
+  // This avoids the deload week itself pulling down the average and masking other weeks.
+  const completedPlannedAvg =
+    currentWeekIndex > 0
+      ? plan.weeks.slice(0, currentWeekIndex).reduce((s, w) => s + w.targetKm, 0) / currentWeekIndex
+      : 0
+
+  const isDeload = (week: TrainingWeek) =>
+    completedPlannedAvg > 0 && week.targetKm < completedPlannedAvg * DELOAD_WEEK_THRESHOLD
+
+  // Use the first non-deload remaining week as the scaling anchor
+  const anchorWeek = remainingWeeks.find((w) => !isDeload(w))
+  if (!anchorWeek) {
+    // All remaining weeks are deload — nothing to adjust
+    return { adjustedWeeks: plan.weeks, scaleFactor: 1.0 }
+  }
+
   const scaleFactor =
-    firstRemainingTarget > 0
-      ? Math.min(1.30, Math.max(0.55, actualAvgKm / firstRemainingTarget))
+    anchorWeek.targetKm > 0
+      ? Math.min(1.30, Math.max(0.55, actualAvgKm / anchorWeek.targetKm))
       : 1.0
 
   const adjustedRemaining = remainingWeeks.map((week) => {
+    // Leave deload/recovery weeks untouched
+    if (isDeload(week)) return week
+
     const newTargetKm = Math.max(5, Math.round(week.targetKm * scaleFactor))
     const sessionScale = week.targetKm > 0 ? newTargetKm / week.targetKm : 1.0
 
-    const adjustedSessions = week.sessions.map((session) => ({
-      ...session,
-      distance: scaleSessionDistance(session.distance, sessionScale),
-    }))
+    // For workouts-focused plans, preserve session distances — structure matters
+    // more than volume. Only the weekly km target label is updated.
+    const adjustedSessions = skipSessionScaling
+      ? week.sessions
+      : week.sessions.map((session) => ({
+          ...session,
+          distance: scaleSessionDistance(session.distance, sessionScale),
+        }))
 
     const adjustNote = `Mid-block adjustment: target updated from ${week.targetKm} km to ${newTargetKm} km based on recent training load.`
     const existingNote = week.coachNote ? ` ${week.coachNote}` : ""

@@ -280,6 +280,11 @@ function PreferencesForm({
             </button>
           ))}
         </div>
+        {regenEvery < blockWeeks && (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            Your plan will regenerate before the mid-block checkpoint can run. Set to at least {blockWeeks}w to benefit from automatic adjustments.
+          </p>
+        )}
       </div>
 
       {/* Notes */}
