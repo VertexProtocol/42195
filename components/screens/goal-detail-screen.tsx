@@ -641,6 +641,10 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
       ? `1 ${t("timeline.week")}`
       : `${currentPhase.totalWeeks} ${t("timeline.weeks")}`
     : null
+  const weekWithinPhase =
+    currentPhase && timeline.currentWeek >= currentPhase.weekStart
+      ? timeline.currentWeek - currentPhase.weekStart + 1
+      : null
 
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
@@ -673,6 +677,11 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
               <span className="text-sm font-semibold text-foreground">
                 {t(PHASE_LABEL_KEYS[currentPhase.type])}
               </span>
+              {weekWithinPhase !== null && (
+                <span className="text-xs font-medium text-primary">
+                  {t("timeline.weekOf")} {weekWithinPhase}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 {currentWeeksLabel}
               </span>
@@ -726,6 +735,11 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
+                    {isCurrent && weekWithinPhase !== null && (
+                      <span className="font-medium text-primary">
+                        {t("timeline.weekOf")} {weekWithinPhase} ·{" "}
+                      </span>
+                    )}
                     {weeksLabel} · {t("timeline.weekOf")} {phase.weekStart}–{phase.weekEnd}
                   </p>
                 </div>
