@@ -798,6 +798,8 @@ export async function POST(req: NextRequest) {
               block_start_date: blockStartDate,
               generated_at: generatedAt,
               previous_plans: previousPlans,
+              // Clear any prior checkpoint — new block starts fresh
+              mid_block_checkpoint: null,
             },
             { onConflict: "goal_id" }
           )
@@ -860,18 +862,31 @@ export async function GET(req: NextRequest) {
 
   const { data: planRow } = await supabase
     .from("ai_training_plans")
-    .select("plan, block_start_date, generated_at, previous_plans")
+    .select("plan, block_start_date, generated_at, previous_plans, mid_block_checkpoint")
     .eq("goal_id", goalId)
     .eq("user_id", user.id)
     .maybeSingle()
 
   if (!planRow) return NextResponse.json({ plan: null })
 
+  // Compute whether a checkpoint is due so the UI can prompt the user
+  const { isCheckpointDue } = await import("@/lib/training-checkpoint")
+  const checkpointDue =
+    planRow.plan && planRow.block_start_date
+      ? isCheckpointDue(
+          planRow.plan as TrainingPlan,
+          planRow.block_start_date,
+          planRow.mid_block_checkpoint ?? null,
+        )
+      : false
+
   return NextResponse.json({
     plan: planRow.plan,
     block_start_date: planRow.block_start_date,
     generated_at: planRow.generated_at,
     previous_plans: planRow.previous_plans ?? [],
+    mid_block_checkpoint: planRow.mid_block_checkpoint ?? null,
+    checkpoint_due: checkpointDue,
   })
 }
 

@@ -37,6 +37,7 @@ import type {
   AiTrainingPlan,
   TrainingWeek,
   PlanSnapshot,
+  MidBlockCheckpoint,
 } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
@@ -753,6 +754,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [checkpoint, setCheckpoint] = useState<MidBlockCheckpoint | null>(null)
 
   // Load existing plan + preferences on mount
   useEffect(() => {
@@ -771,7 +773,34 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             block_start_date: data.block_start_date,
             generated_at: data.generated_at,
             previous_plans: data.previous_plans ?? [],
+            mid_block_checkpoint: data.mid_block_checkpoint ?? null,
           })
+          // Surface any previously applied checkpoint
+          if (data.mid_block_checkpoint?.adjustmentApplied) {
+            setCheckpoint(data.mid_block_checkpoint)
+          }
+          // Silently run checkpoint in the background if it's due
+          if (data.checkpoint_due) {
+            fetch("/api/ai/training-plan/checkpoint", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ goalId: goal.id }),
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((result) => {
+                if (result?.checkpoint) {
+                  setCheckpoint(result.checkpoint)
+                }
+                if (result?.adjustmentApplied && result.updatedPlan) {
+                  setAiPlan((prev) =>
+                    prev
+                      ? { ...prev, plan: result.updatedPlan, mid_block_checkpoint: result.checkpoint }
+                      : prev,
+                  )
+                }
+              })
+              .catch(() => {})
+          }
         }
       }
       // Load preferences
@@ -881,6 +910,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       setGenerateStatus("Analysing your training history…")
       setError(null)
       setShowAdjustForm(false)
+      setCheckpoint(null) // new block — reset checkpoint display
 
       try {
         const res = await fetch("/api/ai/training-plan", {
@@ -1227,6 +1257,17 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                       : `Last week you ran ${skipWarning.actualKm} km. Next week\u2019s plan calls for ${skipWarning.nextPlannedKm} km (+${skipWarning.spikePct}%). A safe target would be ~${skipWarning.safeMaxKm} km. Consider adjusting your plan.`
                     }
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Mid-block checkpoint banner */}
+            {checkpoint?.adjustmentApplied && !isBlockExpired && (
+              <div className="flex gap-2.5 rounded-2xl bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
+                <Lightbulb size={15} className="mt-0.5 shrink-0 text-primary" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium text-foreground">Mid-block plan adjusted</p>
+                  <p className="text-xs text-muted-foreground">{checkpoint.adjustmentNote}</p>
                 </div>
               </div>
             )}
