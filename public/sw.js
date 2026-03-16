@@ -1,4 +1,4 @@
-const CACHE_NAME = "42195-v2"
+const CACHE_NAME = "42195-v3"
 const STATIC_ASSETS = ["/", "/icon.svg", "/manifest.json"]
 
 // Install: cache static assets
@@ -9,16 +9,20 @@ self.addEventListener("install", (event) => {
   self.skipWaiting()
 })
 
-// Activate: clean old caches
+// Activate: clean old caches, then reload all open windows so users
+// immediately see the new version without needing a manual refresh
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+    caches.keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
       )
-    )
+      .then(() => self.clients.matchAll({ type: "window" }))
+      .then((clients) => clients.forEach((client) => client.navigate(client.url)))
   )
   self.clients.claim()
 })
