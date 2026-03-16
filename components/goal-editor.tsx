@@ -102,7 +102,6 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       target_date: targetDate + "T00:00:00Z",
       current_distance_km: isNew ? 0 : goal!.current_distance_km,
       is_active: isNew ? false : goal!.is_active,
-      display_order: isNew ? 0 : goal!.display_order,
       created_at: isNew ? new Date().toISOString() : goal!.created_at,
     }
     onSave(saved)
