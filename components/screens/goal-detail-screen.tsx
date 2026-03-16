@@ -1061,6 +1061,23 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     [goal, aiPlan]
   )
 
+  // Block position within training phase (for "Block X of Y" label)
+  const blockPosition = useMemo(() => {
+    if (!aiPlan || !timeline) return null
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000
+    const goalStartMon = toMonday(new Date((goal.start_date ?? goal.created_at).includes("T")
+      ? (goal.start_date ?? goal.created_at)
+      : (goal.start_date ?? goal.created_at) + "T12:00:00"))
+    const blockStartMon = toMonday(new Date(aiPlan.block_start_date + "T12:00:00"))
+    const blockStartWeek = Math.max(1, Math.round((blockStartMon.getTime() - goalStartMon.getTime()) / msPerWeek) + 1)
+    const blockWeeks = prefs.block_weeks ?? 4
+    const phase = timeline.phases.find(p => blockStartWeek >= p.weekStart && blockStartWeek <= p.weekEnd)
+    if (!phase) return null
+    const blockNumInPhase = Math.floor((blockStartWeek - phase.weekStart) / blockWeeks) + 1
+    const totalBlocksInPhase = Math.ceil(phase.totalWeeks / blockWeeks)
+    return { blockNum: blockNumInPhase, totalBlocks: totalBlocksInPhase, phase }
+  }, [aiPlan, timeline, goal, prefs.block_weeks])
+
   // Check if the training block has ended (all weeks are in the past)
   const isBlockExpired = aiPlan
     ? currentWeekIndex >= (aiPlan.plan.weeks.length)
@@ -1326,6 +1343,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
             {/* Summary */}
             <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20">
+              {blockPosition && (
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-primary/70">
+                  {t(PHASE_LABEL_KEYS[blockPosition.phase.type])} · {t("timeline.block")} {blockPosition.blockNum}/{blockPosition.totalBlocks}
+                </p>
+              )}
               <p className="text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>
             </div>
 
