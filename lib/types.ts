@@ -35,7 +35,7 @@ export interface Goal {
   target_time_seconds: number | null
   current_distance_km: number
   is_active: boolean
-  display_order: number
+  display_order: number  // default 0; set by drag-and-drop reordering
   created_at: string
 }
 
