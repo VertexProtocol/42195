@@ -934,14 +934,26 @@ export async function PUT(req: NextRequest) {
       weekly_increase_pct: weekly_increase_pct ?? 10,
       block_weeks: block_weeks ?? 4,
       regenerate_every_weeks: regenerate_every_weeks ?? 4,
-      plan_mode: plan_mode ?? "block",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "goal_id" }
   )
 
   if (error) {
-    return NextResponse.json({ error: "Failed to save preferences" }, { status: 500 })
+    console.error("Failed to save goal preferences:", error)
+    return NextResponse.json({ error: error.message ?? "Failed to save preferences" }, { status: 500 })
+  }
+
+  // plan_mode lives in a column added by a later migration — update it separately
+  // so a missing column doesn't break the whole save.
+  const { error: modeError } = await supabase
+    .from("goal_preferences")
+    .update({ plan_mode: plan_mode ?? "block" })
+    .eq("goal_id", goalId)
+    .eq("user_id", user.id)
+
+  if (modeError) {
+    console.warn("Could not persist plan_mode (migration may not be applied):", modeError.message)
   }
 
   return NextResponse.json({ ok: true })
