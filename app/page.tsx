@@ -29,8 +29,8 @@ export default async function Page() {
         .limit(200),
       supabase
         .from("goals")
-        .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
-        .order("created_at", { ascending: false }),
+        .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, display_order, created_at")
+        .order("display_order", { ascending: true }),
       supabase
         .from("weekly_goals")
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
@@ -58,7 +58,7 @@ export default async function Page() {
       map_polyline: a.map_polyline,
       created_at: a.created_at,
     })),
-    goals: (goalsRes.data ?? []).map((g) => ({
+    goals: (goalsRes.data ?? []).map((g, i) => ({
       id: g.id,
       goal_category: (g.goal_category ?? "performance") as GoalCategory,
       name: g.name,
@@ -68,6 +68,7 @@ export default async function Page() {
       target_date: g.target_date,
       current_distance_km: Number(g.current_distance_km),
       is_active: g.is_active,
+      display_order: (g as any).display_order ?? i,
       created_at: g.created_at,
     })),
     weeklyGoals: (weeklyGoalsRes.data ?? []).map((wg) => ({

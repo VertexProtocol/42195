@@ -108,8 +108,8 @@ export function useAppData(initialData?: InitialData | null) {
             .order("date", { ascending: false }),
           supabase
             .from("goals")
-            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
-            .order("created_at", { ascending: false }),
+            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, display_order, created_at")
+            .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
             .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
@@ -124,7 +124,7 @@ export function useAppData(initialData?: InitialData | null) {
 
       if (goalsRes.data) {
         setGoals(
-          goalsRes.data.map((g) => ({
+          goalsRes.data.map((g, i) => ({
             id: g.id,
             goal_category: (g.goal_category ?? "performance") as GoalCategory,
             name: g.name,
@@ -134,6 +134,7 @@ export function useAppData(initialData?: InitialData | null) {
             target_date: g.target_date,
             current_distance_km: Number(g.current_distance_km),
             is_active: g.is_active,
+            display_order: g.display_order ?? i,
             created_at: g.created_at,
           }))
         )
@@ -277,6 +278,9 @@ export function useAppData(initialData?: InitialData | null) {
           return false
         }
 
+        // New goal goes at the end of the current list
+        const maxOrder = goalsRef.current.reduce((m, g) => Math.max(m, g.display_order), -1)
+
         const { data, error } = await supabase
           .from("goals")
           .insert({
@@ -289,6 +293,7 @@ export function useAppData(initialData?: InitialData | null) {
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
+            display_order: maxOrder + 1,
           })
           .select()
           .single()
@@ -302,6 +307,7 @@ export function useAppData(initialData?: InitialData | null) {
         // toast.success("Goal created")
         if (data) {
           setGoals((prev) => [
+            ...prev,
             {
               id: data.id,
               goal_category: (data.goal_category ?? "performance") as GoalCategory,
@@ -312,9 +318,9 @@ export function useAppData(initialData?: InitialData | null) {
               target_date: data.target_date,
               current_distance_km: Number(data.current_distance_km),
               is_active: data.is_active,
+              display_order: data.display_order ?? prev.length,
               created_at: data.created_at,
             },
-            ...prev,
           ])
         }
       }
@@ -335,6 +341,34 @@ export function useAppData(initialData?: InitialData | null) {
       // toast.error("Failed to delete goal")
     } else {
       // toast.success("Goal deleted")
+    }
+  }, [])
+
+  /**
+   * Reorder goals after a drag-and-drop operation.
+   * `orderedIds` is the full list of goal IDs in the new desired order.
+   * Updates state optimistically and persists display_order to Supabase.
+   */
+  const reorderGoals = useCallback(async (orderedIds: string[]) => {
+    const snapshot = goalsRef.current
+
+    // Build an id→order map and apply it optimistically
+    const orderMap = new Map(orderedIds.map((id, i) => [id, i]))
+    setGoals((prev) =>
+      [...prev]
+        .map((g) => ({ ...g, display_order: orderMap.get(g.id) ?? g.display_order }))
+        .sort((a, b) => a.display_order - b.display_order)
+    )
+
+    // Persist each updated display_order to the database
+    const updates = orderedIds.map((id, i) =>
+      supabase.from("goals").update({ display_order: i }).eq("id", id)
+    )
+    const results = await Promise.all(updates)
+    const failed = results.find((r) => r.error)
+    if (failed?.error) {
+      console.error("Failed to persist goal order:", failed.error)
+      setGoals(snapshot)
     }
   }, [])
 
@@ -588,6 +622,7 @@ export function useAppData(initialData?: InitialData | null) {
     toggleActiveGoal,
     saveGoal,
     deleteGoal,
+    reorderGoals,
 
     // Weekly goal operations
     saveWeeklyGoal,
