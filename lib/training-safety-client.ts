@@ -20,6 +20,7 @@ export interface SafetyActivity {
   duration_seconds: number
   pace_min_per_km: number | null
   avg_heart_rate: number | null
+  elevation_gain_m?: number | null
 }
 
 export type AthleteLevel = "beginner" | "intermediate" | "advanced"

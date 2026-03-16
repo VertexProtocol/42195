@@ -306,12 +306,14 @@ async function executeToolCall(
 
       const { data } = await supabase
         .from("activities")
-        .select("date, distance_km")
+        .select("date, distance_km, elevation_gain_m")
         .eq("user_id", userId)
         .gte("date", cutoff.toISOString())
         .order("date", { ascending: false })
 
       if (!data || data.length === 0) return "No recent activities for load calculation."
+
+      const { effortAdjustedKm } = await import("@/lib/training-utils")
 
       const now = Date.now()
       const day7 = now - 7 * 24 * 60 * 60 * 1000
@@ -319,16 +321,16 @@ async function executeToolCall(
 
       const acuteLoad = data
         .filter((a) => new Date(a.date).getTime() >= day7)
-        .reduce((s, a) => s + Number(a.distance_km), 0)
+        .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
       const chronicTotal = data
         .filter((a) => new Date(a.date).getTime() >= day28)
-        .reduce((s, a) => s + Number(a.distance_km), 0)
+        .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
       const chronicLoad = chronicTotal / 4
       const acwr = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
       const risk = acwr > 1.5 ? "high" : acwr > 1.3 ? "moderate" : "low"
 
-      // TSB-like estimate
-      const day42Total = data.reduce((s, a) => s + Number(a.distance_km), 0)
+      // TSB-like estimate (effort-adjusted)
+      const day42Total = data.reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
       const fitness = day42Total / 6 // 6-week average
       const fatigue = acuteLoad // 7-day total
       const form = fitness - fatigue
@@ -336,7 +338,7 @@ async function executeToolCall(
       // Fetch extended data for fatigue detection and athlete level
       const { data: extendedData } = await supabase
         .from("activities")
-        .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+        .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
         .eq("user_id", userId)
         .gte("date", new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString())
         .order("date", { ascending: false })
@@ -347,6 +349,7 @@ async function executeToolCall(
         duration_seconds: a.duration_seconds,
         pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
         avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+        elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
       }))
 
       const fatigueResult = detectFatigue(safetyActivities)
