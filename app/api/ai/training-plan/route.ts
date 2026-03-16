@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
+import { computeTrainingTimeline } from "@/lib/training-timeline"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -269,6 +270,7 @@ function buildPrompt(
   previousPlanSummary?: string | null,
   hrSummary?: string | null,
   testRunSection?: string | null,
+  blockPosition?: { blockNum: number; totalBlocks: number; phaseName: string; weekInPlan: number; totalWeeks: number } | null,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -341,6 +343,10 @@ function buildPrompt(
     ? `\n## Previous Plan Context\n${previousPlanSummary}\nBuild on this progression — do not repeat the same block. Ensure continuity and logical progression.\n`
     : ""
 
+  const blockPositionSection = blockPosition
+    ? `\n## Block Position in Training Plan\nThis is block ${blockPosition.blockNum} of ${blockPosition.totalBlocks} in the ${blockPosition.phaseName} phase (week ${blockPosition.weekInPlan} of ${blockPosition.totalWeeks} total). Write the summary to reflect WHERE the runner is in this phase — early blocks should establish foundations, middle blocks should build on progress, late blocks should consolidate. Do not write a generic phase description; reference the runner's actual progression.\n`
+    : ""
+
   const hrSection = hrSummary
     ? `\n## Heart Rate Data\n${hrSummary}\n`
     : ""
@@ -361,7 +367,7 @@ function buildPrompt(
 - Sessions per week: ${prefs.sessions_per_week}
 - Focus: ${focusDescription}
 - Notes: ${prefs.notes ? `"${prefs.notes}"` : "None provided"}
-${adjustSection}${previousPlanSection}${hrSection}${testRunPromptSection}
+${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}
 ## Recent Training History (most recent first)
 ${weekSummaryText}
 
@@ -619,6 +625,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Compute which block this is within the current training phase
+  const timeline = computeTrainingTimeline(goal)
+  let blockPositionArg: { blockNum: number; totalBlocks: number; phaseName: string; weekInPlan: number; totalWeeks: number } | null = null
+  if (timeline) {
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000
+    const goalStartMs = timeline.startDate.getTime()
+    const todayMs = new Date().getTime()
+    const blockStartWeek = Math.max(1, Math.round((todayMs - goalStartMs) / msPerWeek) + 1)
+    const blockWeeks = prefs.block_weeks ?? 4
+    const phase = timeline.phases.find(p => blockStartWeek >= p.weekStart && blockStartWeek <= p.weekEnd)
+    if (phase) {
+      blockPositionArg = {
+        blockNum: Math.floor((blockStartWeek - phase.weekStart) / blockWeeks) + 1,
+        totalBlocks: Math.ceil(phase.totalWeeks / blockWeeks),
+        phaseName: phase.type.replace(/_/g, " "),
+        weekInPlan: blockStartWeek,
+        totalWeeks: timeline.totalWeeks,
+      }
+    }
+  }
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -633,6 +660,7 @@ export async function POST(req: NextRequest) {
     previousPlanSummary,
     hrSummary,
     testRunSection,
+    blockPositionArg,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback

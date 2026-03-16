@@ -395,6 +395,7 @@ const translations = {
     "timeline.today": "Today",
     "timeline.weeks": "weeks",
     "timeline.week": "week",
+    "timeline.block": "Block",
   },
   no: {
     // App
@@ -786,6 +787,7 @@ const translations = {
     "timeline.today": "I dag",
     "timeline.weeks": "uker",
     "timeline.week": "uke",
+    "timeline.block": "Blokk",
   },
 } as const
 
