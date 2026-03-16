@@ -7,6 +7,7 @@ import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
+import { effortAdjustedKm } from "@/lib/training-utils"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -38,6 +39,7 @@ interface WeeklySummary {
   runCount: number
   longestKm: number
   avgPaceMinPerKm: number | null
+  totalElevationM: number
 }
 
 function groupActivitiesByWeek(
@@ -46,6 +48,7 @@ function groupActivitiesByWeek(
     distance_km: number
     duration_seconds: number
     pace_min_per_km: number | null
+    elevation_gain_m?: number | null
   }>
 ): WeeklySummary[] {
   const weeks = new Map<string, WeeklySummary & { totalDurationSec: number }>()
@@ -60,11 +63,13 @@ function groupActivitiesByWeek(
 
     const existing = weeks.get(key)
     const km = Number(a.distance_km)
+    const elev = Number(a.elevation_gain_m ?? 0)
 
     if (existing) {
       existing.totalKm += km
       existing.totalDurationSec += a.duration_seconds
       existing.runCount += 1
+      existing.totalElevationM += elev
       if (km > existing.longestKm) existing.longestKm = km
     } else {
       weeks.set(key, {
@@ -74,6 +79,7 @@ function groupActivitiesByWeek(
         runCount: 1,
         longestKm: km,
         avgPaceMinPerKm: null, // computed below
+        totalElevationM: elev,
       })
     }
   }
@@ -283,7 +289,7 @@ function buildPrompt(
     : weeklySummaries
         .map(
           (w, i) =>
-            `  Week -${i + 1} (${w.weekLabel}): ${w.runCount} run${w.runCount !== 1 ? "s" : ""}, ${w.totalKm.toFixed(1)} km total, longest: ${w.longestKm.toFixed(1)} km${w.avgPaceMinPerKm ? `, avg pace: ${formatPace(w.avgPaceMinPerKm)}` : ""}`
+            `  Week -${i + 1} (${w.weekLabel}): ${w.runCount} run${w.runCount !== 1 ? "s" : ""}, ${w.totalKm.toFixed(1)} km total, longest: ${w.longestKm.toFixed(1)} km${w.avgPaceMinPerKm ? `, avg pace: ${formatPace(w.avgPaceMinPerKm)}` : ""}${w.totalElevationM > 0 ? `, elevation gain: ${Math.round(w.totalElevationM)} m` : ""}`
         )
         .join("\n")
 
@@ -465,7 +471,7 @@ export async function POST(req: NextRequest) {
 
   const { data: activities } = await supabase
     .from("activities")
-    .select("name, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+    .select("name, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
     .gte("date", twelveWeeksAgo.toISOString())
     .order("date", { ascending: false })
@@ -489,17 +495,17 @@ export async function POST(req: NextRequest) {
     (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
-  // Compute ACWR for injury risk awareness in the prompt
+  // Compute ACWR for injury risk awareness in the prompt (effort-adjusted for elevation)
   const now = Date.now()
   const day7 = now - 7 * 24 * 60 * 60 * 1000
   const day28 = now - 28 * 24 * 60 * 60 * 1000
   const acts = activities ?? []
   const acuteLoad = acts
     .filter((a) => new Date(a.date).getTime() >= day7)
-    .reduce((s, a) => s + Number(a.distance_km), 0)
+    .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
   const chronicTotal = acts
     .filter((a) => new Date(a.date).getTime() >= day28)
-    .reduce((s, a) => s + Number(a.distance_km), 0)
+    .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
   const chronicLoad = chronicTotal / 4
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
@@ -536,7 +542,8 @@ export async function POST(req: NextRequest) {
           name: a.name ?? "Activity", date: a.date,
           distance_km: Number(a.distance_km), duration_seconds: a.duration_seconds,
           pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-          elevation_gain_m: null, avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+          elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
+          avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
           avg_cadence: null, calories: null, map_polyline: null,
         })),
         Math.round(maxHr * 1.1),

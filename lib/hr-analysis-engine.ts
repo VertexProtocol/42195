@@ -16,6 +16,7 @@
  */
 
 import type { Activity } from "@/lib/types"
+import { gradeAdjustedPace } from "@/lib/training-utils"
 
 // ─── Types ──────────────────────────────────────────
 
@@ -236,7 +237,9 @@ function detectMisalignment(
     const currentZ2Max = Math.round(currentMaxHr * 0.70)
     const recZ2Max = Math.round(recommendedMaxHr * 0.70)
 
-    // Count easy/long runs where avg HR falls above current Z2 max
+    // Count easy/long runs where avg HR falls above current Z2 max.
+    // Use grade-adjusted pace so hilly runs with artificially slow raw pace
+    // don't get misclassified as easy when they were actually hard efforts.
     const longEasyRuns = activities.filter(
       (a) =>
         a.avg_heart_rate != null &&
@@ -244,7 +247,7 @@ function detectMisalignment(
         a.duration_seconds >= 30 * 60 &&
         a.distance_km >= 5 &&
         a.pace_min_per_km != null &&
-        a.pace_min_per_km > 5.5, // slower pace = likely easy run
+        gradeAdjustedPace(a.pace_min_per_km, a.distance_km, a.elevation_gain_m) > 5.5, // slower GAP = likely easy run
     )
 
     const z2Misclassified = longEasyRuns.filter(

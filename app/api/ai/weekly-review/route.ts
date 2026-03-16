@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   // Fetch activities for this week
   const { data: activities } = await supabase
     .from("activities")
-    .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
+    .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
     .gte("date", weekStart.toISOString())
     .lt("date", weekEnd.toISOString())
@@ -101,7 +101,7 @@ PLANNED:
 ACTUAL:
 - Runs completed: ${totalRuns}
 - Total distance: ${totalKm.toFixed(1)} km (target: ${week.targetKm} km)
-${acts.map((a) => `- ${a.name}: ${Number(a.distance_km).toFixed(1)} km, ${Math.floor(a.duration_seconds / 60)}min${a.avg_heart_rate ? `, HR ${a.avg_heart_rate}` : ""}`).join("\n")}
+${acts.map((a) => `- ${a.name}: ${Number(a.distance_km).toFixed(1)} km, ${Math.floor(a.duration_seconds / 60)}min${a.avg_heart_rate ? `, HR ${a.avg_heart_rate}` : ""}${a.elevation_gain_m ? `, +${Math.round(Number(a.elevation_gain_m))} m elevation` : ""}`).join("\n")}
 
 Session completion: ${weekCompletions.filter((c) => c.status === "completed").length}/${week.sessions.length} marked completed, ${weekCompletions.filter((c) => c.status === "skipped").length} skipped`
 
