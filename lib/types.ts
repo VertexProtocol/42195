@@ -209,4 +209,28 @@ export interface AiTrainingPlan {
   block_start_date: string
   generated_at: string
   previous_plans: PlanSnapshot[]
+  mid_block_checkpoint?: MidBlockCheckpoint | null
+}
+
+// ---- Mid-block checkpoint types ----
+
+export interface WeekAdherence {
+  weekNumber: number
+  plannedKm: number
+  actualKm: number
+  adherencePct: number
+}
+
+export interface MidBlockCheckpoint {
+  checkedAt: string
+  blockStartDate: string
+  blockWeeks: number
+  /** 1-based week number when the checkpoint was evaluated */
+  checkpointWeek: number
+  completedWeeks: WeekAdherence[]
+  overallAdherencePct: number
+  isWayOff: boolean
+  direction: "under" | "over" | "on_track"
+  adjustmentApplied: boolean
+  adjustmentNote: string | null
 }
