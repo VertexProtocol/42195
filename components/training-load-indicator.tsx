@@ -337,11 +337,8 @@ function MomentumGraph({ data }: MomentumGraphProps) {
       </div>
 
       {/* SVG Graph */}
-      {/* suppressHydrationWarning: graph uses today's date for day labels and
-          coordinates — server and client can legitimately differ by a few ms */}
       <svg
         ref={svgRef}
-        suppressHydrationWarning
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-auto"
         style={{ maxHeight: 160 }}
