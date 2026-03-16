@@ -777,6 +777,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
   const [showPrefsForm, setShowPrefsForm] = useState(false)
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
@@ -1063,21 +1064,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   )
 
   // Block position within training phase (for "Block X of Y" label)
+  // Uses current week so the label always reflects where the user is now,
+  // not when the plan was last generated.
   const blockPosition = useMemo(() => {
-    if (!aiPlan || !timeline) return null
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000
-    const goalStartMon = toMonday(new Date((goal.start_date ?? goal.created_at).includes("T")
-      ? (goal.start_date ?? goal.created_at)
-      : (goal.start_date ?? goal.created_at) + "T12:00:00"))
-    const blockStartMon = toMonday(new Date(aiPlan.block_start_date + "T12:00:00"))
-    const blockStartWeek = Math.max(1, Math.round((blockStartMon.getTime() - goalStartMon.getTime()) / msPerWeek) + 1)
-    const blockWeeks = prefs.block_weeks ?? 4
-    const phase = timeline.phases.find(p => blockStartWeek >= p.weekStart && blockStartWeek <= p.weekEnd)
+    if (!timeline) return null
+    const phase = timeline.currentPhase
     if (!phase) return null
-    const blockNumInPhase = Math.floor((blockStartWeek - phase.weekStart) / blockWeeks) + 1
+    const blockWeeks = prefs.block_weeks ?? 4
+    const weekWithinPhase = Math.max(0, timeline.currentWeek - phase.weekStart)
+    const currentBlockNum = Math.floor(weekWithinPhase / blockWeeks) + 1
     const totalBlocksInPhase = Math.ceil(phase.totalWeeks / blockWeeks)
-    return { blockNum: blockNumInPhase, totalBlocks: totalBlocksInPhase, phase }
-  }, [aiPlan, timeline, goal, prefs.block_weeks])
+    return { blockNum: currentBlockNum, totalBlocks: totalBlocksInPhase, phase }
+  }, [timeline, prefs.block_weeks])
 
   // Check if the training block has ended (all weeks are in the past)
   const isBlockExpired = aiPlan
@@ -1343,13 +1341,25 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             )}
 
             {/* Summary */}
-            <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20">
-              {blockPosition && (
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-primary/70">
-                  {t(PHASE_LABEL_KEYS[blockPosition.phase.type])} · {t("timeline.block")} {blockPosition.blockNum}/{blockPosition.totalBlocks}
+            <div className="rounded-2xl bg-primary/5 ring-1 ring-primary/20 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSummaryExpanded((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-primary/10 transition-colors"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
+                  {blockPosition
+                    ? `${t(PHASE_LABEL_KEYS[blockPosition.phase.type])} · ${t("timeline.block")} ${blockPosition.blockNum}/${blockPosition.totalBlocks}`
+                    : "AI Training Plan"}
                 </p>
+                <ChevronDown
+                  size={14}
+                  className={`shrink-0 text-primary/50 transition-transform ${summaryExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+              {summaryExpanded && (
+                <p className="px-4 pb-3.5 text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>
               )}
-              <p className="text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>
             </div>
 
             {/* Weekly blocks */}
