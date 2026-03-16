@@ -1,4 +1,4 @@
-const CACHE_NAME = "42195-v1"
+const CACHE_NAME = "42195-v2"
 const STATIC_ASSETS = ["/", "/icon.svg", "/manifest.json"]
 
 // Install: cache static assets
