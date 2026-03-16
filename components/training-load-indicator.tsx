@@ -101,7 +101,7 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
           <div className="flex items-center justify-between">
             <p className={`text-sm font-semibold ${cfg.textClass}`}>{cfg.label}</p>
             {latest && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                 Fitness {fitnessArrow} {latest.ctl.toFixed(1)}
               </span>
             )}
@@ -141,7 +141,7 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
               Form
               <InfoTooltip content="Fitness minus fatigue. Positive = fresh and ready to race. Negative = still building." />
             </div>
-            <div className={`text-sm font-semibold font-mono ${cfg.textClass}`}>
+            <div className={`text-sm font-semibold font-mono ${cfg.textClass}`} suppressHydrationWarning>
               {latest.tsb > 0 ? "+" : ""}{latest.tsb.toFixed(1)}
             </div>
           </div>
