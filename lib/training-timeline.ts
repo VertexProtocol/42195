@@ -34,12 +34,14 @@ const PHASE_CONFIG: Record<TrainingPhaseType, {
   fraction: number
   /** minimum weeks for the phase (0 = can be skipped) */
   minWeeks: number
+  /** hard ceiling — excess weeks flow back to earlier phases */
+  maxWeeks?: number
 }> = {
   base_building:         { fraction: 0.30, minWeeks: 2 },
   endurance_development: { fraction: 0.30, minWeeks: 2 },
   peak_training:         { fraction: 0.20, minWeeks: 1 },
-  taper:                 { fraction: 0.13, minWeeks: 1 },
-  race_week:             { fraction: 0.07, minWeeks: 1 },
+  taper:                 { fraction: 0.13, minWeeks: 2, maxWeeks: 3 },
+  race_week:             { fraction: 0.07, minWeeks: 1, maxWeeks: 1 },
 }
 
 const PHASE_ORDER: TrainingPhaseType[] = [
@@ -118,6 +120,19 @@ function distributeWeeks(total: number): Map<TrainingPhaseType, number> {
       result.set(sorted[idx].phase, result.get(sorted[idx].phase)! + 1)
       distributed++
       idx++
+    }
+  }
+
+  // Apply maxWeeks caps — overflow flows to peak_training (highest-intensity phase)
+  for (const phase of PHASE_ORDER) {
+    const max = PHASE_CONFIG[phase].maxWeeks
+    if (max !== undefined) {
+      const allocated = result.get(phase) ?? 0
+      if (allocated > max) {
+        const overflow = allocated - max
+        result.set(phase, max)
+        result.set("peak_training", (result.get("peak_training") ?? 0) + overflow)
+      }
     }
   }
 
