@@ -157,9 +157,15 @@ export function GoalsScreen({
     wg.is_recurring || wg.week_start === selectedWeekStart
   )
 
-  // All race goals sorted by user-defined display_order
+  // All race goals sorted by user-defined display_order, falling back to
+  // created_at so goals still appear in a sensible order before drag is used
   const raceGoals = useMemo(
-    () => [...goals].sort((a, b) => a.display_order - b.display_order),
+    () =>
+      [...goals].sort((a, b) => {
+        const orderDiff = a.display_order - b.display_order
+        if (orderDiff !== 0) return orderDiff
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }),
     [goals],
   )
 
