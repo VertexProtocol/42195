@@ -63,6 +63,12 @@ describe("elevationEffortMultiplier", () => {
     expect(elevationEffortMultiplier(10, 100)).toBeCloseTo(1.08, 5)
   })
 
+  it("returns 1 for negative elevation (descent — not modelled)", () => {
+    // Descents are currently ignored (treated as flat) because the Minetti model
+    // used here only adds uphill cost; downhill recovery is not yet accounted for.
+    expect(elevationEffortMultiplier(10, -50)).toBe(1)
+  })
+
   it("scales linearly with grade", () => {
     // 5 km with 100 m → grade = 100/5000 = 2% → 1 + 0.02*8 = 1.16
     expect(elevationEffortMultiplier(5, 100)).toBeCloseTo(1.16, 5)
@@ -188,12 +194,19 @@ describe("computeTrainingLoad elevation", () => {
     expect(hillyLatest.ctl).toBeGreaterThan(flatLatest.ctl)
   })
 
-  it("accepts activities without elevation_gain_m field", () => {
-    // Backward-compat: old activities without the field should not throw
-    const activities = [{ date: daysAgo(1), distance_km: 10 }]
-    expect(() => computeTrainingLoad(activities)).not.toThrow()
-    const points = computeTrainingLoad(activities)
-    expect(points.length).toBeGreaterThan(0)
+  it("accepts activities without elevation_gain_m field and gives same result as elevation_gain_m: null", () => {
+    // Backward-compat: old activities without the field must behave identically to null
+    const withoutField = [{ date: daysAgo(1), distance_km: 10 }]
+    const withNull = [{ date: daysAgo(1), distance_km: 10, elevation_gain_m: null }]
+
+    const pointsWithout = computeTrainingLoad(withoutField)
+    const pointsWithNull = computeTrainingLoad(withNull)
+
+    const latestWithout = pointsWithout[pointsWithout.length - 1]
+    const latestWithNull = pointsWithNull[pointsWithNull.length - 1]
+    expect(latestWithout.atl).toBe(latestWithNull.atl)
+    expect(latestWithout.ctl).toBe(latestWithNull.ctl)
+    expect(latestWithout.tsb).toBe(latestWithNull.tsb)
   })
 
   it("returns empty array for no activities", () => {
@@ -206,10 +219,10 @@ describe("computeTrainingLoad elevation", () => {
 // ---------------------------------------------------------------------------
 
 describe("detectPersonalRecords elevation", () => {
-  it("prefers flat run over same-distance hilly run with slower raw time", () => {
-    // Two 5K runs:
-    //   flatRun: 25 min on flat — flat time = 25 min
-    //   hillyRun: 28 min with 80 m gain — multiplier ≈ 1.128, flatTime ≈ 24.8 min
+  it("hilly run with slower raw time wins when its flat-equivalent time is faster", () => {
+    // flatRun: 25:00 flat → flat-equivalent = 25:00
+    // hillyRun: 28:00 with 80m on 5km → multiplier = 1 + (80/5000)*8 = 1.128
+    //   flat-equivalent = 28:00 / 1.128 ≈ 24:49 → FASTER than the flat run
     const flatRun = makeActivity({
       id: "flat",
       distance_km: 5,
@@ -228,7 +241,7 @@ describe("detectPersonalRecords elevation", () => {
     const records = detectPersonalRecords([flatRun, hillyRun])
     const fiveK = records.find((r) => r.distance_label === "5 km")
     expect(fiveK).toBeDefined()
-    // hillRun has better flat-equivalent time so it should win
+    // hillyRun has the better flat-equivalent time (24:49 < 25:00) so it should win
     expect(fiveK!.activity.id).toBe("hilly")
   })
 
