@@ -13,6 +13,7 @@ import {
   Footprints,
   Clock,
   AlertCircle,
+  AlertTriangle,
   Lightbulb,
   Pencil,
   Flag,
@@ -755,6 +756,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [checkpoint, setCheckpoint] = useState<MidBlockCheckpoint | null>(null)
+  const [pendingCheckpoint, setPendingCheckpoint] = useState<MidBlockCheckpoint | null>(null)
+  const [showCheckpointReview, setShowCheckpointReview] = useState(false)
+  const [isApplyingCheckpoint, setIsApplyingCheckpoint] = useState(false)
 
   // Load existing plan + preferences on mount
   useEffect(() => {
@@ -779,24 +783,17 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           if (data.mid_block_checkpoint?.adjustmentApplied) {
             setCheckpoint(data.mid_block_checkpoint)
           }
-          // Silently run checkpoint in the background if it's due
+          // Dry-run checkpoint in the background to check if adjustment is needed
           if (data.checkpoint_due) {
             fetch("/api/ai/training-plan/checkpoint", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ goalId: goal.id }),
+              body: JSON.stringify({ goalId: goal.id, dryRun: true }),
             })
               .then((r) => (r.ok ? r.json() : null))
               .then((result) => {
-                if (result?.checkpoint) {
-                  setCheckpoint(result.checkpoint)
-                }
-                if (result?.adjustmentApplied && result.updatedPlan) {
-                  setAiPlan((prev) =>
-                    prev
-                      ? { ...prev, plan: result.updatedPlan, mid_block_checkpoint: result.checkpoint }
-                      : prev,
-                  )
+                if (result?.checkpoint?.isWayOff) {
+                  setPendingCheckpoint(result.checkpoint)
                 }
               })
               .catch(() => {})
@@ -904,6 +901,31 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     })
   }, [goal.id, sessionStatuses])
 
+  const handleApplyCheckpoint = useCallback(async () => {
+    setIsApplyingCheckpoint(true)
+    try {
+      const res = await fetch("/api/ai/training-plan/checkpoint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: goal.id }),
+      })
+      if (!res.ok) return
+      const result = await res.json()
+      if (result?.checkpoint) setCheckpoint(result.checkpoint)
+      if (result?.adjustmentApplied && result.updatedPlan) {
+        setAiPlan((prev) =>
+          prev ? { ...prev, plan: result.updatedPlan, mid_block_checkpoint: result.checkpoint } : prev,
+        )
+      }
+      setPendingCheckpoint(null)
+      setShowCheckpointReview(false)
+    } catch {
+      // silently ignore
+    } finally {
+      setIsApplyingCheckpoint(false)
+    }
+  }, [goal.id])
+
   const handleGenerate = useCallback(
     async (note?: string) => {
       setIsGenerating(true)
@@ -911,6 +933,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       setError(null)
       setShowAdjustForm(false)
       setCheckpoint(null) // new block — reset checkpoint display
+      setPendingCheckpoint(null)
+      setShowCheckpointReview(false)
 
       try {
         const res = await fetch("/api/ai/training-plan", {
@@ -1333,12 +1357,63 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
             {/* Adjust / Regenerate */}
             <div className="flex flex-col gap-2 pt-1">
-              <button
-                onClick={() => setShowAdjustForm((v) => !v)}
-                className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium text-secondary-foreground transition-colors active:bg-accent"
-              >
-                {showAdjustForm ? "Cancel" : "Adjust plan"}
-              </button>
+              {(() => {
+                const checkpointPending = !!pendingCheckpoint?.isWayOff && !checkpoint?.adjustmentApplied
+                return (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (checkpointPending) {
+                          setShowCheckpointReview((v) => !v)
+                          setShowAdjustForm(false)
+                        } else {
+                          setShowAdjustForm((v) => !v)
+                          setShowCheckpointReview(false)
+                        }
+                      }}
+                      className={
+                        "flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors active:bg-accent " +
+                        (checkpointPending
+                          ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 dark:text-amber-400"
+                          : "bg-secondary text-secondary-foreground")
+                      }
+                    >
+                      {checkpointPending && (
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+                        </span>
+                      )}
+                      {showAdjustForm || showCheckpointReview
+                        ? "Cancel"
+                        : checkpointPending
+                          ? "Review mid-block adjustment"
+                          : "Adjust plan"}
+                    </button>
+
+                    {showCheckpointReview && pendingCheckpoint && (
+                      <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                        <div className="flex gap-2.5">
+                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                          <div className="flex flex-col gap-1">
+                            <p className="text-sm font-medium text-foreground">Plan adjustment available</p>
+                            <p className="text-xs text-muted-foreground">
+                              {`After ${pendingCheckpoint.completedWeeks.length} completed ${pendingCheckpoint.completedWeeks.length === 1 ? "week" : "weeks"} at ${Math.round(pendingCheckpoint.overallAdherencePct)}% of planned volume, the remaining weeks can be scaled ${pendingCheckpoint.direction === "under" ? "down" : "up"} to better match your actual training.`}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleApplyCheckpoint}
+                          disabled={isApplyingCheckpoint}
+                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
+                        >
+                          {isApplyingCheckpoint ? "Applying…" : "Apply adjustment"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
               {showAdjustForm && (
                 <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
