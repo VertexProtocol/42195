@@ -14,7 +14,7 @@
  */
 
 import type { TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
-import { computeACWR, computeTrainingLoad } from "@/lib/training-utils"
+import { computeACWR, computeTrainingLoad, gradeAdjustedPace } from "@/lib/training-utils"
 
 // Re-export client-safe utilities so server-side callers don't need to change imports
 export {
@@ -277,13 +277,14 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     hrElevated = median(recentHrs) > median(baselineHrs) + 5
   }
 
-  // Pace fatigue signal (higher pace value = slower, using median)
+  // Pace fatigue signal — use grade-adjusted pace so hilly runs don't falsely
+  // register as "slower" (higher pace value = slower, using median)
   const recentPaces = recent
     .filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
-    .map((a) => a.pace_min_per_km!)
+    .map((a) => gradeAdjustedPace(a.pace_min_per_km!, a.distance_km, a.elevation_gain_m))
   const baselinePaces = baseline
     .filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
-    .map((a) => a.pace_min_per_km!)
+    .map((a) => gradeAdjustedPace(a.pace_min_per_km!, a.distance_km, a.elevation_gain_m))
   let paceDeclining = false
   if (recentPaces.length >= 3 && baselinePaces.length >= 4) {
     // Pace declining = getting slower (higher pace value) by more than 5%

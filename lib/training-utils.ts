@@ -1,5 +1,46 @@
 import type { Activity, StreamPoint } from "@/lib/types"
 
+// ---- Elevation effort helpers ----
+
+/**
+ * Effort multiplier based on elevation gain.
+ * Research (Minetti et al.) shows each metre of climbing costs roughly 8 metres
+ * of equivalent flat running effort, so we add 0.8% effort per m/km of average grade.
+ * Returns 1.0 when there is no elevation data or the run is flat.
+ */
+export function elevationEffortMultiplier(
+  distance_km: number,
+  elevation_gain_m: number | null | undefined,
+): number {
+  if (!elevation_gain_m || elevation_gain_m <= 0 || distance_km <= 0) return 1
+  // grade as a fraction (m gained / m covered)
+  const grade = elevation_gain_m / (distance_km * 1000)
+  return 1 + grade * 8
+}
+
+/**
+ * Converts actual distance to flat-terrain effort equivalent.
+ * A 10 km run with 100 m of gain becomes ~10.8 km equivalent effort.
+ */
+export function effortAdjustedKm(
+  distance_km: number,
+  elevation_gain_m: number | null | undefined,
+): number {
+  return distance_km * elevationEffortMultiplier(distance_km, elevation_gain_m)
+}
+
+/**
+ * Grade-adjusted pace: normalises raw pace to what it would be on flat ground.
+ * E.g. 6:00/km at 5% average grade ≈ 5:33/km flat-equivalent.
+ */
+export function gradeAdjustedPace(
+  pace_min_per_km: number,
+  distance_km: number,
+  elevation_gain_m: number | null | undefined,
+): number {
+  return pace_min_per_km / elevationEffortMultiplier(distance_km, elevation_gain_m)
+}
+
 // ---- 3.3 Personal Records (PR) Detection ----
 
 export interface PersonalRecord {
@@ -36,23 +77,28 @@ export function detectPersonalRecords(activities: Activity[]): PersonalRecord[] 
     )
     if (qualifying.length === 0) continue
 
-    // Best = smallest pace-adjusted time for exactly the standard distance
+    // Best = smallest flat-equivalent time for exactly the standard distance.
+    // Grade-adjusting prevents a hilly slow run from ranking below a faster flat run.
     let best = qualifying[0]
-    let bestTime = (km / best.distance_km) * best.duration_seconds
+    let bestFlatTime = (km / best.distance_km) * best.duration_seconds /
+      elevationEffortMultiplier(best.distance_km, best.elevation_gain_m)
 
     for (const a of qualifying) {
-      const adjusted = (km / a.distance_km) * a.duration_seconds
-      if (adjusted < bestTime) {
+      const flatTime = (km / a.distance_km) * a.duration_seconds /
+        elevationEffortMultiplier(a.distance_km, a.elevation_gain_m)
+      if (flatTime < bestFlatTime) {
         best = a
-        bestTime = adjusted
+        bestFlatTime = flatTime
       }
     }
 
+    // Store the actual (raw) time for the winning activity, pace-adjusted to standard distance
+    const rawTime = (km / best.distance_km) * best.duration_seconds
     records.push({
       distance_label: label,
       distance_km: km,
-      time_seconds: Math.round(bestTime),
-      pace_min_per_km: bestTime / 60 / km,
+      time_seconds: Math.round(rawTime),
+      pace_min_per_km: rawTime / 60 / km,
       activity: best,
       date: best.date,
     })
@@ -75,18 +121,20 @@ export interface AcwrResult {
  * Acute = last 7 days distance. Chronic = 28-day average weekly distance.
  * Risk: <0.8 = low (underprepared), 0.8-1.3 = low (sweet spot), 1.3-1.5 = moderate, >1.5 = high.
  */
-export function computeACWR(activities: Array<{ date: string; distance_km: number }>): AcwrResult {
+export function computeACWR(
+  activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
+): AcwrResult {
   const now = Date.now()
   const day7 = now - 7 * 24 * 60 * 60 * 1000
   const day28 = now - 28 * 24 * 60 * 60 * 1000
 
   const acuteLoad = activities
     .filter((a) => new Date(a.date).getTime() >= day7)
-    .reduce((s, a) => s + a.distance_km, 0)
+    .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
 
   const chronicTotal = activities
     .filter((a) => new Date(a.date).getTime() >= day28)
-    .reduce((s, a) => s + a.distance_km, 0)
+    .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
 
   const chronicLoad = chronicTotal / 4 // 4 weeks average
 
@@ -115,10 +163,12 @@ export interface TrainingLoadPoint {
  * the half-life equals the stated number of days.
  * Returns the last 90 days of data points.
  */
-export function computeTrainingLoad(activities: Array<{ date: string; distance_km: number }>): TrainingLoadPoint[] {
+export function computeTrainingLoad(
+  activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
+): TrainingLoadPoint[] {
   if (activities.length === 0) return []
 
-  // Build daily distance map for the last 120 days (buffer for EWMA warmup)
+  // Build daily effort-adjusted distance map for the last 120 days (buffer for EWMA warmup)
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const startDays = 120
@@ -127,7 +177,7 @@ export function computeTrainingLoad(activities: Array<{ date: string; distance_k
   const dailyLoad = new Map<string, number>()
   for (const a of activities) {
     const d = a.date.split("T")[0]
-    dailyLoad.set(d, (dailyLoad.get(d) ?? 0) + a.distance_km)
+    dailyLoad.set(d, (dailyLoad.get(d) ?? 0) + effortAdjustedKm(a.distance_km, a.elevation_gain_m))
   }
 
   const points: TrainingLoadPoint[] = []
@@ -209,7 +259,9 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
   let bestScore = Infinity
 
   for (const a of recent) {
-    const equiv = (5 / a.distance_km) ** 1.06 * a.duration_seconds
+    // Use flat-equivalent duration so hilly runs don't get unfairly penalised
+    const flatDuration = a.duration_seconds / elevationEffortMultiplier(a.distance_km, a.elevation_gain_m)
+    const equiv = (5 / a.distance_km) ** 1.06 * flatDuration
     const daysOld = (now - new Date(a.date).getTime()) / (24 * 60 * 60 * 1000)
     // No penalty for first 30 days, then up to 5% penalty at 90 days
     const recencyPenalty = daysOld <= 30 ? 1.0 : 1.0 + ((daysOld - 30) / 60) * 0.05
@@ -228,14 +280,17 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
   const exponentLow = 1.03  // optimistic (well-trained)
   const exponentHigh = 1.09 // conservative (less trained)
 
+  // Use flat-equivalent reference time so hilly reference runs project correctly to flat races
+  const refFlatSeconds = bestRef.duration_seconds / elevationEffortMultiplier(bestRef.distance_km, bestRef.elevation_gain_m)
+
   const predictions: RacePrediction[] = PREDICTION_DISTANCES.map(({ label, km }) => {
     const ratio = km / bestRef.distance_km
     return {
       distance_label: label,
       distance_km: km,
-      predicted_seconds: Math.round(bestRef.duration_seconds * ratio ** exponent),
-      low_seconds: Math.round(bestRef.duration_seconds * ratio ** exponentLow),
-      high_seconds: Math.round(bestRef.duration_seconds * ratio ** exponentHigh),
+      predicted_seconds: Math.round(refFlatSeconds * ratio ** exponent),
+      low_seconds: Math.round(refFlatSeconds * ratio ** exponentLow),
+      high_seconds: Math.round(refFlatSeconds * ratio ** exponentHigh),
     }
   })
 
