@@ -631,9 +631,18 @@ const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
 }
 
 // ---- Training Timeline visual ----
-function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
+function TrainingTimelineView({
+  timeline,
+  blockPosition,
+  summary,
+}: {
+  timeline: TTimeline
+  blockPosition?: { blockNum: number; totalBlocks: number } | null
+  summary?: string | null
+}) {
   const { t } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false)
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
 
   const currentPhase = timeline.currentPhase
   const currentWeeksLabel = currentPhase
@@ -648,7 +657,7 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
 
   return (
     <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
-      {/* Header - clickable to toggle */}
+      {/* Header - clickable to toggle full phase list */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -661,35 +670,65 @@ function TrainingTimelineView({ timeline }: { timeline: TTimeline }) {
           <span className="text-xs text-muted-foreground">
             {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
           </span>
-          <ChevronDown 
-            size={16} 
-            className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
           />
         </div>
       </button>
 
-      {/* Collapsed: show current phase summary */}
+      {/* Collapsed: show current phase + block position + AI summary */}
       {!isExpanded && currentPhase && (
-        <div className="flex items-center gap-3 px-5 pb-4">
-          <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold text-foreground">
-                {t(PHASE_LABEL_KEYS[currentPhase.type])}
-              </span>
-              {weekWithinPhase !== null && (
-                <span className="text-xs font-medium text-primary">
-                  {t("timeline.weekOf")} {weekWithinPhase}
+        <div className="px-5 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-foreground">
+                  {t(PHASE_LABEL_KEYS[currentPhase.type])}
                 </span>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {currentWeeksLabel}
-              </span>
+                {weekWithinPhase !== null && (
+                  <span className="text-xs font-medium text-primary">
+                    {t("timeline.weekOf")} {weekWithinPhase}
+                  </span>
+                )}
+                {blockPosition && (
+                  <span className="text-xs font-medium text-primary/70">
+                    · {t("timeline.block")} {blockPosition.blockNum}/{blockPosition.totalBlocks}
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {currentWeeksLabel}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
-            </p>
           </div>
+          {/* AI block summary — expandable */}
+          {summary && (
+            <div className="mt-3 border-t border-border/40 pt-3">
+              <button
+                type="button"
+                onClick={() => setSummaryExpanded((v) => !v)}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t("timeline.block")} {blockPosition?.blockNum}/{blockPosition?.totalBlocks} — {t("plan.blockSummary")}
+                </span>
+                <ChevronDown
+                  size={13}
+                  className={`shrink-0 text-muted-foreground transition-transform ${summaryExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+              {summaryExpanded && (
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                  {summary}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -777,7 +816,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
   const [showPrefsForm, setShowPrefsForm] = useState(false)
-  const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
@@ -1203,7 +1241,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
       {/* Training Timeline */}
       {timeline && !past && (
-        <TrainingTimelineView timeline={timeline} />
+        <TrainingTimelineView
+          timeline={timeline}
+          blockPosition={blockPosition}
+          summary={aiPlan?.plan.summary ?? null}
+        />
       )}
 
       {/* ---- AI Training Plan section ---- */}
@@ -1339,28 +1381,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 </div>
               </div>
             )}
-
-            {/* Summary */}
-            <div className="rounded-2xl bg-primary/5 ring-1 ring-primary/20 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setSummaryExpanded((v) => !v)}
-                className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-primary/10 transition-colors"
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
-                  {blockPosition
-                    ? `${t(PHASE_LABEL_KEYS[blockPosition.phase.type])} · ${t("timeline.block")} ${blockPosition.blockNum}/${blockPosition.totalBlocks}`
-                    : "AI Training Plan"}
-                </p>
-                <ChevronDown
-                  size={14}
-                  className={`shrink-0 text-primary/50 transition-transform ${summaryExpanded ? "rotate-180" : ""}`}
-                />
-              </button>
-              {summaryExpanded && (
-                <p className="px-4 pb-3.5 text-sm text-foreground leading-relaxed">{aiPlan.plan.summary}</p>
-              )}
-            </div>
 
             {/* Weekly blocks */}
             {aiPlan.plan.weeks.map((week, i) => {

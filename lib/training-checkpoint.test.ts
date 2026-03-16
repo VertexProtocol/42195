@@ -43,16 +43,17 @@ function makePlan(
 
   const weeks: TrainingWeek[] = kms.map((km, i) => ({
     weekNumber: i + 1,
+    theme: `Week ${i + 1}`,
     targetKm: km,
     sessions: [
-      { day: "Monday", type: "Easy run", distance: `${Math.round(km / 3)} km`, notes: "" },
-      { day: "Wednesday", type: "Tempo", distance: `${Math.round(km / 3)} km`, notes: "" },
-      { day: "Saturday", type: "Long run", distance: `${Math.round(km / 3)} km`, notes: "" },
+      { type: "Easy run", distance: `${Math.round(km / 3)} km`, effort: "Easy", purpose: "Base" },
+      { type: "Tempo", distance: `${Math.round(km / 3)} km`, effort: "Moderate", purpose: "Speed" },
+      { type: "Long run", distance: `${Math.round(km / 3)} km`, effort: "Easy", purpose: "Endurance" },
     ],
     coachNote: null,
   }))
 
-  return { weeks, goalRaceDate: "2026-06-01", goalRaceType: "10K" }
+  return { summary: "", weeks, keyPrinciples: [], watchOut: null }
 }
 
 /**
@@ -495,14 +496,15 @@ describe("adjustRemainingWeeks", () => {
   it("scales range-format session distances (e.g. '8-10 km')", () => {
     // Construct a plan manually with a range session distance
     const plan: TrainingPlan = {
+      summary: "",
+      keyPrinciples: [],
+      watchOut: null,
       weeks: [
-        { weekNumber: 1, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
-        { weekNumber: 2, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
-        { weekNumber: 3, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
-        { weekNumber: 4, targetKm: 50, sessions: [{ day: "Monday", type: "Easy", distance: "8-10 km", notes: "" }], coachNote: null },
+        { weekNumber: 1, theme: "Week 1", targetKm: 50, sessions: [{ type: "Easy", distance: "8-10 km", effort: "Easy", purpose: "Base" }], coachNote: null },
+        { weekNumber: 2, theme: "Week 2", targetKm: 50, sessions: [{ type: "Easy", distance: "8-10 km", effort: "Easy", purpose: "Base" }], coachNote: null },
+        { weekNumber: 3, theme: "Week 3", targetKm: 50, sessions: [{ type: "Easy", distance: "8-10 km", effort: "Easy", purpose: "Base" }], coachNote: null },
+        { weekNumber: 4, theme: "Week 4", targetKm: 50, sessions: [{ type: "Easy", distance: "8-10 km", effort: "Easy", purpose: "Base" }], coachNote: null },
       ],
-      goalRaceDate: "2026-06-01",
-      goalRaceType: "10K",
     }
     // actualAvgKm = 27.5 → scale = 27.5/50 = 0.55 (exactly at clamp floor)
     // newTargetKm = round(50 * 0.55) = round(27.5) = 28; sessionScale = 28/50 = 0.56
