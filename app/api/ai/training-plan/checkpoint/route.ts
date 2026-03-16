@@ -51,13 +51,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "goalId is required" }, { status: 400 })
   }
 
-  // Load current plan + checkpoint state
-  const { data: planRow, error: fetchError } = await supabase
-    .from("ai_training_plans")
-    .select("plan, block_start_date, mid_block_checkpoint")
-    .eq("goal_id", goalId)
-    .eq("user_id", user.id)
-    .maybeSingle()
+  // Load current plan + checkpoint state, and user preferences in parallel
+  const [{ data: planRow, error: fetchError }, { data: prefsRow }] = await Promise.all([
+    supabase
+      .from("ai_training_plans")
+      .select("plan, block_start_date, mid_block_checkpoint")
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("goal_preferences")
+      .select("focus")
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ])
 
   if (fetchError) {
     return NextResponse.json({ error: "Failed to load training plan" }, { status: 500 })
@@ -111,7 +119,9 @@ export async function POST(req: NextRequest) {
     const actualAvgKm =
       completedWeeks.reduce((s, w) => s + w.actualKm, 0) / completedWeeks.length
 
-    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, currentWeekIndex, actualAvgKm)
+    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, currentWeekIndex, actualAvgKm, {
+      skipSessionScaling: prefsRow?.focus === "workouts",
+    })
 
     // Only save the adjustment if the remaining weeks actually changed
     const remainingChanged = adjustedWeeks

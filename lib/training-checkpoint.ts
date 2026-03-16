@@ -212,6 +212,7 @@ export function adjustRemainingWeeks(
   plan: TrainingPlan,
   currentWeekIndex: number,
   actualAvgKm: number,
+  { skipSessionScaling = false }: { skipSessionScaling?: boolean } = {},
 ): { adjustedWeeks: TrainingWeek[]; scaleFactor: number } {
   const completedWeeks = plan.weeks.slice(0, currentWeekIndex)
   const remainingWeeks = plan.weeks.slice(currentWeekIndex)
@@ -249,10 +250,14 @@ export function adjustRemainingWeeks(
     const newTargetKm = Math.max(5, Math.round(week.targetKm * scaleFactor))
     const sessionScale = week.targetKm > 0 ? newTargetKm / week.targetKm : 1.0
 
-    const adjustedSessions = week.sessions.map((session) => ({
-      ...session,
-      distance: scaleSessionDistance(session.distance, sessionScale),
-    }))
+    // For workouts-focused plans, preserve session distances — structure matters
+    // more than volume. Only the weekly km target label is updated.
+    const adjustedSessions = skipSessionScaling
+      ? week.sessions
+      : week.sessions.map((session) => ({
+          ...session,
+          distance: scaleSessionDistance(session.distance, sessionScale),
+        }))
 
     const adjustNote = `Mid-block adjustment: target updated from ${week.targetKm} km to ${newTargetKm} km based on recent training load.`
     const existingNote = week.coachNote ? ` ${week.coachNote}` : ""
