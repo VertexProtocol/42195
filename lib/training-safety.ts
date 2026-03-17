@@ -27,6 +27,7 @@ import {
   PROLONGED_FATIGUE_TSB_THRESHOLD,
   PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
   PROLONGED_FATIGUE_DELOAD_MULTIPLIER,
+  PROLONGED_FATIGUE_MIN_POINTS,
 } from "@/lib/training-constants"
 
 // Re-export client-safe utilities so server-side callers don't need to change imports
@@ -39,9 +40,23 @@ export {
   type SkipLoadWarning,
 } from "@/lib/training-safety-client"
 import type { SafetyActivity, AthleteLevel } from "@/lib/training-safety-client"
-import { MAX_WEEKLY_INCREASE, classifyAthleteLevel as _classifyAthleteLevel } from "@/lib/training-safety-client"
-// Local alias for internal use (the re-export above handles external consumers)
-const classifyAthleteLevel = _classifyAthleteLevel
+import { MAX_WEEKLY_INCREASE, classifyAthleteLevel } from "@/lib/training-safety-client"
+
+/**
+ * Parses a session distance string into its low/high numeric km values.
+ * For ranges like "8-10 km" returns { low: 8, high: 10 }.
+ * For single values like "10 km" returns { low: 10, high: 10 }.
+ * Returns null if the string cannot be parsed.
+ */
+export function parseSessionDistanceParts(
+  distance: string,
+): { low: number; high: number } | null {
+  const rangeMatch = distance.match(/([\d.]+)\s*[-–]\s*([\d.]+)\s*km/i)
+  if (rangeMatch) return { low: parseFloat(rangeMatch[1]), high: parseFloat(rangeMatch[2]) }
+  const singleMatch = distance.match(/([\d.]+)\s*km/i)
+  if (singleMatch) { const v = parseFloat(singleMatch[1]); return { low: v, high: v } }
+  return null
+}
 
 /**
  * Extracts km from a session distance string.
@@ -49,15 +64,8 @@ const classifyAthleteLevel = _classifyAthleteLevel
  * and "10.5km" (no space).
  */
 export function parseSessionDistanceKm(distance: string): number {
-  // Try range first: "8-10 km" or "8–10 km"
-  const rangeMatch = distance.match(/([\d.]+)\s*[–\-]\s*([\d.]+)\s*km/i)
-  if (rangeMatch) return parseFloat(rangeMatch[2]) // use max of range
-
-  // Single value: "10 km" or "10.5km"
-  const singleMatch = distance.match(/([\d.]+)\s*km/i)
-  if (singleMatch) return parseFloat(singleMatch[1])
-
-  return 0
+  const parts = parseSessionDistanceParts(distance)
+  return parts ? parts.high : 0
 }
 
 // ── Weekly load progression check ─────────────────────────────────────────────
@@ -200,7 +208,7 @@ export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
       ratio,
       risk: "moderate",
       weekOneMultiplier: 0.95,
-      message: null,
+      message: `ACWR ${ratio.toFixed(2)} is slightly elevated. Plan reduced 5% this week as a precaution.`,
     }
   }
   return { ratio, risk: "low", weekOneMultiplier: 1.0, message: null }
@@ -394,7 +402,7 @@ export interface ProlongedFatigueResult {
  */
 export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFatigueResult {
   const loadPoints = computeTrainingLoad(activities)
-  if (loadPoints.length < 21) {
+  if (loadPoints.length < PROLONGED_FATIGUE_MIN_POINTS) {
     return { detected: false, consecutiveNegativeTsbWeeks: 0, deloadMultiplier: 1.0, message: null }
   }
 
@@ -487,11 +495,12 @@ export interface SafetyValidationResult {
  *
  * 1. Classify athlete level
  * 2. Check ACWR — apply week-1 multiplier if needed
- * 3. Detect prolonged fatigue — apply deload multiplier if needed
- * 4. Check weekly progression caps — clamp violations
- * 5. Check long run protection — clamp violations
- * 6. Check frequency progression
- * 7. Detect fatigue signals — attach notes
+ *    + Detect prolonged fatigue — apply deload multiplier if needed
+ * 2b. Check weekly progression caps — clamp violations
+ * 2c. Check cumulative progression caps (3-week rolling window) — clamp violations
+ * 3. Check long run protection — clamp violations
+ * 4. Detect fatigue signals — attach notes
+ * 5. Check frequency progression
  *
  * Returns the validated (and potentially adjusted) plan plus a summary of issues.
  */

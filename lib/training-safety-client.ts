@@ -15,6 +15,7 @@ import {
   ATHLETE_ADVANCED_SESSIONS_PER_WEEK,
   ATHLETE_INTERMEDIATE_KM_PER_WEEK,
   ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK,
+  SKIP_LOAD_SPIKE_DANGER_THRESHOLD,
 } from "@/lib/training-constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -126,6 +127,6 @@ export function checkSkipLoadSpike(
     safeMaxKm,
     spikePct,
     maxAllowedPct: Math.round(maxAllowedPct * 100),
-    severity: spikePct > 30 ? "danger" : "caution",
+    severity: spikePct > SKIP_LOAD_SPIKE_DANGER_THRESHOLD ? "danger" : "caution",
   }
 }

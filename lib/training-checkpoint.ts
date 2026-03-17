@@ -12,6 +12,7 @@
  */
 
 import type { TrainingPlan, TrainingWeek, WeekAdherence, MidBlockCheckpoint } from "@/lib/types"
+import { parseSessionDistanceParts } from "@/lib/training-safety"
 import {
   CHECKPOINT_UNDER_THRESHOLD as UNDER_THRESHOLD,
   CHECKPOINT_OVER_THRESHOLD as OVER_THRESHOLD,
@@ -192,20 +193,15 @@ export function analyzeBlockAdherence(
  * Handles ranges like "8-10 km" and single values like "10 km".
  */
 function scaleSessionDistance(distanceStr: string, scale: number): string {
-  // Range: "8-10 km" or "8–10 km"
-  const rangeMatch = distanceStr.match(/^([\d.]+)\s*[-–]\s*([\d.]+)\s*km$/i)
-  if (rangeMatch) {
-    const low = Math.round(parseFloat(rangeMatch[1]) * scale * 10) / 10
-    const high = Math.round(parseFloat(rangeMatch[2]) * scale * 10) / 10
+  const parts = parseSessionDistanceParts(distanceStr)
+  if (!parts) return distanceStr // unparseable — leave unchanged
+  if (parts.low !== parts.high) {
+    const low = Math.round(parts.low * scale * 10) / 10
+    const high = Math.round(parts.high * scale * 10) / 10
     return `${low}–${high} km`
   }
-  // Single value: "10 km" or "10.5km"
-  const singleMatch = distanceStr.match(/^([\d.]+)\s*km$/i)
-  if (singleMatch) {
-    const km = Math.round(parseFloat(singleMatch[1]) * scale * 10) / 10
-    return `${km} km`
-  }
-  return distanceStr // unparseable — leave unchanged
+  const km = Math.round(parts.high * scale * 10) / 10
+  return `${km} km`
 }
 
 /**
