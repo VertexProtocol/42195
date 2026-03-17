@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
+import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
@@ -400,6 +401,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimit = await checkAiRateLimit(user.id)
+  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit)
 
   let goalId: string
   let adjustNote: string | null = null

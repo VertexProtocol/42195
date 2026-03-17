@@ -6,7 +6,7 @@ import { useTheme } from "next-themes"
 import {
   RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw, Settings2,
-  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info,
+  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info, ChevronRight,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { formatTimeAgo } from "@/lib/format"
@@ -22,6 +22,7 @@ interface ProfileScreenProps {
   onFullSync: () => void
   onConnectStrava: () => Promise<{ ok: boolean; error?: string }>
   onSignOut: () => void
+  onNavigateToGoals: () => void
 }
 
 // HR zone configuration (5-zone model)
@@ -41,6 +42,7 @@ export function ProfileScreen({
   onFullSync,
   onConnectStrava,
   onSignOut,
+  onNavigateToGoals,
 }: ProfileScreenProps) {
   const { theme, setTheme } = useTheme()
   const isDarkMode = theme === "dark"
@@ -510,11 +512,18 @@ export function ProfileScreen({
             )}
           </div>
 
-          {/* Training Preferences */}
-          <div className="px-4 py-4">
-            <p className="text-sm font-medium text-card-foreground mb-1">{t("profile.trainingPreferences")}</p>
-            <p className="text-xs text-muted-foreground">{t("profile.trainingPrefsDesc")}</p>
-          </div>
+          {/* Training Preferences — navigates to Goals tab where AI plan prefs live */}
+          <button
+            onClick={onNavigateToGoals}
+            className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors active:bg-accent"
+          >
+            <Settings2 size={15} className="shrink-0 text-muted-foreground" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-card-foreground">{t("profile.trainingPreferences")}</p>
+              <p className="text-xs text-muted-foreground">{t("profile.trainingPrefsDesc")}</p>
+            </div>
+            <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
+          </button>
         </div>
       </section>
 
