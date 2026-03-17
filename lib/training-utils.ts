@@ -170,7 +170,7 @@ export function computeTrainingLoad(
 
   // Build daily effort-adjusted distance map for the last 120 days (buffer for EWMA warmup)
   const now = new Date()
-  now.setHours(0, 0, 0, 0)
+  now.setUTCHours(0, 0, 0, 0)
   const startDays = 120
   const outputDays = 90
 
