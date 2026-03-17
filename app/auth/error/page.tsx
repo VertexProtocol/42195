@@ -1,12 +1,33 @@
 import Link from "next/link"
 
+function sanitizeAuthErrorMessage(message: string | undefined): string {
+  if (!message) return "An unexpected error occurred. Please try again."
+  const m = message.toLowerCase()
+  if (m.includes("invalid login credentials") || m.includes("invalid credentials") || m.includes("wrong password") || m.includes("user not found")) {
+    return "Invalid email or password. Please try again."
+  }
+  if (m.includes("email not confirmed") || m.includes("confirm your email")) {
+    return "Please confirm your email address before signing in."
+  }
+  if (m.includes("too many requests") || m.includes("rate limit")) {
+    return "Too many attempts. Please wait a few minutes and try again."
+  }
+  if (m.includes("token") || m.includes("expired") || m.includes("invalid") || m.includes("otp")) {
+    return "This link has expired or is invalid. Please request a new one."
+  }
+  if (m.includes("user already registered") || m.includes("already exists")) {
+    return "An account with this email already exists."
+  }
+  return "An unexpected error occurred. Please try again."
+}
+
 export default async function AuthErrorPage({
   searchParams,
 }: {
   searchParams: Promise<{ message?: string }>
 }) {
   const { message } = await searchParams
-  const displayMessage = message ?? "An unexpected error occurred. Please try again."
+  const displayMessage = sanitizeAuthErrorMessage(message)
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">

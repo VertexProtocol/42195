@@ -72,6 +72,7 @@ export interface UserProfile {
   display_name: string
   email: string
   avatar_url: string | null
+  locale?: string | null
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"

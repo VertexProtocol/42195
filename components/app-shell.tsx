@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useCallback, useSyncExternalStore, lazy, Suspense } from "react"
+import { useState, useCallback, useEffect, useSyncExternalStore, lazy, Suspense } from "react"
+import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
@@ -50,6 +51,16 @@ interface AppShellProps {
 export function AppShell({ initialData }: AppShellProps) {
   const data = useAppData(initialData)
   const searchParams = useLocationSearch()
+  const { setLocale } = useI18n()
+
+  // Sync locale from DB on mount — overrides localStorage if user has a saved preference
+  useEffect(() => {
+    const dbLocale = data.user?.locale
+    if (dbLocale === "en" || dbLocale === "no") {
+      setLocale(dbLocale as Locale)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.user?.locale])
 
   // Read navigation state from URL
   const urlTab = searchParams.get("tab") as TabId | null
