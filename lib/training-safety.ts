@@ -15,6 +15,19 @@
 
 import type { TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
 import { computeACWR, computeTrainingLoad, gradeAdjustedPace } from "@/lib/training-utils"
+import {
+  ACWR_HIGH_THRESHOLD,
+  ACWR_UNSAFE_THRESHOLD,
+  RECOVERY_WEEK_THRESHOLD,
+  LONG_RUN_MAX_FRACTION,
+  FATIGUE_MIN_QUALIFYING_RUNS,
+  FATIGUE_RECENT_RUNS_COUNT,
+  FATIGUE_HR_ELEVATION_BPM,
+  FATIGUE_PACE_DECLINE_FACTOR,
+  PROLONGED_FATIGUE_TSB_THRESHOLD,
+  PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
+  PROLONGED_FATIGUE_DELOAD_MULTIPLIER,
+} from "@/lib/training-constants"
 
 // Re-export client-safe utilities so server-side callers don't need to change imports
 export {
@@ -74,7 +87,7 @@ export function checkWeeklyLoadProgression(
     const maxAllowed = Math.round(prev * (1 + maxIncrease))
 
     // Skip recovery weeks (defined as weeks that drop ≥15% from previous week)
-    const isRecoveryWeek = curr < prev * 0.85
+    const isRecoveryWeek = curr < prev * RECOVERY_WEEK_THRESHOLD
     if (isRecoveryWeek) continue
 
     if (curr > maxAllowed) {
@@ -166,7 +179,7 @@ export interface AcwrSafety {
 export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
   const { acuteLoad, chronicLoad, ratio } = computeACWR(activities)
 
-  if (ratio > 1.5) {
+  if (ratio > ACWR_UNSAFE_THRESHOLD) {
     return {
       ratio,
       risk: "unsafe",
@@ -174,7 +187,7 @@ export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
       message: `Acute load (${acuteLoad.toFixed(1)} km) is ${ratio.toFixed(2)}x chronic (${chronicLoad.toFixed(1)} km/wk). Plan reduced 25% — prioritise recovery before building volume.`,
     }
   }
-  if (ratio > 1.3) {
+  if (ratio > ACWR_HIGH_THRESHOLD) {
     return {
       ratio,
       risk: "high",
@@ -258,12 +271,12 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     .filter((a) => a.distance_km > 3 && a.duration_seconds > 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  if (runs.length < 8) {
+  if (runs.length < FATIGUE_MIN_QUALIFYING_RUNS) {
     return { signal: "none", description: null, intensityMultiplier: 1.0 }
   }
 
-  const recent = runs.slice(0, 4)
-  const baseline = runs.slice(4, 12)
+  const recent = runs.slice(0, FATIGUE_RECENT_RUNS_COUNT)
+  const baseline = runs.slice(FATIGUE_RECENT_RUNS_COUNT, FATIGUE_RECENT_RUNS_COUNT + FATIGUE_MIN_QUALIFYING_RUNS)
 
   // HR fatigue signal (using median for outlier resistance)
   const recentHrs = recent
@@ -274,7 +287,7 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     .map((a) => a.avg_heart_rate!)
   let hrElevated = false
   if (recentHrs.length >= 3 && baselineHrs.length >= 4) {
-    hrElevated = median(recentHrs) > median(baselineHrs) + 5
+    hrElevated = median(recentHrs) > median(baselineHrs) + FATIGUE_HR_ELEVATION_BPM
   }
 
   // Pace fatigue signal — use grade-adjusted pace so hilly runs don't falsely
@@ -287,8 +300,7 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     .map((a) => gradeAdjustedPace(a.pace_min_per_km!, a.distance_km, a.elevation_gain_m))
   let paceDeclining = false
   if (recentPaces.length >= 3 && baselinePaces.length >= 4) {
-    // Pace declining = getting slower (higher pace value) by more than 5%
-    paceDeclining = median(recentPaces) > median(baselinePaces) * 1.05
+    paceDeclining = median(recentPaces) > median(baselinePaces) * FATIGUE_PACE_DECLINE_FACTOR
   }
 
   if (hrElevated && paceDeclining) {
@@ -326,7 +338,7 @@ export interface LongRunViolation {
   adjustedKm: number
 }
 
-const LONG_RUN_MAX_FRACTION = 0.35
+// LONG_RUN_MAX_FRACTION imported from training-constants
 
 /**
  * Parses session distances from a week and checks the long run cap.
@@ -358,7 +370,7 @@ export function checkLongRunProtection(plan: TrainingPlan): LongRunViolation[] {
         adjustedKm: maxAllowed,
       })
       console.warn(
-        `[safety] Week ${week.weekNumber}: long run ${longestSessionKm} km exceeds 35% of ${week.targetKm} km weekly total (max ${maxAllowed} km). Session: "${longestSessionType}"`
+        `[safety] Week ${week.weekNumber}: long run ${longestSessionKm} km exceeds ${Math.round(LONG_RUN_MAX_FRACTION * 100)}% of ${week.targetKm} km weekly total (max ${maxAllowed} km). Session: "${longestSessionType}"`
       )
     }
   }
@@ -394,19 +406,19 @@ export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFa
 
   let consecutiveNegative = 0
   for (let i = weeklyPoints.length - 1; i >= 0; i--) {
-    if (weeklyPoints[i].tsb < -15) {
+    if (weeklyPoints[i].tsb < PROLONGED_FATIGUE_TSB_THRESHOLD) {
       consecutiveNegative++
     } else {
       break
     }
   }
 
-  if (consecutiveNegative >= 3) {
+  if (consecutiveNegative >= PROLONGED_FATIGUE_CONSECUTIVE_WEEKS) {
     return {
       detected: true,
       consecutiveNegativeTsbWeeks: consecutiveNegative,
-      deloadMultiplier: 0.60,
-      message: `TSB has been below -15 for ${consecutiveNegative} consecutive weeks — forced 40% deload recommended before resuming volume increases.`,
+      deloadMultiplier: PROLONGED_FATIGUE_DELOAD_MULTIPLIER,
+      message: `TSB has been below ${PROLONGED_FATIGUE_TSB_THRESHOLD} for ${consecutiveNegative} consecutive weeks — forced ${Math.round((1 - PROLONGED_FATIGUE_DELOAD_MULTIPLIER) * 100)}% deload recommended before resuming volume increases.`,
     }
   }
 
@@ -561,7 +573,7 @@ export function validateAndAdjustPlan(
     })
     if (maxIdx >= 0) {
       week.sessions[maxIdx].distance = `${v.adjustedKm} km`
-      const note = `Week ${v.weekNumber}: long run capped at ${v.adjustedKm} km (35% of ${week.targetKm} km week)`
+      const note = `Week ${v.weekNumber}: long run capped at ${v.adjustedKm} km (${Math.round(LONG_RUN_MAX_FRACTION * 100)}% of ${week.targetKm} km week)`
       safetyNotes.push(note)
     }
   }

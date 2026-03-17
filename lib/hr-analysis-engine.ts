@@ -17,6 +17,14 @@
 
 import type { Activity } from "@/lib/types"
 import { gradeAdjustedPace } from "@/lib/training-utils"
+import {
+  HR_ZONE_LABELS,
+  HR_ZONE_PCTS,
+  HR_ZONE_MATCH_TOLERANCE,
+  HR_MAJOR_MISALIGNMENT_THRESHOLD,
+  HR_MINOR_MISALIGNMENT_THRESHOLD,
+  HR_ZONE_CLUSTER_THRESHOLD,
+} from "@/lib/training-constants"
 
 // ─── Types ──────────────────────────────────────────
 
@@ -63,21 +71,7 @@ export interface HrAnalysisResult {
   analyzedAt: string
 }
 
-// ─── Constants ──────────────────────────────────────
-
-const ZONE_LABELS = ["Recovery", "Aerobic", "Tempo", "Threshold", "VO2 Max"]
-
-/** Default zone percentages of max HR */
-const ZONE_PCTS: [number, number][] = [
-  [0.50, 0.60],
-  [0.60, 0.70],
-  [0.70, 0.80],
-  [0.80, 0.90],
-  [0.90, 1.00],
-]
-
-/** BPM tolerance for zone match comparison */
-const ZONE_MATCH_TOLERANCE = 3
+// ─── Constants (imported from training-constants) ───────────
 
 // ─── Core Engine ────────────────────────────────────
 
@@ -90,18 +84,18 @@ const ZONE_MATCH_TOLERANCE = 3
 function buildZones(maxHr: number, restingHr?: number | null): HrZoneBoundary[] {
   if (restingHr && restingHr > 30 && restingHr < maxHr * 0.5) {
     const reserve = maxHr - restingHr
-    return ZONE_LABELS.map((label, i) => ({
+    return HR_ZONE_LABELS.map((label, i) => ({
       zone: i + 1,
       label,
-      min: Math.round(restingHr + reserve * ZONE_PCTS[i][0]),
-      max: Math.round(restingHr + reserve * ZONE_PCTS[i][1]),
+      min: Math.round(restingHr + reserve * HR_ZONE_PCTS[i][0]),
+      max: Math.round(restingHr + reserve * HR_ZONE_PCTS[i][1]),
     }))
   }
-  return ZONE_LABELS.map((label, i) => ({
+  return HR_ZONE_LABELS.map((label, i) => ({
     zone: i + 1,
     label,
-    min: Math.round(maxHr * ZONE_PCTS[i][0]),
-    max: Math.round(maxHr * ZONE_PCTS[i][1]),
+    min: Math.round(maxHr * HR_ZONE_PCTS[i][0]),
+    max: Math.round(maxHr * HR_ZONE_PCTS[i][1]),
   }))
 }
 
@@ -209,7 +203,7 @@ function detectMisalignment(
   const maxHrPctDiff = maxHrDiff / recommendedMaxHr
 
   // 1. Max HR significantly different
-  if (maxHrPctDiff > 0.08) {
+  if (maxHrPctDiff > HR_MAJOR_MISALIGNMENT_THRESHOLD) {
     severity += 2
     if (recommendedMaxHr > currentMaxHr) {
       explanations.push(
@@ -224,7 +218,7 @@ function detectMisalignment(
         `Your zones may be set too high.`
       )
     }
-  } else if (maxHrPctDiff > 0.04) {
+  } else if (maxHrPctDiff > HR_MINOR_MISALIGNMENT_THRESHOLD) {
     severity += 1
     explanations.push(
       `Your estimated max HR (${recommendedMaxHr} bpm) differs slightly from the current ` +
@@ -234,8 +228,8 @@ function detectMisalignment(
 
   // 2. Zone 2 runs appearing too hard
   if (thresholdHr != null) {
-    const currentZ2Max = Math.round(currentMaxHr * 0.70)
-    const recZ2Max = Math.round(recommendedMaxHr * 0.70)
+    const currentZ2Max = Math.round(currentMaxHr * HR_ZONE_PCTS[1][1])
+    const recZ2Max = Math.round(recommendedMaxHr * HR_ZONE_PCTS[1][1])
 
     // Count easy/long runs where avg HR falls above current Z2 max.
     // Use grade-adjusted pace so hilly runs with artificially slow raw pace
@@ -269,10 +263,10 @@ function detectMisalignment(
     const withHr = activities.filter((a) => a.avg_heart_rate != null && a.avg_heart_rate > 0)
     if (withHr.length >= 8) {
       const zoneCounts = [0, 0, 0, 0, 0]
-      const z1Max = Math.round(currentMaxHr * 0.60)
-      const z2Max = Math.round(currentMaxHr * 0.70)
-      const z3Max = Math.round(currentMaxHr * 0.80)
-      const z4Max = Math.round(currentMaxHr * 0.90)
+      const z1Max = Math.round(currentMaxHr * HR_ZONE_PCTS[0][1])
+      const z2Max = Math.round(currentMaxHr * HR_ZONE_PCTS[1][1])
+      const z3Max = Math.round(currentMaxHr * HR_ZONE_PCTS[2][1])
+      const z4Max = Math.round(currentMaxHr * HR_ZONE_PCTS[3][1])
 
       for (const a of withHr) {
         const hr = a.avg_heart_rate!
@@ -284,7 +278,7 @@ function detectMisalignment(
       }
 
       const maxInOneZone = Math.max(...zoneCounts)
-      if (maxInOneZone / withHr.length > 0.7) {
+      if (maxInOneZone / withHr.length > HR_ZONE_CLUSTER_THRESHOLD) {
         const dominantZone = zoneCounts.indexOf(maxInOneZone) + 1
         severity += 1
         explanations.push(
@@ -320,8 +314,8 @@ function detectMisalignment(
 function zonesMatch(a: HrZoneBoundary[], b: HrZoneBoundary[]): boolean {
   if (a.length !== b.length) return false
   return a.every((z, i) =>
-    Math.abs(z.min - b[i].min) <= ZONE_MATCH_TOLERANCE &&
-    Math.abs(z.max - b[i].max) <= ZONE_MATCH_TOLERANCE,
+    Math.abs(z.min - b[i].min) <= HR_ZONE_MATCH_TOLERANCE &&
+    Math.abs(z.max - b[i].max) <= HR_ZONE_MATCH_TOLERANCE,
   )
 }
 
@@ -403,8 +397,8 @@ export function analyzeHeartRateZones(
 
   // Add threshold info if available
   if (thresholdHr != null && status !== "insufficient_data") {
-    const recZ4Min = Math.round(estimatedMax * 0.80)
-    const recZ4Max = Math.round(estimatedMax * 0.90)
+    const recZ4Min = Math.round(estimatedMax * HR_ZONE_PCTS[3][0])
+    const recZ4Max = Math.round(estimatedMax * HR_ZONE_PCTS[3][1])
     if (thresholdHr >= recZ4Min && thresholdHr <= recZ4Max) {
       explanations.push(
         `Your estimated threshold HR (${thresholdHr} bpm) falls within the recommended ` +
