@@ -279,7 +279,6 @@ export function AppShell({ initialData }: AppShellProps) {
               onFullSync={data.fullSync}
               onConnectStrava={data.connectStrava}
               onSignOut={data.signOut}
-              onNavigateToGoals={() => handleTabChange("goals")}
             />
           </Suspense>
         )}
