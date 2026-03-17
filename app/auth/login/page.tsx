@@ -116,7 +116,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          {t("auth.noAccount")}{" "}
+          {t("auth.noAccount")}
           <Link href="/auth/sign-up" className="font-medium text-primary underline-offset-4 hover:underline">
             {t("auth.signUp")}
           </Link>
