@@ -5,7 +5,7 @@ import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
   RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
-  Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw, Settings2,
+  Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw,
   Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
@@ -510,11 +510,6 @@ export function ProfileScreen({
             )}
           </div>
 
-          {/* Training Preferences */}
-          <div className="px-4 py-4">
-            <p className="text-sm font-medium text-card-foreground mb-1">{t("profile.trainingPreferences")}</p>
-            <p className="text-xs text-muted-foreground">{t("profile.trainingPrefsDesc")}</p>
-          </div>
         </div>
       </section>
 
