@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useTransition } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
-  RefreshCw, LogOut, CheckCircle2, AlertCircle, Clock, User, Moon, Sun,
+  RefreshCw, LogOut, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw,
-  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info,
+  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info, Pencil, KeyRound,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
+import { createClient } from "@/lib/supabase/client"
 import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
@@ -56,18 +57,67 @@ export function ProfileScreen({
   const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(null)
   const [hrLoading, setHrLoading] = useState(false)
   const [hrExpanded, setHrExpanded] = useState(false)
+  const [hrError, setHrError] = useState<string | null>(null)
+  // Edit name state
+  const [editingName, setEditingName] = useState(false)
+  const [nameValue, setNameValue] = useState(user.display_name)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [namePending, startNameTransition] = useTransition()
+  // Change password state
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [pwError, setPwError] = useState<string | null>(null)
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwPending, startPwTransition] = useTransition()
 
   const fetchHrAnalysis = useCallback(async () => {
     setHrLoading(true)
+    setHrError(null)
     try {
       const res = await fetch("/api/hr-analysis")
       if (res.ok) {
         const data = await res.json()
         setHrAnalysis(data.analysis)
+      } else {
+        setHrError(t("profile.hrError"))
       }
-    } catch {}
+    } catch {
+      setHrError(t("profile.hrError"))
+    }
     setHrLoading(false)
-  }, [])
+  }, [t])
+
+  function handleSaveName(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const trimmed = nameValue.trim()
+    if (trimmed.length < 2) {
+      setNameError(t("profile.nameTooShort"))
+      return
+    }
+    setNameError(null)
+    startNameTransition(async () => {
+      const supabase = createClient()
+      await supabase.from("profiles").update({ display_name: trimmed }).eq("id", user.id)
+      setEditingName(false)
+    })
+  }
+
+  function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const pw = fd.get("new_password") as string
+    const confirm = fd.get("confirm_password") as string
+    setPwError(null)
+    setPwSuccess(false)
+    if (pw !== confirm) { setPwError(t("profile.passwordMismatch")); return }
+    if (pw.length < 8) { setPwError(t("profile.passwordTooShort")); return }
+    startPwTransition(async () => {
+      const supabase = createClient()
+      const { error } = await supabase.auth.updateUser({ password: pw })
+      if (error) { setPwError(error.message); return }
+      setPwSuccess(true)
+      setTimeout(() => { setShowChangePassword(false); setPwSuccess(false) }, 2000)
+    })
+  }
 
   // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
@@ -153,12 +203,101 @@ export function ProfileScreen({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-semibold text-card-foreground">
-                {user.display_name}
-              </p>
+              {editingName ? (
+                <form onSubmit={handleSaveName} className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    className="flex-1 min-w-0 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    disabled={namePending}
+                    className="shrink-0 text-xs font-semibold text-primary disabled:opacity-50"
+                  >
+                    {namePending ? t("profile.nameSaving") : t("profile.saveName")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingName(false); setNameValue(user.display_name); setNameError(null) }}
+                    className="shrink-0 text-xs text-muted-foreground"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold text-card-foreground">{user.display_name}</p>
+                  <button
+                    onClick={() => { setEditingName(true); setNameValue(user.display_name) }}
+                    className="shrink-0 text-muted-foreground active:opacity-70"
+                    aria-label={t("profile.editName")}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                </div>
+              )}
+              {nameError && <p className="mt-0.5 text-xs text-destructive">{nameError}</p>}
               <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
+
+          {/* Change password */}
+          {!showChangePassword ? (
+            <button
+              onClick={() => { setShowChangePassword(true); setPwError(null); setPwSuccess(false) }}
+              className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-sm font-medium text-card-foreground transition-colors active:bg-accent"
+            >
+              <KeyRound size={16} className="text-muted-foreground" />
+              {t("profile.changePassword")}
+            </button>
+          ) : (
+            <div className="border-b border-border px-4 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-card-foreground">{t("profile.changePassword")}</span>
+                <button onClick={() => setShowChangePassword(false)} className="text-xs text-muted-foreground active:opacity-70">
+                  {t("common.cancel")}
+                </button>
+              </div>
+              {pwSuccess ? (
+                <p className="text-sm text-success flex items-center gap-1.5">
+                  <Check size={14} /> {t("profile.passwordUpdated")}
+                </p>
+              ) : (
+                <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+                  {pwError && (
+                    <p className="text-xs text-destructive">{pwError}</p>
+                  )}
+                  <input
+                    name="new_password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    placeholder={t("auth.newPasswordLabel")}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <input
+                    name="confirm_password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    placeholder={t("auth.confirmPasswordLabel")}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    disabled={pwPending}
+                    className="flex h-9 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {pwPending ? t("profile.updating") : t("auth.updatePassword")}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Sign out */}
           <button
@@ -367,6 +506,10 @@ export function ProfileScreen({
               {hrLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
             </div>
             <p className="text-xs text-muted-foreground mb-3">{t("profile.hrZonesDesc")}</p>
+
+            {hrError && (
+              <p className="mb-2 text-xs text-destructive">{hrError}</p>
+            )}
 
             {/* Default zone reference when no analysis */}
             {!hrAnalysis && !hrLoading && (
