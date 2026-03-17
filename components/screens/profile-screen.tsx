@@ -6,7 +6,7 @@ import { useTheme } from "next-themes"
 import {
   RefreshCw, LogOut, AlertCircle, Clock, User, Moon, Sun,
   Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw,
-  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info, Pencil, KeyRound,
+  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info, Pencil, KeyRound, Eye, EyeOff,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { createClient } from "@/lib/supabase/client"
@@ -68,6 +68,10 @@ export function ProfileScreen({
   const [pwError, setPwError] = useState<string | null>(null)
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwPending, startPwTransition] = useTransition()
+  const [showPw, setShowPw] = useState(false)
+  const [showConfirmPw, setShowConfirmPw] = useState(false)
+  // Displayed name (local state so it updates immediately after save)
+  const [displayedName, setDisplayedName] = useState(user.display_name)
 
   const fetchHrAnalysis = useCallback(async () => {
     setHrLoading(true)
@@ -97,6 +101,7 @@ export function ProfileScreen({
     startNameTransition(async () => {
       const supabase = createClient()
       await supabase.from("profiles").update({ display_name: trimmed }).eq("id", user.id)
+      setDisplayedName(trimmed)
       setEditingName(false)
     })
   }
@@ -220,7 +225,7 @@ export function ProfileScreen({
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setEditingName(false); setNameValue(user.display_name); setNameError(null) }}
+                    onClick={() => { setEditingName(false); setNameValue(displayedName); setNameError(null) }}
                     className="shrink-0 text-xs text-muted-foreground"
                   >
                     {t("common.cancel")}
@@ -228,9 +233,9 @@ export function ProfileScreen({
                 </form>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <p className="truncate text-sm font-semibold text-card-foreground">{user.display_name}</p>
+                  <p className="truncate text-sm font-semibold text-card-foreground">{displayedName}</p>
                   <button
-                    onClick={() => { setEditingName(true); setNameValue(user.display_name) }}
+                    onClick={() => { setEditingName(true); setNameValue(displayedName) }}
                     className="shrink-0 text-muted-foreground active:opacity-70"
                     aria-label={t("profile.editName")}
                   >
@@ -269,24 +274,54 @@ export function ProfileScreen({
                   {pwError && (
                     <p className="text-xs text-destructive">{pwError}</p>
                   )}
-                  <input
-                    name="new_password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                    placeholder={t("auth.newPasswordLabel")}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <input
-                    name="confirm_password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                    placeholder={t("auth.confirmPasswordLabel")}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="new_password" className="text-xs font-medium text-card-foreground">
+                      {t("auth.newPasswordLabel")}
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="new_password"
+                        name="new_password"
+                        type={showPw ? "text" : "password"}
+                        autoComplete="new-password"
+                        required
+                        minLength={8}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPw(!showPw)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground active:opacity-70"
+                        aria-label={showPw ? "Hide password" : "Show password"}
+                      >
+                        {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="confirm_password" className="text-xs font-medium text-card-foreground">
+                      {t("auth.confirmPasswordLabel")}
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="confirm_password"
+                        name="confirm_password"
+                        type={showConfirmPw ? "text" : "password"}
+                        autoComplete="new-password"
+                        required
+                        minLength={8}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPw(!showConfirmPw)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground active:opacity-70"
+                        aria-label={showConfirmPw ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
                   <button
                     type="submit"
                     disabled={pwPending}
@@ -709,7 +744,10 @@ export function ProfileScreen({
               {(["en", "no"] as Locale[]).map((l) => (
                 <button
                   key={l}
-                  onClick={() => setLocale(l)}
+                  onClick={() => {
+                    setLocale(l)
+                    createClient().from("profiles").update({ locale: l }).eq("id", user.id)
+                  }}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     locale === l
                       ? "bg-card text-foreground shadow-sm"

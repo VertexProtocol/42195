@@ -1,11 +1,34 @@
 "use client"
 
+import { useState, useTransition } from "react"
 import Link from "next/link"
+import { Eye, EyeOff } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import { signUpAction } from "./actions"
 
 export default function SignUpPage() {
   const { t } = useI18n()
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const password = formData.get("password") as string
+    const confirm = formData.get("confirm") as string
+
+    if (password !== confirm) {
+      setError(t("auth.passwordMismatch"))
+      return
+    }
+
+    setError(null)
+    startTransition(async () => {
+      await signUpAction(formData)
+    })
+  }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
@@ -15,7 +38,13 @@ export default function SignUpPage() {
           <p className="text-sm text-muted-foreground">{t("auth.createAccountTagline")}</p>
         </div>
 
-        <form action={signUpAction} className="space-y-4">
+        {error && (
+          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="display_name" className="text-sm font-medium">
               {t("auth.nameLabel")}
@@ -50,23 +79,60 @@ export default function SignUpPage() {
             <label htmlFor="password" className="text-sm font-medium">
               {t("auth.passwordLabel")}
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder={t("auth.minCharsPlaceholder")}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder={t("auth.minCharsPlaceholder")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="confirm" className="text-sm font-medium">
+              {t("auth.confirmPasswordLabel")}
+            </label>
+            <div className="relative">
+              <input
+                id="confirm"
+                name="confirm"
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder={t("auth.repeatPasswordPlaceholder")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+              >
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            disabled={isPending}
+            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
-            {t("auth.createAccount")}
+            {isPending ? t("auth.creatingAccount") : t("auth.createAccount")}
           </button>
         </form>
 
