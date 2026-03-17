@@ -12,28 +12,15 @@
  */
 
 import type { TrainingPlan, TrainingWeek, WeekAdherence, MidBlockCheckpoint } from "@/lib/types"
-
-/** Adherence below this triggers a downward adjustment */
-const UNDER_THRESHOLD = 0.70
-
-/** Adherence above this triggers an upward adjustment (capped by safety limits) */
-const OVER_THRESHOLD = 1.35
-
-/** Minimum block length for checkpoint to apply */
-const MIN_BLOCK_WEEKS_FOR_CHECKPOINT = 4
-
-/**
- * A week whose targetKm is below this fraction of the block average is treated
- * as a deload/recovery week and left untouched by the checkpoint adjustment.
- */
-const DELOAD_WEEK_THRESHOLD = 0.75
-
-/**
- * A completed week where actual km is below this fraction of planned is treated
- * as a missed week (sickness, travel, life) and excluded from the adherence
- * average used to compute the scale factor.
- */
-const MISSED_WEEK_THRESHOLD = 0.20
+import {
+  CHECKPOINT_UNDER_THRESHOLD as UNDER_THRESHOLD,
+  CHECKPOINT_OVER_THRESHOLD as OVER_THRESHOLD,
+  CHECKPOINT_MIN_BLOCK_WEEKS as MIN_BLOCK_WEEKS_FOR_CHECKPOINT,
+  CHECKPOINT_DELOAD_WEEK_THRESHOLD as DELOAD_WEEK_THRESHOLD,
+  CHECKPOINT_MISSED_WEEK_THRESHOLD as MISSED_WEEK_THRESHOLD,
+  CHECKPOINT_MIN_SCALE,
+  CHECKPOINT_MAX_SCALE,
+} from "@/lib/training-constants"
 
 /**
  * Returns the 0-based index of the current week within the training block.
@@ -265,7 +252,7 @@ export function adjustRemainingWeeks(
 
   const scaleFactor =
     anchorWeek.targetKm > 0
-      ? Math.min(1.30, Math.max(0.55, actualAvgKm / anchorWeek.targetKm))
+      ? Math.min(CHECKPOINT_MAX_SCALE, Math.max(CHECKPOINT_MIN_SCALE, actualAvgKm / anchorWeek.targetKm))
       : 1.0
 
   const adjustedRemaining = remainingWeeks.map((week) => {

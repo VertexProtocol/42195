@@ -1,4 +1,27 @@
 import type { Activity, StreamPoint } from "@/lib/types"
+import {
+  ACWR_ACUTE_DAYS,
+  ACWR_CHRONIC_DAYS,
+  ACWR_CHRONIC_WEEKS,
+  ACWR_HIGH_THRESHOLD,
+  ACWR_UNSAFE_THRESHOLD,
+  ATL_HALF_LIFE_DAYS,
+  CTL_HALF_LIFE_DAYS,
+  TRAINING_LOAD_BUFFER_DAYS,
+  TRAINING_LOAD_OUTPUT_DAYS,
+  ELEVATION_GRADE_EFFORT_FACTOR,
+  RIEGEL_EXPONENT,
+  RIEGEL_EXPONENT_MIN,
+  RIEGEL_EXPONENT_MAX,
+  RIEGEL_EXPONENT_OPTIMISTIC,
+  RIEGEL_EXPONENT_CONSERVATIVE,
+  RACE_PREDICTION_LOOKBACK_DAYS,
+  RACE_PREDICTION_RECENCY_THRESHOLD_DAYS,
+  RACE_PREDICTION_RECENCY_FADE_DAYS,
+  RACE_PREDICTION_MAX_RECENCY_PENALTY,
+  HR_ZONE_LABELS,
+  HR_ZONE_PCTS,
+} from "@/lib/training-constants"
 
 // ---- Elevation effort helpers ----
 
@@ -15,7 +38,7 @@ export function elevationEffortMultiplier(
   if (!elevation_gain_m || elevation_gain_m <= 0 || distance_km <= 0) return 1
   // grade as a fraction (m gained / m covered)
   const grade = elevation_gain_m / (distance_km * 1000)
-  return 1 + grade * 8
+  return 1 + grade * ELEVATION_GRADE_EFFORT_FACTOR
 }
 
 /**
@@ -125,8 +148,8 @@ export function computeACWR(
   activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
 ): AcwrResult {
   const now = Date.now()
-  const day7 = now - 7 * 24 * 60 * 60 * 1000
-  const day28 = now - 28 * 24 * 60 * 60 * 1000
+  const day7 = now - ACWR_ACUTE_DAYS * 24 * 60 * 60 * 1000
+  const day28 = now - ACWR_CHRONIC_DAYS * 24 * 60 * 60 * 1000
 
   const acuteLoad = activities
     .filter((a) => new Date(a.date).getTime() >= day7)
@@ -136,13 +159,13 @@ export function computeACWR(
     .filter((a) => new Date(a.date).getTime() >= day28)
     .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
 
-  const chronicLoad = chronicTotal / 4 // 4 weeks average
+  const chronicLoad = chronicTotal / ACWR_CHRONIC_WEEKS
 
   const ratio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
 
   let risk: AcwrResult["risk"] = "low"
-  if (ratio > 1.5) risk = "high"
-  else if (ratio > 1.3) risk = "moderate"
+  if (ratio > ACWR_UNSAFE_THRESHOLD) risk = "high"
+  else if (ratio > ACWR_HIGH_THRESHOLD) risk = "moderate"
 
   return { acuteLoad, chronicLoad, ratio, risk }
 }
@@ -171,8 +194,8 @@ export function computeTrainingLoad(
   // Build daily effort-adjusted distance map for the last 120 days (buffer for EWMA warmup)
   const now = new Date()
   now.setUTCHours(0, 0, 0, 0)
-  const startDays = 120
-  const outputDays = 90
+  const startDays = TRAINING_LOAD_BUFFER_DAYS
+  const outputDays = TRAINING_LOAD_OUTPUT_DAYS
 
   const dailyLoad = new Map<string, number>()
   for (const a of activities) {
@@ -182,8 +205,8 @@ export function computeTrainingLoad(
 
   const points: TrainingLoadPoint[] = []
   // α = 1 - e^(-ln(2)/n) gives true n-day half-life
-  const atlDecay = 1 - Math.exp(-Math.LN2 / 7)   // ≈ 0.0943 (7-day half-life)
-  const ctlDecay = 1 - Math.exp(-Math.LN2 / 42)  // ≈ 0.0164 (42-day half-life)
+  const atlDecay = 1 - Math.exp(-Math.LN2 / ATL_HALF_LIFE_DAYS)
+  const ctlDecay = 1 - Math.exp(-Math.LN2 / CTL_HALF_LIFE_DAYS)
 
   let atl = 0
   let ctl = 0
@@ -241,7 +264,7 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
   predictions: RacePrediction[]
   referenceActivity: Activity | null
 } {
-  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000
+  const cutoff = Date.now() - RACE_PREDICTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
   const recent = activities.filter(
     (a) =>
       new Date(a.date).getTime() >= cutoff &&
@@ -263,8 +286,9 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
     const flatDuration = a.duration_seconds / elevationEffortMultiplier(a.distance_km, a.elevation_gain_m)
     const equiv = (5 / a.distance_km) ** 1.06 * flatDuration
     const daysOld = (now - new Date(a.date).getTime()) / (24 * 60 * 60 * 1000)
-    // No penalty for first 30 days, then up to 5% penalty at 90 days
-    const recencyPenalty = daysOld <= 30 ? 1.0 : 1.0 + ((daysOld - 30) / 60) * 0.05
+    const recencyPenalty = daysOld <= RACE_PREDICTION_RECENCY_THRESHOLD_DAYS
+      ? 1.0
+      : 1.0 + ((daysOld - RACE_PREDICTION_RECENCY_THRESHOLD_DAYS) / RACE_PREDICTION_RECENCY_FADE_DAYS) * RACE_PREDICTION_MAX_RECENCY_PENALTY
     const score = equiv * recencyPenalty
     if (score < bestScore) {
       bestRef = a
@@ -276,9 +300,9 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
   // range from ~1.01 (well-trained) to ~1.12 (less trained). We use ±0.03
   // to produce a practical confidence band.
   // If test run validation data suggests an adjustment, apply it.
-  const exponent = Math.max(1.01, Math.min(1.12, 1.06 + (exponentAdjustment ?? 0)))
-  const exponentLow = 1.03  // optimistic (well-trained)
-  const exponentHigh = 1.09 // conservative (less trained)
+  const exponent = Math.max(RIEGEL_EXPONENT_MIN, Math.min(RIEGEL_EXPONENT_MAX, RIEGEL_EXPONENT + (exponentAdjustment ?? 0)))
+  const exponentLow = RIEGEL_EXPONENT_OPTIMISTIC
+  const exponentHigh = RIEGEL_EXPONENT_CONSERVATIVE
 
   // Use flat-equivalent reference time so hilly reference runs project correctly to flat races
   const refFlatSeconds = bestRef.duration_seconds / elevationEffortMultiplier(bestRef.distance_km, bestRef.elevation_gain_m)
@@ -336,13 +360,11 @@ export function analyzeHrZones(
   // is unreliable for easy runs. Prefer passing a global max HR.
   const estimatedMax = maxHr ?? Math.max(...hrPoints.map((p) => p.hr!)) * 1.05
 
-  const zones: { label: string; min: number; max: number }[] = [
-    { label: "Recovery", min: 0, max: Math.round(estimatedMax * 0.6) },
-    { label: "Aerobic", min: Math.round(estimatedMax * 0.6), max: Math.round(estimatedMax * 0.7) },
-    { label: "Tempo", min: Math.round(estimatedMax * 0.7), max: Math.round(estimatedMax * 0.8) },
-    { label: "Threshold", min: Math.round(estimatedMax * 0.8), max: Math.round(estimatedMax * 0.9) },
-    { label: "VO2 Max", min: Math.round(estimatedMax * 0.9), max: Math.round(estimatedMax) },
-  ]
+  const zones = HR_ZONE_LABELS.map((label, i) => ({
+    label,
+    min: i === 0 ? 0 : Math.round(estimatedMax * HR_ZONE_PCTS[i][0]),
+    max: Math.round(estimatedMax * HR_ZONE_PCTS[i][1]),
+  }))
 
   // Count time in each zone (each point represents a time interval)
   const zoneCounts = [0, 0, 0, 0, 0]
