@@ -139,6 +139,28 @@ export const HR_MINOR_MISALIGNMENT_THRESHOLD = 0.04
 /** If more than this fraction of activities cluster in a single zone, flag it */
 export const HR_ZONE_CLUSTER_THRESHOLD = 0.70
 
+// ── Resting HR Estimation ────────────────────────────────────────────────────
+
+/**
+ * Approximate BPM offset subtracted from the average easy-run HR to estimate
+ * resting HR. This is a rough heuristic — not a clinical resting HR measurement.
+ */
+export const RESTING_HR_OFFSET = 45
+
+// ── Skip Load Spike Detection ─────────────────────────────────────────────────
+
+/** Spike percentage (integer, 0–100) above which severity is "danger" vs "caution" */
+export const SKIP_LOAD_SPIKE_DANGER_THRESHOLD = 30
+
+// ── Prolonged Fatigue Load History ───────────────────────────────────────────
+
+/**
+ * Minimum number of training load data points required before
+ * checkProlongedFatigue will attempt to sample 6 weekly data points.
+ * Equals 6 weeks × 7 days so that no weekly sample aliases to loadPoints[0].
+ */
+export const PROLONGED_FATIGUE_MIN_POINTS = 42 // 6 * 7
+
 // ── Athlete Classification ───────────────────────────────────────────────────
 
 /** Rolling window (weeks) used to classify athlete level */
