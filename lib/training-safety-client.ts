@@ -8,6 +8,15 @@
  * don't need to change their imports.
  */
 
+import {
+  RECOVERY_WEEK_THRESHOLD,
+  ATHLETE_CLASSIFICATION_WEEKS,
+  ATHLETE_ADVANCED_KM_PER_WEEK,
+  ATHLETE_ADVANCED_SESSIONS_PER_WEEK,
+  ATHLETE_INTERMEDIATE_KM_PER_WEEK,
+  ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK,
+} from "@/lib/training-constants"
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -45,18 +54,18 @@ export const MAX_WEEKLY_INCREASE: Record<AthleteLevel, number> = {
 export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel {
   if (activities.length === 0) return "beginner"
 
-  const twelveWeeksMs = 84 * 24 * 60 * 60 * 1000
-  const cutoff = Date.now() - twelveWeeksMs
+  const lookbackMs = ATHLETE_CLASSIFICATION_WEEKS * 7 * 24 * 60 * 60 * 1000
+  const cutoff = Date.now() - lookbackMs
   const recent = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
 
   if (recent.length === 0) return "beginner"
 
   const totalKm = recent.reduce((s, a) => s + a.distance_km, 0)
-  const avgWeeklyKm = totalKm / 12
-  const avgSessionsPerWeek = recent.length / 12
+  const avgWeeklyKm = totalKm / ATHLETE_CLASSIFICATION_WEEKS
+  const avgSessionsPerWeek = recent.length / ATHLETE_CLASSIFICATION_WEEKS
 
-  if (avgWeeklyKm > 50 && avgSessionsPerWeek > 4) return "advanced"
-  if (avgWeeklyKm > 20 && avgSessionsPerWeek >= 2) return "intermediate"
+  if (avgWeeklyKm > ATHLETE_ADVANCED_KM_PER_WEEK && avgSessionsPerWeek > ATHLETE_ADVANCED_SESSIONS_PER_WEEK) return "advanced"
+  if (avgWeeklyKm > ATHLETE_INTERMEDIATE_KM_PER_WEEK && avgSessionsPerWeek >= ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK) return "intermediate"
   return "beginner"
 }
 
@@ -86,7 +95,7 @@ export function checkSkipLoadSpike(
   previousPlannedKm?: number,
 ): SkipLoadWarning | null {
   // If next week is a recovery week (planned drop ≥15% from previous planned), skip check
-  if (previousPlannedKm && nextPlannedKm < previousPlannedKm * 0.85) return null
+  if (previousPlannedKm && nextPlannedKm < previousPlannedKm * RECOVERY_WEEK_THRESHOLD) return null
 
   // If actual >= planned (runner is on track or ahead), no spike
   if (recentActualKm >= nextPlannedKm) return null
