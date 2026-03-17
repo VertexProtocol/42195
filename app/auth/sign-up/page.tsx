@@ -71,7 +71,7 @@ export default function SignUpPage() {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          {t("auth.haveAccount")}{" "}
+          {t("auth.haveAccount")}
           <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
             {t("auth.signIn")}
           </Link>
