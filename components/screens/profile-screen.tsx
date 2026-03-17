@@ -43,8 +43,8 @@ export function ProfileScreen({
   onConnectStrava,
   onSignOut,
 }: ProfileScreenProps) {
-  const { theme, setTheme } = useTheme()
-  const isDarkMode = theme === "dark"
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDarkMode = resolvedTheme === "dark"
   const { locale, setLocale, t } = useI18n()
   const [connecting, setConnecting] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
