@@ -1,69 +1,24 @@
-import { redirect } from "next/navigation"
-import { headers } from "next/headers"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
 import Link from "next/link"
+import { useI18n } from "@/lib/i18n"
+import { signUpAction } from "./actions"
 
 export default function SignUpPage() {
-  async function signUp(formData: FormData) {
-    "use server"
-
-    const supabase = await createClient()
-    const headersList = await headers()
-
-    // Prefer an explicit site URL so email links work outside localhost
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      headersList.get("origin") ??
-      ""
-
-    const { data, error } = await supabase.auth.signUp({
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-      options: {
-        // /auth/callback exchanges the PKCE code for a session, then redirects
-        emailRedirectTo: `${siteUrl}/auth/callback?next=/auth/sign-up-success`,
-        data: {
-          display_name: formData.get("display_name") as string,
-        },
-      },
-    })
-
-    if (error) {
-      redirect(`/auth/error?message=${encodeURIComponent(error.message)}`)
-    }
-
-    // Supabase returns a fake success with empty identities for already-registered
-    // emails (to prevent email enumeration). Detect this and show a helpful message.
-    if (data.user && data.user.identities?.length === 0) {
-      redirect(
-        `/auth/error?message=${encodeURIComponent(
-          "An account with this email may already exist. Try signing in or resetting your password."
-        )}`
-      )
-    }
-
-    // If email confirmation is disabled in Supabase, a session is returned
-    // immediately — send the user straight into the app.
-    if (data.session) {
-      redirect("/")
-    }
-
-    // Otherwise the user must confirm their email first.
-    redirect("/auth/sign-up-success")
-  }
+  const { t } = useI18n()
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-bold tracking-tight">42195</h1>
-          <p className="text-sm text-muted-foreground">Create your account</p>
+          <p className="text-sm text-muted-foreground">{t("auth.createAccountTagline")}</p>
         </div>
 
-        <form action={signUp} className="space-y-4">
+        <form action={signUpAction} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="display_name" className="text-sm font-medium">
-              Name
+              {t("auth.nameLabel")}
             </label>
             <input
               id="display_name"
@@ -72,13 +27,13 @@ export default function SignUpPage() {
               autoComplete="name"
               required
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="Alex Runner"
+              placeholder={t("auth.namePlaceholder")}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              {t("auth.emailLabel")}
             </label>
             <input
               id="email"
@@ -93,7 +48,7 @@ export default function SignUpPage() {
 
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium">
-              Password
+              {t("auth.passwordLabel")}
             </label>
             <input
               id="password"
@@ -103,7 +58,7 @@ export default function SignUpPage() {
               required
               minLength={8}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="Min. 8 characters"
+              placeholder={t("auth.minCharsPlaceholder")}
             />
           </div>
 
@@ -111,14 +66,14 @@ export default function SignUpPage() {
             type="submit"
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Create account
+            {t("auth.createAccount")}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
+          {t("auth.haveAccount")}{" "}
           <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            Sign in
+            {t("auth.signIn")}
           </Link>
         </p>
       </div>

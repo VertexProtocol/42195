@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { useI18n } from "@/lib/i18n"
 
 export default function ForgotPasswordPage() {
+  const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -29,8 +31,8 @@ export default function ForgotPasswordPage() {
         }
 
         setSent(true)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.")
+      } catch {
+        setError(t("auth.errorDefault"))
       }
     })
   }
@@ -40,16 +42,14 @@ export default function ForgotPasswordPage() {
       <div className="flex min-h-dvh items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm space-y-6 text-center">
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
-            <p className="text-sm text-muted-foreground">
-              If an account exists with that email, we sent a password reset link. Check your inbox and spam folder.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{t("auth.checkEmailTitle")}</h1>
+            <p className="text-sm text-muted-foreground">{t("auth.checkEmailDesc")}</p>
           </div>
           <Link
             href="/auth/login"
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90"
           >
-            Back to sign in
+            {t("auth.backToSignIn")}
           </Link>
         </div>
       </div>
@@ -60,10 +60,8 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Reset password</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your email and we'll send you a reset link.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("auth.resetPasswordTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("auth.resetPasswordDesc")}</p>
         </div>
 
         {error && (
@@ -75,7 +73,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              {t("auth.emailLabel")}
             </label>
             <input
               id="email"
@@ -93,13 +91,13 @@ export default function ForgotPasswordPage() {
             disabled={isPending}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
-            {isPending ? "Sending..." : "Send reset link"}
+            {isPending ? t("auth.sending") : t("auth.sendResetLink")}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
           <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            Back to sign in
+            {t("auth.backToSignIn")}
           </Link>
         </p>
       </div>

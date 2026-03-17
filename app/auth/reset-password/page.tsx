@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useI18n } from "@/lib/i18n"
 
 export default function ResetPasswordPage() {
+  const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -16,12 +18,12 @@ export default function ResetPasswordPage() {
     setError(null)
 
     if (password !== confirm) {
-      setError("Passwords do not match.")
+      setError(t("auth.passwordMismatch"))
       return
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.")
+      setError(t("auth.passwordTooShort"))
       return
     }
 
@@ -39,8 +41,8 @@ export default function ResetPasswordPage() {
         setTimeout(() => {
           window.location.href = "/"
         }, 2000)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.")
+      } catch {
+        setError(t("auth.errorDefault"))
       }
     })
   }
@@ -49,8 +51,8 @@ export default function ResetPasswordPage() {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm space-y-4 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Password updated</h1>
-          <p className="text-sm text-muted-foreground">Redirecting you to the app...</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("auth.passwordUpdated")}</h1>
+          <p className="text-sm text-muted-foreground">{t("auth.redirecting")}</p>
         </div>
       </div>
     )
@@ -60,8 +62,8 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Set new password</h1>
-          <p className="text-sm text-muted-foreground">Enter your new password below.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("auth.setNewPasswordTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("auth.setNewPasswordDesc")}</p>
         </div>
 
         {error && (
@@ -73,7 +75,7 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium">
-              New password
+              {t("auth.newPasswordLabel")}
             </label>
             <input
               id="password"
@@ -83,13 +85,13 @@ export default function ResetPasswordPage() {
               required
               minLength={8}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="Min. 8 characters"
+              placeholder={t("auth.minCharsPlaceholder")}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="confirm" className="text-sm font-medium">
-              Confirm password
+              {t("auth.confirmPasswordLabel")}
             </label>
             <input
               id="confirm"
@@ -99,7 +101,7 @@ export default function ResetPasswordPage() {
               required
               minLength={8}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="Repeat password"
+              placeholder={t("auth.repeatPasswordPlaceholder")}
             />
           </div>
 
@@ -108,7 +110,7 @@ export default function ResetPasswordPage() {
             disabled={isPending}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
-            {isPending ? "Updating..." : "Update password"}
+            {isPending ? t("auth.updating") : t("auth.updatePassword")}
           </button>
         </form>
       </div>
