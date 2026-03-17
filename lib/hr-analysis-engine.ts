@@ -24,6 +24,7 @@ import {
   HR_MAJOR_MISALIGNMENT_THRESHOLD,
   HR_MINOR_MISALIGNMENT_THRESHOLD,
   HR_ZONE_CLUSTER_THRESHOLD,
+  RESTING_HR_OFFSET,
 } from "@/lib/training-constants"
 
 // ─── Types ──────────────────────────────────────────
@@ -182,9 +183,9 @@ function estimateRestingHr(activities: Activity[]): number | null {
   const lowest3 = sorted.slice(0, 3)
   const avg = lowest3.reduce((s, a) => s + a.avg_heart_rate!, 0) / lowest3.length
 
-  // Resting HR is roughly avg easy run HR minus 40-50 bpm
+  // Resting HR is roughly avg easy run HR minus RESTING_HR_OFFSET bpm
   // This is a rough approximation
-  return Math.round(avg - 45)
+  return Math.round(avg - RESTING_HR_OFFSET)
 }
 
 /**

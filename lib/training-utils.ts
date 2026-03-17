@@ -106,7 +106,7 @@ export function detectPersonalRecords(activities: Activity[]): PersonalRecord[] 
     let bestFlatTime = (km / best.distance_km) * best.duration_seconds /
       elevationEffortMultiplier(best.distance_km, best.elevation_gain_m)
 
-    for (const a of qualifying) {
+    for (const a of qualifying.slice(1)) {
       const flatTime = (km / a.distance_km) * a.duration_seconds /
         elevationEffortMultiplier(a.distance_km, a.elevation_gain_m)
       if (flatTime < bestFlatTime) {
@@ -136,13 +136,13 @@ export interface AcwrResult {
   acuteLoad: number    // 7-day load in km
   chronicLoad: number  // 28-day average weekly load in km
   ratio: number        // acute / chronic
-  risk: "low" | "moderate" | "high"
+  risk: "low" | "high" | "unsafe"
 }
 
 /**
  * Computes Acute:Chronic Workload Ratio.
  * Acute = last 7 days distance. Chronic = 28-day average weekly distance.
- * Risk: <0.8 = low (underprepared), 0.8-1.3 = low (sweet spot), 1.3-1.5 = moderate, >1.5 = high.
+ * Risk: ≤1.3 = low (sweet spot), 1.3–1.5 = high (elevated), >1.5 = unsafe (forced reduction).
  */
 export function computeACWR(
   activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
@@ -164,8 +164,8 @@ export function computeACWR(
   const ratio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
 
   let risk: AcwrResult["risk"] = "low"
-  if (ratio > ACWR_UNSAFE_THRESHOLD) risk = "high"
-  else if (ratio > ACWR_HIGH_THRESHOLD) risk = "moderate"
+  if (ratio > ACWR_UNSAFE_THRESHOLD) risk = "unsafe"
+  else if (ratio > ACWR_HIGH_THRESHOLD) risk = "high"
 
   return { acuteLoad, chronicLoad, ratio, risk }
 }
@@ -362,7 +362,7 @@ export function analyzeHrZones(
 
   const zones = HR_ZONE_LABELS.map((label, i) => ({
     label,
-    min: i === 0 ? 0 : Math.round(estimatedMax * HR_ZONE_PCTS[i][0]),
+    min: Math.round(estimatedMax * HR_ZONE_PCTS[i][0]),
     max: Math.round(estimatedMax * HR_ZONE_PCTS[i][1]),
   }))
 
