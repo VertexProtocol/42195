@@ -4,11 +4,11 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
+import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
-import { effortAdjustedKm } from "@/lib/training-utils"
+import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 
 const TrainingPlanSchema = z.object({
@@ -748,7 +748,9 @@ export async function POST(req: NextRequest) {
         const safePlan = safetyResult.adjustedPlan
 
         // Pace guide: deterministic pace targets per session based on test runs + race predictions
-        const paceGuide = buildPaceGuide(acts, testRuns ?? [], goal.target_distance_km, recentEasyPace)
+        // acts contains all fields predictRaceTimes needs (date, distance_km, duration_seconds, elevation_gain_m)
+        const { predictions: racePredictions } = predictRaceTimes(acts as unknown as Activity[])
+        const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
         for (const week of safePlan.weeks) {
           for (const session of week.sessions) {
             const pace = assignSessionPace(session.type, paceGuide)

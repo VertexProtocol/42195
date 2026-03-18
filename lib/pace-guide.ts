@@ -10,8 +10,7 @@
  * but does NOT compute these values.
  */
 
-import type { Activity } from "@/lib/types"
-import { predictRaceTimes } from "@/lib/training-utils"
+import type { RacePrediction } from "@/lib/training-utils"
 
 export interface PaceGuide {
   easyPace: number | null      // min/km — conversational aerobic effort
@@ -30,18 +29,16 @@ interface TestRunRow {
 /**
  * Build a full pace guide for a runner.
  *
- * @param activities    Recent activity history
+ * @param predictions   Pre-computed Riegel race predictions (avoids re-running on partial Activity rows)
  * @param testRuns      Test runs sorted newest-first
  * @param goalDistanceKm  Target race distance
  * @param recentEasyPace  Pre-computed easy pace (avg of slowest 50% of runs)
- * @param exponentAdjustment  Optional Riegel exponent shift from test run validation
  */
 export function buildPaceGuide(
-  activities: Activity[],
+  predictions: RacePrediction[],
   testRuns: TestRunRow[],
   goalDistanceKm: number,
   recentEasyPace: number | null,
-  exponentAdjustment?: number,
 ): PaceGuide {
   // --- Step 1: threshold pace from most recent test run with valid derived metrics ---
   let thresholdPace: number | null = null
@@ -53,9 +50,7 @@ export function buildPaceGuide(
     }
   }
 
-  // --- Step 2: race predictions via Riegel formula ---
-  const { predictions } = predictRaceTimes(activities, exponentAdjustment)
-
+  // --- Step 2: pace zones from pre-computed race predictions ---
   const pred5k = predictions.find((p) => p.distance_km === 5) ?? null
   const pred10k = predictions.find((p) => p.distance_km === 10) ?? null
 
