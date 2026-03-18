@@ -912,14 +912,68 @@ export async function GET(req: NextRequest) {
   const goalId = req.nextUrl.searchParams.get("goalId")
   if (!goalId) return NextResponse.json({ error: "goalId is required" }, { status: 400 })
 
-  const { data: planRow } = await supabase
-    .from("ai_training_plans")
-    .select("plan, block_start_date, generated_at, previous_plans, mid_block_checkpoint")
-    .eq("goal_id", goalId)
-    .eq("user_id", user.id)
-    .maybeSingle()
+  const twelveWeeksAgo = new Date()
+  twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84)
+
+  // Fetch plan, goal, activities and test runs in parallel for pace enrichment
+  const [{ data: planRow }, { data: goal }, { data: activities }, { data: testRuns }] = await Promise.all([
+    supabase
+      .from("ai_training_plans")
+      .select("plan, block_start_date, generated_at, previous_plans, mid_block_checkpoint")
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("goals")
+      .select("target_distance_km")
+      .eq("id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("activities")
+      .select("date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m")
+      .eq("user_id", user.id)
+      .gte("date", twelveWeeksAgo.toISOString())
+      .order("date", { ascending: false })
+      .limit(500),
+    supabase
+      .from("test_runs")
+      .select("derived_metrics, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ])
 
   if (!planRow) return NextResponse.json({ plan: null })
+
+  // Enrich cached plan sessions with suggestedPace if goal + activity data available
+  let enrichedPlan = planRow.plan
+  if (enrichedPlan && goal?.target_distance_km) {
+    const acts = activities ?? []
+    const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+    const recentEasyPace = actsWithPace.length > 0
+      ? actsWithPace
+          .map((a) => Number(a.pace_min_per_km))
+          .sort((a, b) => b - a)
+          .slice(0, Math.ceil(actsWithPace.length * 0.5))
+          .reduce((s, p, _, arr) => s + p / arr.length, 0)
+      : null
+
+    const { predictions: racePredictions } = predictRaceTimes(acts as unknown as Activity[])
+    const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
+
+    const plan = enrichedPlan as TrainingPlan
+    enrichedPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) => ({
+        ...week,
+        sessions: week.sessions.map((session) => ({
+          ...session,
+          suggestedPace: assignSessionPace(session.type, paceGuide) ?? session.suggestedPace,
+        })),
+      })),
+    }
+  }
 
   // Compute whether a checkpoint is due so the UI can prompt the user
   const { isCheckpointDue } = await import("@/lib/training-checkpoint")
@@ -933,7 +987,7 @@ export async function GET(req: NextRequest) {
       : false
 
   return NextResponse.json({
-    plan: planRow.plan,
+    plan: enrichedPlan,
     block_start_date: planRow.block_start_date,
     generated_at: planRow.generated_at,
     previous_plans: planRow.previous_plans ?? [],
