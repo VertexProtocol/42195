@@ -9,9 +9,6 @@ import {
   ChevronUp,
   MapPin,
   CalendarCheck,
-  TrendingUp,
-  Footprints,
-  Clock,
   AlertCircle,
   AlertTriangle,
   Lightbulb,
@@ -24,10 +21,6 @@ import {
   daysUntil,
   isDatePast,
   timeElapsedPercentage,
-  computeDistanceInRange,
-  formatDuration,
-  bestRelevantRun,
-  longestRun,
 } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
@@ -358,16 +351,6 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
       {Array.from({ length: blockWeeks }).map((_, i) => (
         <WeekCardSkeleton key={i} />
       ))}
-      {/* Key principles */}
-      <div className="rounded-2xl bg-card px-4 py-4 shadow-sm ring-1 ring-border">
-        <Skeleton className="mb-2.5 h-3 w-24" />
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-3.5 w-full" />
-          <Skeleton className="h-3.5 w-5/6" />
-          <Skeleton className="h-3.5 w-4/5" />
-          <Skeleton className="h-3.5 w-full" />
-        </div>
-      </div>
     </div>
   )
 }
@@ -639,15 +622,14 @@ const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
 function TrainingTimelineView({
   timeline,
   blockPosition,
-  summary,
+  embedded = false,
 }: {
   timeline: TTimeline
   blockPosition?: { blockNum: number; totalBlocks: number } | null
-  summary?: string | null
+  embedded?: boolean
 }) {
   const { t } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false)
-  const [summaryExpanded, setSummaryExpanded] = useState(false)
 
   const currentPhase = timeline.currentPhase
   const currentWeeksLabel = currentPhase
@@ -660,8 +642,8 @@ function TrainingTimelineView({
       ? timeline.currentWeek - currentPhase.weekStart + 1
       : null
 
-  return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+  const timelineContent = (
+    <>
       {/* Header - clickable to toggle full phase list */}
       <button
         type="button"
@@ -711,29 +693,6 @@ function TrainingTimelineView({
               </p>
             </div>
           </div>
-          {/* AI block summary — expandable */}
-          {summary && (
-            <div className="mt-3 border-t border-border/40 pt-3">
-              <button
-                type="button"
-                onClick={() => setSummaryExpanded((v) => !v)}
-                className="flex w-full items-center justify-between text-left"
-              >
-                <span className="text-xs font-medium text-muted-foreground">
-                  {t("timeline.block")} {blockPosition?.blockNum}/{blockPosition?.totalBlocks} — {t("plan.blockSummary")}
-                </span>
-                <ChevronDown
-                  size={13}
-                  className={`shrink-0 text-muted-foreground transition-transform ${summaryExpanded ? "rotate-180" : ""}`}
-                />
-              </button>
-              {summaryExpanded && (
-                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                  {summary}
-                </p>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -803,6 +762,16 @@ function TrainingTimelineView({
           </div>
         </div>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return <div className="border-t border-border overflow-hidden">{timelineContent}</div>
+  }
+
+  return (
+    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+      {timelineContent}
     </div>
   )
 }
@@ -820,11 +789,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     regenerate_every_weeks: 4,
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
-  const [showPrefsForm, setShowPrefsForm] = useState(false)
+  const [activeTab, setActiveTab] = useState<"plan" | "preferences">("plan")
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
-  const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -878,7 +846,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         const p = await prefsRes.json()
         if (p.preferences) setPrefs(p.preferences)
       }
-      setPrefsLoaded(true)
     }
     load()
   }, [goal.id])
@@ -1081,10 +1048,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const past = isDatePast(goal.target_date)
   const effectiveStart = goal.start_date ?? goal.created_at
   const timeProgress = past ? 100 : timeElapsedPercentage(effectiveStart, goal.target_date)
-  const logged = computeDistanceInRange(activities, goal.start_date, goal.target_date, goal.created_at)
-  const best = bestRelevantRun(activities, goal.target_distance_km)
-  const longest = longestRun(activities, goal.start_date, goal.created_at)
-
   // Which week of the plan are we currently in? (Monday-aligned)
   const currentWeekIndex = aiPlan
     ? Math.floor(
@@ -1205,53 +1168,30 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         </div>
       </header>
 
-      {/* Progress bar */}
-      <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border px-5 py-4">
-        <div className="flex items-center justify-between text-xs mb-2">
-          <span className="text-muted-foreground">
-            {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
-          </span>
-          <span className="font-medium text-foreground">{timeProgress}%</span>
+      {/* Progress bar + Training Timeline (merged) */}
+      <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="text-muted-foreground">
+              {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
+            </span>
+            <span className="font-medium text-foreground">{timeProgress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${timeProgress}%` }}
+            />
+          </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-secondary">
-          <div
-            className="h-full rounded-full bg-primary transition-all duration-500"
-            style={{ width: `${timeProgress}%` }}
+        {timeline && !past && (
+          <TrainingTimelineView
+            timeline={timeline}
+            blockPosition={blockPosition}
+            embedded
           />
-        </div>
-
-        {/* Stats grid */}
-        <div className="mt-4 grid grid-cols-3 divide-x divide-border border-t border-border -mx-5 px-0">
-          <div className="flex flex-col items-center gap-1 px-3 py-3">
-            <TrendingUp size={14} className="text-muted-foreground" />
-            <span className="text-base font-bold font-mono text-foreground">{logged.toFixed(0)}</span>
-            <span className="text-[10px] text-muted-foreground text-center">km logged</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 px-3 py-3">
-            <Footprints size={14} className="text-muted-foreground" />
-            <span className="text-base font-bold font-mono text-foreground">
-              {longest ? `${longest.distance_km.toFixed(1)}` : "—"}
-            </span>
-            <span className="text-[10px] text-muted-foreground text-center">longest run</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 px-3 py-3">
-            <Clock size={14} className="text-muted-foreground" />
-            <span className="text-base font-bold font-mono text-foreground">
-              {best ? formatDuration(best.duration_seconds) : "—"}
-            </span>
-            <span className="text-[10px] text-muted-foreground text-center">best sim. run</span>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* Training Timeline */}
-      {timeline && !past && (
-        <TrainingTimelineView
-          timeline={timeline}
-          blockPosition={blockPosition}
-          summary={aiPlan?.plan.summary ?? null}
-        />
-      )}
 
       {/* ---- AI Training Plan section ---- */}
       <section>
@@ -1259,7 +1199,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             AI Training Plan
           </h2>
-          {aiPlan && (
+          {aiPlan && activeTab === "plan" && (
             <div className="flex items-center gap-1.5">
               {isDueForRefresh && (
                 <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-semibold text-warning">
@@ -1273,35 +1213,49 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           )}
         </div>
 
-        {/* Preferences toggle */}
-        <button
-          onClick={() => setShowPrefsForm((v) => !v)}
-          className="mb-3 flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
-        >
-          <span className="font-medium text-foreground">
-            {prefsLoaded
-              ? `Preferences · ${prefs.sessions_per_week}x/week · ${{ volume: "km focus", workouts: "structured", balanced: "balanced" }[prefs.focus]}`
-              : "Preferences"}
-          </span>
-          {showPrefsForm ? (
-            <ChevronUp size={16} className="text-muted-foreground" />
-          ) : (
-            <ChevronDown size={16} className="text-muted-foreground" />
-          )}
-        </button>
+        {/* Tab bar */}
+        <div className="mb-3 flex gap-1 rounded-xl bg-secondary p-1">
+          <button
+            onClick={() => setActiveTab("plan")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+              activeTab === "plan"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Flag size={14} />
+            Training Plan
+          </button>
+          <button
+            onClick={() => setActiveTab("preferences")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+              activeTab === "preferences"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Pencil size={14} />
+            Preferences
+          </button>
+        </div>
 
-        {showPrefsForm && (
-          <div className="mb-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+        {/* Preferences tab */}
+        {activeTab === "preferences" && (
+          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
             <PreferencesForm
               goalId={goal.id}
               initial={prefs}
               onSaved={(saved) => {
                 setPrefs(saved)
-                setShowPrefsForm(false)
+                setActiveTab("plan")
               }}
             />
           </div>
         )}
+
+        {/* Training Plan tab */}
+        {activeTab === "plan" && (
+        <>
 
         {/* Error */}
         {error && (
@@ -1419,20 +1373,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 />
               )
             })}
-
-            {/* Key principles - collapsible */}
-            {aiPlan.plan.keyPrinciples?.length > 0 && (
-              <CollapsibleSection title="Key principles" defaultOpen={false}>
-                <ul className="flex flex-col gap-2">
-                  {aiPlan.plan.keyPrinciples.map((p, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-card-foreground">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-              </CollapsibleSection>
-            )}
 
             {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
@@ -1599,6 +1539,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </section>
     </div>
