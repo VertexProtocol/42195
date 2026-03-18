@@ -11,6 +11,8 @@ import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 
+const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
+
 const TrainingPlanSchema = z.object({
   summary: z.string(),
   weeks: z.array(
@@ -477,7 +479,7 @@ export async function POST(req: NextRequest) {
 
   const { data: activities } = await supabase
     .from("activities")
-    .select("name, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
+    .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
     .gte("date", twelveWeeksAgo.toISOString())
     .order("date", { ascending: false })
@@ -516,8 +518,9 @@ export async function POST(req: NextRequest) {
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
 
-  // Compute pace stats for the prompt
-  const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+  // Compute pace stats for the prompt — running activities only to avoid skew from walks/hikes/rides
+  const runActs = acts.filter((a) => RUN_TYPES.has(a.type))
+  const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
   const recentEasyPace = actsWithPace.length > 0
     ? actsWithPace
         .map((a) => Number(a.pace_min_per_km))
@@ -748,8 +751,8 @@ export async function POST(req: NextRequest) {
         const safePlan = safetyResult.adjustedPlan
 
         // Pace guide: deterministic pace targets per session based on test runs + race predictions
-        // acts contains all fields predictRaceTimes needs (date, distance_km, duration_seconds, elevation_gain_m)
-        const { predictions: racePredictions } = predictRaceTimes(acts as unknown as Activity[])
+        // Use running activities only so cycling/hiking don't skew Riegel predictions
+        const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
         const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
         for (const week of safePlan.weeks) {
           for (const session of week.sessions) {
@@ -931,7 +934,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle(),
     supabase
       .from("activities")
-      .select("date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m")
+      .select("type, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m")
       .eq("user_id", user.id)
       .gte("date", twelveWeeksAgo.toISOString())
       .order("date", { ascending: false })
@@ -950,7 +953,8 @@ export async function GET(req: NextRequest) {
   let enrichedPlan = planRow.plan
   if (enrichedPlan && goal?.target_distance_km) {
     const acts = activities ?? []
-    const actsWithPace = acts.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+    const runActs = acts.filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
+    const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
     const recentEasyPace = actsWithPace.length > 0
       ? actsWithPace
           .map((a) => Number(a.pace_min_per_km))
@@ -959,7 +963,7 @@ export async function GET(req: NextRequest) {
           .reduce((s, p, _, arr) => s + p / arr.length, 0)
       : null
 
-    const { predictions: racePredictions } = predictRaceTimes(acts as unknown as Activity[])
+    const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
     const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
 
     const plan = enrichedPlan as TrainingPlan

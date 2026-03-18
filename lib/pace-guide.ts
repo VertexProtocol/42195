@@ -81,8 +81,17 @@ export function buildPaceGuide(
 
   // --- Step 4: build pace zones ---
 
-  // Easy: use historical easy pace, or derive from threshold (~+22%)
-  const easyPace = recentEasyPace ?? (thresholdPace ? thresholdPace * 1.22 : null)
+  // Marathon prediction can give a fitness-derived easy pace estimate (~marathon + 15%)
+  const predMarathon = predictions.find((p) => p.distance_km > 40)
+  const fitnessEasyPace = predMarathon
+    ? (predMarathon.predicted_seconds / 60 / predMarathon.distance_km) * 1.15
+    : null
+
+  // Easy: take the faster of historical easy pace and fitness-derived estimate, or fall back to threshold
+  const easyPaceRaw = recentEasyPace != null && fitnessEasyPace != null
+    ? Math.min(recentEasyPace, fitnessEasyPace)  // lower min/km = faster
+    : (recentEasyPace ?? fitnessEasyPace)
+  const easyPace = easyPaceRaw ?? (thresholdPace ? thresholdPace * 1.22 : null)
 
   // Long run: 5% slower than easy (more aerobic, less fatigue)
   const longRunPace = easyPace ? easyPace * 1.05 : null
@@ -122,7 +131,7 @@ function detectZone(sessionType: string): SessionZone {
   if (/long/.test(t)) return "long"
   if (/tempo|threshold|lactate|cruise|steady.?state/.test(t)) return "tempo"
   if (/interval|track|speed|fartlek|repeat|strides|vo2/.test(t)) return "interval"
-  if (/race.?pace|goal.?pace|specific/.test(t)) return "race"
+  if (/race.?pace|goal.?pace|specific|marathon.?pace|half.?marathon.?pace/.test(t)) return "race"
   return "easy"
 }
 
