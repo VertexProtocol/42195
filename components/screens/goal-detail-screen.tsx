@@ -593,7 +593,12 @@ function WeekCard({
                       </span>
                       <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">{session.effort}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">{session.effort}</p>
+                      {session.suggestedPace && (
+                        <span className="shrink-0 font-mono text-xs text-primary/70">{session.suggestedPace}</span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
                   </div>
                 </div>

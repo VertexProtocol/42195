@@ -116,10 +116,11 @@ export interface GoalPreferences {
 }
 
 export interface TrainingSession {
-  type: string        // e.g. "Long run", "Tempo run", "Easy run(s)"
-  distance: string    // e.g. "20 km"
-  effort: string      // e.g. "Easy — conversational pace"
-  purpose: string     // e.g. "Build endurance base"
+  type: string              // e.g. "Long run", "Tempo run", "Easy run(s)"
+  distance: string          // e.g. "20 km"
+  effort: string            // e.g. "Easy — conversational pace"
+  purpose: string           // e.g. "Build endurance base"
+  suggestedPace?: string    // e.g. "5:20–5:30 /km" — computed deterministically post-AI
 }
 
 export interface TrainingWeek {
