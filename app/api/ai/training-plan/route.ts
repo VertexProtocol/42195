@@ -4,11 +4,12 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-import type { GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
+import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
-import { effortAdjustedKm } from "@/lib/training-utils"
+import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
+import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -23,6 +24,7 @@ const TrainingPlanSchema = z.object({
           distance: z.string(),
           effort: z.string(),
           purpose: z.string(),
+          suggestedPace: z.string().optional(),
         }),
       ),
       coachNote: z.string().nullable(),
@@ -744,6 +746,17 @@ export async function POST(req: NextRequest) {
         // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue
         const safetyResult = validateAndAdjustPlan(plan, acts, prefs)
         const safePlan = safetyResult.adjustedPlan
+
+        // Pace guide: deterministic pace targets per session based on test runs + race predictions
+        // acts contains all fields predictRaceTimes needs (date, distance_km, duration_seconds, elevation_gain_m)
+        const { predictions: racePredictions } = predictRaceTimes(acts as unknown as Activity[])
+        const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
+        for (const week of safePlan.weeks) {
+          for (const session of week.sessions) {
+            const pace = assignSessionPace(session.type, paceGuide)
+            if (pace) session.suggestedPace = pace
+          }
+        }
 
         if (!safetyResult.passed) {
           console.warn(
