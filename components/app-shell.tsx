@@ -68,6 +68,12 @@ export function AppShell({ initialData }: AppShellProps) {
   const activityId = searchParams.get("activity")
   const goalId = searchParams.get("goal")
 
+  // Keep InsightsScreen mounted after first visit so its fetch doesn't re-run on tab switch
+  const [insightsMounted, setInsightsMounted] = useState(activeTab === "insights")
+  useEffect(() => {
+    if (activeTab === "insights") setInsightsMounted(true)
+  }, [activeTab])
+
   // Resolve selected items from URL IDs
   const selectedActivity = activityId
     ? data.activities.find((a) => a.id === activityId) ?? null
@@ -275,10 +281,13 @@ export function AppShell({ initialData }: AppShellProps) {
           </Suspense>
         )}
 
-        {activeTab === "insights" && (
-          <Suspense fallback={<ScreenFallback />}>
-            <InsightsScreen activities={data.activities} />
-          </Suspense>
+        {/* InsightsScreen stays mounted after first visit to avoid refetching on tab switch */}
+        {insightsMounted && (
+          <div className={activeTab !== "insights" ? "hidden" : ""}>
+            <Suspense fallback={<ScreenFallback />}>
+              <InsightsScreen activities={data.activities} />
+            </Suspense>
+          </div>
         )}
 
         {activeTab === "profile" && (
