@@ -3,6 +3,28 @@ import Anthropic from "@anthropic-ai/sdk"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
+export async function GET(req: NextRequest) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const activityId = req.nextUrl.searchParams.get("activityId")
+  if (!activityId) return NextResponse.json({ error: "activityId is required" }, { status: 400 })
+
+  const { data } = await supabase
+    .from("activity_analyses")
+    .select("analysis")
+    .eq("activity_id", activityId)
+    .eq("user_id", user.id)
+    .single()
+
+  if (!data) return NextResponse.json({ analysis: null })
+  return NextResponse.json({ analysis: data.analysis })
+}
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const ANALYSIS_SYSTEM_PROMPT = `You are a concise running coach reviewing a runner's completed activity. Provide a brief, actionable analysis in 3-5 short sentences. Be specific about the data — reference actual numbers. Be encouraging but honest.
@@ -108,6 +130,11 @@ Recent context (last 2 weeks): ${recentActivities?.length ?? 0} runs${recentAvgP
     if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
+
+    // Persist so the user sees the same analysis on future visits
+    await supabase
+      .from("activity_analyses")
+      .upsert({ user_id: user.id, activity_id: activityId, analysis: textBlock.text }, { onConflict: "activity_id" })
 
     return NextResponse.json({ analysis: textBlock.text })
   } catch (err) {
