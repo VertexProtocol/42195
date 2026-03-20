@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
-import { validateAndAdjustPlan, parseSessionDistanceKm } from "@/lib/training-safety"
+import { validateAndAdjustPlan, parseSessionDistanceKm, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
@@ -754,9 +754,29 @@ export async function POST(req: NextRequest) {
         // Use running activities only so cycling/hiking don't skew Riegel predictions
         const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
         const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
+
+        // Fatigue modifier: when safety system detects fatigue, pull back hard-session paces
+        const fatigueSignal = safetyResult.fatigue.signal
+        const hardFatigueModifier =
+          fatigueSignal === "both"         ? 1.12 :  // HR + pace both declining → 12% slower
+          fatigueSignal === "hr_elevated"  ? 1.05 :  // HR elevated only → 5% slower
+          fatigueSignal === "pace_declining"? 1.08 :  // pace declining only → 8% slower
+          1.0
+
         for (const week of safePlan.weeks) {
+          // Recovery weeks: all zones run 10% slower to reinforce the lower-stimulus purpose
+          const prevWeek = safePlan.weeks[safePlan.weeks.indexOf(week) - 1] ?? null
+          const isRecovery =
+            /recovery|deload/i.test(week.theme ?? "") ||
+            (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
+
           for (const session of week.sessions) {
-            const pace = assignSessionPace(session.type, paceGuide)
+            const zone = session.type.toLowerCase()
+            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
+            const modifier = isRecovery
+              ? 1.10
+              : isHardSession ? hardFatigueModifier : 1.0
+            const pace = assignSessionPace(session.type, paceGuide, modifier)
             if (pace) session.suggestedPace = pace
           }
         }
@@ -934,7 +954,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle(),
     supabase
       .from("activities")
-      .select("type, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m")
+      .select("type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
       .eq("user_id", user.id)
       .gte("date", twelveWeeksAgo.toISOString())
       .order("date", { ascending: false })
@@ -966,16 +986,35 @@ export async function GET(req: NextRequest) {
     const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
     const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
 
+    // Re-evaluate fatigue against current activity data so the cached plan reflects current state
+    const fatigue = detectFatigue(runActs as unknown as SafetyActivity[])
+    const hardFatigueModifier =
+      fatigue.signal === "both"          ? 1.12 :
+      fatigue.signal === "hr_elevated"   ? 1.05 :
+      fatigue.signal === "pace_declining" ? 1.08 :
+      1.0
+
     const plan = enrichedPlan as TrainingPlan
     enrichedPlan = {
       ...plan,
-      weeks: plan.weeks.map((week) => ({
-        ...week,
-        sessions: week.sessions.map((session) => ({
-          ...session,
-          suggestedPace: assignSessionPace(session.type, paceGuide) ?? session.suggestedPace,
-        })),
-      })),
+      weeks: plan.weeks.map((week, weekIdx) => {
+        const prevWeek = plan.weeks[weekIdx - 1] ?? null
+        const isRecovery =
+          /recovery|deload/i.test(week.theme ?? "") ||
+          (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
+        return {
+          ...week,
+          sessions: week.sessions.map((session) => {
+            const zone = session.type.toLowerCase()
+            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
+            const modifier = isRecovery ? 1.10 : isHardSession ? hardFatigueModifier : 1.0
+            return {
+              ...session,
+              suggestedPace: assignSessionPace(session.type, paceGuide, modifier) ?? session.suggestedPace,
+            }
+          }),
+        }
+      }),
     }
   }
 

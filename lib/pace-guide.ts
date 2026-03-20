@@ -146,8 +146,15 @@ function fmtPace(minPerKm: number): string {
 /**
  * Returns a formatted pace range string for a session, e.g. "5:20–5:30 /km".
  * Returns null if the guide has no data for the detected zone.
+ *
+ * @param paceModifier  Optional multiplier applied to the centre pace (>1 = slower).
+ *                      Use >1 for recovery weeks or fatigued states.
  */
-export function assignSessionPace(sessionType: string, guide: PaceGuide): string | null {
+export function assignSessionPace(
+  sessionType: string,
+  guide: PaceGuide,
+  paceModifier = 1.0,
+): string | null {
   const zone = detectZone(sessionType)
 
   const paceMap: Record<SessionZone, number | null> = {
@@ -161,6 +168,7 @@ export function assignSessionPace(sessionType: string, guide: PaceGuide): string
   const pace = paceMap[zone]
   if (!pace || pace <= 0) return null
 
+  const adjusted = pace * paceModifier
   const spread = ZONE_SPREAD_SECS[zone] / 60 / 2
-  return `${fmtPace(pace - spread)}–${fmtPace(pace + spread)} /km`
+  return `${fmtPace(adjusted - spread)}–${fmtPace(adjusted + spread)} /km`
 }
