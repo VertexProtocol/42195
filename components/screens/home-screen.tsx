@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { ChevronRight, TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
+import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -168,7 +168,6 @@ export function HomeScreen({
                           </div>
                         </div>
                       </div>
-                      <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
                     </button>
                   </CarouselItem>
                 )
