@@ -90,6 +90,11 @@ export function ProfileScreen({
     setHrLoading(false)
   }, [t])
 
+  // Auto-run HR analysis on mount if no cached result exists
+  useEffect(() => {
+    if (!hrAnalysis) fetchHrAnalysis()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleSaveName(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const trimmed = nameValue.trim()
