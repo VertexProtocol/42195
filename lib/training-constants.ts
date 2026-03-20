@@ -77,6 +77,31 @@ export const CHECKPOINT_MIN_SCALE = 0.55
 /** Maximum scale factor when adjusting over-performing plans */
 export const CHECKPOINT_MAX_SCALE = 1.30
 
+// ── Intra-block Pace Progression ─────────────────────────────────────────────
+
+/**
+ * Weekly pace improvement applied to quality sessions (tempo, intervals) as
+ * the training block advances. Scaled by athlete level so progression stays
+ * proportional to the runner's training history and recovery capacity.
+ *
+ * Combined with PACE_PROGRESSION_MAX_WEEKS = 6, the worst-case tempo target
+ * (advanced, week 6+) is pred10K × 1.04 × 0.98 = pred10K × 1.019 — tempo
+ * stays ~2% slower than 10K race pace, which is physiologically sound.
+ */
+export const PACE_PROGRESSION_RATES: Record<string, number> = {
+  beginner:     0.002,  // 0.2%/week → 1.0% max over 6 weeks
+  intermediate: 0.003,  // 0.3%/week → 1.5% max over 6 weeks
+  advanced:     0.004,  // 0.4%/week → 2.0% max over 6 weeks
+}
+
+/**
+ * Progression is capped at 6 weeks for all levels. This ensures that even at
+ * the highest rate (0.4%/week), tempo paces stay safely below 10K race pace
+ * (the base tempo target already has a 4% buffer above 10K pace — consuming
+ * at most 2% of that still leaves a ~2% margin). Weeks beyond 6 hold steady.
+ */
+export const PACE_PROGRESSION_MAX_WEEKS = 6
+
 // ── Elevation Effort (Minetti et al.) ────────────────────────────────────────
 
 /**
