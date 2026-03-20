@@ -5,12 +5,12 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
-import { validateAndAdjustPlan, parseSessionDistanceKm, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
+import { validateAndAdjustPlan, parseSessionDistanceKm, detectFatigue, classifyAthleteLevel, type SafetyActivity } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
-import { PACE_PROGRESSION_RATE_PER_WEEK, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
+import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
@@ -771,11 +771,11 @@ export async function POST(req: NextRequest) {
             /recovery|deload/i.test(week.theme ?? "") ||
             (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
 
-          // Intra-block progression for quality sessions: 0.4%/week faster, capped at 12 weeks.
-          // This is deliberate stimulus progression — each week asks a little more of the runner.
-          // Only applies when not fatigued and not a recovery week.
+          // Intra-block progression for quality sessions: rate scaled by athlete level,
+          // capped at 6 weeks so tempo targets stay safely below 10K race pace.
+          const progressionRate = PACE_PROGRESSION_RATES[safetyResult.athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
           const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
-          const progressionModifier = 1.0 - weekIndex * PACE_PROGRESSION_RATE_PER_WEEK
+          const progressionModifier = 1.0 - weekIndex * progressionRate
 
           for (const session of week.sessions) {
             const zone = session.type.toLowerCase()
@@ -995,8 +995,9 @@ export async function GET(req: NextRequest) {
     const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
     const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
 
-    // Re-evaluate fatigue against current activity data so the cached plan reflects current state
+    // Re-evaluate fatigue and athlete level against current activity data
     const fatigue = detectFatigue(runActs as unknown as SafetyActivity[])
+    const athleteLevel = classifyAthleteLevel(runActs as unknown as SafetyActivity[])
     const hardFatigueModifier =
       fatigue.signal === "both"          ? 1.12 :
       fatigue.signal === "hr_elevated"   ? 1.05 :
@@ -1012,8 +1013,9 @@ export async function GET(req: NextRequest) {
           /recovery|deload/i.test(week.theme ?? "") ||
           (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
 
+        const progressionRate = PACE_PROGRESSION_RATES[athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
         const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
-        const progressionModifier = 1.0 - weekIndex * PACE_PROGRESSION_RATE_PER_WEEK
+        const progressionModifier = 1.0 - weekIndex * progressionRate
 
         return {
           ...week,
