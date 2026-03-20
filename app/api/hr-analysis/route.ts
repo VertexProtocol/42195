@@ -57,5 +57,8 @@ export async function GET() {
 
   const result = analyzeHeartRateZones(activities)
 
+  // Persist so the profile screen can restore it across sessions
+  await supabase.from("profiles").update({ hr_analysis_cache: result }).eq("id", user.id)
+
   return NextResponse.json({ analysis: result })
 }

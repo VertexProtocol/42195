@@ -73,6 +73,7 @@ export interface UserProfile {
   email: string
   avatar_url: string | null
   locale?: string | null
+  hr_analysis_cache?: import("@/lib/hr-analysis-engine").HrAnalysisResult | null
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"

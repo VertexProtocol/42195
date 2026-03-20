@@ -169,6 +169,16 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [showTestRunPicker, setShowTestRunPicker] = useState(false)
   const [testRunExpanded, setTestRunExpanded] = useState(false)
 
+  // Load cached analysis on mount
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/ai/activity-analysis?activityId=${activity.id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (!cancelled && data?.analysis) setAiAnalysis(data.analysis) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activity.id])
+
   const handleGetAnalysis = useCallback(async () => {
     setAiAnalysisLoading(true)
     try {

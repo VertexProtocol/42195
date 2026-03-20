@@ -35,7 +35,7 @@ export default async function Page() {
         .from("weekly_goals")
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
         .order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id, display_name, email, avatar_url, locale").eq("id", authUser.id).single(),
+      supabase.from("profiles").select("id, display_name, email, avatar_url, locale, hr_analysis_cache").eq("id", authUser.id).single(),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
