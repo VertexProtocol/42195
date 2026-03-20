@@ -11,6 +11,7 @@ import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
 import { Onboarding } from "@/components/onboarding"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
@@ -38,8 +39,14 @@ function useLocationSearch() {
 
 function ScreenFallback() {
   return (
-    <div className="flex items-center justify-center py-20">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    <div className="flex flex-col gap-4 px-5 pt-4">
+      <Skeleton className="h-8 w-40 rounded-xl" />
+      <Skeleton className="h-4 w-28 rounded-lg" />
+      <div className="flex flex-col gap-3 mt-2">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+        ))}
+      </div>
     </div>
   )
 }
@@ -197,11 +204,40 @@ export function AppShell({ initialData }: AppShellProps) {
   // ----- Loading state -----
   if (data.isLoading) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+      <div className="mx-auto min-h-dvh max-w-md bg-background">
+        <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+          {/* Header */}
+          <div className="flex items-baseline justify-between">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-9 w-20 rounded-lg" />
+              <Skeleton className="h-4 w-40 rounded-md" />
+            </div>
+          </div>
+          {/* Goal card */}
+          <Skeleton className="h-[120px] w-full rounded-2xl" />
+          {/* Weekly stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+          </div>
+          {/* Recent activities */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3.5 w-32 rounded-md" />
+              <Skeleton className="h-3.5 w-12 rounded-md" />
+            </div>
+            <div className="flex gap-3 overflow-hidden">
+              <Skeleton className="h-[100px] w-[66%] shrink-0 rounded-2xl" />
+              <Skeleton className="h-[100px] w-[66%] shrink-0 rounded-2xl" />
+            </div>
+          </div>
         </div>
+        {/* Tab bar placeholder */}
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 h-16"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        />
       </div>
     )
   }
@@ -211,87 +247,101 @@ export function AppShell({ initialData }: AppShellProps) {
       {/* Screen content */}
       <main className="relative pb-20">
         {activeTab === "home" && (
-          <HomeScreen
-            activeGoals={data.activeGoals}
-            activities={data.activities}
-            weeklySummary={data.weeklySummary}
-            recentActivities={data.activities.slice(0, 5)}
-            syncStatus={data.syncStatus}
-            stravaConnected={data.stravaConnected}
-            onViewActivities={() => handleTabChange("activities")}
-            onViewGoal={(goal) => { navigate({ tab: "goals", goal: goal.id }) }}
-            onViewGoals={() => handleTabChange("goals")}
-            onViewInsights={() => handleTabChange("insights")}
-            onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
-          />
+          <div className="animate-in fade-in duration-200 ease-out">
+            <HomeScreen
+              activeGoals={data.activeGoals}
+              activities={data.activities}
+              weeklySummary={data.weeklySummary}
+              recentActivities={data.activities.slice(0, 5)}
+              syncStatus={data.syncStatus}
+              stravaConnected={data.stravaConnected}
+              onViewActivities={() => handleTabChange("activities")}
+              onViewGoal={(goal) => { navigate({ tab: "goals", goal: goal.id }) }}
+              onViewGoals={() => handleTabChange("goals")}
+              onViewInsights={() => handleTabChange("insights")}
+              onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
+            />
+          </div>
         )}
 
         {activeTab === "activities" && !selectedActivity && (
-          <ActivitiesScreen
-            activities={data.activities}
-            stravaConnected={data.stravaConnected}
-            syncStatus={data.syncStatus}
-            onSelectActivity={handleSelectActivity}
-            onSync={data.sync}
-            onAddActivity={() => setIsManualActivityOpen(true)}
-          />
+          <div className="animate-in fade-in duration-200 ease-out">
+            <ActivitiesScreen
+              activities={data.activities}
+              stravaConnected={data.stravaConnected}
+              syncStatus={data.syncStatus}
+              onSelectActivity={handleSelectActivity}
+              onSync={data.sync}
+              onAddActivity={() => setIsManualActivityOpen(true)}
+            />
+          </div>
         )}
 
         {activeTab === "activities" && selectedActivity && (
-          <Suspense fallback={<ScreenFallback />}>
-            <ActivityDetailScreen
-              activity={selectedActivity}
-              onBack={handleBackFromDetail}
-              onDelete={handleDeleteActivity}
-              allActivities={data.activities}
-            />
-          </Suspense>
+          <div className="animate-in slide-in-from-bottom-4 duration-300 ease-out">
+            <Suspense fallback={<ScreenFallback />}>
+              <ActivityDetailScreen
+                activity={selectedActivity}
+                onBack={handleBackFromDetail}
+                onDelete={handleDeleteActivity}
+                allActivities={data.activities}
+              />
+            </Suspense>
+          </div>
         )}
 
         {activeTab === "goals" && !selectedGoal && (
-          <GoalsScreen
-            goals={data.goals}
-            activities={data.activities}
-            weeklyGoals={data.weeklyGoals}
-            onToggleActive={data.toggleActiveGoal}
-            onEditGoal={handleEditGoal}
-            onAddGoal={() => handleAddGoal("performance")}
-            onAddEventGoal={() => handleAddGoal("event_training")}
-            onEditWeeklyGoal={handleEditWeeklyGoal}
-            onAddWeeklyGoal={handleAddWeeklyGoal}
-            onSelectGoal={handleSelectGoal}
-          />
+          <div className="animate-in fade-in duration-200 ease-out">
+            <GoalsScreen
+              goals={data.goals}
+              activities={data.activities}
+              weeklyGoals={data.weeklyGoals}
+              onToggleActive={data.toggleActiveGoal}
+              onEditGoal={handleEditGoal}
+              onAddGoal={() => handleAddGoal("performance")}
+              onAddEventGoal={() => handleAddGoal("event_training")}
+              onEditWeeklyGoal={handleEditWeeklyGoal}
+              onAddWeeklyGoal={handleAddWeeklyGoal}
+              onSelectGoal={handleSelectGoal}
+            />
+          </div>
         )}
 
         {activeTab === "goals" && selectedGoal && (
-          <Suspense fallback={<ScreenFallback />}>
-            <GoalDetailScreen
-              goal={selectedGoal}
-              activities={data.activities}
-              onBack={handleBackFromGoalDetail}
-              onEditGoal={handleEditGoal}
-            />
-          </Suspense>
+          <div className="animate-in slide-in-from-bottom-4 duration-300 ease-out">
+            <Suspense fallback={<ScreenFallback />}>
+              <GoalDetailScreen
+                goal={selectedGoal}
+                activities={data.activities}
+                onBack={handleBackFromGoalDetail}
+                onEditGoal={handleEditGoal}
+              />
+            </Suspense>
+          </div>
         )}
 
         {activeTab === "insights" && (
-          <Suspense fallback={<ScreenFallback />}>
-            <InsightsScreen activities={data.activities} />
-          </Suspense>
+          <div className="animate-in fade-in duration-200 ease-out">
+            <Suspense fallback={<ScreenFallback />}>
+              <InsightsScreen activities={data.activities} />
+            </Suspense>
+          </div>
         )}
 
         {activeTab === "profile" && (
-          <Suspense fallback={<ScreenFallback />}>
-            <ProfileScreen
-              user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
-              syncStatus={data.syncStatus}
-              stravaConnected={data.stravaConnected}
-              onSync={data.sync}
-              onFullSync={data.fullSync}
-              onConnectStrava={data.connectStrava}
-              onSignOut={data.signOut}
-            />
-          </Suspense>
+          <div className="animate-in fade-in duration-200 ease-out">
+            <Suspense fallback={<ScreenFallback />}>
+              <ProfileScreen
+                user={data.user ?? { id: "", display_name: "Runner", email: "", avatar_url: null }}
+                syncStatus={data.syncStatus}
+                stravaConnected={data.stravaConnected}
+                onSync={data.sync}
+                onFullSync={data.fullSync}
+                onConnectStrava={data.connectStrava}
+                onSignOut={data.signOut}
+              />
+            </Suspense>
+          </div>
         )}
       </main>
 
