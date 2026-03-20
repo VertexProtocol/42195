@@ -108,8 +108,9 @@ export function useAppData(initialData?: InitialData | null) {
             .order("date", { ascending: false }),
           supabase
             .from("goals")
-            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
-            .order("created_at", { ascending: false }),
+            // [DND] include display_order; order by it so the array arrives pre-sorted
+            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, display_order")
+            .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
             .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
@@ -135,6 +136,7 @@ export function useAppData(initialData?: InitialData | null) {
             current_distance_km: Number(g.current_distance_km),
             is_active: g.is_active,
             created_at: g.created_at,
+            display_order: g.display_order ?? 0, // [DND]
           }))
         )
       }
@@ -289,6 +291,7 @@ export function useAppData(initialData?: InitialData | null) {
             target_date: saved.target_date,
             current_distance_km: saved.current_distance_km,
             is_active: saved.is_active,
+            display_order: goalsRef.current.length + 1, // [DND] new goals go to the end
           })
           .select()
           .single()
@@ -302,6 +305,7 @@ export function useAppData(initialData?: InitialData | null) {
         // toast.success("Goal created")
         if (data) {
           setGoals((prev) => [
+            ...prev,
             {
               id: data.id,
               goal_category: (data.goal_category ?? "performance") as GoalCategory,
@@ -313,8 +317,8 @@ export function useAppData(initialData?: InitialData | null) {
               current_distance_km: Number(data.current_distance_km),
               is_active: data.is_active,
               created_at: data.created_at,
+              display_order: data.display_order ?? prev.length + 1, // [DND]
             },
-            ...prev,
           ])
         }
       }
@@ -336,6 +340,28 @@ export function useAppData(initialData?: InitialData | null) {
     } else {
       // toast.success("Goal deleted")
     }
+  }, [])
+
+  // [DND] Reorder race goals by persisting a new display_order for each goal
+  const reorderGoals = useCallback(async (orderedIds: string[]) => {
+    // Optimistic update: reassign display_order values in the local state
+    setGoals((prev) => {
+      const byId = new Map(prev.map((g) => [g.id, g]))
+      const reordered = orderedIds
+        .map((id, i) => {
+          const g = byId.get(id)
+          return g ? { ...g, display_order: i + 1 } : null
+        })
+        .filter(Boolean) as Goal[]
+      const reorderedSet = new Set(orderedIds)
+      return [...reordered, ...prev.filter((g) => !reorderedSet.has(g.id))]
+    })
+    // Persist to Supabase (fire-and-forget; errors only affect order until next reload)
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        supabase.from("goals").update({ display_order: i + 1 }).eq("id", id)
+      )
+    )
   }, [])
 
   // ----- Weekly Goal CRUD -----
@@ -588,6 +614,7 @@ export function useAppData(initialData?: InitialData | null) {
     toggleActiveGoal,
     saveGoal,
     deleteGoal,
+    reorderGoals, // [DND]
 
     // Weekly goal operations
     saveWeeklyGoal,
