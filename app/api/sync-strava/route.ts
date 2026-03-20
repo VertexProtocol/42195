@@ -69,6 +69,11 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" },
     )
 
+    // Invalidate HR analysis cache so the profile page recomputes it with fresh data
+    if (result.synced > 0) {
+      await service.from("profiles").update({ hr_analysis_cache: null }).eq("id", userId)
+    }
+
     return NextResponse.json({ ok: true, ...result })
   } catch (err: unknown) {
     console.error("Strava sync error:", err)
