@@ -53,8 +53,8 @@ export function ProfileScreen({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  // HR analysis state
-  const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(null)
+  // HR analysis state — seed from server-fetched cache so it persists across sessions
+  const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(user.hr_analysis_cache ?? null)
   const [hrLoading, setHrLoading] = useState(false)
   const [hrExpanded, setHrExpanded] = useState(false)
   const [hrError, setHrError] = useState<string | null>(null)
