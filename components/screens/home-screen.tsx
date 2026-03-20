@@ -70,7 +70,7 @@ export function HomeScreen({
   )
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+    <div className="flex flex-col gap-5 px-4 pb-6 pt-4">
       {/* Header */}
       <header className="flex items-baseline justify-between">
         <div>
@@ -130,14 +130,14 @@ export function HomeScreen({
                   >
                     <button
                       onClick={() => onViewGoal(goal)}
-                      className="relative w-full overflow-hidden rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform min-h-[120px]"
+                      className="relative w-full overflow-hidden rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform min-h-[108px]"
                     >
                       <div className="flex items-start justify-between h-full">
                         <div className="flex-1 pr-4 flex flex-col">
                           <p className="text-xs font-medium uppercase tracking-wider text-primary">
                             {t("home.activeGoal")}
                           </p>
-                          <h2 className="mt-1 text-lg font-semibold text-card-foreground text-balance line-clamp-1">
+                          <h2 className="mt-1 text-base font-semibold text-card-foreground text-balance line-clamp-1">
                             {goal.name}
                           </h2>
                           <div className="mt-auto pt-2.5 flex flex-col gap-1">
@@ -159,7 +159,7 @@ export function HomeScreen({
                         <div className="relative flex shrink-0 items-center justify-center">
                           <ProgressRing
                             percentage={m.timeProgress}
-                            size={72}
+                            size={64}
                             strokeWidth={5}
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -194,29 +194,29 @@ export function HomeScreen({
           {t("home.thisWeek")}
         </h3>
         <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <TrendingUp size={20} className="text-primary" />
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+              <TrendingUp size={16} className="text-primary" />
             </div>
-            <span className="text-lg font-bold text-card-foreground">
+            <span className="text-base font-bold text-card-foreground">
               {weeklySummary.total_distance_km.toFixed(1)}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.km")}</span>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <Clock size={20} className="text-primary" />
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+              <Clock size={16} className="text-primary" />
             </div>
-            <span className="text-lg font-bold text-card-foreground">
+            <span className="text-base font-bold text-card-foreground">
               {formatDuration(weeklySummary.total_time_seconds)}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.time")}</span>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <Footprints size={20} className="text-primary" />
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+              <Footprints size={16} className="text-primary" />
             </div>
-            <span className="text-lg font-bold text-card-foreground">
+            <span className="text-base font-bold text-card-foreground">
               {weeklySummary.run_count}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
@@ -242,7 +242,7 @@ export function HomeScreen({
           <Carousel opts={{ align: "start", dragFree: true }}>
             <CarouselContent className="-ml-3">
               {recentActivities.map((activity) => (
-                <CarouselItem key={activity.id} className="pl-3 basis-[72%]">
+                <CarouselItem key={activity.id} className="pl-3 basis-[68%]">
                   <button
                     onClick={() => onSelectActivity(activity)}
                     className="w-full rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
