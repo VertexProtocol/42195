@@ -44,13 +44,28 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
-  // AI Coach state
+  // AI Coach state — persisted to localStorage so chat survives tab switches
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [thinkingDetail, setThinkingDetail] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("coach-messages")
+      if (stored) setMessages(JSON.parse(stored) as Message[])
+    } catch {}
+  }, [])
+
+  // Persist messages to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem("coach-messages", JSON.stringify(messages))
+    } catch {}
+  }, [messages])
 
   const [testRuns, setTestRuns] = useState<TestRun[]>([])
   const [testRunsLoading, setTestRunsLoading] = useState(true)
@@ -187,6 +202,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   const handleClear = () => {
     setMessages([])
     setInput("")
+    try { localStorage.removeItem("coach-messages") } catch {}
   }
 
   const suggestions = [
