@@ -5,6 +5,8 @@ import {
   Trophy,
   Timer,
   TrendingUp,
+  Footprints,
+  Clock,
   Bot,
   Send,
   User,
@@ -60,6 +62,14 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
     return computePredictionAdjustment(testRuns).exponentAdjustment
   }, [testRuns])
   const racePredictions = useMemo(() => predictRaceTimes(activities, predictionAdjustment), [activities, predictionAdjustment])
+
+  const totalKm = useMemo(() => activities.reduce((sum, a) => sum + Number(a.distance_km), 0), [activities])
+  const longestRunKm = useMemo(() => activities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [activities])
+  const recentRunCount = useMemo(() => {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 30)
+    return activities.filter(a => new Date(a.date) >= cutoff).length
+  }, [activities])
 
   // Fetch test runs for benchmarks section
   useEffect(() => {
@@ -319,6 +329,29 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
         <p className="mt-0.5 text-sm text-muted-foreground">{t("insights.subtitle")}</p>
       </header>
 
+      {/* Training Stats */}
+      {activities.length > 0 && (
+        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <div className="grid grid-cols-3 divide-x divide-border">
+            <div className="flex flex-col items-center gap-1 px-3 py-4">
+              <TrendingUp size={14} className="text-muted-foreground" />
+              <span className="text-base font-bold font-mono text-foreground">{totalKm.toFixed(0)}</span>
+              <span className="text-[10px] text-muted-foreground text-center">km logged</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 px-3 py-4">
+              <Footprints size={14} className="text-muted-foreground" />
+              <span className="text-base font-bold font-mono text-foreground">{longestRunKm.toFixed(1)}</span>
+              <span className="text-[10px] text-muted-foreground text-center">longest run</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 px-3 py-4">
+              <Clock size={14} className="text-muted-foreground" />
+              <span className="text-base font-bold font-mono text-foreground">{recentRunCount}</span>
+              <span className="text-[10px] text-muted-foreground text-center">runs (30 days)</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Coach Card */}
       <button
         onClick={() => setActiveTab("coach")}
@@ -373,39 +406,30 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
             </h3>
             <InfoTooltip content="Estimated finish times for common race distances, based on your recent best run." />
           </div>
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
-            {racePredictions.predictions.map((pred, i) => (
-              <div
-                key={pred.distance_label}
-                className={`flex items-center justify-between px-4 py-3 ${
-                  i < racePredictions.predictions.length - 1 ? "border-b border-border" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Timer size={14} className="text-muted-foreground" />
-                  <span className="text-sm text-card-foreground">{pred.distance_label}</span>
-                </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}
-                    </span>
-                    <span className="text-sm font-bold font-mono text-foreground">
-                      {formatTargetTime(pred.predicted_seconds)}
-                    </span>
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              {racePredictions.predictions.map((pred) => (
+                <div
+                  key={pred.distance_label}
+                  className="rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
+                >
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Timer size={13} className="text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{pred.distance_label}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {formatTargetTime(pred.low_seconds)} – {formatTargetTime(pred.high_seconds)}
-                  </span>
+                  <p className="text-base font-bold font-mono text-foreground leading-none mb-0.5">
+                    {formatTargetTime(pred.predicted_seconds)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground font-mono">
+                    {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}/km
+                  </p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
             {racePredictions.referenceActivity && (
-              <div className="border-t border-border px-4 py-2">
-                <p className="text-[10px] text-muted-foreground">
-                  {t("insights.basedOn")} {formatDistance(racePredictions.referenceActivity.distance_km)} {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
-                </p>
-              </div>
+              <p className="text-[10px] text-muted-foreground px-1">
+                {t("insights.basedOn")} {formatDistance(racePredictions.referenceActivity.distance_km)} {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
+              </p>
             )}
           </div>
         </section>
