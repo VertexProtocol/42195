@@ -36,13 +36,22 @@ export default function ResetPasswordPage() {
         const { error } = await supabase.auth.updateUser({ password })
 
         if (error) {
-          setError(error.message)
+          // Never relay the raw Supabase error to the UI.
+          setError(t("auth.errorDefault"))
           return
         }
 
+        // Invalidate ALL sessions for this account (current device + any others).
+        // This is critical: if an attacker had an active session, changing the
+        // password must revoke it. Without this, existing sessions remain valid
+        // even after the password is changed.
+        await supabase.auth.signOut({ scope: "global" })
+
         setSuccess(true)
         setTimeout(() => {
-          window.location.href = "/"
+          // Send to login rather than "/" — the global sign-out above means the
+          // user must authenticate again with their new password.
+          window.location.href = "/auth/login"
         }, 2000)
       } catch {
         setError(t("auth.errorDefault"))
