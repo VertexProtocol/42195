@@ -77,6 +77,23 @@ export const CHECKPOINT_MIN_SCALE = 0.55
 /** Maximum scale factor when adjusting over-performing plans */
 export const CHECKPOINT_MAX_SCALE = 1.30
 
+// ── Intra-block Pace Progression ─────────────────────────────────────────────
+
+/**
+ * Weekly pace improvement applied to quality sessions (tempo, intervals) as
+ * the training block advances. 0.4%/week gives ~2.8% over 8 weeks — consistent
+ * with Pfitzinger-style progressive overload (demanding slightly more each week
+ * to drive adaptation, independent of Riegel fitness re-calibration).
+ * Only applied to hard sessions; easy/long/race paces stay flat.
+ */
+export const PACE_PROGRESSION_RATE_PER_WEEK = 0.004
+
+/**
+ * Maximum cumulative pace progression. Caps the progression for very long blocks
+ * so pace targets don't become unrealistic. 12 weeks × 0.4% = 4.8% ceiling.
+ */
+export const PACE_PROGRESSION_MAX_WEEKS = 12
+
 // ── Elevation Effort (Minetti et al.) ────────────────────────────────────────
 
 /**

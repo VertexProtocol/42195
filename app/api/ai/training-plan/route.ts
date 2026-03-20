@@ -10,6 +10,7 @@ import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
+import { PACE_PROGRESSION_RATE_PER_WEEK, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
@@ -770,12 +771,20 @@ export async function POST(req: NextRequest) {
             /recovery|deload/i.test(week.theme ?? "") ||
             (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
 
+          // Intra-block progression for quality sessions: 0.4%/week faster, capped at 12 weeks.
+          // This is deliberate stimulus progression — each week asks a little more of the runner.
+          // Only applies when not fatigued and not a recovery week.
+          const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
+          const progressionModifier = 1.0 - weekIndex * PACE_PROGRESSION_RATE_PER_WEEK
+
           for (const session of week.sessions) {
             const zone = session.type.toLowerCase()
             const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
             const modifier = isRecovery
               ? 1.10
-              : isHardSession ? hardFatigueModifier : 1.0
+              : isHardSession
+                ? (fatigueSignal !== "none" ? hardFatigueModifier : progressionModifier)
+                : 1.0
             const pace = assignSessionPace(session.type, paceGuide, modifier)
             if (pace) session.suggestedPace = pace
           }
@@ -1002,12 +1011,20 @@ export async function GET(req: NextRequest) {
         const isRecovery =
           /recovery|deload/i.test(week.theme ?? "") ||
           (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
+
+        const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
+        const progressionModifier = 1.0 - weekIndex * PACE_PROGRESSION_RATE_PER_WEEK
+
         return {
           ...week,
           sessions: week.sessions.map((session) => {
             const zone = session.type.toLowerCase()
             const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
-            const modifier = isRecovery ? 1.10 : isHardSession ? hardFatigueModifier : 1.0
+            const modifier = isRecovery
+              ? 1.10
+              : isHardSession
+                ? (fatigue.signal !== "none" ? hardFatigueModifier : progressionModifier)
+                : 1.0
             return {
               ...session,
               suggestedPace: assignSessionPace(session.type, paceGuide, modifier) ?? session.suggestedPace,
