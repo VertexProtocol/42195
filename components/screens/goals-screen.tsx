@@ -354,14 +354,14 @@ export function GoalsScreen({
           <div className="flex gap-2">
             <button
               onClick={onAddGoal}
-              className="flex flex-1 min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+              className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
             >
               <Timer size={16} />
               {t("goals.addPerfGoal")}
             </button>
             <button
               onClick={onAddEventGoal}
-              className="flex flex-1 min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+              className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
             >
               <CalendarCheck size={16} />
               {t("plan.addEvent")}
