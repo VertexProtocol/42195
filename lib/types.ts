@@ -36,6 +36,8 @@ export interface Goal {
   current_distance_km: number
   is_active: boolean
   created_at: string
+  // [DND] drag-and-drop display order (set by scripts/007_add_goal_display_order.sql)
+  display_order?: number
 }
 
 export type WeeklyGoalMetric = "distance_km" | "sessions" | "duration_minutes" | "elevation_m"

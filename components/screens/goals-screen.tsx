@@ -1,12 +1,25 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
-  CalendarCheck, MapPin, Footprints, Sparkles, ChevronDown,
+  CalendarCheck, MapPin, Footprints, Sparkles, ChevronDown, GripVertical,
 } from "lucide-react"
+// [DND] @dnd-kit drag-and-drop for goal reordering
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import {
   formatDistance,
   formatDate,
@@ -54,6 +67,29 @@ interface GoalsScreenProps {
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
   onAddWeeklyGoal: () => void
   onSelectGoal: (goal: Goal) => void
+  onReorderGoals: (orderedIds: string[]) => Promise<void> // [DND]
+}
+
+// [DND] Wrapper that makes a goal card sortable and provides drag listeners to children
+function SortableGoalItem({
+  id,
+  children,
+}: {
+  id: string
+  children: (dragListeners: React.HTMLAttributes<HTMLElement> | undefined) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      {children(listeners)}
+    </div>
+  )
 }
 
 // ---- date helpers ----
@@ -108,6 +144,7 @@ export function GoalsScreen({
   onEditWeeklyGoal,
   onAddWeeklyGoal,
   onSelectGoal,
+  onReorderGoals, // [DND]
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("race")
@@ -133,23 +170,32 @@ export function GoalsScreen({
     wg.is_recurring || wg.week_start === selectedWeekStart
   )
 
-  // Performance goals
+  // Performance goals (still needed for perfGoalStatuses below)
   const performanceGoals = goals.filter((g) => g.goal_category === "performance")
 
-  // Event training goals (sorted: active first, then by date)
-  const eventGoals = [...goals.filter((g) => g.goal_category === "event_training")].sort((a, b) => {
-    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
-    return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
-  })
+  // [DND] All race goals sorted by user-defined display_order
+  const raceGoals = useMemo(
+    () =>
+      goals
+        .filter((g) => g.goal_category === "performance" || g.goal_category === "event_training")
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)),
+    [goals]
+  )
 
-  // All race goals: performance + events, sorted by active first, then by date
-  const raceGoals = useMemo(() => {
-    const all = [...performanceGoals, ...eventGoals]
-    return all.sort((a, b) => {
-      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
-      return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
-    })
-  }, [performanceGoals, eventGoals])
+  // [DND] Local ordered list for optimistic drag-and-drop reordering
+  const [orderedRaceGoals, setOrderedRaceGoals] = useState(raceGoals)
+  useEffect(() => { setOrderedRaceGoals(raceGoals) }, [goals]) // sync when server state changes
+
+  // [DND] Handle drag end: reorder locally and persist
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedRaceGoals.findIndex((g) => g.id === active.id)
+    const newIndex = orderedRaceGoals.findIndex((g) => g.id === over.id)
+    const reordered = arrayMove(orderedRaceGoals, oldIndex, newIndex)
+    setOrderedRaceGoals(reordered)
+    onReorderGoals(reordered.map((g) => g.id))
+  }
 
   // Pre-compute performance goal evaluations (avoids O(goals * activities) inside JSX)
   const perfGoalStatuses = useMemo(
@@ -369,7 +415,7 @@ export function GoalsScreen({
           </div>
 
           {/* Empty state */}
-          {raceGoals.length === 0 ? (
+          {orderedRaceGoals.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
                 <Trophy size={28} className="text-muted-foreground" />
@@ -380,7 +426,10 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            raceGoals.map((goal) => {
+            // [DND] DnD context wraps the sortable goal list
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={orderedRaceGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                {orderedRaceGoals.map((goal) => {
               const isPerformance = goal.goal_category === "performance"
               const isExpanded = expandedGoalIds.has(goal.id)
               const days = daysUntil(goal.target_date)
@@ -398,64 +447,78 @@ export function GoalsScreen({
               const best = !isPerformance ? bestRelevantRun(activities, goal.target_distance_km, goal.start_date, goal.target_date) : null
               const longest = !isPerformance ? longestRun(activities, goal.start_date, goal.target_date) : null
 
+              // [DND] wrap each card in SortableGoalItem
               return (
-                <div
-                  key={goal.id}
-                  className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
-                    status?.reached
-                      ? "ring-success/40 ring-2"
-                      : goal.is_active
-                        ? "ring-primary/40 ring-2"
-                        : "ring-border"
-                  } ${isPast && !status?.reached ? "opacity-60" : ""}`}
-                >
-                  {/* Collapsed header - always visible */}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpanded(goal.id)}
-                    className="flex w-full items-center gap-3 p-4 text-left active:bg-secondary/50 transition-colors"
+                <SortableGoalItem key={goal.id} id={goal.id}>
+                  {(dragListeners) => (
+                  <div
+                    className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
+                      status?.reached
+                        ? "ring-success/40 ring-2"
+                        : goal.is_active
+                          ? "ring-primary/40 ring-2"
+                          : "ring-border"
+                    } ${isPast && !status?.reached ? "opacity-60" : ""}`}
                   >
-                    {/* Icon */}
-                    <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
-                      isPerformance ? "bg-amber-500/10" : "bg-primary/10"
-                    }`}>
-                      {isPerformance ? (
-                        <Timer size={20} className="text-amber-500" />
-                      ) : (
-                        <Footprints size={20} className="text-primary" />
-                      )}
-                    </div>
-                    
-                    {/* Title and summary */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
-                        {goal.is_active && (
-                          <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
-                        )}
-                        {status?.reached && (
-                          <Trophy size={14} className="text-success shrink-0" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        <span>{formatDistance(goal.target_distance_km)}</span>
-                        {goal.target_time_seconds && (
-                          <>
+                    {/* Collapsed header: [drag handle] [expand button] */}
+                    <div className="flex items-center">
+                      {/* [DND] Drag handle — separate from the expand tap target */}
+                      <button
+                        {...dragListeners}
+                        onClick={(e) => e.stopPropagation()}
+                        className="touch-none flex shrink-0 items-center self-stretch px-3 text-muted-foreground/25 active:text-muted-foreground/60"
+                        aria-label="Drag to reorder"
+                      >
+                        <GripVertical size={16} />
+                      </button>
+                      {/* Expand / collapse */}
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(goal.id)}
+                        className="flex flex-1 items-center gap-3 py-4 pr-4 text-left active:bg-secondary/50 transition-colors"
+                      >
+                        {/* Icon */}
+                        <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                          isPerformance ? "bg-amber-500/10" : "bg-primary/10"
+                        }`}>
+                          {isPerformance ? (
+                            <Timer size={20} className="text-amber-500" />
+                          ) : (
+                            <Footprints size={20} className="text-primary" />
+                          )}
+                        </div>
+
+                        {/* Title and summary */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
+                            {goal.is_active && (
+                              <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                            )}
+                            {status?.reached && (
+                              <Trophy size={14} className="text-success shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span>{formatDistance(goal.target_distance_km)}</span>
+                            {goal.target_time_seconds && (
+                              <>
+                                <span>·</span>
+                                <span className="text-primary font-medium">{formatTargetTime(goal.target_time_seconds)}</span>
+                              </>
+                            )}
                             <span>·</span>
-                            <span className="text-primary font-medium">{formatTargetTime(goal.target_time_seconds)}</span>
-                          </>
-                        )}
-                        <span>·</span>
-                        <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
-                      </div>
+                            <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
+                          </div>
+                        </div>
+
+                        {/* Chevron */}
+                        <ChevronDown
+                          size={18}
+                          className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        />
+                      </button>
                     </div>
-                    
-                    {/* Chevron */}
-                    <ChevronDown 
-                      size={18} 
-                      className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} 
-                    />
-                  </button>
 
                   {/* Expanded content */}
                   {isExpanded && (
@@ -584,9 +647,13 @@ export function GoalsScreen({
                       )}
                     </div>
                   )}
-                </div>
+                  </div>
+                  )}
+                </SortableGoalItem>
               )
-            })
+            })}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       )}
