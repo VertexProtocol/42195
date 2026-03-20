@@ -39,10 +39,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Redirect authenticated users away from auth pages
-  // Allow /auth/callback (code exchange) and /auth/sign-up-success through always
+  // Redirect authenticated users away from auth pages.
+  // Allow through routes that must be reachable with an active session:
+  //   /auth/callback       — exchanges the recovery/OAuth code for a session
+  //   /auth/reset-password — requires the recovery session to call updateUser()
+  //   /auth/sign-up-success — shown after email confirmation
   const isAuthPassthrough =
-    pathname === "/auth/sign-up-success" || pathname === "/auth/callback"
+    pathname === "/auth/sign-up-success" ||
+    pathname === "/auth/callback" ||
+    pathname === "/auth/reset-password"
 
   if (user && isAuthRoute && !isAuthPassthrough) {
     const homeUrl = request.nextUrl.clone()

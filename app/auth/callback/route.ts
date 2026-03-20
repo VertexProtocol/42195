@@ -27,15 +27,30 @@ export async function GET(request: NextRequest) {
     | "magiclink"
     | "email"
     | null
-  const next = searchParams.get("next") ?? "/"
+  const rawNext = searchParams.get("next") ?? "/"
+  // Reject protocol-relative paths (//evil.com) and anything that isn't a
+  // relative path — prevents open-redirect abuse via the next parameter.
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/"
 
   const supabase = await createClient()
 
   const getRedirectUrl = () => {
+    // Prefer the canonical site URL from the environment — this is the only
+    // fully trusted source for the host. x-forwarded-host is only consulted
+    // when the env var is absent (e.g. during local development previews) and
+    // is validated against the canonical host to prevent header-spoofing redirects.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    if (siteUrl) return `${siteUrl}${next}`
+
     const forwardedHost = request.headers.get("x-forwarded-host")
     const isLocalEnv = process.env.NODE_ENV === "development"
     if (isLocalEnv) return `${origin}${next}`
-    if (forwardedHost) return `https://${forwardedHost}${next}`
+    if (forwardedHost) {
+      // Only trust x-forwarded-host when it matches the request origin host,
+      // guarding against spoofed headers on non-Vercel infrastructure.
+      const originHost = new URL(origin).host
+      if (forwardedHost === originHost) return `https://${forwardedHost}${next}`
+    }
     return `${origin}${next}`
   }
 
