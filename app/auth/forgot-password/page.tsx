@@ -20,13 +20,20 @@ export default function ForgotPasswordPage() {
     startTransition(async () => {
       try {
         const supabase = createClient()
-        const siteUrl = window.location.origin
+        // Use the canonical site URL from the environment so the reset link
+        // always points to the correct host, regardless of preview/staging context.
+        // Falls back to window.location.origin for local development.
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${siteUrl}/auth/callback?next=/auth/reset-password`,
         })
 
         if (error) {
-          setError(error.message)
+          // Do NOT expose the raw Supabase error — rate-limit messages can be
+          // scoped to a specific email and enable indirect user enumeration.
+          // The UI already shows a neutral "check your email" screen on success,
+          // so any failure path should also reveal nothing about the account.
+          setError(t("auth.errorDefault"))
           return
         }
 
