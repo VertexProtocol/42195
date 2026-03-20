@@ -127,18 +127,10 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
             <span className="text-muted-foreground/60"> / 100</span>
           </span>
         </div>
-        <div className="relative h-2.5 rounded-full bg-border/60 overflow-hidden">
-          {/* Optimal zone */}
-          <div
-            className="absolute inset-y-0 bg-emerald-500/20"
-            style={{ left: `${(0.8 / 1.5) * 100}%`, width: `${((1.3 - 0.8) / 1.5) * 100}%` }}
-          />
-          {/* Bar */}
+        <div className="h-2 overflow-hidden rounded-full bg-secondary">
           {acwr.ratio > 0 && (
             <div
-              className={`h-full rounded-full transition-all ${
-                acwr.ratio > 1.3 ? "bg-red-500" : acwr.ratio > 0.8 ? "bg-emerald-500" : "bg-amber-500"
-              }`}
+              className="h-full rounded-full bg-primary transition-all duration-500"
               style={{ width: `${Math.min((acwr.ratio / 1.5) * 100, 100)}%` }}
             />
           )}
