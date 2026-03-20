@@ -451,6 +451,7 @@ function WeekCard({
   weekEnd: Date
 }) {
   const [expanded, setExpanded] = useState(isCurrent)
+  const [coachNoteOpen, setCoachNoteOpen] = useState(false)
 
   const deltaKm = actualKm !== null ? actualKm - week.targetKm : null
   const deltaPct = actualKm !== null && week.targetKm > 0
@@ -582,7 +583,6 @@ function WeekCard({
                         <span className="shrink-0 font-mono text-xs text-primary/70">{session.suggestedPace}</span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground/70 italic">{session.purpose}</p>
                   </div>
                 </div>
               )
@@ -590,9 +590,18 @@ function WeekCard({
           </div>
 
           {week.coachNote && (
-            <div className="mt-3 flex gap-2 rounded-xl bg-secondary px-3 py-2.5">
-              <Lightbulb size={14} className="mt-0.5 shrink-0 text-warning" />
-              <p className="text-xs text-muted-foreground">{week.coachNote}</p>
+            <div className="mt-3">
+              <button
+                onClick={() => setCoachNoteOpen(v => !v)}
+                className="flex w-full items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 transition-colors active:bg-accent"
+              >
+                <Lightbulb size={14} className="shrink-0 text-warning" />
+                <span className="flex-1 text-left text-xs font-medium text-muted-foreground">Coach note</span>
+                <ChevronDown size={13} className={`shrink-0 text-muted-foreground transition-transform ${coachNoteOpen ? "rotate-180" : ""}`} />
+              </button>
+              {coachNoteOpen && (
+                <p className="mt-1.5 px-3 text-xs text-muted-foreground leading-relaxed">{week.coachNote}</p>
+              )}
             </div>
           )}
         </div>

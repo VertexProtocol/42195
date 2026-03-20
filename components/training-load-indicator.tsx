@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState, useRef } from "react"
-import { Activity as ActivityIcon, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react"
+import { useMemo } from "react"
+import { Activity as ActivityIcon, TrendingUp, AlertTriangle } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
 import { computeTrainingLoad, type TrainingLoadPoint } from "@/lib/training-utils"
@@ -55,7 +55,6 @@ function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
  */
 export function TrainingLoadIndicator({ activities, compact = false }: TrainingLoadIndicatorProps) {
   const { t } = useI18n()
-  const [chartExpanded, setChartExpanded] = useState(false)
 
   const loadStatus = useMemo(() => computeTrainingLoadStatus(activities), [activities])
   const chartData = useMemo(() => computeTrainingLoad(activities), [activities])
@@ -119,28 +118,40 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
         </div>
       </div>
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-4 border-t border-border/40 divide-x divide-border/40">
-        <div className="px-2 py-2 text-center">
-          <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground mb-0.5">
-            {t("loadIndicator.acwr")}
-            <InfoTooltip content="7-day load ÷ 4-week average. Safe range: 0.8–1.3. Above 1.5 means high injury risk." />
-          </div>
-          <div className={`text-sm font-semibold font-mono ${cfg.textClass}`}>
-            {acwr.ratio > 0 ? acwr.ratio.toFixed(2) : "—"}
-          </div>
+      {/* Load bar 0–100 */}
+      <div className="border-t border-border/40 px-4 py-3">
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1.5">
+          <span>Training Load</span>
+          <span className="font-medium tabular-nums">
+            {acwr.ratio > 0 ? Math.min(Math.round((acwr.ratio / 1.5) * 100), 100) : 0}
+            <span className="text-muted-foreground/60"> / 100</span>
+          </span>
         </div>
-        {latest && (
-          <div className="px-2 py-2 text-center">
-            <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground mb-0.5">
-              Form
-              <InfoTooltip content="Fitness minus fatigue. Positive = fresh and ready to race. Negative = still building." />
-            </div>
-            <div className={`text-sm font-semibold font-mono ${cfg.textClass}`} suppressHydrationWarning>
-              {latest.tsb > 0 ? "+" : ""}{latest.tsb.toFixed(1)}
-            </div>
-          </div>
-        )}
+        <div className="relative h-2.5 rounded-full bg-border/60 overflow-hidden">
+          {/* Optimal zone */}
+          <div
+            className="absolute inset-y-0 bg-emerald-500/20"
+            style={{ left: `${(0.8 / 1.5) * 100}%`, width: `${((1.3 - 0.8) / 1.5) * 100}%` }}
+          />
+          {/* Bar */}
+          {acwr.ratio > 0 && (
+            <div
+              className={`h-full rounded-full transition-all ${
+                acwr.ratio > 1.3 ? "bg-red-500" : acwr.ratio > 0.8 ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+              style={{ width: `${Math.min((acwr.ratio / 1.5) * 100, 100)}%` }}
+            />
+          )}
+        </div>
+        <div className="flex justify-between text-[9px] text-muted-foreground/60 mt-1">
+          <span>Low</span>
+          <span className="text-emerald-600/70 dark:text-emerald-400/70">Optimal</span>
+          <span>High</span>
+        </div>
+      </div>
+
+      {/* Metrics row */}
+      <div className="grid grid-cols-2 border-t border-border/40 divide-x divide-border/40">
         <div className="px-2 py-2 text-center">
           <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground mb-0.5">
             {t("loadIndicator.fatigue")}
@@ -166,359 +177,7 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
           </div>
         </div>
       </div>
-
-      {/* Chart toggle */}
-      {hasChartData && (
-        <>
-          <button
-            onClick={() => setChartExpanded(!chartExpanded)}
-            className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 py-2 text-xs text-muted-foreground active:bg-muted/30 transition-colors"
-          >
-            <span>{chartExpanded ? "Hide chart" : "Show chart"}</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${chartExpanded ? "rotate-180" : ""}`}
-            />
-          </button>
-
-          {/* Collapsible momentum graph */}
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              chartExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-            }`}
-          >
-            <div className="overflow-hidden">
-              <MomentumGraph data={chartData} />
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }
 
-// ---- Momentum Graph Component ----
-
-interface MomentumGraphProps {
-  data: TrainingLoadPoint[]
-}
-
-function MomentumGraph({ data }: MomentumGraphProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [animated, setAnimated] = useState(false)
-  const [selectedPoint, setSelectedPoint] = useState<number | null>(null)
-  const [viewDays, setViewDays] = useState<7 | 14 | 30 | 90>(14)
-  
-  // Trigger animation on mount
-  useEffect(() => {
-    const timer = setTimeout(() => setAnimated(true), 50)
-    return () => clearTimeout(timer)
-  }, [])
-
-  // Filter data based on view selection
-  const displayData = useMemo(() => {
-    return data.slice(-viewDays)
-  }, [data, viewDays])
-
-  if (displayData.length < 3) return null
-
-  // Chart dimensions
-  const width = 320
-  const height = 180
-  const padding = { top: 16, right: 16, bottom: 28, left: 16 }
-  const chartWidth = width - padding.left - padding.right
-  const chartHeight = height - padding.top - padding.bottom
-
-  // Normalize TSB (form) values for the momentum curve
-  // Use actual data range + small padding instead of fixed ±5 clamp
-  const tsbValues = displayData.map(d => d.tsb)
-  const datMin = Math.min(...tsbValues)
-  const datMax = Math.max(...tsbValues)
-  const datPad = Math.max((datMax - datMin) * 0.15, 1.5)
-  const minTsb = datMin - datPad
-  const maxTsb = datMax + datPad
-  const tsbRange = Math.max(maxTsb - minTsb, 1)
-
-  // Calculate points
-  const points = displayData.map((d, i) => {
-    const x = padding.left + (i / (displayData.length - 1)) * chartWidth
-    const normalizedTsb = (d.tsb - minTsb) / tsbRange
-    const y = padding.top + chartHeight - normalizedTsb * chartHeight
-    return { x, y, data: d, index: i }
-  })
-
-  // Create smooth bezier path
-  const createSmoothPath = () => {
-    if (points.length < 2) return ""
-    
-    let path = `M ${points[0].x} ${points[0].y}`
-    
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[Math.max(0, i - 1)]
-      const p1 = points[i]
-      const p2 = points[i + 1]
-      const p3 = points[Math.min(points.length - 1, i + 2)]
-      
-      // Catmull-Rom to Bezier conversion for smooth curves
-      const tension = 0.3
-      const cp1x = p1.x + (p2.x - p0.x) * tension
-      const cp1y = p1.y + (p2.y - p0.y) * tension
-      const cp2x = p2.x - (p3.x - p1.x) * tension
-      const cp2y = p2.y - (p3.y - p1.y) * tension
-      
-      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`
-    }
-    
-    return path
-  }
-
-  // Create gradient fill path (closed)
-  const createFillPath = () => {
-    const linePath = createSmoothPath()
-    if (!linePath) return ""
-    return `${linePath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
-  }
-
-  // Get color based on TSB value
-  const getColor = (tsb: number) => {
-    if (tsb > 2) return "#22c55e" // Green - fresh
-    if (tsb > -2) return "#eab308" // Yellow - neutral
-    return "#f97316" // Orange - fatigued
-  }
-
-  // Create gradient stops for the line
-  const gradientStops = points.map((p, i) => ({
-    offset: `${(i / (points.length - 1)) * 100}%`,
-    color: getColor(p.data.tsb),
-  }))
-
-  const linePath = createSmoothPath()
-  const fillPath = createFillPath()
-  const pathLength = svgRef.current?.querySelector<SVGPathElement>("#momentumLine")?.getTotalLength() || 1000
-
-  // Format day label
-  const formatDayLabel = (dateStr: string) => {
-    const date = new Date(dateStr + "T12:00:00")
-    if (viewDays <= 14) {
-      return date.toLocaleDateString("en-US", { weekday: "short" })
-    }
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  }
-
-  // Get tick indices for x-axis labels
-  const getTickIndices = () => {
-    const count = viewDays <= 14 ? Math.min(7, displayData.length) : Math.min(5, displayData.length)
-    const step = Math.floor((displayData.length - 1) / (count - 1))
-    return Array.from({ length: count }, (_, i) => Math.min(i * step, displayData.length - 1))
-  }
-
-  return (
-    <div className="px-3 pb-3 pt-2">
-      {/* View toggle */}
-      <div className="flex justify-end gap-1 mb-2">
-        {([7, 14, 30, 90] as const).map((days) => (
-          <button
-            key={days}
-            onClick={() => setViewDays(days)}
-            className={`px-2 py-0.5 text-[10px] rounded-full transition-colors ${
-              viewDays === days
-                ? "bg-primary/20 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted/50"
-            }`}
-          >
-            {days}d
-          </button>
-        ))}
-      </div>
-
-      {/* SVG Graph */}
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-auto"
-        style={{ maxHeight: 160 }}
-      >
-        <defs>
-          {/* Line gradient */}
-          <linearGradient id="momentumLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            {gradientStops.map((stop, i) => (
-              <stop key={i} offset={stop.offset} stopColor={stop.color} />
-            ))}
-          </linearGradient>
-          
-          {/* Fill gradient - follows line color but fades to transparent */}
-          <linearGradient id="momentumFillGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-          
-          {/* Glow filter for current day */}
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Zero line */}
-        {minTsb < 0 && maxTsb > 0 && (
-          <line
-            x1={padding.left}
-            y1={padding.top + chartHeight - ((0 - minTsb) / tsbRange) * chartHeight}
-            x2={width - padding.right}
-            y2={padding.top + chartHeight - ((0 - minTsb) / tsbRange) * chartHeight}
-            stroke="currentColor"
-            strokeOpacity="0.2"
-            strokeDasharray="4 4"
-            className="text-muted-foreground"
-          />
-        )}
-
-        {/* Gradient fill under curve */}
-        <path
-          d={fillPath}
-          fill="url(#momentumFillGradient)"
-          className="text-emerald-500"
-          style={{
-            opacity: animated ? 1 : 0,
-            transition: "opacity 400ms ease-out 200ms",
-          }}
-        />
-
-        {/* Main momentum line */}
-        <path
-          id="momentumLine"
-          d={linePath}
-          fill="none"
-          stroke="url(#momentumLineGradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            strokeDasharray: pathLength,
-            strokeDashoffset: animated ? 0 : pathLength,
-            transition: "stroke-dashoffset 600ms ease-out",
-          }}
-        />
-
-        {/* Current day indicator only */}
-        {points.length > 0 && (() => {
-          const lastPoint = points[points.length - 1]
-          const color = getColor(lastPoint.data.tsb)
-          return (
-            <g>
-              <circle
-                cx={lastPoint.x}
-                cy={lastPoint.y}
-                r={6}
-                fill={color}
-                filter="url(#glow)"
-                style={{
-                  opacity: animated ? 1 : 0,
-                  transition: "opacity 300ms ease-out 400ms",
-                }}
-              />
-              <circle
-                cx={lastPoint.x}
-                cy={lastPoint.y}
-                r={2.5}
-                fill="white"
-                style={{
-                  opacity: animated ? 1 : 0,
-                  transition: "opacity 300ms ease-out 400ms",
-                }}
-              />
-            </g>
-          )
-        })()}
-
-        {/* Invisible touch targets for interactivity */}
-        {points.map((p, i) => (
-          <circle
-            key={`touch-${i}`}
-            cx={p.x}
-            cy={p.y}
-            r={12}
-            fill="transparent"
-            style={{ cursor: "pointer" }}
-            onPointerDown={() => setSelectedPoint(selectedPoint === i ? null : i)}
-          />
-        ))}
-
-        {/* X-axis labels */}
-        {getTickIndices().map((idx) => {
-          const p = points[idx]
-          if (!p) return null
-          return (
-            <text
-              key={idx}
-              x={p.x}
-              y={height - 8}
-              textAnchor="middle"
-              className="text-muted-foreground"
-              style={{ fontSize: 9, fill: "currentColor" }}
-            >
-              {formatDayLabel(p.data.date)}
-            </text>
-          )
-        })}
-
-        {/* Tooltip */}
-        {selectedPoint !== null && points[selectedPoint] && (
-          <g>
-            <rect
-              x={Math.min(Math.max(points[selectedPoint].x - 45, 5), width - 95)}
-              y={Math.max(points[selectedPoint].y - 52, 5)}
-              width={90}
-              height={48}
-              rx={6}
-              fill="var(--card)"
-              stroke="var(--border)"
-              strokeWidth="1"
-            />
-            <text
-              x={Math.min(Math.max(points[selectedPoint].x, 50), width - 50)}
-              y={Math.max(points[selectedPoint].y - 36, 21)}
-              textAnchor="middle"
-              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            >
-              {new Date(points[selectedPoint].data.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </text>
-            <text
-              x={Math.min(Math.max(points[selectedPoint].x - 28, 22), width - 78)}
-              y={Math.max(points[selectedPoint].y - 20, 37)}
-              style={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-            >
-              Fitness: {points[selectedPoint].data.ctl.toFixed(1)}
-            </text>
-            <text
-              x={Math.min(Math.max(points[selectedPoint].x - 28, 22), width - 78)}
-              y={Math.max(points[selectedPoint].y - 8, 49)}
-              style={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-            >
-              Fatigue: {points[selectedPoint].data.atl.toFixed(1)}
-            </text>
-          </g>
-        )}
-      </svg>
-
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-4 mt-1">
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-[10px] text-muted-foreground">Fresh</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 rounded-full bg-yellow-500" />
-          <span className="text-[10px] text-muted-foreground">Neutral</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 rounded-full bg-orange-500" />
-          <span className="text-[10px] text-muted-foreground">Building</span>
-        </div>
-      </div>
-    </div>
-  )
-}
