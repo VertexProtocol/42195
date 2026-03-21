@@ -70,7 +70,10 @@ export async function GET(
     if (cacheAge < CACHE_TTL_MS) {
       return NextResponse.json({ points: cached.points })
     }
-    // Cache is stale — fall through to re-fetch from Strava
+    // Cache is stale — delete it now.
+    // Strava API Agreement §7 prohibits retaining Strava data in cache longer
+    // than 7 days. Explicitly delete rather than relying on upsert overwrite.
+    await service.from("activity_streams").delete().eq("activity_id", id)
   }
 
   // 2. No cache — need to fetch from Strava

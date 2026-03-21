@@ -16,7 +16,7 @@ export default function PrivacyPolicyPage() {
       </Link>
 
       <h1 className="text-3xl font-bold text-foreground mb-2">Privacy Policy</h1>
-      <p className="text-sm text-muted-foreground mb-8">Last updated: March 14, 2026</p>
+      <p className="text-sm text-muted-foreground mb-8">Last updated: March 21, 2026</p>
 
       <div className="prose prose-sm prose-neutral dark:prose-invert space-y-6">
         <section>
@@ -64,20 +64,24 @@ export default function PrivacyPolicyPage() {
         <section>
           <h2 className="text-xl font-semibold text-foreground mb-2">5. Third-Party Services</h2>
           <ul className="list-disc pl-5 text-muted-foreground space-y-1">
-            <li><strong>Supabase:</strong> Database and authentication provider.</li>
-            <li><strong>Strava:</strong> Activity data is fetched via the Strava API when you connect your account. We comply with Strava&apos;s API Agreement.</li>
-            <li><strong>Vercel:</strong> Hosting and analytics.</li>
-            <li><strong>Anthropic (Claude):</strong> AI-powered training plans and coaching use Claude. Your activity data may be sent to Anthropic for analysis. No data is retained by Anthropic beyond the API request.</li>
+            <li><strong>Supabase:</strong> Database and authentication provider. Your data is isolated by row-level security so no other user can access it.</li>
+            <li><strong>Strava:</strong> Activity data is fetched via the Strava API when you connect your account. We comply with Strava&apos;s API Agreement. See Section 8 for full details.</li>
+            <li><strong>Vercel:</strong> Hosting provider. Vercel Analytics collects only aggregate page-view metrics and does not receive any of your personal activity data.</li>
+            <li><strong>Anthropic (Claude):</strong> AI-powered features (training plans, activity coaching, race strategy) use Claude. Your aggregated running metrics are sent to Anthropic&apos;s API for real-time inference only. Anthropic does not use API-submitted data to train its models by default, and we additionally send an explicit opt-out header (<code>X-Anthropic-No-Train</code>) on every request. No Strava data is retained by Anthropic beyond processing the individual request. Raw GPS data, social data, or any other users&apos; data is never sent to Anthropic.</li>
           </ul>
         </section>
 
         <section>
           <h2 className="text-xl font-semibold text-foreground mb-2">6. Data Retention</h2>
-          <p className="text-muted-foreground leading-relaxed">
-            We retain your data for as long as your account is active. Cached activity stream data
-            (GPS, heart rate, pace time-series) is automatically refreshed every 7 days. You can
-            request deletion of your account and all associated data at any time.
+          <p className="text-muted-foreground leading-relaxed mb-2">
+            We retain your data for as long as your account is active. You can request deletion at
+            any time (see Your Rights below).
           </p>
+          <ul className="list-disc pl-5 text-muted-foreground space-y-1">
+            <li><strong>Activity stream data</strong> (heart rate, pace, altitude time-series) is cached for up to 7 days. Stale cache entries are explicitly deleted after that period in accordance with Strava&apos;s API Agreement §7.</li>
+            <li><strong>Strava-derived data</strong> (activities, training plans, analyses, tokens) is deleted immediately and automatically if you revoke Strava access, either through Strava&apos;s settings or the app. See Section 8.</li>
+            <li><strong>AI-generated content</strong> (training plans, activity analyses) is stored only to serve it back to you on future visits. It is deleted when you delete your account or disconnect Strava.</li>
+          </ul>
         </section>
 
         <section>
@@ -85,24 +89,56 @@ export default function PrivacyPolicyPage() {
           <p className="text-muted-foreground leading-relaxed mb-2">You have the right to:</p>
           <ul className="list-disc pl-5 text-muted-foreground space-y-1">
             <li><strong>Access:</strong> View all data we store about you within the app.</li>
-            <li><strong>Deletion:</strong> Delete your account and all associated data from the Profile screen or via the account deletion API.</li>
-            <li><strong>Disconnect:</strong> Revoke Strava access at any time through Strava&apos;s settings or by reconnecting in the app.</li>
-            <li><strong>Export:</strong> Your activity data is accessible through the app and the Strava API.</li>
+            <li><strong>Deletion:</strong> Delete your account and all associated data from the Profile screen. This permanently removes your activities, training plans, goals, and authentication account.</li>
+            <li><strong>Disconnect Strava:</strong> Revoke Strava access at any time through Strava&apos;s authorised apps settings. When you do, we automatically and immediately delete all Strava-derived data from our systems (activities, streams, training plans, analyses, and OAuth tokens). Your app account is retained so you can reconnect if you choose.</li>
+            <li><strong>Withdraw AI consent:</strong> You may request that we delete all AI-generated content (training plans, activity analyses) by contacting us or deleting your account.</li>
+            <li><strong>Export:</strong> Your activity data is visible within the app. For a full data export, you can use Strava&apos;s own data export tool from your Strava account settings.</li>
           </ul>
         </section>
 
         <section>
           <h2 className="text-xl font-semibold text-foreground mb-2">8. Strava Data Usage</h2>
+          <p className="text-muted-foreground leading-relaxed mb-2">
+            In accordance with the Strava API Agreement:
+          </p>
+          <ul className="list-disc pl-5 text-muted-foreground space-y-1">
+            <li>We only access the Strava data you have explicitly authorised (running activity metrics: distance, duration, pace, heart rate, elevation).</li>
+            <li>Your Strava data is displayed only to you — it is never shared with other users, sold, or disclosed to advertisers or data brokers.</li>
+            <li>Strava data is <strong>not</strong> used to train any AI or machine learning model, in accordance with Strava API Agreement §2.14.iv. It is used exclusively for real-time inference to generate personalised outputs for you.</li>
+            <li>When you revoke Strava authorisation, our systems receive a webhook notification from Strava and <strong>automatically delete</strong> all Strava-derived data within seconds, in compliance with API Agreement §5.4.</li>
+            <li>Activity stream cache (heart rate, pace, altitude time-series) is deleted after 7 days, in compliance with API Agreement §7.</li>
+            <li>We do not process or aggregate Strava data for analytics, product improvement, or any purpose other than providing features directly to you.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold text-foreground mb-2">9. AI Data Use Policy</h2>
+          <p className="text-muted-foreground leading-relaxed mb-2">
+            42195 uses Anthropic&apos;s Claude API to power training plans, activity coaching, race strategy, and the coach assistant. The following rules govern how your data interacts with AI:
+          </p>
+          <ul className="list-disc pl-5 text-muted-foreground space-y-1">
+            <li><strong>Inference only:</strong> Your data is sent to Anthropic solely to generate a personalised response for you in that moment. It is not stored, indexed, or used in any training pipeline.</li>
+            <li><strong>No model training:</strong> We send an explicit <code>X-Anthropic-No-Train</code> header on every API request, instructing Anthropic not to use the submitted data for model training. Anthropic&apos;s standard API policy already prohibits training on customer data by default.</li>
+            <li><strong>Minimum data:</strong> Only aggregated metrics relevant to your specific request are sent (e.g. weekly distance summaries, average paces, heart rate zones). Raw GPS coordinates, social data, or identifiers are never sent to Anthropic.</li>
+            <li><strong>User-specific:</strong> AI features only ever process your own data to generate output for you. No other user&apos;s data is included in your AI requests.</li>
+            <li><strong>No third-party AI sharing:</strong> Strava data is sent only to Anthropic for inference. It is not sent to any other AI platform, analytics tool, or third-party service.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold text-foreground mb-2">10. Security Incidents</h2>
           <p className="text-muted-foreground leading-relaxed">
-            In accordance with the Strava API Agreement: we only access data you have explicitly
-            authorized; we do not sell or share your Strava data with third parties; we delete your
-            Strava data when you disconnect your account or request account deletion; cached Strava
-            data is refreshed periodically and not stored indefinitely.
+            We maintain appropriate technical and organisational measures to protect your data.
+            In the event of a personal data breach, we will notify affected users and, where required,
+            the relevant supervisory authority within 72 hours of becoming aware of the incident.
+            We will also notify Strava within 24 hours of any breach involving Strava data, in
+            accordance with the Strava API Agreement §2.8. If you discover or suspect a security
+            issue, please contact us immediately.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-2">9. Changes to This Policy</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-2">11. Changes to This Policy</h2>
           <p className="text-muted-foreground leading-relaxed">
             We may update this privacy policy from time to time. Changes will be reflected on this
             page with an updated &quot;Last updated&quot; date.
@@ -110,7 +146,7 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-2">10. Contact</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-2">12. Contact</h2>
           <p className="text-muted-foreground leading-relaxed">
             If you have questions about this privacy policy or your data, please open an issue on
             our GitHub repository or contact us through the app&apos;s support page.
