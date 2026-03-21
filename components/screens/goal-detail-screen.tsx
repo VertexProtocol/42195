@@ -11,9 +11,11 @@ import {
   CalendarCheck,
   AlertCircle,
   AlertTriangle,
+  Info,
   Lightbulb,
   Pencil,
   Flag,
+  CheckCircle2,
 } from "lucide-react"
 import {
   formatDistance,
@@ -104,6 +106,7 @@ function PreferencesForm({
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
+  const [injuryNotes, setInjuryNotes] = useState(initial.injury_notes ?? "")
   const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
   const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
   const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
@@ -123,6 +126,7 @@ function PreferencesForm({
           sessions_per_week: sessions,
           focus,
           notes,
+          injury_notes: injuryNotes || null,
           weekly_increase_pct: increasePct,
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
@@ -139,6 +143,7 @@ function PreferencesForm({
         sessions_per_week: sessions,
         focus,
         notes: notes || null,
+        injury_notes: injuryNotes || null,
         weekly_increase_pct: increasePct,
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
@@ -292,14 +297,31 @@ function PreferencesForm({
           Coach notes (optional)
         </label>
         <p className="mb-2 text-xs text-muted-foreground/70">
-          Any context for the AI coach — injuries, schedule constraints, experience level, etc.
+          Any context for the AI coach — schedule constraints, experience level, etc.
         </p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g. only available Wed + weekends, recovering from a knee niggle, experienced ultra runner..."
+          placeholder="e.g. only available Wed + weekends, experienced ultra runner..."
           className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={3}
+        />
+      </div>
+
+      {/* Injury notes */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Injury history (optional)
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          Recurring issues or injury history the coach should keep in mind for safety.
+        </p>
+        <textarea
+          value={injuryNotes}
+          onChange={(e) => setInjuryNotes(e.target.value)}
+          placeholder="e.g. recurring left knee pain, previous stress fracture in right foot..."
+          className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          rows={2}
         />
       </div>
 
@@ -384,9 +406,9 @@ function toMonday(date: Date): Date {
  * then greedily assigns the closest pair first.
  * Each activity matches at most one session.
  *
- * Matching rule: activity distance must be ≥ 95% of planned distance
- * (i.e. you must run at least the planned distance, with 5% grace for
- * GPS drift). Running further than planned always counts.
+ * Matching rule: activity distance must be ≥ 80% of planned distance
+ * (i.e. you must run at least 80% of the planned distance to count as
+ * completed). Running further than planned always counts.
  */
 function autoMatchSessions(
   sessions: { type: string; distance: string }[],
@@ -402,7 +424,7 @@ function autoMatchSessions(
   // Build all valid (session, activity) candidate pairs
   const candidates: { si: number; ai: number; delta: number }[] = []
   for (const session of sessionKms) {
-    const minRequired = session.km * 0.95 // must run at least 95% of planned
+    const minRequired = session.km * 0.80 // must run at least 80% of planned
     for (let ai = 0; ai < weekActivities.length; ai++) {
       const actKm = Number(weekActivities[ai].distance_km)
       if (actKm >= minRequired) {
@@ -793,11 +815,13 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     sessions_per_week: 3,
     focus: "balanced",
     notes: null,
+    injury_notes: null,
     weekly_increase_pct: 10,
     block_weeks: 4,
     regenerate_every_weeks: 4,
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
+  const [paceSource, setPaceSource] = useState<"test_run" | "prediction" | "historical" | "none" | null>(null)
   const [activeTab, setActiveTab] = useState<"plan" | "preferences">("plan")
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
@@ -829,6 +853,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             previous_plans: data.previous_plans ?? [],
             mid_block_checkpoint: data.mid_block_checkpoint ?? null,
           })
+          if (data.pace_source) setPaceSource(data.pace_source)
           // Surface any previously applied checkpoint
           if (data.mid_block_checkpoint?.adjustmentApplied) {
             setCheckpoint(data.mid_block_checkpoint)
@@ -1024,6 +1049,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             } else if (event.status === "generating") {
               setGenerateStatus("Writing your plan…")
             } else if (event.status === "done") {
+              if (event.pace_source) setPaceSource(event.pace_source)
               setAiPlan((prev) => ({
                 goal_id: goal.id,
                 plan: event.plan,
@@ -1031,7 +1057,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 generated_at: event.generated_at,
                 previous_plans: prev?.plan
                   ? [
-                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      {
+                        summary: prev.plan.summary,
+                        weeks: prev.plan.weeks.map((w) => ({
+                          weekNumber: w.weekNumber,
+                          theme: w.theme,
+                          targetKm: w.targetKm,
+                          sessionCount: w.sessions.length,
+                        })),
+                        generated_at: prev.generated_at,
+                        adjust_note: null,
+                        block_start_date: prev.block_start_date,
+                      },
                       ...(prev.previous_plans ?? []),
                     ].slice(0, 5)
                   : prev?.previous_plans ?? [],
@@ -1097,6 +1134,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     ? currentWeekIndex >= (aiPlan.plan.weeks.length)
     : false
 
+  const blockCompletionStats = useMemo(() => {
+    if (!aiPlan || !isBlockExpired) return null
+    const totalSessions = aiPlan.plan.weeks.reduce((s, w) => s + w.sessions.length, 0)
+    const completedSessions = aiPlan.plan.weeks.reduce(
+      (wSum, w) => wSum + w.sessions.reduce(
+        (sSum, _, si) => sSum + (sessionStatuses[`W${w.weekNumber}-${si}`] === "completed" ? 1 : 0), 0
+      ), 0
+    )
+    const totalKm = aiPlan.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+    return { weeks: aiPlan.plan.weeks.length, totalKm, completedSessions, totalSessions }
+  }, [aiPlan, isBlockExpired, sessionStatuses])
+
   // Pre-compute actual km per plan week for skip-load detection
   const weeklyActualKm = useMemo(() => {
     if (!aiPlan) return []
@@ -1127,7 +1176,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   }, [aiPlan, currentWeekIndex, weeklyActualKm, activities, isBlockExpired])
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-8 pt-4">
+    <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
       {/* Back */}
       <button
         onClick={onBack}
@@ -1144,7 +1193,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             {goal.is_active && !past && (
               <div className="mb-1 flex items-center gap-1.5">
                 <div className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                   Active plan
                 </span>
               </div>
@@ -1302,14 +1351,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
-            {/* Expired block warning */}
-            {isBlockExpired && (
-              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
-                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+            {/* Block completion summary */}
+            {isBlockExpired && blockCompletionStats && (
+              <div className="flex gap-2.5 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
+                <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Training block ended</p>
+                  <p className="text-sm font-medium text-foreground">Block complete</p>
                   <p className="text-xs text-muted-foreground">
-                    This {aiPlan.plan.weeks.length}-week block has finished. Regenerate to get a fresh plan based on your latest training.
+                    {blockCompletionStats.weeks}w · {blockCompletionStats.totalKm} km · {blockCompletionStats.completedSessions}/{blockCompletionStats.totalSessions} sessions · Regenerate when ready
                   </p>
                 </div>
               </div>
@@ -1388,6 +1437,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
                 <p className="text-sm text-foreground">{aiPlan.plan.watchOut}</p>
               </CollapsibleSection>
+            )}
+
+            {/* Pace source warning — only shown when pace targets are estimates */}
+            {(paceSource === "historical" || paceSource === "none") && (
+              <div className="flex items-start gap-2 rounded-xl bg-secondary px-3 py-2.5">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" />
+                <p className="text-xs text-muted-foreground">
+                  {paceSource === "none"
+                    ? "Pace suggestions are rough estimates — complete a test run to get accurate, personalised targets."
+                    : "Pace suggestions are based on your training history. Complete a test run for more precise targets."}
+                </p>
+              </div>
             )}
 
             {/* Adjust / Regenerate */}
@@ -1504,42 +1565,29 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     {aiPlan.previous_plans.map((prev, i) => {
                       const genDate = new Date(prev.generated_at)
                       const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                      const totalKm = prev.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+                      // Support both new format (prev.weeks) and legacy format (prev.plan.weeks)
+                      const weeks = prev.weeks ?? prev.plan?.weeks ?? []
+                      const totalKm = weeks.reduce((s, w) => s + w.targetKm, 0)
+                      const totalSessions = weeks.reduce((s, w) => s + ("sessionCount" in w ? w.sessionCount : (w as { sessions: unknown[] }).sessions.length), 0)
+                      const completedSessions = prev.sessionCompletions
+                        ? Object.values(prev.sessionCompletions).filter((s) => s === "completed").length
+                        : null
                       return (
                         <div
                           key={i}
-                          className="flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                          className="flex flex-col gap-1.5 rounded-xl bg-card px-4 py-3 ring-1 ring-border"
                         >
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-card-foreground">{label}</span>
                             <span className="text-xs text-muted-foreground">
-                              {prev.plan.weeks.length}w · {totalKm} km total
+                              {weeks.length}w · {totalKm} km
+                              {completedSessions !== null ? ` · ${completedSessions}/${totalSessions} sessions` : ""}
                               {prev.adjust_note ? " · adjusted" : ""}
                             </span>
                           </div>
-                          <button
-                            onClick={() => {
-                              setAiPlan((current) => {
-                                if (!current) return current
-                                // Swap: current → previous, selected previous → current
-                                const newPrevious = [
-                                  { plan: current.plan, generated_at: current.generated_at, adjust_note: null, block_start_date: current.block_start_date },
-                                  ...current.previous_plans.filter((_, j) => j !== i),
-                                ].slice(0, 5)
-                                return {
-                                  ...current,
-                                  plan: prev.plan,
-                                  generated_at: prev.generated_at,
-                                  block_start_date: prev.block_start_date,
-                                  previous_plans: newPrevious,
-                                }
-                              })
-                              setShowPreviousPlans(false)
-                            }}
-                            className="text-xs font-semibold text-primary active:opacity-70"
-                          >
-                            Restore
-                          </button>
+                          {prev.summary && (
+                            <p className="text-xs text-muted-foreground">{prev.summary}</p>
+                          )}
                         </div>
                       )
                     })}

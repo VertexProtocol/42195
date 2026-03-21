@@ -29,7 +29,7 @@ export default async function Page() {
         .limit(200),
       supabase
         .from("goals")
-        .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at")
+        .select("*")
         .order("created_at", { ascending: false }),
       supabase
         .from("weekly_goals")
@@ -69,6 +69,7 @@ export default async function Page() {
       current_distance_km: Number(g.current_distance_km),
       is_active: g.is_active,
       created_at: g.created_at,
+      is_starred: (g as any).is_starred ?? false, // [STAR]
     })),
     weeklyGoals: (weeklyGoalsRes.data ?? []).map((wg) => ({
       id: wg.id,

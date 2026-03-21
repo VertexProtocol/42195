@@ -123,13 +123,13 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-foreground/30 transition-opacity"
+        className="fixed inset-0 z-[60] bg-foreground/30 transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
+      <div className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
         <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
           {/* Handle */}
           <div className="flex shrink-0 justify-center pt-3 pb-1">

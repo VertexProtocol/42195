@@ -109,12 +109,14 @@ export function useAppData(initialData?: InitialData | null) {
           supabase
             .from("goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
-            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, display_order")
+            // [STAR] include is_starred for home screen pinned cards
+            .select("*")
             .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
-            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
-            .order("created_at", { ascending: false }),
+            // [DND] include display_order; order by it so the array arrives pre-sorted
+            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+            .order("display_order", { ascending: true }),
           supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
@@ -137,6 +139,7 @@ export function useAppData(initialData?: InitialData | null) {
             is_active: g.is_active,
             created_at: g.created_at,
             display_order: g.display_order ?? 0, // [DND]
+            is_starred: (g as any).is_starred ?? false, // [STAR]
           }))
         )
       }
@@ -153,6 +156,7 @@ export function useAppData(initialData?: InitialData | null) {
             is_recurring: wg.is_recurring ?? false,
             session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
             session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
+            display_order: wg.display_order ?? 0, // [DND]
           }))
         )
       }
@@ -191,6 +195,14 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Derived data -----
   const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
+  // [STAR] Event goals pinned to the home screen, sorted by race date (soonest first)
+  const starredGoals = useMemo(
+    () =>
+      goals
+        .filter((g) => g.is_starred)
+        .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()),
+    [goals],
+  )
 
   const { currentWeekMonday, weeklySummary } = useMemo(() => {
     const now = new Date()
@@ -342,6 +354,29 @@ export function useAppData(initialData?: InitialData | null) {
     }
   }, [])
 
+  // [STAR] Toggle is_starred on a goal (optimistic update)
+  const toggleStarGoal = useCallback(async (goalId: string) => {
+    const target = goalsRef.current.find((g) => g.id === goalId)
+    if (!target) return
+
+    const newStarred = !target.is_starred
+    setGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, is_starred: newStarred } : g))
+    )
+
+    const { error } = await supabase
+      .from("goals")
+      .update({ is_starred: newStarred })
+      .eq("id", goalId)
+
+    if (error) {
+      console.error("Failed to toggle goal star:", error)
+      setGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? { ...g, is_starred: !newStarred } : g))
+      )
+    }
+  }, [])
+
   // [DND] Reorder race goals by persisting a new display_order for each goal
   const reorderGoals = useCallback(async (orderedIds: string[]) => {
     // Optimistic update: reassign display_order values in the local state
@@ -461,6 +496,26 @@ export function useAppData(initialData?: InitialData | null) {
     } else {
       // toast.success("Weekly goal deleted")
     }
+  }, [])
+
+  // [DND] Reorder weekly goals by persisting a new display_order for each goal
+  const reorderWeeklyGoals = useCallback(async (orderedIds: string[]) => {
+    setWeeklyGoals((prev) => {
+      const byId = new Map(prev.map((g) => [g.id, g]))
+      const reordered = orderedIds
+        .map((id, i) => {
+          const g = byId.get(id)
+          return g ? { ...g, display_order: i + 1 } : null
+        })
+        .filter(Boolean) as import("@/lib/types").WeeklyGoal[]
+      const reorderedSet = new Set(orderedIds)
+      return [...reordered, ...prev.filter((g) => !reorderedSet.has(g.id))]
+    })
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        supabase.from("weekly_goals").update({ display_order: i + 1 }).eq("id", id)
+      )
+    )
   }, [])
 
   // ----- Add manual activity -----
@@ -606,12 +661,14 @@ export function useAppData(initialData?: InitialData | null) {
 
     // Derived
     activeGoals,
+    starredGoals, // [STAR]
     currentWeekMonday,
     weeklySummary,
     currentWeekGoals,
 
     // Goal operations
     toggleActiveGoal,
+    toggleStarGoal, // [STAR]
     saveGoal,
     deleteGoal,
     reorderGoals, // [DND]
@@ -619,6 +676,7 @@ export function useAppData(initialData?: InitialData | null) {
     // Weekly goal operations
     saveWeeklyGoal,
     deleteWeeklyGoal,
+    reorderWeeklyGoals, // [DND]
 
     // Activities
     addActivity,

@@ -376,7 +376,7 @@ function buildPrompt(
 ## Runner's Preferences
 - Sessions per week: ${prefs.sessions_per_week}
 - Focus: ${focusDescription}
-- Notes: ${prefs.notes ? `"${prefs.notes}"` : "None provided"}
+- Notes: ${prefs.notes ? `"${prefs.notes}"` : "None provided"}${prefs.injury_notes ? `\n- Injury history / recurring issues: "${prefs.injury_notes}" — take this seriously when prescribing session intensity and volume. Avoid movements or loads that aggravate these conditions.` : ""}
 ${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}
 ## Recent Training History (most recent first)
 ${weekSummaryText}
@@ -425,7 +425,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "goalId is required" }, { status: 400 })
   }
 
-  // Rate limit: prevent regeneration within 60 seconds
+  // Rate limit: prevent regeneration more than once per 10 minutes to avoid
+  // plan confusion and excessive AI costs. Users who want to tweak should use
+  // the "Adjust" note rather than spamming regenerate.
   const { data: existingPlan } = await supabase
     .from("ai_training_plans")
     .select("generated_at, plan, adjust_note, block_start_date, previous_plans")
@@ -434,9 +436,13 @@ export async function POST(req: NextRequest) {
 
   if (existingPlan?.generated_at) {
     const lastGen = new Date(existingPlan.generated_at).getTime()
-    if (Date.now() - lastGen < 60_000) {
+    const COOLDOWN_MS = 10 * 60 * 1000 // 10 minutes
+    const elapsed = Date.now() - lastGen
+    if (elapsed < COOLDOWN_MS) {
+      const waitSecs = Math.ceil((COOLDOWN_MS - elapsed) / 1000)
+      const waitMins = Math.ceil(waitSecs / 60)
       return NextResponse.json(
-        { error: "Please wait at least 60 seconds before regenerating" },
+        { error: `Please wait ${waitMins} minute${waitMins !== 1 ? "s" : ""} before regenerating` },
         { status: 429 },
       )
     }
@@ -466,6 +472,7 @@ export async function POST(req: NextRequest) {
     sessions_per_week: prefsRow?.sessions_per_week ?? 3,
     focus: prefsRow?.focus ?? "balanced",
     notes: prefsRow?.notes ?? null,
+    injury_notes: (prefsRow as any)?.injury_notes ?? null,
     weekly_increase_pct: prefsRow?.weekly_increase_pct ?? 10,
     block_weeks: prefsRow?.block_weeks ?? 4,
     regenerate_every_weeks: prefsRow?.regenerate_every_weeks ?? 4,
@@ -484,7 +491,9 @@ export async function POST(req: NextRequest) {
     .order("date", { ascending: false })
     .limit(500)
 
-  const weeklySummaries = groupActivitiesByWeek(activities ?? [])
+  // Weekly summaries are computed from running activities only so that cycling/hiking weeks
+  // don't inflate weekly km targets in the AI prompt.
+  const weeklySummaries = groupActivitiesByWeek((activities ?? []).filter((a) => RUN_TYPES.has(a.type)))
 
   // Compute derived metrics
   // Use the same window as the plan regeneration cadence — if the user checks in
@@ -502,23 +511,22 @@ export async function POST(req: NextRequest) {
     (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
-  // Compute ACWR for injury risk awareness in the prompt (effort-adjusted for elevation)
+  // Compute ACWR and safety metrics from running activities only — cycling/hiking inflate
+  // chronic load and cause the plan generator to produce overly conservative running plans.
+  const acts = activities ?? []
+  const runActs = acts.filter((a) => RUN_TYPES.has(a.type))
   const now = Date.now()
   const day7 = now - 7 * 24 * 60 * 60 * 1000
   const day28 = now - 28 * 24 * 60 * 60 * 1000
-  const acts = activities ?? []
-  const acuteLoad = acts
+  const acuteLoad = runActs
     .filter((a) => new Date(a.date).getTime() >= day7)
     .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
-  const chronicTotal = acts
+  const chronicTotal = runActs
     .filter((a) => new Date(a.date).getTime() >= day28)
     .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
   const chronicLoad = chronicTotal / 4
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
-
-  // Compute pace stats for the prompt — running activities only to avoid skew from walks/hikes/rides
-  const runActs = acts.filter((a) => RUN_TYPES.has(a.type))
   const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
   const recentEasyPace = actsWithPace.length > 0
     ? actsWithPace
@@ -638,6 +646,52 @@ export async function POST(req: NextRequest) {
     if (existingPlan.adjust_note) {
       previousPlanSummary += `\n  Last adjustment note: "${existingPlan.adjust_note}"`
     }
+
+    // Synthesize patterns from up to 4 archived previous blocks using session completions.
+    // This gives the coach context on long-term adherence patterns across the training cycle.
+    const archivePlans = Array.isArray(existingPlan.previous_plans) ? existingPlan.previous_plans : []
+    if (archivePlans.length > 0) {
+      const blockSummaries: string[] = []
+      let totalCompletedSessions = 0
+      let totalPlannedSessions = 0
+      const sessionTypeCompletions: Record<string, { completed: number; total: number }> = {}
+
+      for (const archived of archivePlans.slice(0, 4)) {
+        const completions = archived.sessionCompletions ?? {}
+        const weeks = archived.weeks ?? []
+        let blockCompleted = 0
+        let blockPlanned = 0
+
+        for (const week of weeks) {
+          for (let si = 0; si < (week.sessionCount ?? 0); si++) {
+            const key = `W${week.weekNumber}-${si}`
+            const status = completions[key]
+            blockPlanned++
+            if (status === "completed") blockCompleted++
+          }
+        }
+
+        totalCompletedSessions += blockCompleted
+        totalPlannedSessions += blockPlanned
+        const blockAdherence = blockPlanned > 0 ? Math.round((blockCompleted / blockPlanned) * 100) : null
+        if (blockAdherence !== null) {
+          blockSummaries.push(`Block ${archived.generated_at?.split("T")[0] ?? "?"}: ${blockAdherence}% session adherence (${blockCompleted}/${blockPlanned} sessions completed)`)
+        }
+      }
+
+      if (blockSummaries.length > 0) {
+        const overallAdherence = totalPlannedSessions > 0 ? Math.round((totalCompletedSessions / totalPlannedSessions) * 100) : null
+        previousPlanSummary += `\n\n  Historical adherence pattern (${blockSummaries.length} prior blocks):\n  ${blockSummaries.join("\n  ")}`
+        if (overallAdherence !== null) {
+          previousPlanSummary += `\n  Overall session adherence across tracked blocks: ${overallAdherence}%`
+          if (overallAdherence < 70) {
+            previousPlanSummary += ` — consistently low adherence suggests real-world constraints. Consider reducing session count or targeting shorter, more manageable sessions.`
+          } else if (overallAdherence > 90) {
+            previousPlanSummary += ` — consistently high adherence indicates a reliable trainer. Progression can be more confident.`
+          }
+        }
+      }
+    }
   }
 
   // Compute which block this is within the current training phase
@@ -690,10 +744,19 @@ export async function POST(req: NextRequest) {
       try {
         send({ status: "thinking" })
 
+        // Scale thinking budget with plan length: longer blocks benefit from more planning
+        // tokens. Capped at 8000 so cost stays predictable.
+        const blockWeeksCount = (() => {
+          const maxWeeks = Math.max(1, Math.floor(daysUntilRace / 7))
+          const isFullCycle = (prefs.plan_mode ?? "block") === "full_cycle"
+          return isFullCycle ? Math.min(maxWeeks, 20) : Math.min(prefs.block_weeks ?? 4, maxWeeks)
+        })()
+        const thinkingBudget = Math.min(8000, Math.max(2000, blockWeeksCount * 1000))
+
         const stream = anthropic.messages.stream({
           model: "claude-sonnet-4-6",
           max_tokens: 10000,
-          thinking: { type: "enabled", budget_tokens: 2000 },
+          thinking: { type: "enabled", budget_tokens: thinkingBudget },
           system: [
             {
               type: "text" as const,
@@ -745,8 +808,9 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue
-        const safetyResult = validateAndAdjustPlan(plan, acts, prefs)
+        // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue.
+        // Pass running activities only so cross-training doesn't skew ACWR and fatigue detection.
+        const safetyResult = validateAndAdjustPlan(plan, runActs as unknown as SafetyActivity[], prefs)
         const safePlan = safetyResult.adjustedPlan
 
         // Pace guide: deterministic pace targets per session based on test runs + race predictions
@@ -892,7 +956,59 @@ export async function POST(req: NextRequest) {
           return
         }
 
-        // Clean up orphaned session completions from the previous plan
+        // Migrate session completions from old plan to new plan by matching on week + session type.
+        // This preserves "completed" / "skipped" marks when regenerating with an adjust note,
+        // rather than wiping all progress on every regen.
+        const oldCompletions = Array.isArray(currentPlan?.session_completions)
+          ? (currentPlan.session_completions as Array<{ session_key: string; status: string }>)
+          : []
+        const oldPlan = currentPlan?.plan as TrainingPlan | undefined
+        const migratedRows: Array<{ goal_id: string; user_id: string; session_key: string; status: string; updated_at: string }> = []
+
+        if (oldPlan && oldCompletions.length > 0) {
+          // Build a type-normalizer so "Long Run" and "long run" match
+          const norm = (s: string) => s.toLowerCase().trim()
+
+          // Index new plan sessions by week number for fast lookup
+          const newSessionsByWeek = new Map<number, string[]>() // weekNumber → [normalizedType, ...]
+          for (const week of safePlan.weeks) {
+            newSessionsByWeek.set(week.weekNumber, week.sessions.map((s) => norm(s.type)))
+          }
+
+          // Track which new session slots are already claimed (to avoid double-counting)
+          const claimed = new Map<string, boolean>()
+
+          for (const comp of oldCompletions) {
+            if (comp.status === "planned") continue // default state — skip
+            const keyMatch = comp.session_key.match(/^W(\d+)-(\d+)$/)
+            if (!keyMatch) continue
+            const weekNum = parseInt(keyMatch[1], 10)
+            const sessionIdx = parseInt(keyMatch[2], 10)
+
+            // Find the old session type for this key
+            const oldWeek = oldPlan.weeks.find((w) => w.weekNumber === weekNum)
+            if (!oldWeek || sessionIdx >= oldWeek.sessions.length) continue
+            const oldType = norm(oldWeek.sessions[sessionIdx].type)
+
+            // Find a matching session in the new plan at the same week (by type)
+            const newTypes = newSessionsByWeek.get(weekNum)
+            if (!newTypes) continue
+            const newIdx = newTypes.findIndex((t, i) => t === oldType && !claimed.get(`W${weekNum}-${i}`))
+            if (newIdx === -1) continue // no matching session in new plan
+
+            const newKey = `W${weekNum}-${newIdx}`
+            claimed.set(newKey, true)
+            migratedRows.push({
+              goal_id: goalId,
+              user_id: user.id,
+              session_key: newKey,
+              status: comp.status,
+              updated_at: new Date().toISOString(),
+            })
+          }
+        }
+
+        // Delete all old completions then re-insert migrated ones
         const { error: deleteError } = await service
           .from("session_completions")
           .delete()
@@ -900,12 +1016,23 @@ export async function POST(req: NextRequest) {
         if (deleteError) {
           console.warn(`[plan] Failed to clean up session completions for goal ${goalId}:`, deleteError)
         }
+        if (migratedRows.length > 0) {
+          const { error: migrateError } = await service
+            .from("session_completions")
+            .upsert(migratedRows, { onConflict: "goal_id,session_key" })
+          if (migrateError) {
+            console.warn(`[plan] Failed to migrate session completions for goal ${goalId}:`, migrateError)
+          } else {
+            console.log(`[plan] Migrated ${migratedRows.length} session completions for goal ${goalId}`)
+          }
+        }
 
         send({
           status: "done",
           plan: safePlan,
           block_start_date: blockStartDate,
           generated_at: generatedAt,
+          pace_source: paceGuide.source,
           safety: safetyResult.passed ? null : {
             athleteLevel: safetyResult.athleteLevel,
             notes: safetyResult.safetyNotes,
@@ -1046,6 +1173,22 @@ export async function GET(req: NextRequest) {
         )
       : false
 
+  // Build pace guide for the enriched plan so we can return the source tier
+  const paceGuideForResponse = (() => {
+    if (!enrichedPlan || !goal?.target_distance_km) return null
+    const runActs2 = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
+    const actsWithPace2 = runActs2.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
+    const easyPace2 = actsWithPace2.length > 0
+      ? actsWithPace2
+          .map((a) => Number(a.pace_min_per_km))
+          .sort((a, b) => b - a)
+          .slice(0, Math.ceil(actsWithPace2.length * 0.5))
+          .reduce((s, p, _, arr) => s + p / arr.length, 0)
+      : null
+    const { predictions: preds } = predictRaceTimes(runActs2 as unknown as Activity[])
+    return buildPaceGuide(preds, testRuns ?? [], goal.target_distance_km, easyPace2)
+  })()
+
   return NextResponse.json({
     plan: enrichedPlan,
     block_start_date: planRow.block_start_date,
@@ -1053,6 +1196,7 @@ export async function GET(req: NextRequest) {
     previous_plans: planRow.previous_plans ?? [],
     mid_block_checkpoint: planRow.mid_block_checkpoint ?? null,
     checkpoint_due: checkpointDue,
+    pace_source: paceGuideForResponse?.source ?? "none",
   })
 }
 
@@ -1061,6 +1205,7 @@ const PreferencesSchema = z.object({
   sessions_per_week: z.number().int().min(1).max(14),
   focus: z.enum(["volume", "workouts", "balanced"]),
   notes: z.string().max(500).nullable().optional(),
+  injury_notes: z.string().max(500).nullable().optional(),
   weekly_increase_pct: z.number().min(0).max(25).default(10),
   block_weeks: z.number().int().min(1).max(20).default(4),
   regenerate_every_weeks: z.number().int().min(1).max(12).default(4),
@@ -1088,7 +1233,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 })
   }
 
-  const { goalId, sessions_per_week, focus, notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = parsed.data
+  const { goalId, sessions_per_week, focus, notes, injury_notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = parsed.data
 
   const { error } = await supabase.from("goal_preferences").upsert(
     {
@@ -1104,6 +1249,19 @@ export async function PUT(req: NextRequest) {
     },
     { onConflict: "goal_id" }
   )
+
+  // injury_notes lives in a column added by migration 020 — update separately
+  // so a missing column doesn't break the whole preferences save.
+  if (!error) {
+    await supabase
+      .from("goal_preferences")
+      .update({ injury_notes: injury_notes || null })
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .then(({ error: injErr }) => {
+        if (injErr) console.warn("Could not persist injury_notes (migration may not be applied):", injErr.message)
+      })
+  }
 
   if (error) {
     console.error("Failed to save goal preferences:", error)
