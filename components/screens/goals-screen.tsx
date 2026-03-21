@@ -153,19 +153,8 @@ export function GoalsScreen({
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("race")
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
-  const [expandedWeeklyIds, setExpandedWeeklyIds] = useState<Set<string>>(new Set())
-
   const toggleExpanded = (id: string) => {
     setExpandedGoalIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleWeeklyExpanded = (id: string) => {
-    setExpandedWeeklyIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -341,112 +330,91 @@ export function GoalsScreen({
                   const isComplete = current >= wg.target
                   const label = t(METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
 
-                  const isWeeklyExpanded = expandedWeeklyIds.has(wg.id)
-
                   // [DND] wrap each card in SortableGoalItem
                   return (
                     <SortableGoalItem key={wg.id} id={wg.id}>
                       {(dragListeners) => (
                         <div
-                          className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
+                          className={`rounded-2xl bg-card shadow-sm ring-1 transition-all ${
                             isComplete ? "ring-success/40 ring-2" : "ring-border"
                           }`}
                         >
-                          {/* Collapsed header */}
-                          <div className="flex items-center">
+                          <div className="flex items-center gap-3 px-4 pt-4 pb-3">
                             {/* [DND] Drag handle */}
                             <button
                               {...dragListeners}
                               onClick={(e) => e.stopPropagation()}
-                              className="touch-none flex shrink-0 items-center self-stretch px-3 text-muted-foreground/25 active:text-muted-foreground/60"
+                              className="touch-none shrink-0 text-muted-foreground/25 active:text-muted-foreground/60 -ml-1"
                               aria-label="Drag to reorder"
                             >
                               <GripVertical size={16} />
                             </button>
 
-                            {/* Expand / collapse */}
-                            <button
-                              type="button"
-                              onClick={() => toggleWeeklyExpanded(wg.id)}
-                              className="flex flex-1 items-center gap-3 py-4 pr-2 text-left active:bg-secondary/50 transition-colors"
-                            >
-                              <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
-                                isComplete ? "bg-success/15" : "bg-secondary"
-                              }`}>
-                                <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
-                              </div>
+                            {/* Icon */}
+                            <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                              isComplete ? "bg-success/15" : "bg-secondary"
+                            }`}>
+                              <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
+                            </div>
 
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <h4 className="text-sm font-semibold text-card-foreground truncate">{label}</h4>
-                                  {wg.is_recurring && (
-                                    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                      <RefreshCw size={9} />
-                                      {t("goals.weekly")}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                                  <span className={`font-semibold ${isComplete ? "text-success" : "text-foreground"}`}>
-                                    {formatWeeklyMetric(current, wg.metric)}
+                            {/* Label + badge */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <h4 className="text-sm font-semibold text-card-foreground truncate">{label}</h4>
+                                {wg.is_recurring && (
+                                  <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                    <RefreshCw size={9} />
+                                    {t("goals.weekly")}
                                   </span>
-                                  {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
-                                </p>
+                                )}
                               </div>
-
-                              <ChevronDown
-                                size={18}
-                                className={`text-muted-foreground shrink-0 transition-transform ${isWeeklyExpanded ? "rotate-180" : ""}`}
-                              />
-                            </button>
+                            </div>
 
                             {/* Edit button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
-                              className="flex shrink-0 items-center self-stretch px-3 text-muted-foreground/40 active:text-muted-foreground transition-colors"
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
                               aria-label={`Edit ${label}`}
                             >
-                              <Pencil size={15} />
+                              <Pencil size={12} />
                             </button>
                           </div>
 
-                          {/* Expanded content */}
-                          {isWeeklyExpanded && (
-                            <div className="px-4 pb-4 border-t border-border">
-                              {/* Per-session requirement hint */}
-                              {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
-                                <p className="mt-3 text-xs text-muted-foreground">
-                                  {[
-                                    wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
-                                    wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
-                                  ].filter(Boolean).join(" · ")} {t("goals.perSession")}
-                                </p>
-                              )}
-
-                              <div className="mt-3">
-                                <div className="flex items-baseline gap-1 mb-2">
-                                  <span className="text-2xl font-bold font-mono text-foreground">
-                                    {formatWeeklyMetric(current, wg.metric)}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">
-                                    / {formatWeeklyMetric(wg.target, wg.metric)}
-                                  </span>
-                                </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
-                                    style={{ width: `${progress}%` }}
-                                  />
-                                </div>
-                                <div className="mt-1 flex items-center justify-between text-[11px]">
-                                  <span className="text-muted-foreground">{isComplete ? t("goals.completed") : `${progress}%`}</span>
-                                  {isComplete && (
-                                    <span className="font-medium text-success">{t("goals.goalReached")}</span>
-                                  )}
-                                </div>
-                              </div>
+                          {/* Progress section */}
+                          <div className="px-4 pb-4">
+                            <div className="flex items-baseline gap-1 mb-2">
+                              <span className={`text-2xl font-bold font-mono ${isComplete ? "text-success" : "text-foreground"}`}>
+                                {formatWeeklyMetric(current, wg.metric)}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                / {formatWeeklyMetric(wg.target, wg.metric)}
+                              </span>
                             </div>
-                          )}
+                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <div className="mt-1 flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">
+                                {isComplete ? t("goals.completed") : `${progress}%`}
+                              </span>
+                              {isComplete && (
+                                <span className="font-medium text-success">{t("goals.goalReached")}</span>
+                              )}
+                            </div>
+
+                            {/* Per-session requirement hint */}
+                            {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                {[
+                                  wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
+                                  wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
+                                ].filter(Boolean).join(" · ")} {t("goals.perSession")}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </SortableGoalItem>
