@@ -352,7 +352,7 @@ export function GoalsScreen({
                             </button>
 
                             {/* Main content row */}
-                            <div className="flex flex-1 items-center gap-3 py-3 pr-2">
+                            <div className="flex flex-1 items-center gap-3 py-3 pr-3">
                               <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
                                 isComplete ? "bg-success/15" : "bg-secondary"
                               }`}>
@@ -393,16 +393,16 @@ export function GoalsScreen({
                                   </p>
                                 )}
                               </div>
-                            </div>
 
-                            {/* Edit button */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
-                              className="flex shrink-0 items-center self-stretch px-3 text-muted-foreground/40 active:text-muted-foreground transition-colors"
-                              aria-label={`Edit ${label}`}
-                            >
-                              <Pencil size={16} />
-                            </button>
+                              {/* Edit button — inside content row so it stays anchored to text, not card edge */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
+                                className="shrink-0 self-start rounded-lg p-2 text-muted-foreground/40 active:text-muted-foreground transition-colors"
+                                aria-label={`Edit ${label}`}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
