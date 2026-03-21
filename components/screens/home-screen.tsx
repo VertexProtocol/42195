@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star, Flame, Mountain, Target } from "lucide-react"
+import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -241,54 +241,47 @@ export function HomeScreen({
         </div>
 
         {/* Weekly goal progress rings */}
-        {currentWeekGoals.length > 0 && (
-          <div className="mt-3 flex flex-col gap-2">
-            {currentWeekGoals.map((wg) => {
-              const current = computeWeeklyProgress(
-                activities,
-                wg.metric,
-                currentMondayStr,
-                wg.session_min_duration_minutes,
-                wg.session_min_distance_km,
-              )
-              const progress = progressPercentage(current, wg.target)
-              const isComplete = current >= wg.target
-              const ICONS: Record<string, typeof Target> = { distance_km: TrendingUp, sessions: Flame, duration_minutes: Clock, elevation_m: Mountain }
-              const KEYS: Record<string, TranslationKey> = { distance_km: "goals.weeklyDistance", sessions: "goals.trainingSessions", duration_minutes: "goals.activeMinutes", elevation_m: "goals.elevationGain" }
-              const Icon = ICONS[wg.metric] ?? Target
-              return (
-                <button
-                  key={wg.id}
-                  onClick={onViewGoals}
-                  className={`flex items-center gap-3.5 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 text-left active:scale-[0.99] transition-transform ${isComplete ? "ring-2 ring-success/40" : "ring-border"}`}
-                >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isComplete ? "bg-success/15" : "bg-secondary"}`}>
-                    <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-card-foreground truncate">
-                      {t(KEYS[wg.metric]) || wg.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                      <span className={`font-semibold ${isComplete ? "text-success" : "text-foreground"}`}>{formatWeeklyMetric(current, wg.metric)}</span>
-                      {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
-                    </p>
-                  </div>
-
-                  <div className="relative flex shrink-0 items-center justify-center">
-                    <ProgressRing percentage={progress} size={52} strokeWidth={4} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className={`text-[10px] font-bold tabular-nums ${isComplete ? "text-success" : "text-foreground"}`}>
-                        {progress}%
-                      </span>
+        {currentWeekGoals.length > 0 && (() => {
+          const KEYS: Record<string, TranslationKey> = { distance_km: "goals.weeklyDistance", sessions: "goals.trainingSessions", duration_minutes: "goals.activeMinutes", elevation_m: "goals.elevationGain" }
+          return (
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              {currentWeekGoals.slice(0, 3).map((wg) => {
+                const current = computeWeeklyProgress(
+                  activities,
+                  wg.metric,
+                  currentMondayStr,
+                  wg.session_min_duration_minutes,
+                  wg.session_min_distance_km,
+                )
+                const progress = progressPercentage(current, wg.target)
+                const isComplete = current >= wg.target
+                return (
+                  <button
+                    key={wg.id}
+                    onClick={onViewGoals}
+                    className="flex flex-col items-center gap-1.5 active:opacity-70 transition-opacity"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <ProgressRing
+                        percentage={progress}
+                        size={64}
+                        strokeWidth={5}
+                      />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className={`text-[11px] font-bold tabular-nums leading-none ${isComplete ? "text-success" : "text-foreground"}`}>
+                          {progress}%
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
+                    <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2 px-1">
+                      {t(KEYS[wg.metric]) || wg.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
       </section>
 
 
