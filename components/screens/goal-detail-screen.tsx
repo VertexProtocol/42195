@@ -1032,7 +1032,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 generated_at: event.generated_at,
                 previous_plans: prev?.plan
                   ? [
-                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      {
+                        summary: prev.plan.summary,
+                        weeks: prev.plan.weeks.map((w) => ({
+                          weekNumber: w.weekNumber,
+                          theme: w.theme,
+                          targetKm: w.targetKm,
+                          sessionCount: w.sessions.length,
+                        })),
+                        generated_at: prev.generated_at,
+                        adjust_note: null,
+                        block_start_date: prev.block_start_date,
+                      },
                       ...(prev.previous_plans ?? []),
                     ].slice(0, 5)
                   : prev?.previous_plans ?? [],
