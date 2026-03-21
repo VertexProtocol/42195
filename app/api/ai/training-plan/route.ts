@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
+import { anthropic } from "@/lib/anthropic"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
@@ -36,8 +36,6 @@ const TrainingPlanSchema = z.object({
   keyPrinciples: z.array(z.string()),
   watchOut: z.string().nullable(),
 })
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 interface WeeklySummary {
   weekLabel: string

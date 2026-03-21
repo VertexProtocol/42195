@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
+import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const COACH_SYSTEM_PROMPT = `You are an expert running coach assistant embedded in a training app. You help runners with questions about their training, goals, pacing, recovery, and race preparation.
 

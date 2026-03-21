@@ -65,11 +65,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid subscription" }, { status: 403 })
   }
 
-  // We only care about activity events
-  if (event.object_type !== "activity") {
-    return NextResponse.json({ ok: true })
-  }
-
   const service = createServiceClient()
 
   // Look up which user owns this Strava athlete_id
@@ -86,6 +81,40 @@ export async function POST(request: NextRequest) {
   }
 
   const userId = tokenRow.user_id
+
+  // ---------------------------------------------------------------------------
+  // Athlete deauthorization — user revoked Strava access.
+  // Strava API Agreement §5.4 requires deleting all Personal Data when a user
+  // revokes authorization. Delete every Strava-derived record for this user.
+  // We retain the app auth account so the user can reconnect if they choose.
+  // ---------------------------------------------------------------------------
+  if (event.object_type === "athlete" && event.aspect_type === "delete") {
+    const tables = [
+      "activity_streams",
+      "activity_laps",
+      "activity_analyses",
+      "activities",
+      "ai_training_plans",
+      "goal_preferences",
+      "sync_status",
+      "strava_tokens",
+    ] as const
+
+    for (const table of tables) {
+      const { error } = await service.from(table).delete().eq("user_id", userId)
+      if (error && error.code !== "42P01") {
+        console.error(`Strava deauthorize: failed to delete from ${table} for user ${userId}:`, error)
+      }
+    }
+
+    console.log(`Strava deauthorize: deleted all Strava data for user ${userId} (athlete ${event.owner_id})`)
+    return NextResponse.json({ ok: true })
+  }
+
+  // Ignore other non-activity events
+  if (event.object_type !== "activity") {
+    return NextResponse.json({ ok: true })
+  }
 
   try {
     if (event.aspect_type === "create" || event.aspect_type === "update") {
