@@ -515,7 +515,7 @@ export function GoalsScreen({
                       <button
                         type="button"
                         onClick={() => toggleExpanded(goal.id)}
-                        className="flex flex-1 items-center gap-3 py-4 pr-4 text-left active:bg-secondary/50 transition-colors"
+                        className="flex flex-1 items-center gap-3 py-4 pr-2 text-left active:bg-secondary/50 transition-colors"
                       >
                         {/* Icon */}
                         <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
@@ -557,6 +557,18 @@ export function GoalsScreen({
                           size={18}
                           className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                         />
+                      </button>
+                      {/* [STAR] Star button — always visible in collapsed header */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onToggleStar(goal.id); }}
+                        className={`flex shrink-0 items-center self-stretch px-3 transition-colors ${
+                          goal.is_starred
+                            ? "text-amber-500 active:text-amber-600"
+                            : "text-muted-foreground/40 active:text-muted-foreground"
+                        }`}
+                        aria-label={goal.is_starred ? "Unpin from home" : "Pin to home"}
+                      >
+                        <Star size={16} fill={goal.is_starred ? "currentColor" : "none"} />
                       </button>
                     </div>
 
@@ -669,28 +681,13 @@ export function GoalsScreen({
                           
                           {/* Actions */}
                           <div className="mt-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
-                                className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
-                              >
-                                <Pencil size={14} />
-                                Edit
-                              </button>
-                              {/* [STAR] Pin to home screen */}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); onToggleStar(goal.id); }}
-                                className={`flex items-center gap-1.5 text-xs transition-colors ${
-                                  goal.is_starred
-                                    ? "text-amber-500 active:text-amber-600"
-                                    : "text-muted-foreground active:text-foreground"
-                                }`}
-                                title={goal.is_starred ? "Unpin from home screen" : "Pin to home screen"}
-                              >
-                                <Star size={14} fill={goal.is_starred ? "currentColor" : "none"} />
-                                {goal.is_starred ? "Pinned" : "Pin"}
-                              </button>
-                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); onSelectGoal(goal); }}
                               className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary active:bg-primary/20 transition-colors"
