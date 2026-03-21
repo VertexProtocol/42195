@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
+import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
@@ -24,8 +24,6 @@ export async function GET(req: NextRequest) {
   if (!data) return NextResponse.json({ analysis: null })
   return NextResponse.json({ analysis: data.analysis })
 }
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const ANALYSIS_SYSTEM_PROMPT = `You are a concise running coach reviewing a runner's completed activity. Provide a brief, actionable analysis in 3-5 short sentences. Be specific about the data — reference actual numbers. Be encouraging but honest.
 

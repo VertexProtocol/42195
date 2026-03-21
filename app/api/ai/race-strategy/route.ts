@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
+import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal, and fitness level, create a detailed pacing and preparation plan.
 
