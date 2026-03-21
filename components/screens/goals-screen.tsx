@@ -360,8 +360,8 @@ export function GoalsScreen({
                               </div>
 
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-semibold text-foreground truncate">{label}</h4>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <h4 className="font-semibold text-foreground truncate min-w-0">{label}</h4>
                                   {wg.is_recurring && (
                                     <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                                       <RefreshCw size={9} />
