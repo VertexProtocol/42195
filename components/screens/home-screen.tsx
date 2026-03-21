@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, lazy, Suspense } from "react"
+import { useMemo, lazy, Suspense, useEffect, useState } from "react"
 import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
@@ -16,6 +16,7 @@ import {
 } from "@/lib/format"
 import type { Goal, WeeklySummary, Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { createClient } from "@/lib/supabase/client"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
@@ -47,6 +48,34 @@ export function HomeScreen({
   onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
+
+  const [planBadges, setPlanBadges] = useState<Record<string, { checkpoint: boolean; blockCompleted: boolean }>>({})
+
+  useEffect(() => {
+    if (activeGoals.length === 0) return
+    const supabase = createClient()
+    supabase
+      .from("ai_training_plans")
+      .select("goal_id, block_start_date, plan, mid_block_checkpoint")
+      .in("goal_id", activeGoals.map((g) => g.id))
+      .then(({ data }) => {
+        if (!data) return
+        const now = new Date()
+        const badges: Record<string, { checkpoint: boolean; blockCompleted: boolean }> = {}
+        for (const row of data) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const weeks = (row.plan as any)?.weeks
+          const blockEnd = new Date(row.block_start_date)
+          blockEnd.setDate(blockEnd.getDate() + (Array.isArray(weeks) ? weeks.length : 0) * 7)
+          badges[row.goal_id] = {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            checkpoint: !!(row.mid_block_checkpoint as any)?.adjustmentApplied,
+            blockCompleted: Array.isArray(weeks) && weeks.length > 0 && now > blockEnd,
+          }
+        }
+        setPlanBadges(badges)
+      })
+  }, [activeGoals])
 
   // Pre-compute goal metrics outside JSX so we don't run O(goals * activities) on every render
   const goalMetrics = useMemo(
@@ -140,6 +169,22 @@ export function HomeScreen({
                           <h2 className="mt-1 text-base font-semibold text-card-foreground text-balance line-clamp-1">
                             {goal.name}
                           </h2>
+                          {(planBadges[goal.id]?.checkpoint || planBadges[goal.id]?.blockCompleted) && (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              {planBadges[goal.id]?.checkpoint && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                  <CheckCircle2 size={9} />
+                                  Checkpoint
+                                </span>
+                              )}
+                              {planBadges[goal.id]?.blockCompleted && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle2 size={9} />
+                                  Block done
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="mt-auto pt-2.5 flex flex-col gap-1">
                             <div className="flex items-center gap-4">
                               <span className="text-sm text-muted-foreground">
