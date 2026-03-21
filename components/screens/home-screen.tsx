@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
+import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star, Sparkles, MapPin } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -21,6 +21,8 @@ const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indi
 
 interface HomeScreenProps {
   activeGoals: Goal[]
+  starredGoals: Goal[] // [STAR] pinned event goals
+  checkpointStatus: Record<string, boolean> // [STAR] goalId → checkpoint pending
   activities: Activity[]
   weeklySummary: WeeklySummary
   recentActivities: Activity[]
@@ -35,6 +37,8 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   activeGoals,
+  starredGoals,
+  checkpointStatus,
   activities,
   weeklySummary,
   recentActivities,
@@ -103,6 +107,47 @@ export function HomeScreen({
         <Suspense fallback={null}>
           <TrainingLoadIndicator activities={activities} />
         </Suspense>
+      )}
+
+      {/* [STAR] Pinned event goal cards */}
+      {starredGoals.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-1.5">
+            <Star size={11} className="text-amber-500" fill="currentColor" />
+            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Pinned
+            </h3>
+          </div>
+          <div className="flex flex-col gap-2">
+            {starredGoals.map((goal) => {
+              const days = daysUntil(goal.target_date)
+              const hasPendingCheckpoint = checkpointStatus[goal.id] === true
+              return (
+                <button
+                  key={goal.id}
+                  onClick={() => onViewGoal(goal)}
+                  className="relative flex w-full items-center gap-3 rounded-2xl bg-card p-3.5 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Footprints size={16} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-card-foreground truncate">{goal.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDistance(goal.target_distance_km)} · {days} {t("home.daysLeft")}
+                    </p>
+                  </div>
+                  {hasPendingCheckpoint && (
+                    <div className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                      <Sparkles size={9} />
+                      Adjust
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       {/* Active Goals */}

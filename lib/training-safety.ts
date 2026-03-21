@@ -386,6 +386,45 @@ export function checkLongRunProtection(plan: TrainingPlan): LongRunViolation[] {
   return violations
 }
 
+// ── Taper validation ─────────────────────────────────────────────────────────
+
+export interface TaperViolation {
+  weekNumber: number
+  taperKm: number
+  peakKm: number
+  message: string
+}
+
+/**
+ * Validates that weeks whose theme indicates taper/race-prep have lower volume
+ * than the detected peak week. Catches plans where Claude labels a week as
+ * "taper" but assigns more km than the preceding peak.
+ *
+ * A week is considered a taper week if its theme matches "taper", "race",
+ * "race week", or "race-ready".
+ */
+export function checkTaperProgression(plan: TrainingPlan): TaperViolation[] {
+  const violations: TaperViolation[] = []
+  if (plan.weeks.length < 2) return violations
+
+  const peakKm = Math.max(...plan.weeks.map((w) => w.targetKm))
+
+  for (const week of plan.weeks) {
+    const isTaperWeek = /taper|race.?week|race.?ready|race.?prep|peak.?taper/i.test(week.theme ?? "")
+    if (!isTaperWeek) continue
+    if (week.targetKm >= peakKm) {
+      violations.push({
+        weekNumber: week.weekNumber,
+        taperKm: week.targetKm,
+        peakKm,
+        message: `Week ${week.weekNumber} is labelled "${week.theme}" but has ${week.targetKm} km — not lower than the block peak of ${peakKm} km.`,
+      })
+    }
+  }
+
+  return violations
+}
+
 // ── Prolonged fatigue / forced deload ────────────────────────────────────────
 
 export interface ProlongedFatigueResult {
@@ -482,6 +521,7 @@ export interface SafetyValidationResult {
   athleteLevel: AthleteLevel
   weeklyLoadViolations: WeeklyLoadViolation[]
   longRunViolations: LongRunViolation[]
+  taperViolations: TaperViolation[]
   frequencyWarning: FrequencyWarning | null
   acwrSafety: AcwrSafety
   fatigue: FatigueResult
@@ -599,10 +639,26 @@ export function validateAndAdjustPlan(
     )
   }
 
+  // Step 6: Taper validation — warn when taper-labelled weeks aren't actually tapering
+  const taperViolations = checkTaperProgression({ ...plan, weeks: adjustedWeeks })
+  for (const v of taperViolations) {
+    // Apply a 30% volume reduction to incorrectly-loaded taper weeks
+    const week = adjustedWeeks.find((w) => w.weekNumber === v.weekNumber)
+    if (week) {
+      const corrected = Math.round(v.peakKm * 0.65) // 65% of peak = meaningful taper
+      if (corrected < week.targetKm) {
+        week.targetKm = corrected
+        safetyNotes.push(v.message + ` Reduced to ${corrected} km (65% of peak).`)
+        console.warn(`[safety] ${v.message} Corrected to ${corrected} km.`)
+      }
+    }
+  }
+
   const passed =
     weeklyViolations.length === 0 &&
     cumulativeViolations.length === 0 &&
     longRunViolations.length === 0 &&
+    taperViolations.length === 0 &&
     !frequencyWarning &&
     acwrSafety.weekOneMultiplier === 1.0 &&
     !prolongedFatigue.detected &&
@@ -613,6 +669,7 @@ export function validateAndAdjustPlan(
     athleteLevel,
     weeklyLoadViolations: weeklyViolations,
     longRunViolations,
+    taperViolations,
     frequencyWarning,
     acwrSafety,
     fatigue,
