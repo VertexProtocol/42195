@@ -814,6 +814,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     sessions_per_week: 3,
     focus: "balanced",
     notes: null,
+    injury_notes: null,
     weekly_increase_pct: 10,
     block_weeks: 4,
     regenerate_every_weeks: 4,
