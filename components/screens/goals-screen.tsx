@@ -352,7 +352,7 @@ export function GoalsScreen({
                             </button>
 
                             {/* Main content row */}
-                            <div className="flex flex-1 items-center gap-3 py-4 pr-2">
+                            <div className="flex flex-1 items-center gap-3 py-3 pr-2">
                               <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
                                 isComplete ? "bg-success/15" : "bg-secondary"
                               }`}>
@@ -374,11 +374,28 @@ export function GoalsScreen({
                                     {formatWeeklyMetric(current, wg.metric)}
                                   </span>
                                   {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
+                                  {isComplete && (
+                                    <span className="ml-1.5 font-medium text-success">{t("goals.goalReached")}</span>
+                                  )}
                                 </p>
+                                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                                {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {[
+                                      wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
+                                      wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
+                                    ].filter(Boolean).join(" · ")} {t("goals.perSession")}
+                                  </p>
+                                )}
                               </div>
                             </div>
 
-                            {/* Edit button — matches star button style */}
+                            {/* Edit button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
                               className="flex shrink-0 items-center self-stretch px-3 text-muted-foreground/40 active:text-muted-foreground transition-colors"
@@ -386,34 +403,6 @@ export function GoalsScreen({
                             >
                               <Pencil size={16} />
                             </button>
-                          </div>
-
-                          {/* Progress section — matches expanded content style */}
-                          <div className="px-4 pb-4 border-t border-border">
-                            <div className="mt-3 flex items-center justify-between text-xs mb-1.5">
-                              <span className="text-muted-foreground">
-                                {isComplete ? t("goals.completed") : `${progress}%`}
-                              </span>
-                              {isComplete && (
-                                <span className="font-medium text-success">{t("goals.goalReached")}</span>
-                              )}
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-
-                            {/* Per-session requirement hint */}
-                            {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
-                              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                {[
-                                  wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
-                                  wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
-                                ].filter(Boolean).join(" · ")} {t("goals.perSession")}
-                              </p>
-                            )}
                           </div>
                         </div>
                       )}
