@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import type Anthropic from "@anthropic-ai/sdk"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
