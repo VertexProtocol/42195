@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, lazy, Suspense } from "react"
-import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star } from "lucide-react"
+import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star, Flame, Mountain, Target } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
@@ -18,7 +18,7 @@ import {
   progressPercentage,
 } from "@/lib/format"
 import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
@@ -240,7 +240,7 @@ export function HomeScreen({
           </div>
         </div>
 
-        {/* Weekly goal progress bars */}
+        {/* Weekly goal progress rings */}
         {currentWeekGoals.length > 0 && (
           <div className="mt-3 flex flex-col gap-2">
             {currentWeekGoals.map((wg) => {
@@ -253,27 +253,35 @@ export function HomeScreen({
               )
               const progress = progressPercentage(current, wg.target)
               const isComplete = current >= wg.target
+              const ICONS: Record<string, typeof Target> = { distance_km: TrendingUp, sessions: Flame, duration_minutes: Clock, elevation_m: Mountain }
+              const KEYS: Record<string, TranslationKey> = { distance_km: "goals.weeklyDistance", sessions: "goals.trainingSessions", duration_minutes: "goals.activeMinutes", elevation_m: "goals.elevationGain" }
+              const Icon = ICONS[wg.metric] ?? Target
               return (
                 <button
                   key={wg.id}
                   onClick={onViewGoals}
-                  className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border text-left active:scale-[0.99] transition-transform"
+                  className={`flex items-center gap-3.5 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 text-left active:scale-[0.99] transition-transform ${isComplete ? "ring-2 ring-success/40" : "ring-border"}`}
                 >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isComplete ? "bg-success/15" : "bg-secondary"}`}>
+                    <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
+                  </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-xs font-medium text-card-foreground truncate">
-                        {wg.label || formatWeeklyMetric(wg.target, wg.metric)}
+                    <p className="text-sm font-semibold text-card-foreground truncate">
+                      {t(KEYS[wg.metric]) || wg.label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                      <span className={`font-semibold ${isComplete ? "text-success" : "text-foreground"}`}>{formatWeeklyMetric(current, wg.metric)}</span>
+                      {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
+                    </p>
+                  </div>
+
+                  <div className="relative flex shrink-0 items-center justify-center">
+                    <ProgressRing percentage={progress} size={52} strokeWidth={4} />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className={`text-[10px] font-bold tabular-nums ${isComplete ? "text-success" : "text-foreground"}`}>
+                        {progress}%
                       </span>
-                      <span className={`text-xs font-semibold tabular-nums shrink-0 ${isComplete ? "text-success" : "text-foreground"}`}>
-                        {formatWeeklyMetric(current, wg.metric)}
-                        <span className="font-normal text-muted-foreground"> / {formatWeeklyMetric(wg.target, wg.metric)}</span>
-                      </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
-                        style={{ width: `${progress}%` }}
-                      />
                     </div>
                   </div>
                 </button>
