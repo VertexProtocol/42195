@@ -199,7 +199,7 @@ export function useAppData(initialData?: InitialData | null) {
   const starredGoals = useMemo(
     () =>
       goals
-        .filter((g) => g.is_starred && g.goal_category === "event_training")
+        .filter((g) => g.is_starred)
         .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()),
     [goals],
   )
