@@ -267,6 +267,7 @@ export function AppShell({ initialData }: AppShellProps) {
             onAddWeeklyGoal={handleAddWeeklyGoal}
             onSelectGoal={handleSelectGoal}
             onReorderGoals={data.reorderGoals}
+            onReorderWeeklyGoals={data.reorderWeeklyGoals}
           />
         )}
 

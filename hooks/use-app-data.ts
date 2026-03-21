@@ -113,8 +113,9 @@ export function useAppData(initialData?: InitialData | null) {
             .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
-            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
-            .order("created_at", { ascending: false }),
+            // [DND] include display_order; order by it so the array arrives pre-sorted
+            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+            .order("display_order", { ascending: true }),
           supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
@@ -153,6 +154,7 @@ export function useAppData(initialData?: InitialData | null) {
             is_recurring: wg.is_recurring ?? false,
             session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
             session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
+            display_order: wg.display_order ?? 0, // [DND]
           }))
         )
       }
@@ -463,6 +465,26 @@ export function useAppData(initialData?: InitialData | null) {
     }
   }, [])
 
+  // [DND] Reorder weekly goals by persisting a new display_order for each goal
+  const reorderWeeklyGoals = useCallback(async (orderedIds: string[]) => {
+    setWeeklyGoals((prev) => {
+      const byId = new Map(prev.map((g) => [g.id, g]))
+      const reordered = orderedIds
+        .map((id, i) => {
+          const g = byId.get(id)
+          return g ? { ...g, display_order: i + 1 } : null
+        })
+        .filter(Boolean) as import("@/lib/types").WeeklyGoal[]
+      const reorderedSet = new Set(orderedIds)
+      return [...reordered, ...prev.filter((g) => !reorderedSet.has(g.id))]
+    })
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        supabase.from("weekly_goals").update({ display_order: i + 1 }).eq("id", id)
+      )
+    )
+  }, [])
+
   // ----- Add manual activity -----
   const addActivity = useCallback(async (activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">): Promise<boolean> => {
     const { data: authData } = await supabase.auth.getUser()
@@ -619,6 +641,7 @@ export function useAppData(initialData?: InitialData | null) {
     // Weekly goal operations
     saveWeeklyGoal,
     deleteWeeklyGoal,
+    reorderWeeklyGoals, // [DND]
 
     // Activities
     addActivity,

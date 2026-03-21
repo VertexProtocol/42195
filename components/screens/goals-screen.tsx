@@ -68,6 +68,7 @@ interface GoalsScreenProps {
   onAddWeeklyGoal: () => void
   onSelectGoal: (goal: Goal) => void
   onReorderGoals: (orderedIds: string[]) => Promise<void> // [DND]
+  onReorderWeeklyGoals: (orderedIds: string[]) => Promise<void> // [DND]
 }
 
 // [DND] Wrapper that makes a goal card sortable and provides drag listeners to children
@@ -145,6 +146,7 @@ export function GoalsScreen({
   onAddWeeklyGoal,
   onSelectGoal,
   onReorderGoals, // [DND]
+  onReorderWeeklyGoals, // [DND]
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("race")
@@ -195,6 +197,21 @@ export function GoalsScreen({
     const reordered = arrayMove(orderedRaceGoals, oldIndex, newIndex)
     setOrderedRaceGoals(reordered)
     onReorderGoals(reordered.map((g) => g.id))
+  }
+
+  // [DND] Ordered weekly goals for the selected week
+  const [orderedWeeklyGoals, setOrderedWeeklyGoals] = useState(selectedWeekGoals)
+  useEffect(() => { setOrderedWeeklyGoals(selectedWeekGoals) }, [weeklyGoals, selectedWeekStart])
+
+  // [DND] Handle drag end for weekly goals
+  function handleWeeklyDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedWeeklyGoals.findIndex((g) => g.id === active.id)
+    const newIndex = orderedWeeklyGoals.findIndex((g) => g.id === over.id)
+    const reordered = arrayMove(orderedWeeklyGoals, oldIndex, newIndex)
+    setOrderedWeeklyGoals(reordered)
+    onReorderWeeklyGoals(reordered.map((g) => g.id))
   }
 
   // Pre-compute performance goal evaluations (avoids O(goals * activities) inside JSX)
@@ -296,99 +313,120 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            selectedWeekGoals.map((wg) => {
-              const current = computeWeeklyProgress(
-                activities,
-                wg.metric,
-                selectedWeekStart,
-                wg.session_min_duration_minutes,
-                wg.session_min_distance_km,
-              )
-              const progress = progressPercentage(current, wg.target)
-              const Icon = METRIC_ICONS[wg.metric] || Target
-              const isComplete = current >= wg.target
-              const label = t(METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
+            // [DND] DnD context wraps the sortable weekly goal list
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleWeeklyDragEnd}>
+              <SortableContext items={orderedWeeklyGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                {orderedWeeklyGoals.map((wg) => {
+                  const current = computeWeeklyProgress(
+                    activities,
+                    wg.metric,
+                    selectedWeekStart,
+                    wg.session_min_duration_minutes,
+                    wg.session_min_distance_km,
+                  )
+                  const progress = progressPercentage(current, wg.target)
+                  const Icon = METRIC_ICONS[wg.metric] || Target
+                  const isComplete = current >= wg.target
+                  const label = t(METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
 
-              return (
-                <div
-                  key={wg.id}
-                  className={`rounded-2xl bg-card p-4 shadow-sm ring-1 transition-all ${
-                    isComplete ? "ring-success/40 ring-2" : "ring-border"
-                  }`}
-                >
-                  <div className="flex items-start gap-3.5">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                      isComplete ? "bg-success/15" : "bg-secondary"
-                    }`}>
-                      <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <h4 className="text-sm font-semibold text-card-foreground truncate">
-                            {label}
-                          </h4>
-                          {wg.is_recurring && (
-                            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                              <RefreshCw size={9} />
-                              {t("goals.weekly")}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => onEditWeeklyGoal(wg)}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
-                          aria-label={`Edit ${label}`}
+                  // [DND] wrap each card in SortableGoalItem
+                  return (
+                    <SortableGoalItem key={wg.id} id={wg.id}>
+                      {(dragListeners) => (
+                        <div
+                          className={`rounded-2xl bg-card shadow-sm ring-1 transition-all ${
+                            isComplete ? "ring-success/40 ring-2" : "ring-border"
+                          }`}
                         >
-                          <Pencil size={12} />
-                        </button>
-                      </div>
+                          <div className="flex items-center">
+                            {/* [DND] Drag handle */}
+                            <button
+                              {...dragListeners}
+                              onClick={(e) => e.stopPropagation()}
+                              className="touch-none flex shrink-0 items-center self-stretch px-3 text-muted-foreground/25 active:text-muted-foreground/60"
+                              aria-label="Drag to reorder"
+                            >
+                              <GripVertical size={16} />
+                            </button>
 
-                      {/* Per-session requirement hint */}
-                      {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {[
-                            wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
-                            wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
-                          ].filter(Boolean).join(" · ")} {t("goals.perSession")}
-                        </p>
+                            <div className="flex flex-1 items-start gap-3.5 py-4 pr-4">
+                              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                                isComplete ? "bg-success/15" : "bg-secondary"
+                              }`}>
+                                <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <h4 className="text-sm font-semibold text-card-foreground truncate">
+                                      {label}
+                                    </h4>
+                                    {wg.is_recurring && (
+                                      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                        <RefreshCw size={9} />
+                                        {t("goals.weekly")}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => onEditWeeklyGoal(wg)}
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
+                                    aria-label={`Edit ${label}`}
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                </div>
+
+                                {/* Per-session requirement hint */}
+                                {wg.metric === "sessions" && (wg.session_min_duration_minutes || wg.session_min_distance_km) && (
+                                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                    {[
+                                      wg.session_min_duration_minutes && `≥ ${wg.session_min_duration_minutes} min`,
+                                      wg.session_min_distance_km && `≥ ${wg.session_min_distance_km} km`,
+                                    ].filter(Boolean).join(" · ")} {t("goals.perSession")}
+                                  </p>
+                                )}
+
+                                <div className="mt-1 flex items-baseline gap-1">
+                                  <span className="text-xl font-bold font-mono text-foreground">
+                                    {formatWeeklyMetric(current, wg.metric)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    / {formatWeeklyMetric(wg.target, wg.metric)}
+                                  </span>
+                                </div>
+
+                                <div className="mt-2.5">
+                                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        isComplete ? "bg-success" : "bg-primary"
+                                      }`}
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                  <div className="mt-1 flex items-center justify-between">
+                                    <span className="text-[11px] text-muted-foreground">
+                                      {isComplete ? t("goals.completed") : `${progress}%`}
+                                    </span>
+                                    {isComplete && (
+                                      <span className="text-[11px] font-medium text-success">
+                                        {t("goals.goalReached")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       )}
-
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold font-mono text-foreground">
-                          {formatWeeklyMetric(current, wg.metric)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          / {formatWeeklyMetric(wg.target, wg.metric)}
-                        </span>
-                      </div>
-
-                      <div className="mt-2.5">
-                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isComplete ? "bg-success" : "bg-primary"
-                            }`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-[11px] text-muted-foreground">
-                            {isComplete ? t("goals.completed") : `${progress}%`}
-                          </span>
-                          {isComplete && (
-                            <span className="text-[11px] font-medium text-success">
-                              {t("goals.goalReached")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })
+                    </SortableGoalItem>
+                  )
+                })}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       )}
