@@ -29,7 +29,7 @@ export default async function Page() {
         .limit(200),
       supabase
         .from("goals")
-        .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, is_starred")
+        .select("*")
         .order("created_at", { ascending: false }),
       supabase
         .from("weekly_goals")

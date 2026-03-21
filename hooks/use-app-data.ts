@@ -110,7 +110,7 @@ export function useAppData(initialData?: InitialData | null) {
             .from("goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
             // [STAR] include is_starred for home screen pinned cards
-            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, display_order, is_starred")
+            .select("*")
             .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
