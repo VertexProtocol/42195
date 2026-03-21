@@ -109,7 +109,8 @@ export function useAppData(initialData?: InitialData | null) {
           supabase
             .from("goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
-            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, display_order")
+            // [STAR] include is_starred for home screen pinned cards
+            .select("id, goal_category, name, target_distance_km, start_date, target_time_seconds, target_date, current_distance_km, is_active, created_at, display_order, is_starred")
             .order("display_order", { ascending: true }),
           supabase
             .from("weekly_goals")
@@ -138,6 +139,7 @@ export function useAppData(initialData?: InitialData | null) {
             is_active: g.is_active,
             created_at: g.created_at,
             display_order: g.display_order ?? 0, // [DND]
+            is_starred: (g as any).is_starred ?? false, // [STAR]
           }))
         )
       }
@@ -193,6 +195,14 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Derived data -----
   const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
+  // [STAR] Event goals pinned to the home screen, sorted by race date (soonest first)
+  const starredGoals = useMemo(
+    () =>
+      goals
+        .filter((g) => g.is_starred && g.goal_category === "event_training")
+        .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()),
+    [goals],
+  )
 
   const { currentWeekMonday, weeklySummary } = useMemo(() => {
     const now = new Date()
@@ -341,6 +351,29 @@ export function useAppData(initialData?: InitialData | null) {
       // toast.error("Failed to delete goal")
     } else {
       // toast.success("Goal deleted")
+    }
+  }, [])
+
+  // [STAR] Toggle is_starred on a goal (optimistic update)
+  const toggleStarGoal = useCallback(async (goalId: string) => {
+    const target = goalsRef.current.find((g) => g.id === goalId)
+    if (!target) return
+
+    const newStarred = !target.is_starred
+    setGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, is_starred: newStarred } : g))
+    )
+
+    const { error } = await supabase
+      .from("goals")
+      .update({ is_starred: newStarred })
+      .eq("id", goalId)
+
+    if (error) {
+      console.error("Failed to toggle goal star:", error)
+      setGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? { ...g, is_starred: !newStarred } : g))
+      )
     }
   }, [])
 
@@ -628,12 +661,14 @@ export function useAppData(initialData?: InitialData | null) {
 
     // Derived
     activeGoals,
+    starredGoals, // [STAR]
     currentWeekMonday,
     weeklySummary,
     currentWeekGoals,
 
     // Goal operations
     toggleActiveGoal,
+    toggleStarGoal, // [STAR]
     saveGoal,
     deleteGoal,
     reorderGoals, // [DND]

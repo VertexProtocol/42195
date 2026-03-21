@@ -46,10 +46,19 @@ export const MAX_WEEKLY_INCREASE: Record<AthleteLevel, number> = {
 
 /**
  * Classifies an athlete based on their 12-week activity history.
- * Both volume AND frequency must qualify for a given level to prevent
- * misclassification (e.g. 5×4km/week is not advanced despite high frequency).
- * - Advanced:     avg weekly km > 50  AND avg sessions/week > 4
- * - Intermediate: avg weekly km > 20  AND avg sessions/week >= 2
+ *
+ * Both volume AND frequency must qualify for a given level. Additionally, a
+ * consistency factor and training history length are considered:
+ * - Consistency: % of the 12 classification weeks that had at least one run.
+ *   Low consistency (< 50% active weeks) downgrades the level by one tier,
+ *   because a runner returning from a 6-week break is not the same as one
+ *   who has trained steadily at the same volume.
+ * - History length: fewer than 4 weeks of data always returns "beginner" —
+ *   not enough signal to classify higher.
+ *
+ * Tiers:
+ * - Advanced:     avg weekly km > 50  AND avg sessions/week > 4  AND ≥50% active weeks
+ * - Intermediate: avg weekly km > 20  AND avg sessions/week >= 2 AND ≥33% active weeks
  * - Beginner:     everything else
  */
 export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel {
@@ -59,14 +68,36 @@ export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel
   const cutoff = Date.now() - lookbackMs
   const recent = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
 
-  if (recent.length === 0) return "beginner"
+  // Not enough history to classify above beginner
+  if (recent.length < 4) return "beginner"
 
   const totalKm = recent.reduce((s, a) => s + a.distance_km, 0)
   const avgWeeklyKm = totalKm / ATHLETE_CLASSIFICATION_WEEKS
   const avgSessionsPerWeek = recent.length / ATHLETE_CLASSIFICATION_WEEKS
 
-  if (avgWeeklyKm > ATHLETE_ADVANCED_KM_PER_WEEK && avgSessionsPerWeek > ATHLETE_ADVANCED_SESSIONS_PER_WEEK) return "advanced"
-  if (avgWeeklyKm > ATHLETE_INTERMEDIATE_KM_PER_WEEK && avgSessionsPerWeek >= ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK) return "intermediate"
+  // Compute active weeks: weeks that had at least one run
+  const weekMs = 7 * 24 * 60 * 60 * 1000
+  const weeksSeen = new Set<number>()
+  for (const a of recent) {
+    const t = new Date(a.date).getTime()
+    const weekBucket = Math.floor((t - cutoff) / weekMs)
+    weeksSeen.add(weekBucket)
+  }
+  const activeWeeks = weeksSeen.size
+  const consistencyPct = activeWeeks / ATHLETE_CLASSIFICATION_WEEKS
+
+  if (
+    avgWeeklyKm > ATHLETE_ADVANCED_KM_PER_WEEK &&
+    avgSessionsPerWeek > ATHLETE_ADVANCED_SESSIONS_PER_WEEK &&
+    consistencyPct >= 0.50
+  ) return "advanced"
+
+  if (
+    avgWeeklyKm > ATHLETE_INTERMEDIATE_KM_PER_WEEK &&
+    avgSessionsPerWeek >= ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK &&
+    consistencyPct >= 0.33
+  ) return "intermediate"
+
   return "beginner"
 }
 

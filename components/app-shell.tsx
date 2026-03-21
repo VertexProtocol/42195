@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useSyncExternalStore, lazy, Suspense } from "react"
+import { useState, useCallback, useEffect, useSyncExternalStore, lazy, Suspense, useRef } from "react"
 import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
@@ -94,6 +94,30 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const [onboardingDismissed, setOnboardingDismissed] = useState(false)
   const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
+
+  // [STAR] Checkpoint status for starred goals — maps goalId → true if checkpoint is pending.
+  // Fetched once when the starred goals list is non-empty (lightweight DB-only read).
+  const [checkpointStatus, setCheckpointStatus] = useState<Record<string, boolean>>({})
+  const fetchedStarredRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const toFetch = data.starredGoals.filter((g) => !fetchedStarredRef.current.has(g.id))
+    if (toFetch.length === 0) return
+    toFetch.forEach((g) => fetchedStarredRef.current.add(g.id))
+    Promise.all(
+      toFetch.map((g) =>
+        fetch(`/api/ai/training-plan?goalId=${g.id}`)
+          .then((r) => r.json())
+          .then((d) => [g.id, !!d.checkpoint_due] as [string, boolean])
+          .catch(() => [g.id, false] as [string, boolean])
+      )
+    ).then((results) => {
+      setCheckpointStatus((prev) => {
+        const next = { ...prev }
+        for (const [id, due] of results) next[id] = due
+        return next
+      })
+    })
+  }, [data.starredGoals])
 
   // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -219,6 +243,8 @@ export function AppShell({ initialData }: AppShellProps) {
         {activeTab === "home" && (
           <HomeScreen
             activeGoals={data.activeGoals}
+            starredGoals={data.starredGoals}
+            checkpointStatus={checkpointStatus}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
             recentActivities={data.activities.slice(0, 5)}
@@ -260,6 +286,7 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             weeklyGoals={data.weeklyGoals}
             onToggleActive={data.toggleActiveGoal}
+            onToggleStar={data.toggleStarGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("performance")}
             onAddEventGoal={() => handleAddGoal("event_training")}

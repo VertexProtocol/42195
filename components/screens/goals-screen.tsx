@@ -5,7 +5,7 @@ import {
   Check, Calendar, Target, Plus, Pencil,
   Flame, TrendingUp, Clock, Mountain,
   ChevronLeft, ChevronRight, RefreshCw, Timer, Trophy,
-  CalendarCheck, MapPin, Footprints, Sparkles, ChevronDown, GripVertical,
+  CalendarCheck, MapPin, Footprints, Sparkles, ChevronDown, GripVertical, Star,
 } from "lucide-react"
 // [DND] @dnd-kit drag-and-drop for goal reordering
 import {
@@ -61,6 +61,7 @@ interface GoalsScreenProps {
   activities: Activity[]
   weeklyGoals: WeeklyGoal[]
   onToggleActive: (goalId: string) => void
+  onToggleStar: (goalId: string) => void // [STAR]
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
   onAddEventGoal: () => void
@@ -139,6 +140,7 @@ export function GoalsScreen({
   activities,
   weeklyGoals,
   onToggleActive,
+  onToggleStar, // [STAR]
   onEditGoal,
   onAddGoal,
   onAddEventGoal,
@@ -667,13 +669,28 @@ export function GoalsScreen({
                           
                           {/* Actions */}
                           <div className="mt-4 flex items-center justify-between">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
-                            >
-                              <Pencil size={14} />
-                              Edit
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
+                                className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                              >
+                                <Pencil size={14} />
+                                Edit
+                              </button>
+                              {/* [STAR] Pin to home screen */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onToggleStar(goal.id); }}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  goal.is_starred
+                                    ? "text-amber-500 active:text-amber-600"
+                                    : "text-muted-foreground active:text-foreground"
+                                }`}
+                                title={goal.is_starred ? "Unpin from home screen" : "Pin to home screen"}
+                              >
+                                <Star size={14} fill={goal.is_starred ? "currentColor" : "none"} />
+                                {goal.is_starred ? "Pinned" : "Pin"}
+                              </button>
+                            </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); onSelectGoal(goal); }}
                               className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary active:bg-primary/20 transition-colors"

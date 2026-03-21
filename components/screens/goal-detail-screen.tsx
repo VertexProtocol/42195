@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   AlertCircle,
   AlertTriangle,
+  Info,
   Lightbulb,
   Pencil,
   Flag,
@@ -104,6 +105,7 @@ function PreferencesForm({
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
+  const [injuryNotes, setInjuryNotes] = useState(initial.injury_notes ?? "")
   const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
   const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
   const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
@@ -123,6 +125,7 @@ function PreferencesForm({
           sessions_per_week: sessions,
           focus,
           notes,
+          injury_notes: injuryNotes || null,
           weekly_increase_pct: increasePct,
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
@@ -139,6 +142,7 @@ function PreferencesForm({
         sessions_per_week: sessions,
         focus,
         notes: notes || null,
+        injury_notes: injuryNotes || null,
         weekly_increase_pct: increasePct,
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
@@ -292,14 +296,31 @@ function PreferencesForm({
           Coach notes (optional)
         </label>
         <p className="mb-2 text-xs text-muted-foreground/70">
-          Any context for the AI coach — injuries, schedule constraints, experience level, etc.
+          Any context for the AI coach — schedule constraints, experience level, etc.
         </p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g. only available Wed + weekends, recovering from a knee niggle, experienced ultra runner..."
+          placeholder="e.g. only available Wed + weekends, experienced ultra runner..."
           className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={3}
+        />
+      </div>
+
+      {/* Injury notes */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Injury history (optional)
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          Recurring issues or injury history the coach should keep in mind for safety.
+        </p>
+        <textarea
+          value={injuryNotes}
+          onChange={(e) => setInjuryNotes(e.target.value)}
+          placeholder="e.g. recurring left knee pain, previous stress fracture in right foot..."
+          className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          rows={2}
         />
       </div>
 
@@ -384,9 +405,9 @@ function toMonday(date: Date): Date {
  * then greedily assigns the closest pair first.
  * Each activity matches at most one session.
  *
- * Matching rule: activity distance must be ≥ 95% of planned distance
- * (i.e. you must run at least the planned distance, with 5% grace for
- * GPS drift). Running further than planned always counts.
+ * Matching rule: activity distance must be ≥ 80% of planned distance
+ * (i.e. you must run at least 80% of the planned distance to count as
+ * completed). Running further than planned always counts.
  */
 function autoMatchSessions(
   sessions: { type: string; distance: string }[],
@@ -402,7 +423,7 @@ function autoMatchSessions(
   // Build all valid (session, activity) candidate pairs
   const candidates: { si: number; ai: number; delta: number }[] = []
   for (const session of sessionKms) {
-    const minRequired = session.km * 0.95 // must run at least 95% of planned
+    const minRequired = session.km * 0.80 // must run at least 80% of planned
     for (let ai = 0; ai < weekActivities.length; ai++) {
       const actKm = Number(weekActivities[ai].distance_km)
       if (actKm >= minRequired) {
@@ -798,6 +819,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     regenerate_every_weeks: 4,
   })
   const [aiPlan, setAiPlan] = useState<AiTrainingPlan | null>(null)
+  const [paceSource, setPaceSource] = useState<"test_run" | "prediction" | "historical" | "none" | null>(null)
   const [activeTab, setActiveTab] = useState<"plan" | "preferences">("plan")
   const [showAdjustForm, setShowAdjustForm] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
@@ -829,6 +851,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             previous_plans: data.previous_plans ?? [],
             mid_block_checkpoint: data.mid_block_checkpoint ?? null,
           })
+          if (data.pace_source) setPaceSource(data.pace_source)
           // Surface any previously applied checkpoint
           if (data.mid_block_checkpoint?.adjustmentApplied) {
             setCheckpoint(data.mid_block_checkpoint)
@@ -1024,6 +1047,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             } else if (event.status === "generating") {
               setGenerateStatus("Writing your plan…")
             } else if (event.status === "done") {
+              if (event.pace_source) setPaceSource(event.pace_source)
               setAiPlan((prev) => ({
                 goal_id: goal.id,
                 plan: event.plan,
@@ -1388,6 +1412,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
                 <p className="text-sm text-foreground">{aiPlan.plan.watchOut}</p>
               </CollapsibleSection>
+            )}
+
+            {/* Pace source warning — only shown when pace targets are estimates */}
+            {(paceSource === "historical" || paceSource === "none") && (
+              <div className="flex items-start gap-2 rounded-xl bg-secondary px-3 py-2.5">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" />
+                <p className="text-xs text-muted-foreground">
+                  {paceSource === "none"
+                    ? "Pace suggestions are rough estimates — complete a test run to get accurate, personalised targets."
+                    : "Pace suggestions are based on your training history. Complete a test run for more precise targets."}
+                </p>
+              </div>
             )}
 
             {/* Adjust / Regenerate */}
