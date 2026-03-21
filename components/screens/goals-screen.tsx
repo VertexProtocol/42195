@@ -361,23 +361,23 @@ export function GoalsScreen({
 
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-semibold text-foreground truncate">{label}</h4>
-                                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                                  <span className={`font-medium ${isComplete ? "text-success" : "text-foreground"}`}>
-                                    {formatWeeklyMetric(current, wg.metric)}
-                                  </span>
-                                  {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
-                                  {isComplete && (
-                                    <span className="ml-1.5 font-medium text-success">{t("goals.goalReached")}</span>
-                                  )}
-                                </p>
-                                {wg.is_recurring && (
-                                  <div className="mt-1.5">
-                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                <div className="mt-0.5 flex items-center justify-between gap-2">
+                                  <p className="text-xs text-muted-foreground tabular-nums">
+                                    <span className={`font-medium ${isComplete ? "text-success" : "text-foreground"}`}>
+                                      {formatWeeklyMetric(current, wg.metric)}
+                                    </span>
+                                    {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
+                                    {isComplete && (
+                                      <span className="ml-1.5 font-medium text-success">{t("goals.goalReached")}</span>
+                                    )}
+                                  </p>
+                                  {wg.is_recurring && (
+                                    <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                                       <RefreshCw size={9} />
                                       {t("goals.weekly")}
                                     </span>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
                                   <div
                                     className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
