@@ -340,35 +340,27 @@ export function GoalsScreen({
                           }`}
                         >
                           {/* Header — matches performance/event card structure */}
-                          <div className="flex items-center">
+                          <div className="flex">
                             {/* [DND] Drag handle */}
                             <button
                               {...dragListeners}
                               onClick={(e) => e.stopPropagation()}
-                              className="touch-none flex shrink-0 items-center self-stretch px-3 text-muted-foreground/25 active:text-muted-foreground/60"
+                              className="touch-none flex shrink-0 items-center px-3 text-muted-foreground/25 active:text-muted-foreground/60"
                               aria-label="Drag to reorder"
                             >
                               <GripVertical size={16} />
                             </button>
 
-                            {/* Main content row */}
-                            <div className="flex flex-1 items-center gap-3 py-3 pr-3">
-                              <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                            {/* Main content */}
+                            <div className="flex flex-1 items-start gap-3 py-3 pr-2">
+                              <div className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl ${
                                 isComplete ? "bg-success/15" : "bg-secondary"
                               }`}>
                                 <Icon size={20} className={isComplete ? "text-success" : "text-muted-foreground"} />
                               </div>
 
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <h4 className="font-semibold text-foreground truncate min-w-0">{label}</h4>
-                                  {wg.is_recurring && (
-                                    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                      <RefreshCw size={9} />
-                                      {t("goals.weekly")}
-                                    </span>
-                                  )}
-                                </div>
+                                <h4 className="font-semibold text-foreground truncate">{label}</h4>
                                 <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                                   <span className={`font-medium ${isComplete ? "text-success" : "text-foreground"}`}>
                                     {formatWeeklyMetric(current, wg.metric)}
@@ -378,6 +370,14 @@ export function GoalsScreen({
                                     <span className="ml-1.5 font-medium text-success">{t("goals.goalReached")}</span>
                                   )}
                                 </p>
+                                {wg.is_recurring && (
+                                  <div className="mt-1.5">
+                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                      <RefreshCw size={9} />
+                                      {t("goals.weekly")}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
                                   <div
                                     className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
@@ -393,16 +393,16 @@ export function GoalsScreen({
                                   </p>
                                 )}
                               </div>
-
-                              {/* Edit button — inside content row so it stays anchored to text, not card edge */}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
-                                className="shrink-0 self-start rounded-lg p-2 text-muted-foreground/40 active:text-muted-foreground transition-colors"
-                                aria-label={`Edit ${label}`}
-                              >
-                                <Pencil size={15} />
-                              </button>
                             </div>
+
+                            {/* Edit button — top-aligned alongside title */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
+                              className="shrink-0 px-3 pt-3 pb-3 text-muted-foreground/40 active:text-muted-foreground transition-colors"
+                              aria-label={`Edit ${label}`}
+                            >
+                              <Pencil size={15} />
+                            </button>
                           </div>
                         </div>
                       )}
