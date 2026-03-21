@@ -13,14 +13,18 @@ import {
   timeElapsedPercentage,
   formatTargetTime,
   computeDistanceInRange,
+  computeWeeklyProgress,
+  formatWeeklyMetric,
+  progressPercentage,
 } from "@/lib/format"
-import type { Goal, WeeklySummary, Activity, SyncStatus } from "@/lib/types"
+import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
 interface HomeScreenProps {
   starredGoals: Goal[] // [STAR] goals pinned to home screen
+  currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
   recentActivities: Activity[]
@@ -35,6 +39,7 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   starredGoals,
+  currentWeekGoals,
   activities,
   weeklySummary,
   recentActivities,
@@ -47,6 +52,16 @@ export function HomeScreen({
   onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
+
+  const currentMondayStr = useMemo(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const mon = new Date(now)
+    mon.setDate(now.getDate() + diff)
+    const p = (n: number) => String(n).padStart(2, "0")
+    return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
+  }, [])
 
   // Pre-compute goal metrics outside JSX so we don't run O(goals * activities) on every render
   const goalMetrics = useMemo(
@@ -224,6 +239,48 @@ export function HomeScreen({
             <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
           </div>
         </div>
+
+        {/* Weekly goal progress bars */}
+        {currentWeekGoals.length > 0 && (
+          <div className="mt-3 flex flex-col gap-2">
+            {currentWeekGoals.map((wg) => {
+              const current = computeWeeklyProgress(
+                activities,
+                wg.metric,
+                currentMondayStr,
+                wg.session_min_duration_minutes,
+                wg.session_min_distance_km,
+              )
+              const progress = progressPercentage(current, wg.target)
+              const isComplete = current >= wg.target
+              return (
+                <button
+                  key={wg.id}
+                  onClick={onViewGoals}
+                  className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border text-left active:scale-[0.99] transition-transform"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-xs font-medium text-card-foreground truncate">
+                        {wg.label || formatWeeklyMetric(wg.target, wg.metric)}
+                      </span>
+                      <span className={`text-xs font-semibold tabular-nums shrink-0 ${isComplete ? "text-success" : "text-foreground"}`}>
+                        {formatWeeklyMetric(current, wg.metric)}
+                        <span className="font-normal text-muted-foreground"> / {formatWeeklyMetric(wg.target, wg.metric)}</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </section>
 
 
