@@ -15,6 +15,7 @@ import {
   Lightbulb,
   Pencil,
   Flag,
+  CheckCircle2,
 } from "lucide-react"
 import {
   formatDistance,
@@ -1056,7 +1057,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 generated_at: event.generated_at,
                 previous_plans: prev?.plan
                   ? [
-                      { plan: prev.plan, generated_at: prev.generated_at, adjust_note: null, block_start_date: prev.block_start_date },
+                      {
+                        summary: prev.plan.summary,
+                        weeks: prev.plan.weeks.map((w) => ({
+                          weekNumber: w.weekNumber,
+                          theme: w.theme,
+                          targetKm: w.targetKm,
+                          sessionCount: w.sessions.length,
+                        })),
+                        generated_at: prev.generated_at,
+                        adjust_note: null,
+                        block_start_date: prev.block_start_date,
+                      },
                       ...(prev.previous_plans ?? []),
                     ].slice(0, 5)
                   : prev?.previous_plans ?? [],
@@ -1121,6 +1133,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const isBlockExpired = aiPlan
     ? currentWeekIndex >= (aiPlan.plan.weeks.length)
     : false
+
+  const blockCompletionStats = useMemo(() => {
+    if (!aiPlan || !isBlockExpired) return null
+    const totalSessions = aiPlan.plan.weeks.reduce((s, w) => s + w.sessions.length, 0)
+    const completedSessions = aiPlan.plan.weeks.reduce(
+      (wSum, w) => wSum + w.sessions.reduce(
+        (sSum, _, si) => sSum + (sessionStatuses[`W${w.weekNumber}-${si}`] === "completed" ? 1 : 0), 0
+      ), 0
+    )
+    const totalKm = aiPlan.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+    return { weeks: aiPlan.plan.weeks.length, totalKm, completedSessions, totalSessions }
+  }, [aiPlan, isBlockExpired, sessionStatuses])
 
   // Pre-compute actual km per plan week for skip-load detection
   const weeklyActualKm = useMemo(() => {
@@ -1327,14 +1351,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
-            {/* Expired block warning */}
-            {isBlockExpired && (
-              <div className="flex gap-2.5 rounded-2xl bg-warning/10 px-4 py-3.5 ring-1 ring-warning/30">
-                <AlertCircle size={15} className="mt-0.5 shrink-0 text-warning" />
+            {/* Block completion summary */}
+            {isBlockExpired && blockCompletionStats && (
+              <div className="flex gap-2.5 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
+                <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Training block ended</p>
+                  <p className="text-sm font-medium text-foreground">Block complete</p>
                   <p className="text-xs text-muted-foreground">
-                    This {aiPlan.plan.weeks.length}-week block has finished. Regenerate to get a fresh plan based on your latest training.
+                    {blockCompletionStats.weeks}w · {blockCompletionStats.totalKm} km · {blockCompletionStats.completedSessions}/{blockCompletionStats.totalSessions} sessions · Regenerate when ready
                   </p>
                 </div>
               </div>
@@ -1541,42 +1565,29 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     {aiPlan.previous_plans.map((prev, i) => {
                       const genDate = new Date(prev.generated_at)
                       const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                      const totalKm = prev.plan.weeks.reduce((s, w) => s + w.targetKm, 0)
+                      // Support both new format (prev.weeks) and legacy format (prev.plan.weeks)
+                      const weeks = prev.weeks ?? prev.plan?.weeks ?? []
+                      const totalKm = weeks.reduce((s, w) => s + w.targetKm, 0)
+                      const totalSessions = weeks.reduce((s, w) => s + ("sessionCount" in w ? w.sessionCount : (w as { sessions: unknown[] }).sessions.length), 0)
+                      const completedSessions = prev.sessionCompletions
+                        ? Object.values(prev.sessionCompletions).filter((s) => s === "completed").length
+                        : null
                       return (
                         <div
                           key={i}
-                          className="flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                          className="flex flex-col gap-1.5 rounded-xl bg-card px-4 py-3 ring-1 ring-border"
                         >
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-card-foreground">{label}</span>
                             <span className="text-xs text-muted-foreground">
-                              {prev.plan.weeks.length}w · {totalKm} km total
+                              {weeks.length}w · {totalKm} km
+                              {completedSessions !== null ? ` · ${completedSessions}/${totalSessions} sessions` : ""}
                               {prev.adjust_note ? " · adjusted" : ""}
                             </span>
                           </div>
-                          <button
-                            onClick={() => {
-                              setAiPlan((current) => {
-                                if (!current) return current
-                                // Swap: current → previous, selected previous → current
-                                const newPrevious = [
-                                  { plan: current.plan, generated_at: current.generated_at, adjust_note: null, block_start_date: current.block_start_date },
-                                  ...current.previous_plans.filter((_, j) => j !== i),
-                                ].slice(0, 5)
-                                return {
-                                  ...current,
-                                  plan: prev.plan,
-                                  generated_at: prev.generated_at,
-                                  block_start_date: prev.block_start_date,
-                                  previous_plans: newPrevious,
-                                }
-                              })
-                              setShowPreviousPlans(false)
-                            }}
-                            className="text-xs font-semibold text-primary active:opacity-70"
-                          >
-                            Restore
-                          </button>
+                          {prev.summary && (
+                            <p className="text-xs text-muted-foreground">{prev.summary}</p>
+                          )}
                         </div>
                       )
                     })}
