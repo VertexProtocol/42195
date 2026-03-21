@@ -335,74 +335,74 @@ export function GoalsScreen({
                     <SortableGoalItem key={wg.id} id={wg.id}>
                       {(dragListeners) => (
                         <div
-                          className={`rounded-2xl bg-card shadow-sm ring-1 transition-all ${
+                          className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
                             isComplete ? "ring-success/40 ring-2" : "ring-border"
                           }`}
                         >
-                          <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                          {/* Header — matches performance/event card structure */}
+                          <div className="flex items-center">
                             {/* [DND] Drag handle */}
                             <button
                               {...dragListeners}
                               onClick={(e) => e.stopPropagation()}
-                              className="touch-none shrink-0 text-muted-foreground/25 active:text-muted-foreground/60 -ml-1"
+                              className="touch-none flex shrink-0 items-center self-stretch px-3 text-muted-foreground/25 active:text-muted-foreground/60"
                               aria-label="Drag to reorder"
                             >
                               <GripVertical size={16} />
                             </button>
 
-                            {/* Icon */}
-                            <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
-                              isComplete ? "bg-success/15" : "bg-secondary"
-                            }`}>
-                              <Icon size={18} className={isComplete ? "text-success" : "text-muted-foreground"} />
-                            </div>
+                            {/* Main content row */}
+                            <div className="flex flex-1 items-center gap-3 py-4 pr-2">
+                              <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                                isComplete ? "bg-success/15" : "bg-secondary"
+                              }`}>
+                                <Icon size={20} className={isComplete ? "text-success" : "text-muted-foreground"} />
+                              </div>
 
-                            {/* Label + badge */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <h4 className="text-sm font-semibold text-card-foreground truncate">{label}</h4>
-                                {wg.is_recurring && (
-                                  <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                    <RefreshCw size={9} />
-                                    {t("goals.weekly")}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold text-foreground truncate">{label}</h4>
+                                  {wg.is_recurring && (
+                                    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                      <RefreshCw size={9} />
+                                      {t("goals.weekly")}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                                  <span className={`font-medium ${isComplete ? "text-success" : "text-foreground"}`}>
+                                    {formatWeeklyMetric(current, wg.metric)}
                                   </span>
-                                )}
+                                  {" / "}{formatWeeklyMetric(wg.target, wg.metric)}
+                                </p>
                               </div>
                             </div>
 
-                            {/* Edit button */}
+                            {/* Edit button — matches star button style */}
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditWeeklyGoal(wg) }}
-                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
+                              className="flex shrink-0 items-center self-stretch px-3 text-muted-foreground/40 active:text-muted-foreground transition-colors"
                               aria-label={`Edit ${label}`}
                             >
-                              <Pencil size={12} />
+                              <Pencil size={16} />
                             </button>
                           </div>
 
-                          {/* Progress section */}
-                          <div className="px-4 pb-4">
-                            <div className="flex items-baseline gap-1 mb-2">
-                              <span className={`text-2xl font-bold font-mono ${isComplete ? "text-success" : "text-foreground"}`}>
-                                {formatWeeklyMetric(current, wg.metric)}
-                              </span>
-                              <span className="text-sm text-muted-foreground">
-                                / {formatWeeklyMetric(wg.target, wg.metric)}
-                              </span>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                            <div className="mt-1 flex items-center justify-between text-[11px]">
+                          {/* Progress section — matches expanded content style */}
+                          <div className="px-4 pb-4 border-t border-border">
+                            <div className="mt-3 flex items-center justify-between text-xs mb-1.5">
                               <span className="text-muted-foreground">
                                 {isComplete ? t("goals.completed") : `${progress}%`}
                               </span>
                               {isComplete && (
                                 <span className="font-medium text-success">{t("goals.goalReached")}</span>
                               )}
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-primary"}`}
+                                style={{ width: `${progress}%` }}
+                              />
                             </div>
 
                             {/* Per-session requirement hint */}
