@@ -80,17 +80,17 @@ export function ActivitiesDataTable({ activities, testRunActivityIds, onSelectAc
     <Table>
       <TableHeader>
         <TableRow>
-          <SortableHead col="date">Date</SortableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Name</TableHead>
-          <SortableHead col="distance_km" className="text-right">Distance</SortableHead>
-          <SortableHead col="duration_seconds" className="text-right">Duration</SortableHead>
-          <SortableHead col="pace_min_per_km" className="text-right">Pace</SortableHead>
+          <SortableHead col="date">{t("activities.date") ?? "Date"}</SortableHead>
+          <TableHead>{t("activities.type") ?? "Type"}</TableHead>
+          <TableHead>{t("activities.name") ?? "Name"}</TableHead>
+          <SortableHead col="distance_km" className="text-right">{t("activities.distance") ?? "Distance"}</SortableHead>
+          <SortableHead col="duration_seconds" className="text-right">{t("activities.duration") ?? "Duration"}</SortableHead>
+          <SortableHead col="pace_min_per_km" className="text-right">{t("activities.pace") ?? "Pace"}</SortableHead>
           {hasElevation && (
-            <SortableHead col="elevation_gain_m" className="text-right">Elev.</SortableHead>
+            <SortableHead col="elevation_gain_m" className="text-right">{t("activities.elevation") ?? "Elev."}</SortableHead>
           )}
           {hasHR && (
-            <TableHead className="text-right">HR</TableHead>
+            <TableHead className="text-right">{t("activities.heartRate") ?? "HR"}</TableHead>
           )}
         </TableRow>
       </TableHeader>
