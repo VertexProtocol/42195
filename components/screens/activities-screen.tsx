@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
-import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, FlaskConical } from "lucide-react"
-import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
-import { ActivityTypeBadge } from "@/components/activity-type-badge"
+import { Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, FlaskConical } from "lucide-react"
 import type { Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { PoweredByStrava } from "@/components/strava-brand"
+import { ActivitiesDataTable } from "@/components/activities-data-table"
 
 interface ActivitiesScreenProps {
   activities: Activity[]
@@ -320,46 +319,12 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filteredActivities.map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => onSelectActivity(activity)}
-              className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <ActivityTypeBadge type={activity.type} />
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateShort(activity.date)}
-                  </span>
-                  {testRunActivityIds.has(activity.id) && (
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
-                      <FlaskConical size={9} />
-                      {t("testRun.badge")}
-                    </span>
-                  )}
-                </div>
-                <h3 className="mt-1.5 truncate text-sm font-semibold text-card-foreground">
-                  {activity.name}
-                </h3>
-                <div className="mt-2 flex items-center gap-4">
-                  <span className="text-sm font-medium text-foreground">
-                    {formatDistance(activity.distance_km)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDuration(activity.duration_seconds)}
-                  </span>
-                  {activity.pace_min_per_km !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatPace(activity.pace_min_per_km)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
-            </button>
-          ))}
+        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+          <ActivitiesDataTable
+            activities={filteredActivities}
+            testRunActivityIds={testRunActivityIds}
+            onSelectActivity={onSelectActivity}
+          />
         </div>
       )}
 
