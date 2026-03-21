@@ -124,7 +124,7 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
   return (
     <div
       ref={containerRef}
-      className="flex flex-col gap-4 px-5 pb-6 pt-4"
+      className="flex flex-col gap-5 px-5 pb-6 pt-4"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -279,7 +279,7 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
       )}
 
       {activities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-20">
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
             <Inbox size={28} className="text-muted-foreground" />
           </div>

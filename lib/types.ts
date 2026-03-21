@@ -38,6 +38,8 @@ export interface Goal {
   created_at: string
   // [DND] drag-and-drop display order (set by scripts/007_add_goal_display_order.sql)
   display_order?: number
+  // [STAR] whether this goal is pinned to the home screen
+  is_starred?: boolean
 }
 
 export type WeeklyGoalMetric = "distance_km" | "sessions" | "duration_minutes" | "elevation_m"
@@ -55,6 +57,8 @@ export interface WeeklyGoal {
   session_min_duration_minutes?: number | null
   /** For metric="sessions": only count sessions >= this many km (null = no requirement) */
   session_min_distance_km?: number | null
+  // [DND] drag-and-drop display order
+  display_order?: number
 }
 
 export interface WeeklySummary {
@@ -112,6 +116,7 @@ export interface GoalPreferences {
   sessions_per_week: number
   focus: TrainingFocus
   notes: string | null
+  injury_notes: string | null   // injury history / recurring issues for safety context
   weekly_increase_pct: number   // e.g. 10 = 10% volume increase per week
   block_weeks: number           // total weeks per training block (2/3/4/6)
   regenerate_every_weeks: number // how often user plans to regenerate (2/4/6/8)

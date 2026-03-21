@@ -95,7 +95,7 @@ export function AppShell({ initialData }: AppShellProps) {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false)
   const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
 
-  // ----- URL navigation helpers -----
+// ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
   const navigate = useCallback((params: Record<string, string | null>) => {
     const sp = new URLSearchParams(window.location.search)
@@ -218,7 +218,8 @@ export function AppShell({ initialData }: AppShellProps) {
       <main className="relative pb-20">
         {activeTab === "home" && (
           <HomeScreen
-            activeGoals={data.activeGoals}
+            starredGoals={data.starredGoals}
+            currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
             recentActivities={data.activities.slice(0, 5)}
@@ -260,6 +261,7 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             weeklyGoals={data.weeklyGoals}
             onToggleActive={data.toggleActiveGoal}
+            onToggleStar={data.toggleStarGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("performance")}
             onAddEventGoal={() => handleAddGoal("event_training")}
@@ -267,6 +269,7 @@ export function AppShell({ initialData }: AppShellProps) {
             onAddWeeklyGoal={handleAddWeeklyGoal}
             onSelectGoal={handleSelectGoal}
             onReorderGoals={data.reorderGoals}
+            onReorderWeeklyGoals={data.reorderWeeklyGoals}
           />
         )}
 

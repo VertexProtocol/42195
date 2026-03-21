@@ -338,7 +338,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+    <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
       {/* Header */}
       <header>
         <h1 className="text-2xl font-bold text-foreground">{t("insights.title")}</h1>
@@ -579,8 +579,8 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
 
       {/* Empty state if no data */}
       {personalRecords.length === 0 && racePredictions.predictions.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
             <Trophy size={24} className="text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground max-w-[260px]">
