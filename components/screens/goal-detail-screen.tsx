@@ -1152,7 +1152,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   }, [aiPlan, currentWeekIndex, weeklyActualKm, activities, isBlockExpired])
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-8 pt-4">
+    <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
       {/* Back */}
       <button
         onClick={onBack}
@@ -1169,7 +1169,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             {goal.is_active && !past && (
               <div className="mb-1 flex items-center gap-1.5">
                 <div className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                   Active plan
                 </span>
               </div>
