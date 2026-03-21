@@ -55,6 +55,8 @@ export interface WeeklyGoal {
   session_min_duration_minutes?: number | null
   /** For metric="sessions": only count sessions >= this many km (null = no requirement) */
   session_min_distance_km?: number | null
+  // [DND] drag-and-drop display order
+  display_order?: number
 }
 
 export interface WeeklySummary {
