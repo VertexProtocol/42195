@@ -497,7 +497,7 @@ export function GoalsScreen({
                       <button
                         type="button"
                         onClick={() => toggleExpanded(goal.id)}
-                        className="flex flex-1 items-center gap-3 py-4 pr-2 text-left active:bg-secondary/50 transition-colors"
+                        className="flex flex-1 min-w-0 items-center gap-3 py-4 pr-2 text-left active:bg-secondary/50 transition-colors"
                       >
                         {/* Icon */}
                         <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
@@ -512,7 +512,7 @@ export function GoalsScreen({
 
                         {/* Title and summary */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <h3 className="font-semibold text-foreground truncate">{goal.name}</h3>
                             {goal.is_active && (
                               <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
