@@ -14,6 +14,7 @@ import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 import type { HrAnalysisResult } from "@/lib/hr-analysis-engine"
+import { AppCard } from '@/components/ui/app-card'
 
 interface ProfileScreenProps {
   user: UserProfile
@@ -195,7 +196,7 @@ export function ProfileScreen({
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("profile.account")}
         </h3>
-        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush">
           {/* User info */}
           <div className="flex items-center gap-4 px-4 py-4 border-b border-border">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
@@ -347,7 +348,7 @@ export function ProfileScreen({
             <LogOut size={16} />
             {t("profile.signOut")}
           </button>
-        </div>
+        </AppCard>
       </section>
 
       {/* ── CONNECTED SERVICES ──────────────────────────────── */}
@@ -355,7 +356,7 @@ export function ProfileScreen({
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("profile.connectedServices")}
         </h3>
-        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush">
           {/* Strava connection row */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2.5">
@@ -452,7 +453,7 @@ export function ProfileScreen({
               />
             </div>
           )}
-        </div>
+        </AppCard>
       </section>
 
       {/* ── SYNC SETTINGS ───────────────────────────────────── */}
@@ -461,7 +462,7 @@ export function ProfileScreen({
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("profile.syncSettings")}
           </h3>
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <AppCard variant="flush">
             {/* Last synced */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
@@ -518,7 +519,7 @@ export function ProfileScreen({
                 </div>
               </div>
             )}
-          </div>
+          </AppCard>
         </section>
       )}
 
@@ -527,7 +528,7 @@ export function ProfileScreen({
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("profile.trainingSettings")}
         </h3>
-        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush">
           {/* HR Zone Calibration */}
           <div className="border-b border-border px-4 py-4">
             <div className="flex items-center justify-between mb-1">
@@ -693,7 +694,7 @@ export function ProfileScreen({
             )}
           </div>
 
-        </div>
+        </AppCard>
       </section>
 
       {/* ── APPEARANCE ──────────────────────────────────────── */}
@@ -772,7 +773,7 @@ export function ProfileScreen({
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("profile.legalData")}
         </h3>
-        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush">
           {/* Privacy Policy */}
           <a
             href="/privacy"
@@ -830,7 +831,7 @@ export function ProfileScreen({
               </div>
             </div>
           )}
-        </div>
+        </AppCard>
       </section>
     </div>
   )
