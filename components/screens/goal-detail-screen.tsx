@@ -114,6 +114,29 @@ function PreferencesForm({
   const [planMode] = useState<"block" | "full_cycle">(initial.plan_mode ?? "block")
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [localHistory, setLocalHistory] = useState(initial.notes_history)
+  const [resolvingAt, setResolvingAt] = useState<string | null>(null)
+
+  const injuryHistory = localHistory
+    .filter((e) => e.type === "injury")
+    .sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime())
+
+  async function handleResolve(addedAt: string) {
+    setResolvingAt(addedAt)
+    try {
+      const res = await fetch(`/api/ai/training-plan/preferences`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId, entry_added_at: addedAt }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setLocalHistory(data.notes_history)
+      }
+    } finally {
+      setResolvingAt(null)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -149,6 +172,7 @@ function PreferencesForm({
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
         plan_mode: planMode,
+        notes_history: localHistory,
       })
     } catch {
       setSaveError("Network error — please check your connection and try again.")
@@ -324,6 +348,51 @@ function PreferencesForm({
           className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={2}
         />
+        {injuryHistory.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {injuryHistory.map((entry) => {
+              const addedDate = new Date(entry.added_at).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", year: "numeric",
+              })
+              const resolvedDate = entry.resolved_at
+                ? new Date(entry.resolved_at).toLocaleDateString("en-US", {
+                    month: "short", day: "numeric", year: "numeric",
+                  })
+                : null
+              const isResolving = resolvingAt === entry.added_at
+
+              return (
+                <div
+                  key={entry.added_at}
+                  className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-xs ${
+                    entry.resolved_at
+                      ? "bg-secondary/50 text-muted-foreground"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-foreground ring-1 ring-amber-200 dark:ring-amber-800"
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className={entry.resolved_at ? "line-through opacity-60" : "font-medium"}>
+                      {entry.content}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {resolvedDate ? `Added ${addedDate} · Resolved ${resolvedDate}` : `Added ${addedDate}`}
+                      {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase} phase`}
+                    </span>
+                  </div>
+                  {!entry.resolved_at && (
+                    <button
+                      onClick={() => handleResolve(entry.added_at)}
+                      disabled={isResolving}
+                      className="shrink-0 rounded-md bg-emerald-100 dark:bg-emerald-900/40 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 active:opacity-70 disabled:opacity-50"
+                    >
+                      {isResolving ? "…" : "Resolved"}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {saveError && (
@@ -817,6 +886,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     focus: "balanced",
     notes: null,
     injury_notes: null,
+    notes_history: [],
     weekly_increase_pct: 10,
     block_weeks: 4,
     regenerate_every_weeks: 4,
