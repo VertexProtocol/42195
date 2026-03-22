@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       focus: data.focus,
       notes: data.notes ?? null,
       injury_notes: (data as any).injury_notes ?? null,
+      notes_history: (data as any).notes_history ?? [],
       weekly_increase_pct: data.weekly_increase_pct ?? 10,
       block_weeks: data.block_weeks ?? 4,
       regenerate_every_weeks: data.regenerate_every_weeks ?? 4,

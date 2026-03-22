@@ -4,6 +4,7 @@ import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { type NoteHistoryEntry, formatNotesHistoryForPrompt } from "@/lib/notes-history"
 
 const COACH_SYSTEM_PROMPT = `You are an expert running coach assistant embedded in a training app. You help runners with questions about their training, goals, pacing, recovery, and race preparation.
 
@@ -597,6 +598,43 @@ export async function POST(req: NextRequest) {
   const rateLimit = await checkAiRateLimit(user.id)
   if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit)
 
+  // Fetch notes history from all goals for this user so the coach has full context
+  // regardless of which goal the conversation relates to.
+  const { data: allPrefs } = await supabase
+    .from("goal_preferences")
+    .select("goal_id, notes_history, notes, injury_notes")
+    .eq("user_id", user.id)
+
+  const combinedHistory: NoteHistoryEntry[] = (allPrefs ?? []).flatMap(
+    (p) => ((p as any).notes_history as NoteHistoryEntry[] | null) ?? [],
+  )
+
+  const coachHistoryText = formatNotesHistoryForPrompt(combinedHistory, "coach")
+  const injuryHistoryText = formatNotesHistoryForPrompt(combinedHistory, "injury")
+
+  // Fall back to flat notes if no history exists yet (pre-migration data)
+  const fallbackCoach = (allPrefs ?? []).map((p) => p.notes).filter(Boolean).join("; ")
+  const fallbackInjury = (allPrefs ?? [])
+    .map((p) => (p as any).injury_notes)
+    .filter(Boolean)
+    .join("; ")
+
+  const notesContextParts: string[] = []
+  if (coachHistoryText) {
+    notesContextParts.push(`## Coach notes from the runner (most recent first)\n${coachHistoryText}`)
+  } else if (fallbackCoach) {
+    notesContextParts.push(`## Coach notes from the runner\n  • ${fallbackCoach}`)
+  }
+  if (injuryHistoryText) {
+    notesContextParts.push(
+      `## Injury history (most recent first — factor this into all advice about intensity, volume, and recovery)\n${injuryHistoryText}`,
+    )
+  } else if (fallbackInjury) {
+    notesContextParts.push(
+      `## Injury history (factor this into all advice about intensity, volume, and recovery)\n  • ${fallbackInjury}`,
+    )
+  }
+
   let messages: Anthropic.MessageParam[]
   try {
     const body = await req.json()
@@ -631,16 +669,24 @@ export async function POST(req: NextRequest) {
         while (iterations < maxIterations) {
           iterations++
 
+          const systemBlocks: Anthropic.TextBlockParam[] = [
+            {
+              type: "text" as const,
+              text: COACH_SYSTEM_PROMPT,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ]
+          if (notesContextParts.length > 0) {
+            systemBlocks.push({
+              type: "text" as const,
+              text: notesContextParts.join("\n\n"),
+            })
+          }
+
           const response = await anthropic.messages.create({
             model: "claude-haiku-4-5-20251001",
             max_tokens: 2048,
-            system: [
-              {
-                type: "text" as const,
-                text: COACH_SYSTEM_PROMPT,
-                cache_control: { type: "ephemeral" as const },
-              },
-            ],
+            system: systemBlocks,
             tools,
             messages: currentMessages,
           })

@@ -149,6 +149,7 @@ function PreferencesForm({
         block_weeks: blockWeeks,
         regenerate_every_weeks: regenEvery,
         plan_mode: planMode,
+        notes_history: initial.notes_history,
       })
     } catch {
       setSaveError("Network error — please check your connection and try again.")
@@ -817,6 +818,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     focus: "balanced",
     notes: null,
     injury_notes: null,
+    notes_history: [],
     weekly_increase_pct: 10,
     block_weeks: 4,
     regenerate_every_weeks: 4,

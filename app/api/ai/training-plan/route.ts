@@ -11,6 +11,7 @@ import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
+import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt } from "@/lib/notes-history"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
@@ -198,15 +199,6 @@ function calcFullCycleTargets(
   return targets
 }
 
-function getPhaseLabel(weekIndex: number, totalWeeks: number): string {
-  const taperWeeks = Math.min(3, Math.max(1, Math.floor(totalWeeks * 0.15)))
-  const buildWeeks = Math.max(2, Math.floor(totalWeeks * 0.25))
-  const baseWeeks = totalWeeks - buildWeeks - taperWeeks
-
-  if (weekIndex < baseWeeks) return " (base)"
-  if (weekIndex < baseWeeks + buildWeeks) return " (build)"
-  return " (taper)"
-}
 
 /**
  * Cacheable system prompt — identical for all users.
@@ -319,7 +311,7 @@ function buildPrompt(
   }
   const weekTargetLines = weekTargets
     .map((km, i) => {
-      const label = isFullCycle ? getPhaseLabel(i, blockWeeks) : ""
+      const label = isFullCycle ? ` (${getPhaseLabel(i, blockWeeks)})` : ""
       if (i === blockWeeks - 1) return `- Week ${i + 1}: ${km} km (race week — taper)${label}`
       return `- Week ${i + 1}: ${km} km${label}`
     })
@@ -376,7 +368,21 @@ function buildPrompt(
 ## Runner's Preferences
 - Sessions per week: ${prefs.sessions_per_week}
 - Focus: ${focusDescription}
-- Notes: ${prefs.notes ? `"${prefs.notes}"` : "None provided"}${prefs.injury_notes ? `\n- Injury history / recurring issues: "${prefs.injury_notes}" — take this seriously when prescribing session intensity and volume. Avoid movements or loads that aggravate these conditions.` : ""}
+${(() => {
+  const coachHistory = formatNotesHistoryForPrompt(prefs.notes_history, "coach")
+  const injuryHistory = formatNotesHistoryForPrompt(prefs.notes_history, "injury")
+  const coachLine = coachHistory
+    ? `- Coach notes (most recent first):\n${coachHistory}`
+    : prefs.notes
+      ? `- Coach notes: "${prefs.notes}"`
+      : "- Coach notes: None provided"
+  const injuryLine = injuryHistory
+    ? `- Injury history (most recent first — take seriously: adjust volume/intensity to avoid aggravating these conditions):\n${injuryHistory}`
+    : prefs.injury_notes
+      ? `- Injury history / recurring issues: "${prefs.injury_notes}" — take this seriously when prescribing session intensity and volume.`
+      : ""
+  return [coachLine, injuryLine].filter(Boolean).join("\n")
+})()}
 ${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}
 ## Recent Training History (most recent first)
 ${weekSummaryText}
@@ -473,6 +479,7 @@ export async function POST(req: NextRequest) {
     focus: prefsRow?.focus ?? "balanced",
     notes: prefsRow?.notes ?? null,
     injury_notes: (prefsRow as any)?.injury_notes ?? null,
+    notes_history: ((prefsRow as any)?.notes_history as NoteHistoryEntry[]) ?? [],
     weekly_increase_pct: prefsRow?.weekly_increase_pct ?? 10,
     block_weeks: prefsRow?.block_weeks ?? 4,
     regenerate_every_weeks: prefsRow?.regenerate_every_weeks ?? 4,
@@ -1235,6 +1242,68 @@ export async function PUT(req: NextRequest) {
 
   const { goalId, sessions_per_week, focus, notes, injury_notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = parsed.data
 
+  // Fetch current prefs + active plan to compare notes and capture block context
+  const [{ data: currentPrefs }, { data: activePlan }] = await Promise.all([
+    supabase
+      .from("goal_preferences")
+      .select("notes, injury_notes, notes_history")
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("ai_training_plans")
+      .select("plan, block_start_date")
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ])
+
+  // Build block context snapshot for any notes that changed
+  const now = new Date().toISOString()
+  const existingHistory: NoteHistoryEntry[] = (currentPrefs as any)?.notes_history ?? []
+  const newEntries: NoteHistoryEntry[] = []
+
+  const plan = activePlan?.plan as { weeks?: Array<{ targetKm?: number }> } | null
+  const blockStartDate = activePlan?.block_start_date ?? null
+  let blockWeekIndex: number | null = null
+  let blockTotalWeeks: number | null = null
+  let weeklyKmTarget: number | null = null
+
+  if (plan?.weeks && blockStartDate) {
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000
+    blockWeekIndex = Math.floor((Date.now() - new Date(blockStartDate).getTime()) / msPerWeek)
+    blockTotalWeeks = plan.weeks.length
+    if (blockWeekIndex >= 0 && blockWeekIndex < blockTotalWeeks) {
+      weeklyKmTarget = plan.weeks[blockWeekIndex]?.targetKm ?? null
+    } else {
+      blockWeekIndex = null // outside the block
+    }
+  }
+
+  const blockContext = {
+    block_start_date: blockStartDate,
+    block_week: blockWeekIndex !== null ? blockWeekIndex + 1 : null,
+    block_total_weeks: blockTotalWeeks,
+    training_phase:
+      blockWeekIndex !== null && blockTotalWeeks !== null
+        ? getPhaseLabel(blockWeekIndex, blockTotalWeeks)
+        : null,
+    weekly_km_target: weeklyKmTarget,
+    sessions_per_week,
+  }
+
+  const prevNotes = currentPrefs?.notes ?? null
+  const prevInjuryNotes = (currentPrefs as any)?.injury_notes ?? null
+
+  if ((notes || null) !== prevNotes && notes) {
+    newEntries.push({ content: notes, type: "coach", added_at: now, ...blockContext })
+  }
+  if ((injury_notes || null) !== prevInjuryNotes && injury_notes) {
+    newEntries.push({ content: injury_notes, type: "injury", added_at: now, ...blockContext })
+  }
+
+  const updatedHistory = newEntries.length > 0 ? [...existingHistory, ...newEntries] : existingHistory
+
   const { error } = await supabase.from("goal_preferences").upsert(
     {
       goal_id: goalId,
@@ -1250,16 +1319,16 @@ export async function PUT(req: NextRequest) {
     { onConflict: "goal_id" }
   )
 
-  // injury_notes lives in a column added by migration 020 — update separately
+  // injury_notes and notes_history live in columns added by later migrations — update separately
   // so a missing column doesn't break the whole preferences save.
   if (!error) {
     await supabase
       .from("goal_preferences")
-      .update({ injury_notes: injury_notes || null })
+      .update({ injury_notes: injury_notes || null, notes_history: updatedHistory })
       .eq("goal_id", goalId)
       .eq("user_id", user.id)
       .then(({ error: injErr }) => {
-        if (injErr) console.warn("Could not persist injury_notes (migration may not be applied):", injErr.message)
+        if (injErr) console.warn("Could not persist injury_notes/notes_history (migration may not be applied):", injErr.message)
       })
   }
 
