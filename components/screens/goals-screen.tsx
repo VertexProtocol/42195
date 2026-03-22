@@ -11,6 +11,10 @@ import {
 import {
   DndContext,
   closestCenter,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  TouchSensor,
   type DragEndEvent,
 } from "@dnd-kit/core"
 import {
@@ -186,6 +190,12 @@ export function GoalsScreen({
     [goals]
   )
 
+  // [DND] Sensors: PointerSensor for mouse/stylus, TouchSensor for Safari iOS
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(TouchSensor),
+  )
+
   // [DND] Local ordered list for optimistic drag-and-drop reordering
   const [orderedRaceGoals, setOrderedRaceGoals] = useState(raceGoals)
   useEffect(() => { setOrderedRaceGoals(raceGoals) }, [goals]) // sync when server state changes
@@ -316,7 +326,7 @@ export function GoalsScreen({
             </div>
           ) : (
             // [DND] DnD context wraps the sortable weekly goal list
-            <DndContext collisionDetection={closestCenter} onDragEnd={handleWeeklyDragEnd}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleWeeklyDragEnd}>
               <SortableContext items={orderedWeeklyGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
                 {orderedWeeklyGoals.map((wg) => {
                   const current = computeWeeklyProgress(
@@ -446,7 +456,7 @@ export function GoalsScreen({
             </div>
           ) : (
             // [DND] DnD context wraps the sortable goal list
-            <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={orderedRaceGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
                 {orderedRaceGoals.map((goal) => {
               const isPerformance = goal.goal_category === "performance"
