@@ -483,7 +483,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                 ? vo2delta > 0.5 ? "improving" : vo2delta < -0.5 ? "declining" : "stable"
                 : "stable"
               return (
-                <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border space-y-3">
+                <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border space-y-2">
                   <div className="flex items-center gap-2">
                     <FlaskConical size={14} className="text-violet-500" />
                     <span className="text-xs font-medium text-muted-foreground">
@@ -501,27 +501,29 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     {dm.estimated_vo2max != null && (
                       <div className="text-center">
-                        <p className="text-lg font-bold text-card-foreground">{dm.estimated_vo2max.toFixed(1)}</p>
+                        <p className="text-sm font-bold text-card-foreground tabular-nums">
+                          {dm.estimated_vo2max.toFixed(1)}
+                          {vo2delta != null && (
+                            <span className={`ml-1 text-[10px] font-medium ${vo2delta > 0 ? "text-success" : vo2delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                              {vo2delta > 0 ? "+" : ""}{vo2delta.toFixed(1)}
+                            </span>
+                          )}
+                        </p>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</p>
-                        {vo2delta != null && (
-                          <p className={`text-[10px] font-medium ${vo2delta > 0 ? "text-success" : vo2delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                            {vo2delta > 0 ? "+" : ""}{vo2delta.toFixed(1)}
-                          </p>
-                        )}
                       </div>
                     )}
                     {dm.threshold_pace != null && (
                       <div className="text-center">
-                        <p className="text-lg font-bold text-card-foreground">{formatPace(dm.threshold_pace)}</p>
+                        <p className="whitespace-nowrap text-sm font-bold text-card-foreground tabular-nums">{formatPace(dm.threshold_pace)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</p>
                       </div>
                     )}
                     {dm.threshold_hr != null && (
                       <div className="text-center">
-                        <p className="text-lg font-bold text-card-foreground">{dm.threshold_hr}</p>
+                        <p className="text-sm font-bold text-card-foreground tabular-nums">{dm.threshold_hr}</p>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</p>
                       </div>
                     )}

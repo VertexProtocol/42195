@@ -521,17 +521,14 @@ export function GoalsScreen({
                               <Trophy size={14} className="text-success shrink-0" />
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            <span>{formatDistance(goal.target_distance_km)}</span>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {formatDistance(goal.target_distance_km)}
                             {goal.target_time_seconds && (
-                              <>
-                                <span>·</span>
-                                <span className="text-primary font-medium">{formatTargetTime(goal.target_time_seconds)}</span>
-                              </>
+                              <> · <span className="text-primary font-medium">{formatTargetTime(goal.target_time_seconds)}</span></>
                             )}
-                            <span>·</span>
-                            <span>{isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}</span>
-                          </div>
+                            {" · "}
+                            {isPast ? t("plan.completed") : `${days} ${t("common.daysLeft")}`}
+                          </p>
                         </div>
 
                         {/* Chevron */}
