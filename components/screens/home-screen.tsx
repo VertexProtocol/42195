@@ -19,6 +19,7 @@ import {
 } from "@/lib/format"
 import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { AppCard } from '@/components/ui/app-card'
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
 
@@ -194,7 +195,7 @@ export function HomeScreen({
           </Carousel>
         </section>
       ) : (
-        <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
+        <AppCard padding="lg">
           <p className="text-sm text-muted-foreground">{t("home.noActiveGoals")}</p>
           <button
             onClick={onViewGoals}
@@ -202,7 +203,7 @@ export function HomeScreen({
           >
             {t("home.setGoal")}
           </button>
-        </div>
+        </AppCard>
       )}
 
       {/* Weekly Summary */}
@@ -211,7 +212,7 @@ export function HomeScreen({
           {t("home.thisWeek")}
         </h3>
         <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+          <AppCard padding="sm" className="flex flex-col items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
               <TrendingUp size={16} className="text-primary" />
             </div>
@@ -219,8 +220,8 @@ export function HomeScreen({
               {weeklySummary.total_distance_km.toFixed(1)}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.km")}</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+          </AppCard>
+          <AppCard padding="sm" className="flex flex-col items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
               <Clock size={16} className="text-primary" />
             </div>
@@ -228,8 +229,8 @@ export function HomeScreen({
               {formatDuration(weeklySummary.total_time_seconds)}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.time")}</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+          </AppCard>
+          <AppCard padding="sm" className="flex flex-col items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
               <Footprints size={16} className="text-primary" />
             </div>
@@ -237,7 +238,7 @@ export function HomeScreen({
               {weeklySummary.run_count}
             </span>
             <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
-          </div>
+          </AppCard>
         </div>
 
         {/* Weekly goal progress rings */}

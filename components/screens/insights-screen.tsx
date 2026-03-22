@@ -28,6 +28,7 @@ import { useI18n } from "@/lib/i18n"
 import type { Activity, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
+import { AppCard } from '@/components/ui/app-card'
 
 interface Message {
   role: "user" | "assistant"
@@ -347,7 +348,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
 
       {/* Training Stats */}
       {activities.length > 0 && (
-        <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush">
           <div className="grid grid-cols-3 divide-x divide-border">
             <div className="flex flex-col items-center gap-1 px-3 py-4">
               <TrendingUp size={14} className="text-muted-foreground" />
@@ -365,7 +366,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
               <span className="text-[10px] text-muted-foreground text-center">runs (30 days)</span>
             </div>
           </div>
-        </div>
+        </AppCard>
       )}
 
       {/* AI Coach Card */}
@@ -457,18 +458,18 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
           {t("testRun.benchmarks")}
         </h3>
         {testRunsLoading ? (
-          <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border flex items-center justify-center">
+          <AppCard padding="lg" className="flex items-center justify-center">
             <Loader2 size={18} className="animate-spin text-muted-foreground" />
-          </div>
+          </AppCard>
         ) : testRuns.length === 0 ? (
-          <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
+          <AppCard padding="lg">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
                 <FlaskConical size={20} className="text-violet-500" />
               </div>
               <p className="text-xs text-muted-foreground flex-1">{t("testRun.noBenchmarks")}</p>
             </div>
-          </div>
+          </AppCard>
         ) : (
           <div className="flex flex-col gap-2">
             {/* Latest metrics summary */}
@@ -483,7 +484,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                 ? vo2delta > 0.5 ? "improving" : vo2delta < -0.5 ? "declining" : "stable"
                 : "stable"
               return (
-                <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border space-y-2">
+                <AppCard className="space-y-2">
                   <div className="flex items-center gap-2">
                     <FlaskConical size={14} className="text-violet-500" />
                     <span className="text-xs font-medium text-muted-foreground">
@@ -528,12 +529,12 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                       </div>
                     )}
                   </div>
-                </div>
+                </AppCard>
               )
             })()}
             {/* Historical list */}
             {testRuns.length > 1 && (
-              <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+              <AppCard variant="flush">
                 {testRuns.slice(1, 6).map((tr, i) => (
                   <div
                     key={tr.id}
@@ -555,7 +556,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
                     )}
                   </div>
                 ))}
-              </div>
+              </AppCard>
             )}
           </div>
         )}
@@ -566,7 +567,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("insights.trends")}
         </h3>
-        <div className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-border">
+        <AppCard padding="lg">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <TrendingUp size={20} className="text-primary" />
@@ -576,7 +577,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
               <p className="text-xs text-muted-foreground">{t("insights.trendsDesc")}</p>
             </div>
           </div>
-        </div>
+        </AppCard>
       </section>
 
       {/* Empty state if no data */}

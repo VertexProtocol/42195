@@ -37,6 +37,7 @@ import type {
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
+import { AppCard } from '@/components/ui/app-card'
 
 interface GoalDetailScreenProps {
   goal: Goal
@@ -341,7 +342,7 @@ function PreferencesForm({
 // ---- Loading skeletons ----
 function WeekCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-border shadow-sm">
+    <AppCard variant="flush">
       <div className="flex w-full items-center justify-between px-4 py-3.5">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
@@ -352,7 +353,7 @@ function WeekCardSkeleton() {
         </div>
         <Skeleton className="h-4 w-4 shrink-0 rounded" />
       </div>
-    </div>
+    </AppCard>
   )
 }
 
@@ -800,9 +801,9 @@ function TrainingTimelineView({
   }
 
   return (
-    <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+    <AppCard variant="flush">
       {timelineContent}
-    </div>
+    </AppCard>
   )
 }
 
@@ -1203,7 +1204,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       </header>
 
       {/* Progress bar + Training Timeline (merged) */}
-      <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+      <AppCard variant="flush">
         <div className="px-5 py-4">
           <div className="flex items-center justify-between text-xs mb-2">
             <span className="text-muted-foreground">
@@ -1225,7 +1226,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             embedded
           />
         )}
-      </div>
+      </AppCard>
 
       {/* ---- AI Training Plan section ---- */}
       <section>
@@ -1275,7 +1276,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
         {/* Preferences tab */}
         {activeTab === "preferences" && (
-          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+          <AppCard>
             <PreferencesForm
               goalId={goal.id}
               initial={prefs}
@@ -1284,7 +1285,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                 setActiveTab("plan")
               }}
             />
-          </div>
+          </AppCard>
         )}
 
         {/* Training Plan tab */}
@@ -1464,7 +1465,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     </button>
 
                     {showCheckpointReview && pendingCheckpoint && (
-                      <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                      <AppCard className="flex flex-col gap-3">
                         <div className="flex gap-2.5">
                           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
                           <div className="flex flex-col gap-1">
@@ -1481,14 +1482,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                         >
                           {isApplyingCheckpoint ? "Applying…" : "Apply adjustment"}
                         </button>
-                      </div>
+                      </AppCard>
                     )}
                   </>
                 )
               })()}
 
               {showAdjustForm && (
-                <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+                <AppCard className="flex flex-col gap-2">
                   <p className="text-xs text-muted-foreground">
                     Tell Claude what to change — e.g. "fewer runs but longer", "no tempo work yet", "I can only run at weekends"
                   </p>
@@ -1507,7 +1508,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     <Sparkles size={16} />
                     Regenerate with changes
                   </button>
-                </div>
+                </AppCard>
               )}
 
               <button
