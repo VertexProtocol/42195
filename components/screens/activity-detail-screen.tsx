@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n"
 import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics, PredictionValidation } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
+import { AppCard } from '@/components/ui/app-card'
 
 interface ActivityDetailScreenProps {
   activity: Activity
@@ -29,13 +30,13 @@ function StatCard({
   value: string
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+    <AppCard className="flex flex-col items-center gap-2">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
         <Icon size={20} className="text-primary" />
       </div>
       <span className="text-base font-bold text-card-foreground">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
+    </AppCard>
   )
 }
 
@@ -108,7 +109,7 @@ function RouteMap({ polyline }: { polyline: string }) {
     .join(" ")
 
   return (
-    <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+    <AppCard>
       <div className="mb-3 flex items-center gap-2">
         <MapPin size={14} className="text-muted-foreground" />
         <p className="text-xs font-medium text-card-foreground">Route</p>
@@ -150,7 +151,7 @@ function RouteMap({ polyline }: { polyline: string }) {
           />
         )}
       </svg>
-    </div>
+    </AppCard>
   )
 }
 
@@ -382,7 +383,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("activityDetail.details")}
         </h3>
-        <div className="flex flex-col gap-0 overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+        <AppCard variant="flush" className="flex flex-col gap-0">
           {activity.elevation_gain_m !== null && (
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
@@ -427,19 +428,19 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               </span>
             </div>
           )}
-        </div>
+        </AppCard>
       </section>
 
       {/* AI Analysis */}
       <section>
         {aiAnalysis ? (
-          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+          <AppCard>
             <div className="mb-2 flex items-center gap-2">
               <Sparkles size={14} className="text-primary" />
               <span className="text-xs font-medium text-primary">{t("analysis.coachAnalysis")}</span>
             </div>
             <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
-          </div>
+          </AppCard>
         ) : (
           <button
             onClick={handleGetAnalysis}
@@ -594,7 +595,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 {t("testRun.markAs")}
               </button>
             ) : (
-              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+              <AppCard>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <FlaskConical size={14} className="text-violet-600 dark:text-violet-400" />
@@ -655,7 +656,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     </>
                   )
                 })()}
-              </div>
+              </AppCard>
             )}
           </>
         )}
@@ -674,7 +675,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.hrZones")}
           </h3>
-          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+          <AppCard>
             <div className="flex flex-col gap-2.5">
               {hrZones.map((zone) => (
                 <div key={zone.zone} className="flex flex-col gap-1">
@@ -698,7 +699,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 </div>
               ))}
             </div>
-          </div>
+          </AppCard>
         </section>
       )}
 
@@ -708,7 +709,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.paceDistribution")}
           </h3>
-          <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+          <AppCard>
             <div className="flex flex-col gap-2.5">
               {paceZones.filter((z) => z.percentage > 0).map((zone) => (
                 <div key={zone.zone} className="flex flex-col gap-1">
@@ -732,7 +733,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 </div>
               ))}
             </div>
-          </div>
+          </AppCard>
         </section>
       )}
 
@@ -755,7 +756,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           </h3>
           <div className="flex flex-col gap-3">
             {hasPace && (
-              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+              <AppCard>
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={smoothedStreams ?? undefined} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
@@ -797,11 +798,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              </AppCard>
             )}
 
             {hasHr && (
-              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+              <AppCard>
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.heartRate")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
@@ -840,11 +841,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              </AppCard>
             )}
 
             {hasAltitude && (
-              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+              <AppCard>
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.elevation")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
@@ -883,11 +884,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              </AppCard>
             )}
 
             {hasCadence && (
-              <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+              <AppCard>
                 <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.cadence")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
@@ -926,7 +927,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              </AppCard>
             )}
           </div>
         </section>
@@ -938,7 +939,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.laps")}
           </h3>
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border">
+          <AppCard variant="flush">
             <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
               <span className="text-[11px] font-medium text-muted-foreground">#</span>
               <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
@@ -962,7 +963,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 </span>
               </div>
             ))}
-          </div>
+          </AppCard>
         </section>
       )}
 

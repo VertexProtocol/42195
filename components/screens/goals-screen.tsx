@@ -39,6 +39,7 @@ import {
 } from "@/lib/format"
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { AppCard } from '@/components/ui/app-card'
 
 type GoalTab = "weekly" | "race"
 
@@ -334,11 +335,7 @@ export function GoalsScreen({
                   return (
                     <SortableGoalItem key={wg.id} id={wg.id}>
                       {(dragListeners) => (
-                        <div
-                          className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
-                            isComplete ? "ring-success/40 ring-2" : "ring-border"
-                          }`}
-                        >
+                        <AppCard variant="flush" state={isComplete ? 'complete' : 'idle'}>
                           {/* Header — matches performance/event card structure */}
                           <div className="flex">
                             {/* [DND] Drag handle */}
@@ -404,7 +401,7 @@ export function GoalsScreen({
                               <Pencil size={15} />
                             </button>
                           </div>
-                        </div>
+                        </AppCard>
                       )}
                     </SortableGoalItem>
                   )
@@ -473,14 +470,10 @@ export function GoalsScreen({
               return (
                 <SortableGoalItem key={goal.id} id={goal.id}>
                   {(dragListeners) => (
-                  <div
-                    className={`overflow-hidden rounded-2xl bg-card shadow-sm ring-1 transition-all ${
-                      status?.reached
-                        ? "ring-success/40 ring-2"
-                        : goal.is_active
-                          ? "ring-primary/40 ring-2"
-                          : "ring-border"
-                    } ${isPast && !status?.reached ? "opacity-60" : ""}`}
+                  <AppCard
+                    variant="flush"
+                    state={status?.reached ? 'complete' : goal.is_active ? 'active' : 'idle'}
+                    className={isPast && !status?.reached ? 'opacity-60' : ''}
                   >
                     {/* Collapsed header: [drag handle] [expand button] */}
                     <div className="flex items-center">
@@ -678,7 +671,7 @@ export function GoalsScreen({
                       )}
                     </div>
                   )}
-                  </div>
+                  </AppCard>
                   )}
                 </SortableGoalItem>
               )
