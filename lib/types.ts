@@ -146,8 +146,21 @@ export interface TrainingPlan {
   watchOut: string | null
 }
 
+export interface PlanWeekSummary {
+  weekNumber: number
+  theme: string
+  targetKm: number
+  sessionCount: number
+}
+
 export interface PlanSnapshot {
-  plan: TrainingPlan
+  // New format: stripped week summaries + session completion history
+  summary: string
+  weeks: PlanWeekSummary[]
+  sessionCompletions?: Record<string, string>
+  // Legacy field present only on snapshots archived before the format change
+  plan?: TrainingPlan
+  // Common fields
   generated_at: string
   adjust_note: string | null
   block_start_date: string
