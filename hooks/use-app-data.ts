@@ -195,12 +195,12 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Derived data -----
   const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
-  // [STAR] Event goals pinned to the home screen, sorted by race date (soonest first)
+  // [STAR] Event goals pinned to the home screen, sorted by user-defined display_order
   const starredGoals = useMemo(
     () =>
       goals
         .filter((g) => g.is_starred)
-        .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()),
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)),
     [goals],
   )
 

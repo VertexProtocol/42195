@@ -15,7 +15,7 @@ const translations = {
     "tab.insights": "Insights",
     "tab.profile": "Profile",
     // Home
-    "home.activeGoals": "Active Goals",
+    "home.activeGoals": "Pinned Goals",
     "home.activeGoal": "Active Goal",
     "home.goals": "goals",
     "home.setGoal": "Set a goal",
@@ -457,7 +457,7 @@ const translations = {
     "tab.insights": "Innsikt",
     "tab.profile": "Profil",
     // Home
-    "home.activeGoals": "Aktive mål",
+    "home.activeGoals": "Festede mål",
     "home.activeGoal": "Aktivt mål",
     "home.goals": "mål",
     "home.setGoal": "Sett et mål",
