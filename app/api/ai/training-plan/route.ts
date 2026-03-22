@@ -1296,10 +1296,10 @@ export async function PUT(req: NextRequest) {
   const prevInjuryNotes = (currentPrefs as any)?.injury_notes ?? null
 
   if ((notes || null) !== prevNotes && notes) {
-    newEntries.push({ content: notes, type: "coach", added_at: now, ...blockContext })
+    newEntries.push({ content: notes, type: "coach", added_at: now, resolved_at: null, ...blockContext })
   }
   if ((injury_notes || null) !== prevInjuryNotes && injury_notes) {
-    newEntries.push({ content: injury_notes, type: "injury", added_at: now, ...blockContext })
+    newEntries.push({ content: injury_notes, type: "injury", added_at: now, resolved_at: null, ...blockContext })
   }
 
   const updatedHistory = newEntries.length > 0 ? [...existingHistory, ...newEntries] : existingHistory

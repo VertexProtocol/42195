@@ -9,7 +9,8 @@
 export interface NoteHistoryEntry {
   content: string
   type: "coach" | "injury"
-  added_at: string             // ISO timestamp
+  added_at: string             // ISO timestamp — used as a stable entry ID
+  resolved_at: string | null   // ISO timestamp if the issue has been resolved, else null
   block_start_date: string | null
   block_week: number | null    // 1-based week within the block
   block_total_weeks: number | null
@@ -45,8 +46,11 @@ function formatEntryLabel(entry: NoteHistoryEntry): string {
 }
 
 /**
- * Formats a filtered slice of the history array for use in an AI prompt.
- * Returns null if there are no entries of the given type.
+ * Formats the injury history for use in an AI prompt, splitting active and
+ * resolved entries so the model treats them with appropriate weight.
+ *
+ * For coach notes (type "coach") there is no resolved concept — all entries
+ * are returned under a single heading, most recent first.
  */
 export function formatNotesHistoryForPrompt(
   entries: NoteHistoryEntry[],
@@ -54,8 +58,43 @@ export function formatNotesHistoryForPrompt(
 ): string | null {
   const filtered = entries.filter((e) => e.type === type)
   if (filtered.length === 0) return null
+
   const sorted = [...filtered].sort(
     (a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime(),
   )
-  return sorted.map((e) => `  • [${formatEntryLabel(e)}]: "${e.content}"`).join("\n")
+
+  if (type === "coach") {
+    return sorted.map((e) => `  • [${formatEntryLabel(e)}]: "${e.content}"`).join("\n")
+  }
+
+  // Injury entries: separate active from resolved
+  const active = sorted.filter((e) => !e.resolved_at)
+  const resolved = sorted.filter((e) => e.resolved_at)
+
+  const parts: string[] = []
+
+  if (active.length > 0) {
+    parts.push(
+      "  Active (restrict volume/intensity to avoid aggravating these):\n" +
+        active.map((e) => `    • [${formatEntryLabel(e)}]: "${e.content}"`).join("\n"),
+    )
+  }
+
+  if (resolved.length > 0) {
+    parts.push(
+      "  Resolved (historical context only — do NOT restrict training based on these):\n" +
+        resolved
+          .map((e) => {
+            const resolvedDate = new Date(e.resolved_at!).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+            return `    • [${formatEntryLabel(e)} · resolved ${resolvedDate}]: "${e.content}"`
+          })
+          .join("\n"),
+    )
+  }
+
+  return parts.join("\n")
 }
