@@ -1025,24 +1025,27 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   }, [autoStatuses, manualStatuses])
 
   const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
-    setManualStatuses((prev) => {
-      const key = `W${weekNumber}-${sessionIndex}`
-      const effective = sessionStatuses[key] ?? "planned"
-      const next: SessionStatus =
-        effective === "planned" ? "completed"
-        : effective === "completed" ? "skipped"
-        : "planned"
-      const updated = { ...prev, [key]: next }
-      // Persist to database
-      fetch("/api/ai/training-plan/sessions", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalId: goal.id, sessionKey: key, status: next }),
-      }).catch(() => {
-        // Fallback to localStorage if DB save fails
-        try { localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify(updated)) } catch {}
-      })
-      return updated
+    const key = `W${weekNumber}-${sessionIndex}`
+    const effective = sessionStatuses[key] ?? "planned"
+    const next: SessionStatus =
+      effective === "planned" ? "completed"
+      : effective === "completed" ? "skipped"
+      : "planned"
+
+    setManualStatuses((prev) => ({ ...prev, [key]: next }))
+
+    // Persist to database; fall back to localStorage on any failure (network error or non-2xx)
+    fetch("/api/ai/training-plan/sessions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goalId: goal.id, sessionKey: key, status: next }),
+    }).then((res) => {
+      if (!res.ok) throw new Error("save failed")
+    }).catch(() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`session-statuses-${goal.id}`) ?? "{}")
+        localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify({ ...stored, [key]: next }))
+      } catch {}
     })
   }, [goal.id, sessionStatuses])
 
