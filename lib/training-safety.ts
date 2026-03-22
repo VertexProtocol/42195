@@ -192,7 +192,7 @@ export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
       ratio,
       risk: "unsafe",
       weekOneMultiplier: 0.75,
-      message: `Acute load (${acuteLoad.toFixed(1)} km) is ${ratio.toFixed(2)}x chronic (${chronicLoad.toFixed(1)} km/wk). Plan reduced 25% — prioritise recovery before building volume.`,
+      message: `Your recent load (${acuteLoad.toFixed(1)} km) is ${ratio.toFixed(2)}× your baseline (${chronicLoad.toFixed(1)} km/wk). Take a rest day or easy run today — avoid hard sessions until your load comes down.`,
     }
   }
   if (ratio > ACWR_HIGH_THRESHOLD) {
@@ -200,7 +200,7 @@ export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
       ratio,
       risk: "high",
       weekOneMultiplier: 0.85,
-      message: `ACWR ${ratio.toFixed(2)} — elevated injury risk. Plan reduced 15% this week.`,
+      message: `Training load is elevated (ACWR ${ratio.toFixed(2)}). Consider reducing intensity this week and prioritising sleep and recovery.`,
     }
   }
   if (ratio > 1.0) {
@@ -208,7 +208,7 @@ export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
       ratio,
       risk: "moderate",
       weekOneMultiplier: 0.95,
-      message: `ACWR ${ratio.toFixed(2)} is slightly elevated. Plan reduced 5% this week as a precaution.`,
+      message: `Load is slightly above your baseline (ACWR ${ratio.toFixed(2)}). Keep this week manageable to stay in the optimal range.`,
     }
   }
   return { ratio, risk: "low", weekOneMultiplier: 1.0, message: null }

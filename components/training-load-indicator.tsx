@@ -115,6 +115,11 @@ export function TrainingLoadIndicator({ activities, compact = false }: TrainingL
               {prolongedFatigue.message}
             </p>
           )}
+          {acwr.message && acwr.risk !== "low" && !prolongedFatigue.message && (
+            <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
+              {acwr.message}
+            </p>
+          )}
         </div>
       </div>
 
