@@ -79,13 +79,36 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
   }, [testRuns])
   const racePredictions = useMemo(() => predictRaceTimes(activities, predictionAdjustment), [activities, predictionAdjustment])
 
-  const totalKm = useMemo(() => activities.reduce((sum, a) => sum + Number(a.distance_km), 0), [activities])
-  const longestRunKm = useMemo(() => activities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [activities])
-  const recentRunCount = useMemo(() => {
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - 30)
-    return activities.filter(a => new Date(a.date) >= cutoff).length
-  }, [activities])
+  type StatsPeriod = "30d" | "year" | "last_year" | "all"
+  const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>("30d")
+
+  const filteredActivities = useMemo(() => {
+    const now = new Date()
+    if (statsPeriod === "30d") {
+      const cutoff = new Date()
+      cutoff.setDate(now.getDate() - 30)
+      return activities.filter(a => new Date(a.date) >= cutoff)
+    }
+    if (statsPeriod === "year") {
+      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
+    }
+    if (statsPeriod === "last_year") {
+      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
+    }
+    return activities
+  }, [activities, statsPeriod])
+
+  const totalKm = useMemo(() => filteredActivities.reduce((sum, a) => sum + Number(a.distance_km), 0), [filteredActivities])
+  const longestRunKm = useMemo(() => filteredActivities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [filteredActivities])
+  const recentRunCount = filteredActivities.length
+
+  const STATS_PERIODS: { key: StatsPeriod; label: string }[] = [
+    { key: "30d", label: "30d" },
+    { key: "year", label: "This yr" },
+    { key: "last_year", label: "Last yr" },
+    { key: "all", label: "All" },
+  ]
+  const runsLabel = statsPeriod === "30d" ? "runs (30d)" : statsPeriod === "year" ? "runs (this yr)" : statsPeriod === "last_year" ? "runs (last yr)" : "total runs"
 
   // Fetch test runs for benchmarks section
   useEffect(() => {
@@ -349,6 +372,22 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
       {/* Training Stats */}
       {activities.length > 0 && (
         <AppCard variant="flush">
+          {/* Period switcher */}
+          <div className="flex justify-center gap-1 pt-3 px-3">
+            {STATS_PERIODS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setStatsPeriod(key)}
+                className={`px-3 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                  statsPeriod === key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-3 divide-x divide-border">
             <div className="flex flex-col items-center gap-1 px-3 py-4">
               <TrendingUp size={14} className="text-muted-foreground" />
@@ -363,7 +402,7 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
             <div className="flex flex-col items-center gap-1 px-3 py-4">
               <Clock size={14} className="text-muted-foreground" />
               <span className="text-base font-bold font-mono text-foreground">{recentRunCount}</span>
-              <span className="text-[10px] text-muted-foreground text-center">runs (30 days)</span>
+              <span className="text-[10px] text-muted-foreground text-center">{runsLabel}</span>
             </div>
           </div>
         </AppCard>
