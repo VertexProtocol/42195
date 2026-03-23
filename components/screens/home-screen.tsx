@@ -71,7 +71,12 @@ export function HomeScreen({
         for (const row of data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const weeks = (row.plan as any)?.weeks
-          const blockEnd = new Date(row.block_start_date)
+          // Snap to Monday (same as goal-detail-screen) so blockEnd matches the week boundary
+          const blockStart = new Date(row.block_start_date)
+          blockStart.setHours(0, 0, 0, 0)
+          const dow = blockStart.getDay()
+          blockStart.setDate(blockStart.getDate() + (dow === 0 ? -6 : 1 - dow))
+          const blockEnd = new Date(blockStart)
           blockEnd.setDate(blockEnd.getDate() + (Array.isArray(weeks) ? weeks.length : 0) * 7)
           badges[row.goal_id] = {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
