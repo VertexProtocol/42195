@@ -30,11 +30,11 @@ export default async function Page() {
       supabase
         .from("goals")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("display_order", { ascending: true }),
       supabase
         .from("weekly_goals")
-        .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km")
-        .order("created_at", { ascending: false }),
+        .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+        .order("display_order", { ascending: true }),
       supabase.from("profiles").select("id, display_name, email, avatar_url, locale, hr_analysis_cache").eq("id", authUser.id).single(),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
@@ -69,6 +69,7 @@ export default async function Page() {
       current_distance_km: Number(g.current_distance_km),
       is_active: g.is_active,
       created_at: g.created_at,
+      display_order: (g as any).display_order ?? 0, // [DND]
       is_starred: (g as any).is_starred ?? false, // [STAR]
     })),
     weeklyGoals: (weeklyGoalsRes.data ?? []).map((wg) => ({
@@ -81,6 +82,7 @@ export default async function Page() {
       is_recurring: wg.is_recurring ?? false,
       session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
       session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
+      display_order: (wg as any).display_order ?? 0, // [DND]
     })),
     user: profileRes.data
       ? {
