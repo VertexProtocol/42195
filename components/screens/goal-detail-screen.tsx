@@ -1041,12 +1041,13 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       body: JSON.stringify({ goalId: goal.id, sessionKey: key, status: next }),
     }).then((res) => {
       if (!res.ok) throw new Error("save failed")
-    }).catch(() => {
-      try {
-        const stored = JSON.parse(localStorage.getItem(`session-statuses-${goal.id}`) ?? "{}")
-        localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify({ ...stored, [key]: next }))
-      } catch {}
-    })
+    }).catch(() => {})
+    // Always keep localStorage in sync as a backup (Safari may clear it, but
+    // it protects against DB failures and stale GET caches on reload)
+    try {
+      const stored = JSON.parse(localStorage.getItem(`session-statuses-${goal.id}`) ?? "{}")
+      localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify({ ...stored, [key]: next }))
+    } catch {}
   }, [goal.id, sessionStatuses])
 
   const handleApplyCheckpoint = useCallback(async () => {

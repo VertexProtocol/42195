@@ -391,12 +391,14 @@ export function useAppData(initialData?: InitialData | null) {
       const reorderedSet = new Set(orderedIds)
       return [...reordered, ...prev.filter((g) => !reorderedSet.has(g.id))]
     })
-    // Persist to Supabase (fire-and-forget; errors only affect order until next reload)
-    await Promise.all(
+    // Persist to Supabase
+    const results = await Promise.all(
       orderedIds.map((id, i) =>
         supabase.from("goals").update({ display_order: i + 1 }).eq("id", id)
       )
     )
+    const failed = results.filter((r) => r.error)
+    if (failed.length > 0) console.error("reorderGoals: failed to persist order", failed.map((r) => r.error))
   }, [])
 
   // ----- Weekly Goal CRUD -----
@@ -511,11 +513,13 @@ export function useAppData(initialData?: InitialData | null) {
       const reorderedSet = new Set(orderedIds)
       return [...reordered, ...prev.filter((g) => !reorderedSet.has(g.id))]
     })
-    await Promise.all(
+    const results = await Promise.all(
       orderedIds.map((id, i) =>
         supabase.from("weekly_goals").update({ display_order: i + 1 }).eq("id", id)
       )
     )
+    const failed = results.filter((r) => r.error)
+    if (failed.length > 0) console.error("reorderWeeklyGoals: failed to persist order", failed.map((r) => r.error))
   }, [])
 
   // ----- Add manual activity -----

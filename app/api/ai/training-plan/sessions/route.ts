@@ -27,7 +27,9 @@ export async function GET(req: NextRequest) {
     statuses[row.session_key] = row.status as SessionStatus
   }
 
-  return NextResponse.json({ statuses })
+  return NextResponse.json({ statuses }, {
+    headers: { "Cache-Control": "no-store" },
+  })
 }
 
 // PUT — upsert a single session status
