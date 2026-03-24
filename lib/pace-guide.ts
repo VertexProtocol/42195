@@ -129,9 +129,10 @@ type SessionZone = "easy" | "long" | "tempo" | "interval" | "race"
 function detectZone(sessionType: string): SessionZone {
   const t = sessionType.toLowerCase()
   if (/long/.test(t)) return "long"
-  if (/tempo|threshold|lactate|cruise|steady.?state/.test(t)) return "tempo"
-  if (/interval|track|speed|fartlek|repeat|strides|vo2/.test(t)) return "interval"
+  if (/tempo|threshold|lactate|cruise|steady.?state|progression/.test(t)) return "tempo"
+  if (/interval|track|speed|fartlek|repeat|strides|vo2|hill/.test(t)) return "interval"
   if (/race.?pace|goal.?pace|specific|marathon.?pace|half.?marathon.?pace/.test(t)) return "race"
+  // "recovery run" gets easy zone but slightly slower — handled by caller via modifier
   return "easy"
 }
 
