@@ -508,8 +508,20 @@ export async function POST(req: NextRequest) {
   // a broader view. Empty weeks (no runs) are included by always dividing by the
   // full window size, not just the count of active weeks.
   const recentWindow = prefs.regenerate_every_weeks ?? 4
-  const currentAvgWeeklyKm =
+  const recentAvgWeeklyKm =
     weeklySummaries.slice(0, recentWindow).reduce((s, w) => s + w.totalKm, 0) / recentWindow
+
+  // Also find the peak 4-week rolling average across the full 12-week history.
+  // This prevents a recent taper or recovery plan from creating a feedback loop
+  // where each regeneration starts lower than the last, even though the runner's
+  // actual fitness is much higher. We use 85% of the peak as a floor so the new
+  // plan doesn't jump straight back to peak — a slight step-down is appropriate.
+  const peakFourWeekAvg = weeklySummaries.length >= 4
+    ? Math.max(...Array.from({ length: weeklySummaries.length - 3 }, (_, i) =>
+        weeklySummaries.slice(i, i + 4).reduce((s, w) => s + w.totalKm, 0) / 4
+      ))
+    : recentAvgWeeklyKm
+  const currentAvgWeeklyKm = Math.max(recentAvgWeeklyKm, peakFourWeekAvg * 0.85)
 
   const longestRecentRun =
     weeklySummaries.reduce((max, w) => Math.max(max, w.longestKm), 0)
