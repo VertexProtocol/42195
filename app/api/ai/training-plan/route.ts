@@ -109,10 +109,19 @@ function formatPace(minPerKm: number | null): string {
   return `${min}:${String(sec).padStart(2, "0")} min/km`
 }
 
+function calcMinWeeklyKm(sessionsPerWeek: number, longestRecentRun: number): number {
+  // Long run minimum: 8 km if the runner has ever run ≥ 6 km, otherwise gently above their longest
+  const longRunMin = longestRecentRun >= 6 ? 8 : Math.max(longestRecentRun + 1, 5)
+  // Other sessions: 5 km each
+  return longRunMin + Math.max(0, sessionsPerWeek - 1) * 5
+}
+
 function calcWeekTargets(
   avgWeeklyKm: number,
   pct: number,
   blockWeeks: number,
+  sessionsPerWeek: number,
+  longestRecentRun: number,
   acwr?: { ratio: number; risk: string },
 ): number[] {
   let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15 // Conservative default for beginners (was 20)
@@ -122,9 +131,12 @@ function calcWeekTargets(
   } else if (acwr?.risk === "moderate") {
     base = base * 0.9 // 10% reduction for moderate risk
   }
+  // Enforce a minimum weekly volume so that session length rules can be satisfied.
+  // Without this, a 10 km week with 2 sessions can't support a ≥ 8 km long run + ≥ 5 km base run.
+  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
   const multiplier = 1 + pct / 100
   // Safety cap: no week should exceed 150% of baseline to prevent injury
-  const maxWeeklyKm = (avgWeeklyKm > 0 ? avgWeeklyKm : 15) * 1.5
+  const maxWeeklyKm = Math.max(avgWeeklyKm > 0 ? avgWeeklyKm : 15, base) * 1.5
   const targets: number[] = []
   // Week 1 starts at the runner's current baseline
   let current = base
@@ -146,11 +158,14 @@ function calcWeekTargets(
 function calcFullCycleTargets(
   avgWeeklyKm: number,
   totalWeeks: number,
+  sessionsPerWeek: number,
+  longestRecentRun: number,
   acwr?: { ratio: number; risk: string },
 ): number[] {
   let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15
   if (acwr?.risk === "high") base *= 0.8
   else if (acwr?.risk === "moderate") base *= 0.9
+  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
 
   const targets: number[] = []
   // Phase boundaries (approximate):
@@ -206,15 +221,35 @@ function calcFullCycleTargets(
  */
 const COACHING_SYSTEM_PROMPT = `You are an expert running coach creating personalised training blocks for runners preparing for races.
 
+## Session Types
+Use the right session name — it communicates purpose, not just effort. Choose from:
+- **Long run** — the week's longest run. Only use when session is genuinely longest of the week AND ≥ 8 km. Easy/Z2 pace.
+- **Base run** — medium-length easy run (5–10 km). The workhorse of aerobic training. Prefer this over "Easy run" for most sessions.
+- **Recovery run** — short, very easy (4–6 km). Use the day after a hard session or long run. Slower than base pace.
+- **Progression run** — starts easy, finishes last 20–30% at tempo effort. Good mid-block variety.
+- **Tempo run** — sustained threshold effort, 20–40 min. Max 2/week; rarely in base-building phases.
+- **Intervals** — structured speed work with rest (e.g. 6 × 800 m). Only in build/peak phases.
+- **Hill repeats** — short steep uphill efforts with easy jog recovery. Builds strength and form.
+- **Fartlek** — unstructured speedplay mixed into an easy run. Introduces variety without rigid structure.
+- **Race pace run** — sustained goal race pace. Only in peak/sharpening phases, 2–3 weeks before race.
+Vary session types across the block — never use only "Long run" and "Easy run" throughout an entire training plan.
+
 ## Session Distribution Rules
-Distribute each week's km across sessions with meaningful variety — never assign the same distance to every session:
-- Long run: ~40% of weekly total (e.g. 9 km week → long run 4 km, not 3 km)
-- Easy runs: split the remaining km roughly equally
-- The long run MUST always be at least 1 km longer than any easy run in the same week
-- Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
-- Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
-- If focus is "volume" only (no session types required), you may omit run types but still vary distances
-- ORDERING: Always list the Long run FIRST in the sessions array, then tempo/intervals, then easy runs last
+- The longest session of the week (must be ≥ 8 km) → "Long run". Target ~40% of weekly total.
+- Medium easy sessions (5–10 km) → "Base run" (preferred) or "Easy run"
+- Short sessions after hard days → "Recovery run"
+- Long run MUST be at least 2 km longer than any other session in the same week
+- Minimum session length: 5 km for base/easy runs, 8 km for long run
+- EXCEPTION: Weekly volume < 15 km → sessions may be 4 km minimum, but prefer fewer longer sessions (2 × 6 km > 3 × 4 km)
+- Examples: 20 km / 3 sessions → Long run 8 km · Base run 6 km · Base run 6 km
+- Examples: 30 km / 3 sessions → Long run 12 km · Base run 9 km · Base run 9 km
+- ORDERING: Long run FIRST, then quality sessions (tempo/intervals), then base/recovery runs last
+
+## Aerobic Base Principle
+Fewer, longer easy runs are significantly more effective than many short ones for building aerobic fitness.
+- A run under 5 km (~30 min) provides very limited aerobic stimulus — avoid unless weekly volume cannot support longer sessions
+- If weekly target forces sessions below 5 km, reduce session count instead: 2 × 7 km beats 3 × 4 km
+- For base-building phases, prioritise 60–90 min efforts (8–12 km at easy pace) as the weekly long run
 
 ## Intensity Balance
 - At most 2 quality sessions (tempo, intervals, race pace) per week — the rest should be easy effort
@@ -305,9 +340,9 @@ function buildPrompt(
   // For full-cycle, build periodised volume targets with mesocycles
   let weekTargets: number[]
   if (isFullCycle && blockWeeks > 6) {
-    weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, acwr)
+    weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
   } else {
-    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, acwr)
+    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
   }
   const weekTargetLines = weekTargets
     .map((km, i) => {
@@ -508,8 +543,20 @@ export async function POST(req: NextRequest) {
   // a broader view. Empty weeks (no runs) are included by always dividing by the
   // full window size, not just the count of active weeks.
   const recentWindow = prefs.regenerate_every_weeks ?? 4
-  const currentAvgWeeklyKm =
+  const recentAvgWeeklyKm =
     weeklySummaries.slice(0, recentWindow).reduce((s, w) => s + w.totalKm, 0) / recentWindow
+
+  // Also find the peak 4-week rolling average across the full 12-week history.
+  // This prevents a recent taper or recovery plan from creating a feedback loop
+  // where each regeneration starts lower than the last, even though the runner's
+  // actual fitness is much higher. We use 85% of the peak as a floor so the new
+  // plan doesn't jump straight back to peak — a slight step-down is appropriate.
+  const peakFourWeekAvg = weeklySummaries.length >= 4
+    ? Math.max(...Array.from({ length: weeklySummaries.length - 3 }, (_, i) =>
+        weeklySummaries.slice(i, i + 4).reduce((s, w) => s + w.totalKm, 0) / 4
+      ))
+    : recentAvgWeeklyKm
+  const currentAvgWeeklyKm = Math.max(recentAvgWeeklyKm, peakFourWeekAvg * 0.85)
 
   const longestRecentRun =
     weeklySummaries.reduce((max, w) => Math.max(max, w.longestKm), 0)
