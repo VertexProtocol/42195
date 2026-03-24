@@ -914,30 +914,52 @@ export async function POST(req: NextRequest) {
         }
 
         // Final correction: run AFTER safety engine + pace assignment so targetKm is settled.
-        // 1. Scale session distances so they sum to targetKm (AI often under/overshoots).
+        // 1. Round all non-long-run sessions DOWN to nearest 0.5 km; long run absorbs the rest.
         // 2. Ensure the "Long run" label is on the longest session (swap if mismatched).
+        // 3. Update targetKm to match the rounded session total so the UI is consistent.
         for (const week of safePlan.weeks) {
-          const distances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
-          const total = distances.reduce((a: number, b: number) => a + b, 0)
+          const snap = (km: number) => Math.round(km * 2) / 2  // round to nearest 0.5 km
+          const floor5 = (km: number) => Math.floor(km * 2) / 2  // round DOWN to nearest 0.5 km
 
-          if (total > 0 && Math.abs(total - week.targetKm) > week.targetKm * 0.05) {
-            const scale = week.targetKm / total
+          // Step A: swap label so "Long run" is on the longest session
+          const rawDistances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
+          const rawTotal = rawDistances.reduce((a: number, b: number) => a + b, 0)
+
+          // Scale to targetKm first if total is way off
+          if (rawTotal > 0 && Math.abs(rawTotal - week.targetKm) > week.targetKm * 0.05) {
+            const scale = week.targetKm / rawTotal
             week.sessions.forEach((s: { distance: string }, i: number) => {
-              const corrected = Math.round(distances[i] * scale * 10) / 10
-              s.distance = `${corrected} km`
+              s.distance = `${Math.round(rawDistances[i] * scale * 10) / 10} km`
             })
           }
 
+          // Swap label to longest session
           const longRunIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
           if (longRunIdx !== -1) {
-            const finalDistances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
-            const maxIdx = finalDistances.indexOf(Math.max(...finalDistances))
+            const d = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
+            const maxIdx = d.indexOf(Math.max(...d))
             if (maxIdx !== longRunIdx) {
               const tmp = week.sessions[longRunIdx].type
               week.sessions[longRunIdx].type = week.sessions[maxIdx].type
               week.sessions[maxIdx].type = tmp
             }
           }
+
+          // Step B: round non-long-run sessions to nearest 0.5, long run gets the remainder
+          const longIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
+          const scaled = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
+          const otherTotal = scaled.reduce((sum: number, km: number, i: number) => i === longIdx ? sum : sum + floor5(km), 0)
+          week.sessions.forEach((s: { distance: string }, i: number) => {
+            if (i === longIdx) {
+              const longKm = snap(week.targetKm - otherTotal)
+              s.distance = `${longKm} km`
+            } else {
+              s.distance = `${floor5(scaled[i])} km`
+            }
+          })
+
+          // Step C: update targetKm to match rounded session total so UI is consistent
+          week.targetKm = week.sessions.reduce((sum: number, s: { distance: string }) => sum + parseSessionDistanceKm(s.distance), 0)
         }
 
         // Cache in DB (upsert — one active plan per goal)
