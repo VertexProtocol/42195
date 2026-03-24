@@ -109,10 +109,19 @@ function formatPace(minPerKm: number | null): string {
   return `${min}:${String(sec).padStart(2, "0")} min/km`
 }
 
+function calcMinWeeklyKm(sessionsPerWeek: number, longestRecentRun: number): number {
+  // Long run minimum: 8 km if the runner has ever run ≥ 6 km, otherwise gently above their longest
+  const longRunMin = longestRecentRun >= 6 ? 8 : Math.max(longestRecentRun + 1, 5)
+  // Other sessions: 5 km each
+  return longRunMin + Math.max(0, sessionsPerWeek - 1) * 5
+}
+
 function calcWeekTargets(
   avgWeeklyKm: number,
   pct: number,
   blockWeeks: number,
+  sessionsPerWeek: number,
+  longestRecentRun: number,
   acwr?: { ratio: number; risk: string },
 ): number[] {
   let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15 // Conservative default for beginners (was 20)
@@ -122,9 +131,12 @@ function calcWeekTargets(
   } else if (acwr?.risk === "moderate") {
     base = base * 0.9 // 10% reduction for moderate risk
   }
+  // Enforce a minimum weekly volume so that session length rules can be satisfied.
+  // Without this, a 10 km week with 2 sessions can't support a ≥ 8 km long run + ≥ 5 km base run.
+  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
   const multiplier = 1 + pct / 100
   // Safety cap: no week should exceed 150% of baseline to prevent injury
-  const maxWeeklyKm = (avgWeeklyKm > 0 ? avgWeeklyKm : 15) * 1.5
+  const maxWeeklyKm = Math.max(avgWeeklyKm > 0 ? avgWeeklyKm : 15, base) * 1.5
   const targets: number[] = []
   // Week 1 starts at the runner's current baseline
   let current = base
@@ -146,11 +158,14 @@ function calcWeekTargets(
 function calcFullCycleTargets(
   avgWeeklyKm: number,
   totalWeeks: number,
+  sessionsPerWeek: number,
+  longestRecentRun: number,
   acwr?: { ratio: number; risk: string },
 ): number[] {
   let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15
   if (acwr?.risk === "high") base *= 0.8
   else if (acwr?.risk === "moderate") base *= 0.9
+  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
 
   const targets: number[] = []
   // Phase boundaries (approximate):
@@ -325,9 +340,9 @@ function buildPrompt(
   // For full-cycle, build periodised volume targets with mesocycles
   let weekTargets: number[]
   if (isFullCycle && blockWeeks > 6) {
-    weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, acwr)
+    weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
   } else {
-    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, acwr)
+    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
   }
   const weekTargetLines = weekTargets
     .map((km, i) => {
