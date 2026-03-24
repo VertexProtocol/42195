@@ -208,13 +208,20 @@ const COACHING_SYSTEM_PROMPT = `You are an expert running coach creating persona
 
 ## Session Distribution Rules
 Distribute each week's km across sessions with meaningful variety — never assign the same distance to every session:
-- Long run: ~40% of weekly total (e.g. 9 km week → long run 4 km, not 3 km)
-- Easy runs: split the remaining km roughly equally
-- The long run MUST always be at least 1 km longer than any easy run in the same week
-- Example for 9 km / 3 sessions: Long run 4 km · Easy run 2.5 km · Easy run 2.5 km
-- Example for 8 km / 3 sessions: Long run 3.5 km · Easy run 2.5 km · Easy run 2 km
-- If focus is "volume" only (no session types required), you may omit run types but still vary distances
+- Long run: ~40% of weekly total, but NEVER less than 8 km (e.g. 20 km week → long run 8 km; 30 km week → long run 12 km)
+- Easy runs: split the remaining km roughly equally, but NEVER less than 5 km per session
+- The long run MUST always be at least 2 km longer than any easy run in the same week
+- Example for 20 km / 3 sessions: Long run 8 km · Easy run 6 km · Easy run 6 km
+- Example for 30 km / 3 sessions: Long run 12 km · Easy run 9 km · Easy run 9 km
+- Example for 40 km / 4 sessions: Long run 16 km · Easy run 9 km · Easy run 8 km · Easy run 7 km
+- EXCEPTION: If weekly volume is very low (< 15 km/week), you may go below these minimums — but still aim for sessions of at least 4 km
 - ORDERING: Always list the Long run FIRST in the sessions array, then tempo/intervals, then easy runs last
+
+## Aerobic Base Principle
+Fewer, longer easy runs are significantly more effective than many short ones for building aerobic fitness.
+- A 5 km easy run (~30 min) provides very limited aerobic stimulus — avoid prescribing short sessions unless weekly volume genuinely cannot support longer ones
+- If the weekly target forces sessions below 5 km, reduce the number of sessions rather than making all runs tiny — e.g., 2 × 6 km is better than 3 × 4 km
+- For base-building phases, prefer long easy efforts of 60–90 minutes (8–12 km at easy pace) over multiple short jogs
 
 ## Intensity Balance
 - At most 2 quality sessions (tempo, intervals, race pace) per week — the rest should be easy effort
