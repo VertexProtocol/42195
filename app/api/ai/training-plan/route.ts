@@ -862,6 +862,38 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // Post-generation correction: fix session distances and label consistency.
+        // The AI sometimes produces sessions that don't sum to targetKm, and may label
+        // a shorter session as "Long run" while a longer one is "Base run".
+        for (const week of plan.weeks) {
+          const distances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
+          const total = distances.reduce((a: number, b: number) => a + b, 0)
+
+          // 1. Scale session distances proportionally to match targetKm
+          if (total > 0 && Math.abs(total - week.targetKm) > week.targetKm * 0.05) {
+            const scale = week.targetKm / total
+            week.sessions.forEach((s: { distance: string }, i: number) => {
+              const corrected = Math.round(distances[i] * scale * 10) / 10
+              s.distance = `${corrected} km`
+            })
+          }
+
+          // 2. Ensure the session labelled "Long run" is actually the longest in the week.
+          // If a non-long-run session is longer, swap its label with the long run's label.
+          const longRunIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
+          if (longRunIdx !== -1) {
+            const updatedDistances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
+            const maxDist = Math.max(...updatedDistances)
+            const maxIdx = updatedDistances.indexOf(maxDist)
+            if (maxIdx !== longRunIdx) {
+              // Swap labels so "Long run" ends up on the longest session
+              const tmp = week.sessions[longRunIdx].type
+              week.sessions[longRunIdx].type = week.sessions[maxIdx].type
+              week.sessions[maxIdx].type = tmp
+            }
+          }
+        }
+
         // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue.
         // Pass running activities only so cross-training doesn't skew ACWR and fatigue detection.
         const safetyResult = validateAndAdjustPlan(plan, runActs as unknown as SafetyActivity[], prefs)
