@@ -945,13 +945,16 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Step B: round non-long-run sessions to nearest 0.5, long run gets the remainder
+          // Step B: round all sessions DOWN to nearest 0.5, long run gets the remainder
+          // Using floor5 for the long run too ensures we never round the total UP above targetKm
+          // (which would make a 12 km recovery week display as 13 km).
           const longIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
           const scaled = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
           const otherTotal = scaled.reduce((sum: number, km: number, i: number) => i === longIdx ? sum : sum + floor5(km), 0)
           week.sessions.forEach((s: { distance: string }, i: number) => {
             if (i === longIdx) {
-              const longKm = snap(week.targetKm - otherTotal)
+              // Floor the long run too — never round up beyond targetKm
+              const longKm = floor5(week.targetKm - otherTotal)
               s.distance = `${longKm} km`
             } else {
               s.distance = `${floor5(scaled[i])} km`
