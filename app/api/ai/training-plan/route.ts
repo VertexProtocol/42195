@@ -146,8 +146,9 @@ function calcWeekTargets(
     current = Math.min(current * multiplier, maxWeeklyKm)
     targets.push(Math.round(current))
   }
-  // Last week is always recovery at 80% of peak
-  targets.push(Math.round(current * 0.8))
+  // Last week is always recovery at 80% of peak — use floor so it rounds down,
+  // never up (12.58 → 12, not 13)
+  targets.push(Math.floor(current * 0.8))
   return targets
 }
 
