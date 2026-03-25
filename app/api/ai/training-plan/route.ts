@@ -915,18 +915,29 @@ export async function POST(req: NextRequest) {
         }
 
         // Final correction: run AFTER safety engine + pace assignment so targetKm is settled.
-        // 1. Round all non-long-run sessions DOWN to nearest 0.5 km; long run absorbs the rest.
+        // 0. Enforce recovery week volume cap (AI may ignore the suggested 80% target).
+        // 1. Round all sessions DOWN to nearest 0.5 km; long run absorbs the rest.
         // 2. Ensure the "Long run" label is on the longest session (swap if mismatched).
         // 3. Update targetKm to match the rounded session total so the UI is consistent.
-        for (const week of safePlan.weeks) {
-          const snap = (km: number) => Math.round(km * 2) / 2  // round to nearest 0.5 km
+        for (let wi = 0; wi < safePlan.weeks.length; wi++) {
+          const week = safePlan.weeks[wi]
           const floor5 = (km: number) => Math.floor(km * 2) / 2  // round DOWN to nearest 0.5 km
 
-          // Step A: swap label so "Long run" is on the longest session
+          // Step 0: cap recovery week targetKm at 80% of previous week's final targetKm.
+          // The AI often ignores our suggested 80% and outputs the same km as W1.
+          const isRecovery = wi > 0 && (
+            /recovery|deload|rest/i.test(week.theme ?? "") ||
+            week.targetKm >= safePlan.weeks[wi - 1].targetKm  // last week should always taper
+          )
+          if (isRecovery && wi === safePlan.weeks.length - 1) {
+            const prevTargetKm = safePlan.weeks[wi - 1].targetKm
+            const cap = Math.floor(prevTargetKm * 0.8)
+            if (week.targetKm > cap) week.targetKm = cap
+          }
+
+          // Scale sessions to targetKm if they deviate significantly
           const rawDistances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
           const rawTotal = rawDistances.reduce((a: number, b: number) => a + b, 0)
-
-          // Scale to targetKm first if total is way off
           if (rawTotal > 0 && Math.abs(rawTotal - week.targetKm) > week.targetKm * 0.05) {
             const scale = week.targetKm / rawTotal
             week.sessions.forEach((s: { distance: string }, i: number) => {
@@ -934,7 +945,7 @@ export async function POST(req: NextRequest) {
             })
           }
 
-          // Swap label to longest session
+          // Swap label so "Long run" is on the longest session
           const longRunIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
           if (longRunIdx !== -1) {
             const d = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
@@ -946,23 +957,17 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Step B: round all sessions DOWN to nearest 0.5, long run gets the remainder
-          // Using floor5 for the long run too ensures we never round the total UP above targetKm
-          // (which would make a 12 km recovery week display as 13 km).
+          // Round all sessions DOWN to 0.5 km; long run absorbs remainder
           const longIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
           const scaled = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
           const otherTotal = scaled.reduce((sum: number, km: number, i: number) => i === longIdx ? sum : sum + floor5(km), 0)
           week.sessions.forEach((s: { distance: string }, i: number) => {
-            if (i === longIdx) {
-              // Floor the long run too — never round up beyond targetKm
-              const longKm = floor5(week.targetKm - otherTotal)
-              s.distance = `${longKm} km`
-            } else {
-              s.distance = `${floor5(scaled[i])} km`
-            }
+            s.distance = i === longIdx
+              ? `${floor5(week.targetKm - otherTotal)} km`
+              : `${floor5(scaled[i])} km`
           })
 
-          // Step C: update targetKm to match rounded session total so UI is consistent
+          // Update targetKm to match rounded session total
           week.targetKm = week.sessions.reduce((sum: number, s: { distance: string }) => sum + parseSessionDistanceKm(s.distance), 0)
         }
 
