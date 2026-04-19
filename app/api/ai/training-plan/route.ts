@@ -590,6 +590,20 @@ export async function POST(req: NextRequest) {
     (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
+  // Reject plans for past target dates. A target_date in the past collapses
+  // maxWeeksUntilRace to 0 downstream, producing a degenerate empty plan and
+  // wasting a Claude call. Front-end shouldn't allow it, but the API also
+  // has to be safe when called directly.
+  if (daysUntilRace <= 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot generate a plan — the race date has already passed. Update the goal's target date before regenerating.",
+      },
+      { status: 400 },
+    )
+  }
+
   // Compute ACWR and safety metrics from running activities only — cycling/hiking inflate
   // chronic load and cause the plan generator to produce overly conservative running plans.
   const acts = activities ?? []
