@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+
+const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
+/** Weekly review JSON shape enforced on Claude's response. */
+const WeeklyReviewSchema = z.object({
+  grade: z.enum(["A", "B", "C", "D"]),
+  summary: z.string().min(1),
+  highlights: z.array(z.string().min(1)),
+  concerns: z.array(z.string()).optional().default([]),
+  nextWeekAdvice: z.string().min(1),
+})
 
 const REVIEW_SYSTEM_PROMPT = `You are a concise running coach doing a weekly training review. Compare the runner's actual training against their plan and provide actionable feedback.
 
@@ -71,11 +83,13 @@ export async function POST(req: NextRequest) {
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 7)
 
-  // Fetch activities for this week
+  // Fetch running activities for this week — comparing bike km against a
+  // running target would understate the grade and confuse the review.
   const { data: activities } = await supabase
     .from("activities")
     .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
+    .in("type", RUN_TYPES)
     .gte("date", weekStart.toISOString())
     .lt("date", weekEnd.toISOString())
     .order("date", { ascending: true })
@@ -126,14 +140,34 @@ Session completion: ${weekCompletions.filter((c) => c.status === "completed").le
       return NextResponse.json({ error: "No response" }, { status: 500 })
     }
 
-    // Parse JSON from response
+    // Parse JSON from response and validate against the review schema so
+    // a malformed Claude output can't break the UI that renders grade/
+    // highlights/concerns.
     const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return NextResponse.json({ error: "Invalid response format" }, { status: 500 })
     }
 
-    const review = JSON.parse(jsonMatch[0])
-    return NextResponse.json({ review })
+    let parsedJson: unknown
+    try {
+      parsedJson = JSON.parse(jsonMatch[0])
+    } catch {
+      console.error("[weekly-review] Claude returned invalid JSON:", textBlock.text.slice(0, 500))
+      return NextResponse.json({ error: "Invalid response JSON" }, { status: 502 })
+    }
+
+    const reviewResult = WeeklyReviewSchema.safeParse(parsedJson)
+    if (!reviewResult.success) {
+      console.error(
+        "[weekly-review] Response failed schema validation:",
+        reviewResult.error.issues,
+        "raw:",
+        textBlock.text.slice(0, 500),
+      )
+      return NextResponse.json({ error: "Response failed validation" }, { status: 502 })
+    }
+
+    return NextResponse.json({ review: reviewResult.data })
   } catch (err) {
     console.error("Weekly review error:", err)
     return NextResponse.json({ error: "Failed to generate review" }, { status: 500 })

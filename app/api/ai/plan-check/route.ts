@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
+/**
+ * Shape Claude must return. We validate via safeParse so an out-of-range
+ * confidence, a typo'd recommendation, or a missing reason produces a 502
+ * rather than a silent frontend crash on `check.recommendation`.
+ */
+const PlanCheckResponseSchema = z.object({
+  recommendation: z.enum(["keep", "adjust", "regenerate"]),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().min(1),
+  adjustments: z.array(z.string()).optional().default([]),
+})
 
 /**
  * Adaptive plan check — analyzes whether the current plan needs adjustment.
@@ -179,9 +192,27 @@ Should this plan be kept as-is, adjusted, or fully regenerated?`
       return NextResponse.json({ error: "Invalid response format" }, { status: 500 })
     }
 
-    const check = JSON.parse(jsonMatch[0])
+    let parsedJson: unknown
+    try {
+      parsedJson = JSON.parse(jsonMatch[0])
+    } catch {
+      console.error("[plan-check] Claude returned invalid JSON:", textBlock.text.slice(0, 500))
+      return NextResponse.json({ error: "Invalid response JSON" }, { status: 502 })
+    }
+
+    const checkResult = PlanCheckResponseSchema.safeParse(parsedJson)
+    if (!checkResult.success) {
+      console.error(
+        "[plan-check] Claude returned malformed plan check:",
+        checkResult.error.issues,
+        "raw:",
+        textBlock.text.slice(0, 500),
+      )
+      return NextResponse.json({ error: "Response failed validation" }, { status: 502 })
+    }
+
     return NextResponse.json({
-      check,
+      check: checkResult.data,
       context: {
         currentWeek: currentWeekIndex + 1,
         totalWeeks: plan.weeks.length,

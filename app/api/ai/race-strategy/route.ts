@@ -1,9 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
+/** Race-strategy JSON shape Claude is asked to return. */
+const RaceStrategySchema = z.object({
+  targetTime: z.string().min(1),
+  pacingStrategy: z.object({
+    overall: z.string().min(1),
+    segments: z.array(
+      z.object({
+        name: z.string().min(1),
+        pace: z.string().min(1),
+        notes: z.string().min(1),
+      }),
+    ),
+  }),
+  preRace: z.object({
+    week: z.string().min(1),
+    dayBefore: z.string().min(1),
+    morning: z.string().min(1),
+  }),
+  nutrition: z.object({
+    before: z.string().min(1),
+    during: z.string().min(1),
+    hydration: z.string().min(1),
+  }),
+  mentalStrategy: z.string().min(1),
+  keyReminders: z.array(z.string().min(1)).min(1),
+})
 
 const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal, and fitness level, create a detailed pacing and preparation plan.
 
@@ -180,11 +208,30 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block")
 
-        const jsonMatch = (textBlock as { type: "text"; text: string }).text.match(/\{[\s\S]*\}/)
+        const rawText = (textBlock as { type: "text"; text: string }).text
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
         if (!jsonMatch) throw new Error("No JSON found in response")
 
-        const strategy = JSON.parse(jsonMatch[0])
-        send({ status: "done", strategy })
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(jsonMatch[0])
+        } catch {
+          console.error("[race-strategy] Claude returned invalid JSON:", rawText.slice(0, 500))
+          throw new Error("Response was not valid JSON")
+        }
+
+        const strategyResult = RaceStrategySchema.safeParse(parsed)
+        if (!strategyResult.success) {
+          console.error(
+            "[race-strategy] Response failed schema validation:",
+            strategyResult.error.issues,
+            "raw:",
+            rawText.slice(0, 500),
+          )
+          throw new Error("Response missing required fields")
+        }
+
+        send({ status: "done", strategy: strategyResult.data })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Race strategy error:", msg)
