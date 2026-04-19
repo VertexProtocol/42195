@@ -10,6 +10,7 @@ import { formatElapsed } from "@/lib/format"
 interface TrainingCalendarCardProps {
   activities: Activity[]
   goals: Goal[]
+  onViewGoal?: (goal: Goal) => void
 }
 
 interface DayStats {
@@ -53,7 +54,7 @@ const intensityClass = (km: number, maxKm: number): string => {
   return "bg-primary/15"
 }
 
-export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCardProps) {
+export function TrainingCalendarCard({ activities, goals, onViewGoal }: TrainingCalendarCardProps) {
   const { t, locale } = useI18n()
   const today = useMemo(() => {
     const d = new Date()
@@ -306,18 +307,45 @@ export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCard
       {/* Selected goal info */}
       {selectedGoals.length > 0 && (
         <div className="space-y-1 border-t border-border pt-2.5">
-          {selectedGoals.map((g) => (
-            <div key={g.id} className="flex items-center gap-2 text-xs">
-              <Flag
-                size={11}
-                className="text-amber-500 fill-amber-500 shrink-0"
-              />
-              <span className="font-mono text-muted-foreground shrink-0">
-                {goalDateFmt.format(new Date(g.target_date))}
-              </span>
-              <span className="truncate text-card-foreground">{g.name}</span>
-            </div>
-          ))}
+          {selectedGoals.map((g) => {
+            const row = (
+              <>
+                <Flag
+                  size={11}
+                  className="text-amber-500 fill-amber-500 shrink-0"
+                />
+                <span className="font-mono text-muted-foreground shrink-0">
+                  {goalDateFmt.format(new Date(g.target_date))}
+                </span>
+                <span className="flex-1 truncate text-left text-card-foreground">
+                  {g.name}
+                </span>
+                {onViewGoal && (
+                  <ChevronRight
+                    size={14}
+                    className="text-muted-foreground shrink-0"
+                  />
+                )}
+              </>
+            )
+            if (onViewGoal) {
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => onViewGoal(g)}
+                  className="flex w-full items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-muted/50 active:scale-[0.99] transition-all"
+                >
+                  {row}
+                </button>
+              )
+            }
+            return (
+              <div key={g.id} className="flex items-center gap-2 text-xs px-1.5">
+                {row}
+              </div>
+            )
+          })}
         </div>
       )}
 
