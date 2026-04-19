@@ -640,8 +640,11 @@ export async function POST(req: NextRequest) {
     ? Math.min(...actsWithPace.map((a) => Number(a.pace_min_per_km)))
     : null
 
-  // Build heart rate summary for the prompt, including HR zone boundaries
-  const actsWithHr = acts.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
+  // Build heart rate summary for the prompt, including HR zone boundaries.
+  // HR stats must be run-only — cycling hits much higher sustained HR than
+  // running so including it inflates maxHr and the derived zone boundaries,
+  // which would make Claude's intensity prescriptions too conservative.
+  const actsWithHr = runActs.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
   let hrSummary: string | null = null
   if (actsWithHr.length > 0) {
     const avgHr = Math.round(actsWithHr.reduce((s, a) => s + Number(a.avg_heart_rate), 0) / actsWithHr.length)
@@ -651,10 +654,11 @@ export async function POST(req: NextRequest) {
     const hrTrend = recentAvgHr > avgHr + 5 ? "elevated (possible fatigue)" : recentAvgHr < avgHr - 5 ? "lower than average (good fitness)" : "stable"
     hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}\n- Estimated max HR: ~${Math.round(maxHr * 1.1)} bpm (from activity data)`
 
-    // Add HR zone boundaries from the analysis engine if we have enough data
+    // Add HR zone boundaries from the analysis engine if we have enough data.
+    // Pass runActs (not all activities) so zones reflect running HR only.
     if (actsWithHr.length >= 5) {
       const hrAnalysis = analyzeHeartRateZones(
-        acts.map((a) => ({
+        runActs.map((a) => ({
           id: "", user_id: "", strava_id: 0, type: "Run", created_at: "",
           name: a.name ?? "Activity", date: a.date,
           distance_km: Number(a.distance_km), duration_seconds: a.duration_seconds,

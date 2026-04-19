@@ -419,10 +419,14 @@ async function executeToolCall(
     }
 
     case "get_personal_records": {
+      // PRs are running-only — a 10 km bike ride isn't a 10 km PR and
+      // would otherwise dominate the list because cycling is much faster
+      // than running over the same distance.
       const { data } = await supabase
         .from("activities")
         .select("date, distance_km, duration_seconds, pace_min_per_km, name")
         .eq("user_id", userId)
+        .in("type", RUN_TYPES)
         .order("date", { ascending: false })
         .limit(500)
 

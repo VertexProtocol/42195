@@ -196,6 +196,21 @@ export function checkCumulativeProgression(
 }
 
 /**
+ * Prepends a short safety-adjustment prefix to a week's coachNote so the
+ * displayed text stays consistent with the mutated targetKm. Claude's
+ * original note is preserved — we only annotate, never replace.
+ */
+function annotateSafetyAdjustment(
+  coachNote: string | null | undefined,
+  adjustmentLine: string,
+): string {
+  if (!coachNote || coachNote.trim().length === 0) return adjustmentLine
+  // Don't double-prefix if the note already carries a safety annotation.
+  if (coachNote.startsWith("Safety:")) return coachNote
+  return `${adjustmentLine} ${coachNote}`
+}
+
+/**
  * Computes the runner's actual weekly km for the N weeks immediately before
  * the reference date (rolling 7-day windows, most-recent last). Used as the
  * prior-week context for checkCumulativeProgression so the first plan week
@@ -676,6 +691,12 @@ export function validateAndAdjustPlan(
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (${athleteLevel} cap: +${Math.round(MAX_WEEKLY_INCREASE[athleteLevel] * 100)}%/week)`
       safetyNotes.push(note)
       console.warn(`[safety] ${note}`)
+      // Keep Claude's original coachNote but prefix the adjustment so the
+      // shown text stays consistent with the (now-reduced) targetKm.
+      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
+        adjustedWeeks[idx].coachNote,
+        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, weekly cap).`,
+      )
     }
   }
 
@@ -692,6 +713,10 @@ export function validateAndAdjustPlan(
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (cumulative ${v.cumulativePct}% over 3 weeks exceeds ${v.maxAllowedPct}% cap for ${athleteLevel})`
       safetyNotes.push(note)
       console.warn(`[safety] ${note}`)
+      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
+        adjustedWeeks[idx].coachNote,
+        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, 3-wk cumulative cap).`,
+      )
     }
   }
 
