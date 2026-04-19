@@ -3,6 +3,8 @@ import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { hasActiveInjury, type NoteHistoryEntry } from "@/lib/notes-history"
+import { assessComeback } from "@/lib/training-comeback"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
 
@@ -132,6 +134,23 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .maybeSingle()
 
+  // Runner-state context — active injury + comeback status. Without this,
+  // Claude's strategy assumed a healthy, fully-trained runner and could
+  // prescribe race-pace work on top of an active injury or a fresh return.
+  const { data: prefsRow } = await supabase
+    .from("goal_preferences")
+    .select("notes_history")
+    .eq("goal_id", goalId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const notesHistory = (prefsRow?.notes_history as NoteHistoryEntry[] | null) ?? []
+  const activeInjury = hasActiveInjury(notesHistory)
+  const comeback = assessComeback(
+    acts.map((a) => ({ date: a.date, distance_km: Number(a.distance_km) })),
+    activeInjury,
+  )
+
   const formatPace = (minPerKm: number) => {
     const min = Math.floor(minPerKm)
     const sec = Math.round((minPerKm - min) * 60)
@@ -160,10 +179,23 @@ export async function POST(req: NextRequest) {
     riegelPrediction = `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
 
+  const runnerStateLines: string[] = []
+  runnerStateLines.push(
+    `- Active injury: ${activeInjury ? "YES — bias the strategy toward conservative pacing and cap mid-race intensity" : "no"}`,
+  )
+  if (comeback.needsRamp) {
+    runnerStateLines.push(
+      `- Return-from-pause: ${comeback.pauseDays}-day gap since last run (${comeback.category}). Treat target paces as ceilings, not goals, and include explicit fallback cues if HR drifts early.`,
+    )
+  }
+
   const prompt = `Create a race-day strategy for this runner:
 
 RACE: ${goal.name} (${goal.target_distance_km} km)
 DATE: ${goal.target_date} (${daysUntilRace} days away)${targetTimeStr ? `\nTARGET TIME: ${targetTimeStr}` : ""}${riegelPrediction ? `\nPREDICTED TIME (Riegel): ${riegelPrediction}` : ""}
+
+RUNNER STATE:
+${runnerStateLines.join("\n")}
 
 TRAINING (last 8 weeks):
 - ${totalRuns} runs, avg ${avgWeeklyKm.toFixed(1)} km/week

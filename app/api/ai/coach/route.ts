@@ -4,7 +4,8 @@ import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-import { type NoteHistoryEntry, formatNotesHistoryForPrompt } from "@/lib/notes-history"
+import { type NoteHistoryEntry, formatNotesHistoryForPrompt, hasActiveInjury } from "@/lib/notes-history"
+import { assessComeback } from "@/lib/training-comeback"
 
 /**
  * Running-flavored activity types kept in the activities table. Any tool that
@@ -631,7 +632,40 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join("; ")
 
+  // Structured runner-state summary so Claude doesn't have to infer active
+  // injury + pause/comeback from free-text or tool round-trips. Computed once
+  // per request and injected at the top of the system context.
+  const activeInjury = hasActiveInjury(combinedHistory)
+
+  const sixWeeksAgoIso = new Date(Date.now() - 42 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: recentRunsForState } = await supabase
+    .from("activities")
+    .select("date, distance_km")
+    .eq("user_id", user.id)
+    .in("type", RUN_TYPES)
+    .gte("date", sixWeeksAgoIso)
+    .order("date", { ascending: false })
+
+  const comeback = assessComeback(
+    (recentRunsForState ?? []).map((a: { date: string; distance_km: number }) => ({
+      date: a.date,
+      distance_km: Number(a.distance_km),
+    })),
+    activeInjury,
+  )
+
+  const stateLines: string[] = []
+  stateLines.push(`- Active injury: ${activeInjury ? "YES — adjust intensity/volume accordingly" : "no"}`)
+  if (comeback.needsRamp) {
+    stateLines.push(
+      `- Pause status: ${comeback.pauseDays}-day gap since last run (${comeback.category}). Suggested cap on first week back: ${comeback.weekOneKm} km. Limiting factor: ${comeback.limitingFactor ?? "table"}.`,
+    )
+  } else {
+    stateLines.push(`- Pause status: training recently (${comeback.pauseDays} days since last run)`)
+  }
+
   const notesContextParts: string[] = []
+  notesContextParts.push(`## Current runner status\n${stateLines.join("\n")}`)
   if (coachHistoryText) {
     notesContextParts.push(`## Coach notes from the runner (most recent first)\n${coachHistoryText}`)
   } else if (fallbackCoach) {
