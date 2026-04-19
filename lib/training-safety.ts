@@ -175,7 +175,13 @@ export function checkCumulativeProgression(
 
 export interface AcwrSafety {
   ratio: number
-  risk: "low" | "moderate" | "high" | "unsafe"
+  /**
+   * - "no_baseline" — no chronic load to compare against (new user or
+   *   returning after a long pause). Treat any reported ratio as meaningless
+   *   and start cautiously.
+   * - "low" / "moderate" / "high" / "unsafe" — normal ACWR tiers.
+   */
+  risk: "no_baseline" | "low" | "moderate" | "high" | "unsafe"
   /** Recommended multiplier to apply to the first week's target (e.g. 0.8 for 20% cut) */
   weekOneMultiplier: number
   message: string | null
@@ -187,6 +193,19 @@ export interface AcwrSafety {
  */
 export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
   const { acuteLoad, chronicLoad, ratio } = computeACWR(activities)
+
+  // No chronic load = no baseline to compare against. Distinct from "low"
+  // because the runner needs to ramp UP cautiously, not because they're
+  // "fine" — the message must reflect "build a base first", not "all good".
+  if (chronicLoad <= 0) {
+    return {
+      ratio: 0,
+      risk: "no_baseline",
+      weekOneMultiplier: 0.85,
+      message:
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+    }
+  }
 
   if (ratio > ACWR_UNSAFE_THRESHOLD) {
     return {
@@ -485,7 +504,7 @@ export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFa
 
 // ── Composite training load status ───────────────────────────────────────────
 
-export type LoadStatus = "optimal" | "high" | "overtraining_risk"
+export type LoadStatus = "insufficient_data" | "optimal" | "high" | "overtraining_risk"
 
 export interface TrainingLoadStatus {
   status: LoadStatus
@@ -507,7 +526,11 @@ export function computeTrainingLoadStatus(activities: SafetyActivity[]): Trainin
 
   let status: LoadStatus = "optimal"
 
-  if (
+  // No baseline trumps all other signals — there's nothing meaningful to
+  // grade because chronic load is zero (new user / long pause).
+  if (acwr.risk === "no_baseline") {
+    status = "insufficient_data"
+  } else if (
     acwr.risk === "unsafe" ||
     prolongedFatigue.detected ||
     fatigue.signal === "both"

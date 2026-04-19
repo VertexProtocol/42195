@@ -34,6 +34,15 @@ const WARNING_SEVERITY_TEXT: Record<WarningSeverity, string> = {
 
 function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
   switch (status) {
+    case "insufficient_data":
+      return {
+        label: t("loadIndicator.insufficientData"),
+        Icon: ActivityIcon,
+        dotClass: "bg-muted-foreground",
+        textClass: "text-muted-foreground",
+        ringClass: "ring-border",
+        bgClass: "bg-muted/30",
+      }
     case "optimal":
       return {
         label: t("loadIndicator.optimal"),
