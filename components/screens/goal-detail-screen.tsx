@@ -1086,6 +1086,19 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
   const handleGenerate = useCallback(
     async (note?: string) => {
+      // Guard: target_date in the past would produce a degenerate empty plan
+      // and waste a Claude call. The server rejects it too, but we short-circuit
+      // here so the UI shows a clear error instead of a spinner that dies.
+      const daysUntilRace = Math.ceil(
+        (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+      )
+      if (daysUntilRace <= 0) {
+        setError(
+          "This goal's target date has passed. Update the date before generating a new plan.",
+        )
+        return
+      }
+
       setIsGenerating(true)
       setGenerateStatus("Analysing your training history…")
       setError(null)

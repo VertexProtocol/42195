@@ -362,4 +362,22 @@ describe("detectFatigue elevation (GAP)", () => {
     const result = detectFatigue(runs)
     expect(result.signal).toBe("none")
   })
+
+  it("returns none when the latest qualifying run is older than the freshness window", () => {
+    // Baseline would produce pace_declining: recent (11-14 days ago) at 6.50/km,
+    // baseline (21+ days ago) at 6:00/km. But the latest run is > 10 days old, so
+    // the freshness guard should short-circuit to "none" regardless of the trend.
+    const baseline = makeRuns(8, 30, 6.0, null)
+    const recent = makeRuns(4, 14, 6.5, null) // 14–17 days ago
+    const result = detectFatigue([...recent, ...baseline])
+    expect(result.signal).toBe("none")
+  })
+
+  it("still detects fatigue when the latest run is within the freshness window", () => {
+    // Latest run is 2 days ago → inside window → normal detection logic applies
+    const baseline = makeRuns(8, 30, 6.0, null)
+    const recent = makeRuns(4, 2, 6.5, null)
+    const result = detectFatigue([...recent, ...baseline])
+    expect(result.signal).toMatch(/pace_declining|both/)
+  })
 })

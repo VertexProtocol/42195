@@ -200,6 +200,40 @@ describe("checkCumulativeProgression", () => {
     const violations = checkCumulativeProgression([50, 55, 60, 40], "beginner")
     expect(violations).toHaveLength(0)
   })
+
+  it("uses prior-week context to catch a week-1 spike past pre-plan load", () => {
+    // Beginner ran 20 km/wk for the 3 weeks before the plan started. Plan
+    // week 1 at 40 km is a 100% jump from the prior 20 km reference, well
+    // above the beginner 20% cumulative cap.
+    const violations = checkCumulativeProgression(
+      [40, 45, 50, 55],
+      "beginner",
+      [20, 22, 20],
+    )
+    expect(violations.length).toBeGreaterThan(0)
+    expect(violations[0].weekNumber).toBe(1)
+    expect(violations[0].referenceKm).toBe(20)
+  })
+
+  it("does not emit violations for prior weeks themselves", () => {
+    // Priors jump from 10 -> 30, but we should never flag that as a
+    // plan-week violation because we can't adjust the past.
+    const violations = checkCumulativeProgression(
+      [32, 33, 34, 35],
+      "intermediate",
+      [10, 20, 30],
+    )
+    for (const v of violations) {
+      expect(v.weekNumber).toBeGreaterThanOrEqual(1)
+      expect(v.weekNumber).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it("matches original behaviour when priorWeekTargets is empty", () => {
+    const withoutPriors = checkCumulativeProgression([50, 60, 70, 80], "beginner")
+    const withEmptyPriors = checkCumulativeProgression([50, 60, 70, 80], "beginner", [])
+    expect(withEmptyPriors).toEqual(withoutPriors)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -207,11 +241,11 @@ describe("checkCumulativeProgression", () => {
 // ---------------------------------------------------------------------------
 
 describe("evaluateAcwrSafety", () => {
-  it("returns low risk when there are no recent activities", () => {
+  it("returns no_baseline when there are no recent activities (H4)", () => {
     const result = evaluateAcwrSafety([])
-    expect(result.risk).toBe("low")
-    expect(result.weekOneMultiplier).toBe(1.0)
-    expect(result.message).toBeNull()
+    expect(result.risk).toBe("no_baseline")
+    expect(result.weekOneMultiplier).toBe(0.85)
+    expect(result.message).not.toBeNull()
   })
 
   it("returns low risk when ACWR is at optimal levels", () => {
@@ -254,7 +288,9 @@ describe("evaluateAcwrSafety", () => {
     expect(result.risk).toBe("unsafe")
     expect(result.weekOneMultiplier).toBe(0.75)
     expect(result.message).not.toBeNull()
-    expect(result.message).toContain("recovery")
+    // Message guides the runner to pull back — current wording says "rest day"
+    // and "avoid hard sessions". Accept either cue.
+    expect(result.message).toMatch(/rest day|avoid hard|easy run/i)
   })
 })
 

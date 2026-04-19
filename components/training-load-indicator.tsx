@@ -5,6 +5,7 @@ import { Activity as ActivityIcon, TrendingUp, AlertTriangle, Heart, TrendingDow
 import type { Activity } from "@/lib/types"
 import { computeTrainingLoadStatus, type LoadStatus } from "@/lib/training-safety"
 import { computeTrainingLoad, type TrainingLoadPoint } from "@/lib/training-utils"
+import { isRunActivity } from "@/lib/format"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import type { Warning, WarningSeverity, WarningType } from "@/lib/training-warnings"
@@ -33,6 +34,15 @@ const WARNING_SEVERITY_TEXT: Record<WarningSeverity, string> = {
 
 function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
   switch (status) {
+    case "insufficient_data":
+      return {
+        label: t("loadIndicator.insufficientData"),
+        Icon: ActivityIcon,
+        dotClass: "bg-muted-foreground",
+        textClass: "text-muted-foreground",
+        ringClass: "ring-border",
+        bgClass: "bg-muted/30",
+      }
     case "optimal":
       return {
         label: t("loadIndicator.optimal"),
@@ -73,14 +83,22 @@ function statusConfig(status: LoadStatus, t: (key: TranslationKey) => string) {
 export function TrainingLoadIndicator({ activities, compact = false, warnings = [], onDismissWarning }: TrainingLoadIndicatorProps) {
   const { t } = useI18n()
 
-  const loadStatus = useMemo(() => computeTrainingLoadStatus(activities), [activities])
-  const chartData = useMemo(() => computeTrainingLoad(activities), [activities])
+  // Scope load + fatigue analysis to running activities only. Cycling, hiking,
+  // and other cross-training would otherwise inflate chronic load and cause
+  // false "high" or "overtraining_risk" labels for runners who also bike/swim.
+  const runActivities = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)),
+    [activities],
+  )
+
+  const loadStatus = useMemo(() => computeTrainingLoadStatus(runActivities), [runActivities])
+  const chartData = useMemo(() => computeTrainingLoad(runActivities), [runActivities])
 
   const [dismissing, setDismissing] = useState<Set<WarningType>>(new Set())
   const [hidden, setHidden] = useState<Set<WarningType>>(new Set())
   const visibleWarnings = warnings.filter((w) => !hidden.has(w.type))
 
-  if (activities.length < 4) return null
+  if (runActivities.length < 4) return null
 
   const cfg = statusConfig(loadStatus.status, t)
   const { Icon } = cfg

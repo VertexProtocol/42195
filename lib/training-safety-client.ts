@@ -47,18 +47,22 @@ export const MAX_WEEKLY_INCREASE: Record<AthleteLevel, number> = {
 /**
  * Classifies an athlete based on their 12-week activity history.
  *
- * Both volume AND frequency must qualify for a given level. Additionally, a
- * consistency factor and training history length are considered:
- * - Consistency: % of the 12 classification weeks that had at least one run.
- *   Low consistency (< 50% active weeks) downgrades the level by one tier,
- *   because a runner returning from a 6-week break is not the same as one
- *   who has trained steadily at the same volume.
- * - History length: fewer than 4 weeks of data always returns "beginner" —
- *   not enough signal to classify higher.
+ * Volume and frequency are averaged over ACTIVE WEEKS ONLY (weeks with at
+ * least one run), not the full 12-week window. Averaging over the full
+ * window penalised athletes with planned breaks (e.g. 8 weeks at 70 km/wk
+ * + 4 weeks injured got reported as 47 km/wk and dropped to intermediate),
+ * and over-classified sporadic runners (a single 100 km week got smoothed
+ * down toward "beginner").
  *
- * Tiers:
- * - Advanced:     avg weekly km > 50  AND avg sessions/week > 4  AND ≥50% active weeks
- * - Intermediate: avg weekly km > 20  AND avg sessions/week >= 2 AND ≥33% active weeks
+ * Consistency (% of 12 weeks that were active) gates whether a tier is
+ * available at all, so a runner whose active-weeks average looks like
+ * "advanced" but only ran 4 of 12 weeks is still capped at intermediate.
+ *
+ * - History length: fewer than 4 qualifying activities ⇒ beginner.
+ *
+ * Tiers (all three conditions must hold):
+ * - Advanced:     active-week avg km > 50  AND sessions/active-week > 4   AND ≥50% active weeks
+ * - Intermediate: active-week avg km > 20  AND sessions/active-week >= 2  AND ≥33% active weeks
  * - Beginner:     everything else
  */
 export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel {
@@ -72,8 +76,6 @@ export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel
   if (recent.length < 4) return "beginner"
 
   const totalKm = recent.reduce((s, a) => s + a.distance_km, 0)
-  const avgWeeklyKm = totalKm / ATHLETE_CLASSIFICATION_WEEKS
-  const avgSessionsPerWeek = recent.length / ATHLETE_CLASSIFICATION_WEEKS
 
   // Compute active weeks: weeks that had at least one run
   const weekMs = 7 * 24 * 60 * 60 * 1000
@@ -84,6 +86,11 @@ export function classifyAthleteLevel(activities: SafetyActivity[]): AthleteLevel
     weeksSeen.add(weekBucket)
   }
   const activeWeeks = weeksSeen.size
+  if (activeWeeks === 0) return "beginner"
+
+  // Average across active weeks only — see docstring for rationale
+  const avgWeeklyKm = totalKm / activeWeeks
+  const avgSessionsPerWeek = recent.length / activeWeeks
   const consistencyPct = activeWeeks / ATHLETE_CLASSIFICATION_WEEKS
 
   if (
