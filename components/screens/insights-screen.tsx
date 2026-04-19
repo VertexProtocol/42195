@@ -376,7 +376,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
       {activities.length > 0 && (
         <AppCard>
           {/* Period switcher — compact, right-aligned */}
-          <div className="mb-3 flex justify-end gap-0.5">
+          <div className="mb-3 flex justify-center gap-0.5">
             {STATS_PERIODS.map(({ key, label }) => (
               <button
                 key={key}
