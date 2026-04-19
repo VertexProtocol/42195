@@ -618,7 +618,12 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("calendar.section")}
         </h3>
-        <TrainingCalendarCard activities={activities} goals={goals} onViewGoal={onViewGoal} />
+        <TrainingCalendarCard
+          activities={activities}
+          goals={goals}
+          testRuns={testRuns}
+          onViewGoal={onViewGoal}
+        />
       </section>
 
       {/* Empty state if no data */}
