@@ -263,8 +263,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
                   <Flag
                     aria-label="Goal target date"
                     size={14}
-                    strokeWidth={2.5}
-                    className="fill-amber-400 text-background"
+                    className="fill-amber-600 text-amber-600 dark:fill-orange-400 dark:text-orange-400"
                   />
                 )}
                 {hasData && (
@@ -313,7 +312,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
               <>
                 <Flag
                   size={11}
-                  className="text-amber-500 fill-amber-500 shrink-0"
+                  className="fill-amber-600 text-amber-600 dark:fill-orange-400 dark:text-orange-400 shrink-0"
                 />
                 <span className="font-mono text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
