@@ -171,6 +171,9 @@ Should this plan be kept as-is, adjusted, or fully regenerated?`
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
+      // Safety-adjacent decision (keep/adjust/regenerate) — determinism matters
+      // more than creative variation. Same state should yield same recommendation.
+      temperature: 0,
       max_tokens: 500,
       system: [
         {

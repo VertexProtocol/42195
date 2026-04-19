@@ -118,6 +118,9 @@ Recent context (last 2 weeks): ${recentActivities?.length ?? 0} runs${recentAvgP
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
+      // Deterministic analysis — the same activity should produce the same
+      // insight whether generated now or on a re-render.
+      temperature: 0,
       max_tokens: 300,
       system: [
         {

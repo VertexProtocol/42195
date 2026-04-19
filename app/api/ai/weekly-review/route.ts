@@ -124,6 +124,9 @@ Session completion: ${weekCompletions.filter((c) => c.status === "completed").le
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
+      // Grading a completed week should be deterministic — the same week
+      // shouldn't get different grades on refresh.
+      temperature: 0,
       max_tokens: 500,
       system: [
         {
