@@ -40,11 +40,12 @@ interface Message {
 interface InsightsScreenProps {
   activities: Activity[]
   goals: Goal[]
+  onViewGoal?: (goal: Goal) => void
 }
 
 type InsightsTab = "overview" | "coach"
 
-export function InsightsScreen({ activities, goals }: InsightsScreenProps) {
+export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
@@ -617,7 +618,7 @@ export function InsightsScreen({ activities, goals }: InsightsScreenProps) {
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("calendar.section")}
         </h3>
-        <TrainingCalendarCard activities={activities} />
+        <TrainingCalendarCard activities={activities} goals={goals} onViewGoal={onViewGoal} />
       </section>
 
       {/* Empty state if no data */}
