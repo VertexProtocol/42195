@@ -23,6 +23,8 @@ import { AppCard } from '@/components/ui/app-card'
 import { createClient } from "@/lib/supabase/client"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
+import { TrainingWarningsCard } from "@/components/training-warnings-card"
+import type { Warning, WarningType } from "@/lib/training-warnings"
 
 interface HomeScreenProps {
   starredGoals: Goal[] // [STAR] goals pinned to home screen
@@ -56,6 +58,35 @@ export function HomeScreen({
   const { t } = useI18n()
 
   const [planBadges, setPlanBadges] = useState<Record<string, { checkpoint: boolean; blockCompleted: boolean }>>({})
+  const [warnings, setWarnings] = useState<Warning[]>([])
+
+  // Load proactive training warnings once on mount. Guard against running
+  // before the user has logged any activities — the engine needs history.
+  useEffect(() => {
+    if (activities.length < 7) return
+    let cancelled = false
+    fetch("/api/warnings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.warnings) return
+        setWarnings(data.warnings as Warning[])
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activities.length])
+
+  const handleDismissWarning = async (type: WarningType) => {
+    try {
+      await fetch("/api/warnings/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      })
+    } catch {
+      // Network error — the card will still hide locally; next load will
+      // re-check and the cooldown only applies if the POST succeeded.
+    }
+  }
 
   useEffect(() => {
     if (starredGoals.length === 0) return
@@ -147,6 +178,11 @@ export function HomeScreen({
           </div>
         )}
       </header>
+
+      {/* Proactive training warnings (fatigue, ACWR spikes, etc.) */}
+      {warnings.length > 0 && (
+        <TrainingWarningsCard warnings={warnings} onDismiss={handleDismissWarning} />
+      )}
 
       {/* Training Load Indicator (Optimal / High Load / Overtraining Risk) */}
       {activities.length >= 7 && (

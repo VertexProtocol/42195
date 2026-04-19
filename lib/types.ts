@@ -80,6 +80,7 @@ export interface UserProfile {
   avatar_url: string | null
   locale?: string | null
   hr_analysis_cache?: import("@/lib/hr-analysis-engine").HrAnalysisResult | null
+  warning_state?: import("@/lib/training-warnings").WarningState | null
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"

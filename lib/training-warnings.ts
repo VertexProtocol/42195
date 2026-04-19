@@ -20,10 +20,15 @@
  *     dismissing a warning doesn't immediately re-appear on next page load.
  */
 
-import type { FatigueSignal } from "@/lib/training-safety"
+import type { FatigueSignal, SafetyActivity } from "@/lib/training-safety"
+import { detectFatigue } from "@/lib/training-safety"
+import { computeACWR, computeTrainingLoad, effortAdjustedKm } from "@/lib/training-utils"
 import {
   ACWR_HIGH_THRESHOLD,
   PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
+  PROLONGED_FATIGUE_TSB_THRESHOLD,
+  ACWR_CHRONIC_DAYS,
+  ACWR_ACUTE_DAYS,
 } from "@/lib/training-constants"
 
 export type WarningType =
@@ -214,4 +219,131 @@ export function buildWarningContext(input: {
  */
 export function countActiveWarnings(warnings: Warning[]): number {
   return warnings.length
+}
+
+// ── Context derivation from raw activities ──────────────────────────────────
+
+/**
+ * Activity shape needed by the context builder. Matches the runtime DB shape
+ * but kept local here so callers can pass any structurally-compatible object.
+ */
+export interface WarningActivity {
+  date: string
+  distance_km: number
+  duration_seconds: number
+  pace_min_per_km: number | null
+  avg_heart_rate: number | null
+  elevation_gain_m: number | null
+}
+
+/** One week of calendar time in milliseconds */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+const DAY_MS_LOCAL = 24 * 60 * 60 * 1000
+
+/**
+ * Derives the WarningContext from an activity list + reference date. Runs
+ * ACWR twice (current and one week ago) and counts consecutive weeks below
+ * the TSB fatigue floor.
+ */
+export function deriveWarningContext(
+  activities: WarningActivity[],
+  referenceDate: Date = new Date(),
+): WarningContext {
+  // ── Current ACWR ──
+  const currentAcwr = computeACWR(
+    activities.map((a) => ({
+      date: a.date,
+      distance_km: a.distance_km,
+      elevation_gain_m: a.elevation_gain_m,
+    })),
+  ).ratio
+
+  // ── ACWR one week ago (shift windows back 7 days) ──
+  // The existing computeACWR is now-anchored, so we compute this manually
+  // against the same constants (ACWR_ACUTE_DAYS, ACWR_CHRONIC_DAYS).
+  const anchorMs = referenceDate.getTime() - 7 * DAY_MS_LOCAL
+  const acuteStartMs = anchorMs - ACWR_ACUTE_DAYS * DAY_MS_LOCAL
+  const chronicStartMs = anchorMs - ACWR_CHRONIC_DAYS * DAY_MS_LOCAL
+  const acutePrev = activities
+    .filter((a) => {
+      const t = new Date(a.date).getTime()
+      return t >= acuteStartMs && t <= anchorMs
+    })
+    .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
+  const chronicTotalPrev = activities
+    .filter((a) => {
+      const t = new Date(a.date).getTime()
+      return t >= chronicStartMs && t <= anchorMs
+    })
+    .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
+  const chronicPrev = chronicTotalPrev / 4
+  const acwrOneWeekAgo = chronicPrev > 0 ? acutePrev / chronicPrev : 0
+
+  // ── Fatigue signal (HR / pace drift) ──
+  const safetyActs: SafetyActivity[] = activities.map((a) => ({
+    date: a.date,
+    distance_km: a.distance_km,
+    duration_seconds: a.duration_seconds,
+    pace_min_per_km: a.pace_min_per_km,
+    avg_heart_rate: a.avg_heart_rate,
+    elevation_gain_m: a.elevation_gain_m,
+  }))
+  const fatigue = detectFatigue(safetyActs)
+
+  // ── Consecutive weeks below TSB threshold ──
+  // computeTrainingLoad returns daily ATL/CTL/TSB points; bucket into weeks
+  // (Mon-Sun) and count trailing weeks whose average TSB is below the floor.
+  const loadPoints = computeTrainingLoad(
+    activities.map((a) => ({
+      date: a.date,
+      distance_km: a.distance_km,
+      elevation_gain_m: a.elevation_gain_m,
+    })),
+  )
+  const tsbBelowThresholdWeeks = countTrailingFatigueWeeks(loadPoints, referenceDate)
+
+  return {
+    acwr: currentAcwr,
+    acwrOneWeekAgo,
+    fatigueSignal: fatigue.signal,
+    tsbBelowThresholdWeeks,
+  }
+}
+
+/**
+ * Counts the number of trailing full weeks in which the *average* TSB was
+ * below PROLONGED_FATIGUE_TSB_THRESHOLD. Counting stops at the first week
+ * that is NOT below the threshold, so the result is always "how many weeks
+ * in a row right now", not lifetime.
+ */
+function countTrailingFatigueWeeks(
+  loadPoints: Array<{ date: string; tsb: number }>,
+  referenceDate: Date,
+): number {
+  if (loadPoints.length === 0) return 0
+  // Group into weekly buckets ending at referenceDate, oldest to newest
+  const maxWeeksBack = 12
+  const weeklyAvgTsb: number[] = []
+  for (let w = 0; w < maxWeeksBack; w++) {
+    const windowEnd = referenceDate.getTime() - w * WEEK_MS
+    const windowStart = windowEnd - WEEK_MS
+    const inWindow = loadPoints.filter((p) => {
+      const t = new Date(p.date).getTime()
+      return t >= windowStart && t < windowEnd
+    })
+    if (inWindow.length === 0) {
+      weeklyAvgTsb.push(NaN)
+      continue
+    }
+    const avg = inWindow.reduce((s, p) => s + p.tsb, 0) / inWindow.length
+    weeklyAvgTsb.push(avg)
+  }
+  // Count consecutive weeks (from the most recent) below threshold
+  let count = 0
+  for (const avg of weeklyAvgTsb) {
+    if (!Number.isFinite(avg)) break
+    if (avg < PROLONGED_FATIGUE_TSB_THRESHOLD) count++
+    else break
+  }
+  return count
 }

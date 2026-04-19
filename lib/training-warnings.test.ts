@@ -3,6 +3,8 @@ import {
   evaluateWarnings,
   buildWarningContext,
   countActiveWarnings,
+  deriveWarningContext,
+  type WarningActivity,
   type WarningContext,
   type WarningState,
 } from "./training-warnings"
@@ -210,5 +212,57 @@ describe("countActiveWarnings", () => {
     const ctx: WarningContext = { ...HEALTHY, fatigueSignal: "both" }
     const { newWarnings } = evaluateWarnings(ctx, {}, REF)
     expect(countActiveWarnings(newWarnings)).toBe(2)
+  })
+})
+
+describe("deriveWarningContext", () => {
+  function activity(
+    daysAgo: number,
+    km: number,
+    overrides: Partial<WarningActivity> = {},
+  ): WarningActivity {
+    return {
+      date: new Date(REF.getTime() - daysAgo * DAY_MS).toISOString(),
+      distance_km: km,
+      duration_seconds: km * 6 * 60, // 6 min/km default
+      pace_min_per_km: 6,
+      avg_heart_rate: 150,
+      elevation_gain_m: 0,
+      ...overrides,
+    }
+  }
+
+  it("returns zeros when there's no activity history", () => {
+    const ctx = deriveWarningContext([], REF)
+    expect(ctx.acwr).toBe(0)
+    expect(ctx.acwrOneWeekAgo).toBe(0)
+    expect(ctx.fatigueSignal).toBe("none")
+    expect(ctx.tsbBelowThresholdWeeks).toBe(0)
+  })
+
+  it("computes non-zero ACWR when there are runs in both windows", () => {
+    // Steady 10 km/run, 3 runs/week for 6 weeks → balanced ACWR near 1.0
+    const acts: WarningActivity[] = []
+    for (let week = 0; week < 6; week++) {
+      for (const d of [1, 3, 5]) {
+        acts.push(activity(week * 7 + d, 10))
+      }
+    }
+    const ctx = deriveWarningContext(acts, REF)
+    expect(ctx.acwr).toBeGreaterThan(0)
+    expect(ctx.acwrOneWeekAgo).toBeGreaterThan(0)
+  })
+
+  it("flags fatigue when recent HR is clearly elevated vs baseline", () => {
+    // 8 baseline runs at 140 bpm, then 4 recent runs at 160 bpm
+    const acts: WarningActivity[] = []
+    for (let i = 0; i < 4; i++) {
+      acts.push(activity(i + 1, 6, { avg_heart_rate: 160 }))
+    }
+    for (let i = 0; i < 8; i++) {
+      acts.push(activity(10 + i * 2, 6, { avg_heart_rate: 140 }))
+    }
+    const ctx = deriveWarningContext(acts, REF)
+    expect(["hr_elevated", "both"]).toContain(ctx.fatigueSignal)
   })
 })
