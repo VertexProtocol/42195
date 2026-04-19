@@ -3,6 +3,8 @@ import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
+const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
 const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal, and fitness level, create a detailed pacing and preparation plan.
 
 Respond with ONLY a valid JSON object:
@@ -69,10 +71,14 @@ export async function POST(req: NextRequest) {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - 56)
 
+  // Race strategy is running-only — cycling/hiking pace would corrupt the
+  // avgPace/longestRun stats passed to Claude and produce hallucinated
+  // target times.
   const { data: activities } = await supabase
     .from("activities")
     .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
     .eq("user_id", user.id)
+    .in("type", RUN_TYPES)
     .gte("date", cutoff.toISOString())
     .order("date", { ascending: false })
     .limit(100)

@@ -3,6 +3,8 @@ import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
+const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const {
@@ -69,11 +71,14 @@ export async function POST(req: NextRequest) {
   // Fetch recent context (last 14 days excluding this activity)
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - 14)
+  // Context must be running-only so avg pace / HR baselines compare
+  // apples to apples.
   const { data: recentActivities } = await supabase
     .from("activities")
     .select("distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, date")
     .eq("user_id", user.id)
     .neq("id", activityId)
+    .in("type", RUN_TYPES)
     .gte("date", cutoff.toISOString())
     .order("date", { ascending: false })
     .limit(10)

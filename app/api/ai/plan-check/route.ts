@@ -3,6 +3,8 @@ import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 
+const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
 /**
  * Adaptive plan check — analyzes whether the current plan needs adjustment.
  *
@@ -86,11 +88,13 @@ export async function POST(req: NextRequest) {
   const dayOfBlock = Math.floor((Date.now() - blockStart.getTime()) / (1000 * 60 * 60 * 24))
   const currentWeekIndex = Math.floor(dayOfBlock / 7)
 
-  // Fetch activities since block start
+  // Fetch running activities since block start. Cycling/hiking would inflate
+  // the ACWR computed downstream and produce false "regenerate" recommendations.
   const { data: activities } = await supabase
     .from("activities")
     .select("date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
     .eq("user_id", user.id)
+    .in("type", RUN_TYPES)
     .gte("date", blockStart.toISOString())
     .order("date", { ascending: true })
 
