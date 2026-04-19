@@ -5,7 +5,10 @@ import {
   averageWeeklyKmBeforePause,
   chronicLoadWeeklyKm,
   assessComeback,
+  applyComebackCap,
+  type ComebackRecommendation,
 } from "./training-comeback"
+import type { TrainingPlan } from "./types"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -285,5 +288,116 @@ describe("assessComeback", () => {
     // return a floored / conservative recommendation.
     expect(r.needsRamp).toBe(true)
     expect(r.weekOneKm).toBeGreaterThanOrEqual(3)
+  })
+})
+
+// ── applyComebackCap ────────────────────────────────────────────────────────
+
+function makePlan(weekOneKm: number, sessionKm: number[]): TrainingPlan {
+  return {
+    summary: "test plan",
+    keyPrinciples: [],
+    watchOut: null,
+    weeks: [
+      {
+        weekNumber: 1,
+        theme: "base",
+        targetKm: weekOneKm,
+        coachNote: "Build consistency",
+        sessions: sessionKm.map((km, i) => ({
+          type: "Easy run",
+          distance: `${km} km`,
+          effort: "Easy — conversational",
+          purpose: `Session ${i + 1}`,
+        })),
+      },
+      {
+        weekNumber: 2,
+        theme: "base",
+        targetKm: 35,
+        coachNote: null,
+        sessions: [],
+      },
+    ],
+  }
+}
+
+const RAMP: ComebackRecommendation = {
+  needsRamp: true,
+  pauseDays: 14,
+  category: "moderate",
+  weekOneKm: 20,
+  tablePercent: 0.65,
+  limitingFactor: "table",
+}
+
+const NO_RAMP: ComebackRecommendation = {
+  needsRamp: false,
+  pauseDays: 2,
+  category: "none",
+  weekOneKm: 30,
+  tablePercent: 1.0,
+  limitingFactor: null,
+}
+
+describe("applyComebackCap", () => {
+  it("leaves the plan unchanged when the cap is not needed", () => {
+    const plan = makePlan(30, [10, 10, 10])
+    const r = applyComebackCap(plan, NO_RAMP)
+    expect(r.capped).toBe(false)
+    expect(r.plan).toBe(plan)
+    expect(r.previousTargetKm).toBeNull()
+  })
+
+  it("leaves the plan unchanged when Week 1 already respects the cap", () => {
+    const plan = makePlan(18, [6, 6, 6])
+    const r = applyComebackCap(plan, RAMP)
+    expect(r.capped).toBe(false)
+  })
+
+  it("scales Week 1 targetKm down to the cap when the plan overshoots", () => {
+    const plan = makePlan(40, [10, 15, 15])
+    const r = applyComebackCap(plan, RAMP)
+    expect(r.capped).toBe(true)
+    expect(r.plan.weeks[0].targetKm).toBe(20)
+    expect(r.previousTargetKm).toBe(40)
+  })
+
+  it("scales Week 1 sessions proportionally when capping", () => {
+    const plan = makePlan(40, [10, 15, 15])
+    const r = applyComebackCap(plan, RAMP)
+    // 40 → 20 (half). Sessions 10/15/15 → 5/7.5/7.5
+    const scaled = r.plan.weeks[0].sessions.map((s) => s.distance)
+    expect(scaled[0]).toBe("5 km")
+    expect(scaled[1]).toBe("7.5 km")
+    expect(scaled[2]).toBe("7.5 km")
+  })
+
+  it("prepends a coach note explaining the cap", () => {
+    const plan = makePlan(40, [20, 20])
+    const r = applyComebackCap(plan, RAMP)
+    expect(r.plan.weeks[0].coachNote).toContain("Comeback cap applied")
+    expect(r.plan.weeks[0].coachNote).toContain("20 km")
+    expect(r.plan.weeks[0].coachNote).toContain("14-day pause")
+    // Original coach note is preserved
+    expect(r.plan.weeks[0].coachNote).toContain("Build consistency")
+  })
+
+  it("leaves weeks beyond Week 1 untouched", () => {
+    const plan = makePlan(40, [10, 15, 15])
+    const originalWeek2 = plan.weeks[1]
+    const r = applyComebackCap(plan, RAMP)
+    expect(r.plan.weeks[1]).toBe(originalWeek2)
+  })
+
+  it("is a no-op for an empty plan", () => {
+    const plan: TrainingPlan = {
+      summary: "",
+      keyPrinciples: [],
+      watchOut: null,
+      weeks: [],
+    }
+    const r = applyComebackCap(plan, RAMP)
+    expect(r.capped).toBe(false)
   })
 })

@@ -29,6 +29,8 @@ import {
   COMEBACK_PREPAUSE_WINDOW_WEEKS,
   COMEBACK_FLOOR_KM,
 } from "@/lib/training-constants"
+import { scaleSessionDistance } from "@/lib/training-checkpoint"
+import type { TrainingPlan, TrainingWeek } from "@/lib/types"
 
 export type ComebackCategory =
   | "none"      // no meaningful pause, plan as usual
@@ -201,6 +203,48 @@ export function chronicLoadWeeklyKm(
     .filter((a) => new Date(a.date).getTime() >= cutoffMs)
     .reduce((s, a) => s + Number(a.distance_km), 0)
   return total / (ACWR_CHRONIC_DAYS / 7)
+}
+
+/**
+ * Enforces the comeback cap on a generated plan. If the AI produced a Week 1
+ * that exceeds the deterministic cap, we scale Week 1 down (targetKm +
+ * session distances proportionally) and prepend a coach note explaining why.
+ *
+ * If the cap is already respected, the plan is returned unchanged. Only
+ * Week 1 is touched — subsequent weeks are the AI's ramp-up plan and remain
+ * as written.
+ */
+export function applyComebackCap(
+  plan: TrainingPlan,
+  comeback: ComebackRecommendation,
+): { plan: TrainingPlan; capped: boolean; previousTargetKm: number | null } {
+  if (!comeback.needsRamp || plan.weeks.length === 0) {
+    return { plan, capped: false, previousTargetKm: null }
+  }
+  const week1 = plan.weeks[0]
+  if (week1.targetKm <= comeback.weekOneKm) {
+    return { plan, capped: false, previousTargetKm: null }
+  }
+  const scale = comeback.weekOneKm / week1.targetKm
+  const cappedWeek1: TrainingWeek = {
+    ...week1,
+    targetKm: comeback.weekOneKm,
+    sessions: week1.sessions.map((s) => ({
+      ...s,
+      distance: scaleSessionDistance(s.distance, scale),
+    })),
+    coachNote: [
+      `Comeback cap applied: Week 1 reduced to ${comeback.weekOneKm} km after a ${comeback.pauseDays}-day pause.`,
+      week1.coachNote,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }
+  return {
+    plan: { ...plan, weeks: [cappedWeek1, ...plan.weeks.slice(1)] },
+    capped: true,
+    previousTargetKm: week1.targetKm,
+  }
 }
 
 /**

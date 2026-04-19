@@ -192,7 +192,7 @@ export function analyzeBlockAdherence(
  * Scales a session distance string by `scale`.
  * Handles ranges like "8-10 km" and single values like "10 km".
  */
-function scaleSessionDistance(distanceStr: string, scale: number): string {
+export function scaleSessionDistance(distanceStr: string, scale: number): string {
   const parts = parseSessionDistanceParts(distanceStr)
   if (!parts) return distanceStr // unparseable — leave unchanged
   if (parts.low !== parts.high) {
