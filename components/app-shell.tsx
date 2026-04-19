@@ -288,7 +288,7 @@ export function AppShell({ initialData }: AppShellProps) {
         {insightsMounted && (
           <div className={activeTab !== "insights" ? "hidden" : ""}>
             <Suspense fallback={<ScreenFallback />}>
-              <InsightsScreen activities={data.activities} />
+              <InsightsScreen activities={data.activities} goals={data.goals} />
             </Suspense>
           </div>
         )}

@@ -25,10 +25,12 @@ import {
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
 import { useI18n } from "@/lib/i18n"
-import type { Activity, TestRun } from "@/lib/types"
+import type { Activity, Goal, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { AppCard } from '@/components/ui/app-card'
+import { PaceCalculatorCard } from "@/components/pace-calculator-card"
+import { TrainingCalendarCard } from "@/components/training-calendar-card"
 
 interface Message {
   role: "user" | "assistant"
@@ -37,11 +39,12 @@ interface Message {
 
 interface InsightsScreenProps {
   activities: Activity[]
+  goals: Goal[]
 }
 
 type InsightsTab = "overview" | "coach"
 
-export function InsightsScreen({ activities }: InsightsScreenProps) {
+export function InsightsScreen({ activities, goals }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
@@ -491,6 +494,14 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
         </section>
       )}
 
+      {/* Pace Calculator */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("paceCalc.section")}
+        </h3>
+        <PaceCalculatorCard goals={goals} />
+      </section>
+
       {/* Test Run Benchmarks */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -601,22 +612,12 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
         )}
       </section>
 
-      {/* Training Trends - placeholder for future */}
+      {/* Training Calendar */}
       <section>
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("insights.trends")}
+          {t("calendar.section")}
         </h3>
-        <AppCard padding="lg">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <TrendingUp size={20} className="text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-card-foreground">{t("insights.trendsTitle")}</p>
-              <p className="text-xs text-muted-foreground">{t("insights.trendsDesc")}</p>
-            </div>
-          </div>
-        </AppCard>
+        <TrainingCalendarCard activities={activities} />
       </section>
 
       {/* Empty state if no data */}
