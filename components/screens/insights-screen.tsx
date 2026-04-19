@@ -25,10 +25,11 @@ import {
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
 import { useI18n } from "@/lib/i18n"
-import type { Activity, TestRun } from "@/lib/types"
+import type { Activity, Goal, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { AppCard } from '@/components/ui/app-card'
+import { PaceCalculatorCard } from "@/components/pace-calculator-card"
 
 interface Message {
   role: "user" | "assistant"
@@ -37,11 +38,12 @@ interface Message {
 
 interface InsightsScreenProps {
   activities: Activity[]
+  goals: Goal[]
 }
 
 type InsightsTab = "overview" | "coach"
 
-export function InsightsScreen({ activities }: InsightsScreenProps) {
+export function InsightsScreen({ activities, goals }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
@@ -490,6 +492,14 @@ export function InsightsScreen({ activities }: InsightsScreenProps) {
           </div>
         </section>
       )}
+
+      {/* Pace Calculator */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("paceCalc.section")}
+        </h3>
+        <PaceCalculatorCard goals={goals} />
+      </section>
 
       {/* Test Run Benchmarks */}
       <section>
