@@ -112,7 +112,6 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     { key: "last_year", label: "Last yr" },
     { key: "all", label: "All" },
   ]
-  const runsLabel = statsPeriod === "30d" ? "runs (30d)" : statsPeriod === "year" ? "runs (this yr)" : statsPeriod === "last_year" ? "runs (last yr)" : "total runs"
 
   // Fetch test runs for benchmarks section
   useEffect(() => {
@@ -375,16 +374,16 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
 
       {/* Training Stats */}
       {activities.length > 0 && (
-        <AppCard variant="flush">
-          {/* Period switcher */}
-          <div className="flex justify-center gap-1 pt-3 px-3">
+        <AppCard>
+          {/* Period switcher — compact, right-aligned */}
+          <div className="mb-3 flex justify-end gap-0.5">
             {STATS_PERIODS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setStatsPeriod(key)}
-                className={`px-3 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
                   statsPeriod === key
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -392,21 +391,29 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-3 divide-x divide-border">
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <TrendingUp size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{totalKm.toFixed(0)}</span>
-              <span className="text-[10px] text-muted-foreground text-center">km logged</span>
+
+          {/* Stats — 3 subtle cards with accent icons */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <TrendingUp size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {totalKm.toFixed(0)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">km</span>
             </div>
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <Footprints size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{longestRunKm.toFixed(1)}</span>
-              <span className="text-[10px] text-muted-foreground text-center">longest run</span>
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <Footprints size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {longestRunKm.toFixed(1)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">{t("stats.longest")}</span>
             </div>
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <Clock size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{recentRunCount}</span>
-              <span className="text-[10px] text-muted-foreground text-center">{runsLabel}</span>
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <Clock size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {recentRunCount}
+              </span>
+              <span className="text-[10px] text-muted-foreground">{t("stats.runs")}</span>
             </div>
           </div>
         </AppCard>

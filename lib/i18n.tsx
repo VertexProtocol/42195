@@ -162,6 +162,8 @@ const translations = {
     "insights.basedOn": "Based on",
     "insights.on": "on",
     "insights.emptyState": "Complete more activities to see your personal records and predictions",
+    "stats.longest": "longest",
+    "stats.runs": "runs",
     // Pace calculator
     "paceCalc.section": "Pace Calculator",
     "paceCalc.title": "Pace",
@@ -680,6 +682,8 @@ const translations = {
     "insights.basedOn": "Basert pa",
     "insights.on": "den",
     "insights.emptyState": "Fullfør flere aktiviteter for a se dine personlige rekorder og estimater",
+    "stats.longest": "lengste",
+    "stats.runs": "løp",
     // Pace calculator
     "paceCalc.section": "Pace-kalkulator",
     "paceCalc.title": "Pace",
