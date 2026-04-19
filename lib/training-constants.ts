@@ -77,6 +77,17 @@ export const CHECKPOINT_MIN_SCALE = 0.55
 /** Maximum scale factor when adjusting over-performing plans */
 export const CHECKPOINT_MAX_SCALE = 1.30
 
+// ── Comeback after Pause ─────────────────────────────────────────────────────
+
+/** Minimum gap (days) since last run that qualifies as a pause requiring a ramp */
+export const COMEBACK_PAUSE_THRESHOLD_DAYS = 7
+/** Further volume reduction applied when an active injury is noted in notes_history */
+export const COMEBACK_INJURY_REDUCTION = 0.80
+/** Weeks of history used to compute the runner's pre-pause weekly average */
+export const COMEBACK_PREPAUSE_WINDOW_WEEKS = 4
+/** Week-one floor — never recommend less than this many km on return */
+export const COMEBACK_FLOOR_KM = 3
+
 // ── Intra-block Pace Progression ─────────────────────────────────────────────
 
 /**

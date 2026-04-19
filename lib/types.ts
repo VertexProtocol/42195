@@ -80,6 +80,7 @@ export interface UserProfile {
   avatar_url: string | null
   locale?: string | null
   hr_analysis_cache?: import("@/lib/hr-analysis-engine").HrAnalysisResult | null
+  warning_state?: import("@/lib/training-warnings").WarningState | null
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"
@@ -259,4 +260,8 @@ export interface MidBlockCheckpoint {
   direction: "under" | "over" | "on_track"
   adjustmentApplied: boolean
   adjustmentNote: string | null
+  /** Fatigue signal from HR/pace drift at checkpoint time, if analysed */
+  fatigueSignal?: "none" | "hr_elevated" | "pace_declining" | "both"
+  /** True if the scale was tightened beyond adherence because fatigue was detected */
+  fatigueAdjustmentApplied?: boolean
 }

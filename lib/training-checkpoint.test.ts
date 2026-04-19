@@ -6,6 +6,7 @@ import {
   analyzeBlockAdherence,
   adjustRemainingWeeks,
   buildAdjustmentNote,
+  applyFatigueToScale,
 } from "./training-checkpoint"
 import type { TrainingPlan, TrainingWeek, MidBlockCheckpoint } from "./types"
 
@@ -746,5 +747,156 @@ describe("buildAdjustmentNote", () => {
     const note = buildAdjustmentNote(60, "under", 0.80, 1)
     expect(note).toContain("1 active week")
     expect(note).not.toContain("1 active weeks")
+  })
+
+  it("appends fatigue explanation when HR is elevated", () => {
+    const note = buildAdjustmentNote(70, "under", 0.80, 2, 0, "hr_elevated")
+    expect(note).toContain("Heart rate trend is elevated")
+  })
+
+  it("appends fatigue explanation when pace is declining", () => {
+    const note = buildAdjustmentNote(70, "under", 0.80, 2, 0, "pace_declining")
+    expect(note).toContain("Pace is drifting")
+  })
+
+  it("mentions the dual signal when fatigue is 'both'", () => {
+    const note = buildAdjustmentNote(70, "under", 0.75, 2, 0, "both")
+    expect(note).toContain("HR elevated and pace declining")
+  })
+
+  it("describes an on-track-km-but-fatigued scaleDown", () => {
+    // km ledger is on track, but fatigue forced scale < 1
+    const note = buildAdjustmentNote(98, "on_track", 0.85, 3, 0, "hr_elevated")
+    expect(note).toContain("fatigue signal")
+    expect(note).toContain("deload")
+    expect(note).toContain("15%")
+  })
+
+  it("describes an over-volume-but-fatigued scaleDown", () => {
+    const note = buildAdjustmentNote(140, "over", 0.75, 3, 0, "both")
+    expect(note).toContain("fatigue signal forced a deload")
+    expect(note).toContain("25%")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// applyFatigueToScale
+// ---------------------------------------------------------------------------
+
+describe("applyFatigueToScale", () => {
+  it("returns the base scale unchanged when signal is 'none'", () => {
+    const r = applyFatigueToScale(0.85, "none")
+    expect(r.scale).toBe(0.85)
+    expect(r.fatigueAdjustmentApplied).toBe(false)
+  })
+
+  it("caps a 'way over' scale at 0.75 for 'both' signal", () => {
+    const r = applyFatigueToScale(1.2, "both")
+    expect(r.scale).toBe(0.75)
+    expect(r.fatigueAdjustmentApplied).toBe(true)
+  })
+
+  it("caps an on-track 1.0 scale at 0.85 for 'hr_elevated'", () => {
+    const r = applyFatigueToScale(1.0, "hr_elevated")
+    expect(r.scale).toBe(0.85)
+    expect(r.fatigueAdjustmentApplied).toBe(true)
+  })
+
+  it("caps an on-track 1.0 scale at 0.90 for 'pace_declining'", () => {
+    const r = applyFatigueToScale(1.0, "pace_declining")
+    expect(r.scale).toBe(0.90)
+    expect(r.fatigueAdjustmentApplied).toBe(true)
+  })
+
+  it("does not tighten further when base scale is already below the cap", () => {
+    const r = applyFatigueToScale(0.60, "hr_elevated")
+    expect(r.scale).toBe(0.60)
+    expect(r.fatigueAdjustmentApplied).toBe(false)
+  })
+
+  it("never raises the scale", () => {
+    // base is below 'both' cap 0.75 — fatigue should not raise it to 0.75
+    const r = applyFatigueToScale(0.55, "both")
+    expect(r.scale).toBe(0.55)
+    expect(r.fatigueAdjustmentApplied).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// adjustRemainingWeeks with fatigue signal
+// ---------------------------------------------------------------------------
+
+describe("adjustRemainingWeeks with fatigue signal", () => {
+  const realDate = Date
+  afterEach(() => {
+    vi.useRealTimers()
+    global.Date = realDate
+  })
+
+  it("deloads an on-track runner when 'both' fatigue is detected", () => {
+    // Set up: runner is 2 weeks into a 4-week plan, 40 km/week, hit the target exactly
+    vi.useFakeTimers()
+    const ref = new Date("2026-03-16T12:00:00Z") // Monday of week 3
+    vi.setSystemTime(ref)
+    const start = new Date("2026-03-02") // 2 weeks ago (Monday)
+
+    const plan = makePlan(4, 40)
+    plan.weeks[0].weekNumber = 1
+    // actual = 40 km/wk (on track), but fatigue = "both"
+    const result = adjustRemainingWeeks(plan, 2, 40, { fatigueSignal: "both" })
+    expect(result.fatigueAdjustmentApplied).toBe(true)
+    expect(result.scaleFactor).toBe(0.75)
+    // Weeks 3 and 4 should be scaled to 30 km (40 × 0.75)
+    expect(result.adjustedWeeks[2].targetKm).toBe(30)
+    expect(result.adjustedWeeks[3].targetKm).toBe(30)
+    // Note referencing 'Mid-block adjustment' should be present
+    expect(result.adjustedWeeks[2].coachNote).toContain("Mid-block")
+    // suppress unused warning
+    void start
+  })
+
+  it("leaves 'none' signal as standard adherence scaling", () => {
+    vi.useFakeTimers()
+    const ref = new Date("2026-03-16T12:00:00Z")
+    vi.setSystemTime(ref)
+
+    const plan = makePlan(4, 40)
+    // actual = 20 (50% adherence) — under scale should apply
+    const result = adjustRemainingWeeks(plan, 2, 20, { fatigueSignal: "none" })
+    expect(result.fatigueAdjustmentApplied).toBe(false)
+    // adherenceScale = 0.5 → clamp to CHECKPOINT_MIN_SCALE 0.55
+    expect(result.scaleFactor).toBe(0.55)
+  })
+
+  it("tightens further when adherence is already under AND fatigue is both", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-16T12:00:00Z"))
+
+    const plan = makePlan(4, 40)
+    // actual = 32 → adherenceScale = 0.8 → fatigue 'both' cap = 0.75
+    const result = adjustRemainingWeeks(plan, 2, 32, { fatigueSignal: "both" })
+    expect(result.scaleFactor).toBe(0.75)
+    expect(result.fatigueAdjustmentApplied).toBe(true)
+  })
+
+  it("doesn't override adherence scale when it's already below the fatigue cap", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-16T12:00:00Z"))
+
+    const plan = makePlan(4, 40)
+    // actual = 22 → adherenceScale = 0.55 (clamped); 'hr_elevated' cap = 0.85
+    // 0.55 is already well below 0.85 — don't change
+    const result = adjustRemainingWeeks(plan, 2, 22, { fatigueSignal: "hr_elevated" })
+    expect(result.scaleFactor).toBe(0.55)
+    expect(result.fatigueAdjustmentApplied).toBe(false)
+  })
+
+  it("returns fatigueAdjustmentApplied=false in the no-remaining-weeks case", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-16T12:00:00Z"))
+
+    const plan = makePlan(2, 40)
+    const result = adjustRemainingWeeks(plan, 2, 40, { fatigueSignal: "both" })
+    expect(result.fatigueAdjustmentApplied).toBe(false)
   })
 })
