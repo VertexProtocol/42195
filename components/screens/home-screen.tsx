@@ -23,7 +23,6 @@ import { AppCard } from '@/components/ui/app-card'
 import { createClient } from "@/lib/supabase/client"
 
 const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
-import { TrainingWarningsCard } from "@/components/training-warnings-card"
 import type { Warning, WarningType } from "@/lib/training-warnings"
 
 interface HomeScreenProps {
@@ -179,15 +178,15 @@ export function HomeScreen({
         )}
       </header>
 
-      {/* Proactive training warnings (fatigue, ACWR spikes, etc.) */}
-      {warnings.length > 0 && (
-        <TrainingWarningsCard warnings={warnings} onDismiss={handleDismissWarning} />
-      )}
-
-      {/* Training Load Indicator (Optimal / High Load / Overtraining Risk) */}
+      {/* Training Load Indicator (Optimal / High Load / Overtraining Risk)
+          with embedded proactive warnings rendered as dismissible rows. */}
       {activities.length >= 7 && (
         <Suspense fallback={null}>
-          <TrainingLoadIndicator activities={activities} />
+          <TrainingLoadIndicator
+            activities={activities}
+            warnings={warnings}
+            onDismissWarning={handleDismissWarning}
+          />
         </Suspense>
       )}
 
