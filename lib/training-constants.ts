@@ -144,9 +144,19 @@ export const RIEGEL_EXPONENT = 1.06
 export const RIEGEL_EXPONENT_MIN = 1.01
 /** Upper bound on the exponent (less-trained athletes) */
 export const RIEGEL_EXPONENT_MAX = 1.12
-/** Optimistic confidence bound (faster end of prediction range) */
+/**
+ * Optimistic confidence bound — produces the FASTER end of the prediction
+ * range. In Riegel's T_goal = T_ref × (D_goal / D_ref)^exp, a LOWER exponent
+ * yields a smaller multiplier and therefore a shorter (faster) predicted
+ * time at longer distances. Optimistic here means "optimistic about your
+ * performance" — you're projecting toward a well-trained athlete's curve.
+ */
 export const RIEGEL_EXPONENT_OPTIMISTIC = 1.03
-/** Conservative confidence bound (slower end of prediction range) */
+/**
+ * Conservative confidence bound — produces the SLOWER end of the prediction
+ * range. Higher exponent = bigger multiplier = longer (slower) predicted
+ * time at longer distances. Conservative here means "don't over-promise".
+ */
 export const RIEGEL_EXPONENT_CONSERVATIVE = 1.09
 /** Lookback window for selecting the reference activity for race prediction */
 export const RACE_PREDICTION_LOOKBACK_DAYS = 90
