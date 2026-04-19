@@ -24,6 +24,7 @@ import {
   FATIGUE_RECENT_RUNS_COUNT,
   FATIGUE_HR_ELEVATION_BPM,
   FATIGUE_PACE_DECLINE_FACTOR,
+  FATIGUE_FRESHNESS_DAYS,
   PROLONGED_FATIGUE_TSB_THRESHOLD,
   PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
   PROLONGED_FATIGUE_DELOAD_MULTIPLIER,
@@ -280,6 +281,16 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   if (runs.length < FATIGUE_MIN_QUALIFYING_RUNS) {
+    return { signal: "none", description: null, intensityMultiplier: 1.0 }
+  }
+
+  // Freshness guard: if the latest qualifying run is older than
+  // FATIGUE_FRESHNESS_DAYS, comparing its HR/pace to even older baseline runs
+  // produces a stale signal the runner cannot act on. Skip detection during
+  // multi-week pauses — the comeback calculator handles return-to-training.
+  const latestMs = new Date(runs[0].date).getTime()
+  const ageDays = (Date.now() - latestMs) / (24 * 60 * 60 * 1000)
+  if (ageDays > FATIGUE_FRESHNESS_DAYS) {
     return { signal: "none", description: null, intensityMultiplier: 1.0 }
   }
 

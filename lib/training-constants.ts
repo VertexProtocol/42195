@@ -50,6 +50,12 @@ export const FATIGUE_RECENT_RUNS_COUNT = 4
 export const FATIGUE_HR_ELEVATION_BPM = 5
 /** Pace must exceed baseline median by this factor to signal pace fatigue (5% slower) */
 export const FATIGUE_PACE_DECLINE_FACTOR = 1.05
+/**
+ * If the most recent qualifying run is older than this many days, fatigue
+ * detection returns "none" — comparing pre-pause runs to even older runs
+ * produces stale signals that the runner can't act on.
+ */
+export const FATIGUE_FRESHNESS_DAYS = 10
 
 // ── Prolonged Fatigue / Forced Deload ────────────────────────────────────────
 
