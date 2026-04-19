@@ -262,7 +262,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
           const todayCell = isToday(d.date)
           const showFlag = hasGoal || hasTestRun
           const flagClass = hasGoal
-            ? "fill-amber-600 text-amber-600 dark:fill-teal-400 dark:text-teal-400"
+            ? "fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400"
             : "fill-violet-500 text-violet-500"
           const isSelected = hasGoal && selectedGoalDay === d.key
           const cellContent = (
@@ -330,7 +330,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
               <>
                 <Flag
                   size={11}
-                  className="fill-amber-600 text-amber-600 dark:fill-teal-400 dark:text-teal-400 shrink-0"
+                  className="fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400 shrink-0"
                 />
                 <span className="font-mono text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
