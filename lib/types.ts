@@ -259,4 +259,8 @@ export interface MidBlockCheckpoint {
   direction: "under" | "over" | "on_track"
   adjustmentApplied: boolean
   adjustmentNote: string | null
+  /** Fatigue signal from HR/pace drift at checkpoint time, if analysed */
+  fatigueSignal?: "none" | "hr_elevated" | "pace_declining" | "both"
+  /** True if the scale was tightened beyond adherence because fatigue was detected */
+  fatigueAdjustmentApplied?: boolean
 }

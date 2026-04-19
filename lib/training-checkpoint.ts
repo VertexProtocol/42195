@@ -13,6 +13,7 @@
 
 import type { TrainingPlan, TrainingWeek, WeekAdherence, MidBlockCheckpoint } from "@/lib/types"
 import { parseSessionDistanceParts } from "@/lib/training-safety"
+import type { FatigueSignal } from "@/lib/training-safety"
 import {
   CHECKPOINT_UNDER_THRESHOLD as UNDER_THRESHOLD,
   CHECKPOINT_OVER_THRESHOLD as OVER_THRESHOLD,
@@ -22,6 +23,19 @@ import {
   CHECKPOINT_MIN_SCALE,
   CHECKPOINT_MAX_SCALE,
 } from "@/lib/training-constants"
+
+/**
+ * Caps applied to the checkpoint scale factor when a fatigue signal is
+ * detected. The cap is never raised by fatigue — it can only tighten an
+ * otherwise healthy scaling. The values mirror detectFatigue's intensity
+ * multipliers so the interpretation is consistent across the codebase.
+ */
+const FATIGUE_SCALE_CAPS: Record<FatigueSignal, number | null> = {
+  none: null,
+  hr_elevated: 0.85,
+  pace_declining: 0.90,
+  both: 0.75,
+}
 
 /**
  * Returns the 0-based index of the current week within the training block.
@@ -189,6 +203,26 @@ export function analyzeBlockAdherence(
 }
 
 /**
+ * Applies a fatigue-driven ceiling to a base scale factor. The fatigue cap
+ * only tightens — it never raises a scaling computed from adherence.
+ *
+ * - "none"           → no change
+ * - "hr_elevated"    → scale capped at 0.85 (15% further reduction)
+ * - "pace_declining" → scale capped at 0.90 (10% further reduction)
+ * - "both"           → scale capped at 0.75 (25% further reduction — forced deload)
+ */
+export function applyFatigueToScale(
+  baseScale: number,
+  fatigueSignal: FatigueSignal,
+): { scale: number; fatigueAdjustmentApplied: boolean } {
+  const cap = FATIGUE_SCALE_CAPS[fatigueSignal]
+  if (cap === null || cap >= baseScale) {
+    return { scale: baseScale, fatigueAdjustmentApplied: false }
+  }
+  return { scale: cap, fatigueAdjustmentApplied: true }
+}
+
+/**
  * Scales a session distance string by `scale`.
  * Handles ranges like "8-10 km" and single values like "10 km".
  */
@@ -220,13 +254,16 @@ export function adjustRemainingWeeks(
   plan: TrainingPlan,
   currentWeekIndex: number,
   actualAvgKm: number,
-  { skipSessionScaling = false }: { skipSessionScaling?: boolean } = {},
-): { adjustedWeeks: TrainingWeek[]; scaleFactor: number } {
+  {
+    skipSessionScaling = false,
+    fatigueSignal = "none",
+  }: { skipSessionScaling?: boolean; fatigueSignal?: FatigueSignal } = {},
+): { adjustedWeeks: TrainingWeek[]; scaleFactor: number; fatigueAdjustmentApplied: boolean } {
   const completedWeeks = plan.weeks.slice(0, currentWeekIndex)
   const remainingWeeks = plan.weeks.slice(currentWeekIndex)
 
   if (remainingWeeks.length === 0) {
-    return { adjustedWeeks: plan.weeks, scaleFactor: 1.0 }
+    return { adjustedWeeks: plan.weeks, scaleFactor: 1.0, fatigueAdjustmentApplied: false }
   }
 
   // Detect deload weeks using the average of *completed* weeks as the reference.
@@ -243,13 +280,18 @@ export function adjustRemainingWeeks(
   const anchorWeek = remainingWeeks.find((w) => !isDeload(w))
   if (!anchorWeek) {
     // All remaining weeks are deload — nothing to adjust
-    return { adjustedWeeks: plan.weeks, scaleFactor: 1.0 }
+    return { adjustedWeeks: plan.weeks, scaleFactor: 1.0, fatigueAdjustmentApplied: false }
   }
 
-  const scaleFactor =
+  const adherenceScale =
     anchorWeek.targetKm > 0
       ? Math.min(CHECKPOINT_MAX_SCALE, Math.max(CHECKPOINT_MIN_SCALE, actualAvgKm / anchorWeek.targetKm))
       : 1.0
+
+  // Fatigue can only tighten the scale, never raise it. A runner who hit their
+  // volume but shows HR/pace drift is overreaching even if km-adherence says
+  // "on track" — the fatigue cap overrides the adherence-derived scaling.
+  const { scale: scaleFactor, fatigueAdjustmentApplied } = applyFatigueToScale(adherenceScale, fatigueSignal)
 
   const adjustedRemaining = remainingWeeks.map((week) => {
     // Leave deload/recovery weeks untouched
@@ -281,6 +323,7 @@ export function adjustRemainingWeeks(
   return {
     adjustedWeeks: [...completedWeeks, ...adjustedRemaining],
     scaleFactor,
+    fatigueAdjustmentApplied,
   }
 }
 
@@ -293,17 +336,30 @@ export function buildAdjustmentNote(
   scaleFactor: number,
   activeCount: number,
   missedWeekCount = 0,
+  fatigueSignal: FatigueSignal = "none",
 ): string {
   const pct = Math.round((scaleFactor - 1) * 100)
   const sign = pct >= 0 ? "+" : ""
   const missedNote = missedWeekCount > 0
     ? ` (${missedWeekCount} missed week${missedWeekCount !== 1 ? "s" : ""} excluded)`
     : ""
+  const fatigueSuffix = (() => {
+    if (fatigueSignal === "none") return ""
+    if (fatigueSignal === "both") return " Fatigue signal detected (HR elevated and pace declining) — extra reduction applied."
+    if (fatigueSignal === "hr_elevated") return " Heart rate trend is elevated — extra reduction applied."
+    return " Pace is drifting despite steady HR — extra reduction applied."
+  })()
   if (direction === "under") {
-    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled down by ${Math.abs(pct)}% to better match your current training load.`
+    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled down by ${Math.abs(pct)}% to better match your current training load.${fatigueSuffix}`
   }
   if (direction === "over") {
-    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled up by ${sign}${pct}% to reflect your stronger-than-expected performance.`
+    if (scaleFactor < 1) {
+      return `Volume exceeded plan at ${adherencePct}% (${activeCount} active week${activeCount !== 1 ? "s" : ""})${missedNote}, but a fatigue signal forced a deload: remaining weeks scaled by ${Math.abs(pct)}% down.${fatigueSuffix}`
+    }
+    return `After ${activeCount} active week${activeCount !== 1 ? "s" : ""}${missedNote} at ${adherencePct}% of planned volume, the remaining weeks have been scaled up by ${sign}${pct}% to reflect your stronger-than-expected performance.${fatigueSuffix}`
+  }
+  if (fatigueSignal !== "none" && scaleFactor < 1) {
+    return `Training km is on track at ${adherencePct}% adherence, but a fatigue signal prompted a deload: remaining weeks scaled down by ${Math.abs(pct)}%.${fatigueSuffix}`
   }
   return `Training is on track at ${adherencePct}% adherence — no adjustment needed.`
 }
