@@ -136,17 +136,40 @@ export interface CumulativeLoadViolation {
  * doesn't exceed level-appropriate limits. This catches scenarios where
  * 3 consecutive small increases compound to a dangerous total increase.
  */
+/**
+ * Clamps 3-week cumulative volume jumps against the runner's rolling history.
+ *
+ * @param weekTargets         Planned km for each week in the NEW plan.
+ * @param level               Athlete tier — drives the max cumulative cap.
+ * @param priorWeekTargets    Weekly km for the 1–3 weeks immediately BEFORE
+ *                            the plan starts. Optional, but without it the
+ *                            cap can't see a pre-plan high-load window and
+ *                            the first 3 plan weeks are effectively exempt.
+ *                            Pass oldest-first (index 0 = earliest).
+ *
+ * Violations are always reported with a 1-based weekNumber within the PLAN
+ * (priorWeekTargets never produce violations themselves — we can't adjust
+ * the past).
+ */
 export function checkCumulativeProgression(
   weekTargets: number[],
   level: AthleteLevel,
+  priorWeekTargets: number[] = [],
 ): CumulativeLoadViolation[] {
   const maxCumulative = MAX_CUMULATIVE_INCREASE[level]
   const violations: CumulativeLoadViolation[] = []
   const windowSize = 3
 
-  for (let i = windowSize; i < weekTargets.length; i++) {
-    const reference = weekTargets[i - windowSize]
-    const current = weekTargets[i]
+  // Build a combined view so the reference week can live in the prior segment.
+  const combined = [...priorWeekTargets, ...weekTargets]
+  const priorCount = priorWeekTargets.length
+
+  // Start at the first index where (a) we have `windowSize` lookback and
+  // (b) we're inside the plan (so we don't emit violations for priors).
+  const startIdx = Math.max(windowSize, priorCount)
+  for (let i = startIdx; i < combined.length; i++) {
+    const reference = combined[i - windowSize]
+    const current = combined[i]
 
     // Skip if reference week was a recovery week (very low volume)
     if (reference < 5) continue
@@ -157,8 +180,9 @@ export function checkCumulativeProgression(
     const pctIncrease = (current - reference) / reference
     if (pctIncrease > maxCumulative) {
       const maxAllowed = Math.round(reference * (1 + maxCumulative))
+      const planWeekNumber = i - priorCount + 1 // 1-based within plan
       violations.push({
-        weekNumber: i + 1,
+        weekNumber: planWeekNumber,
         targetKm: current,
         referenceKm: reference,
         cumulativePct: Math.round(pctIncrease * 100),
@@ -169,6 +193,34 @@ export function checkCumulativeProgression(
   }
 
   return violations
+}
+
+/**
+ * Computes the runner's actual weekly km for the N weeks immediately before
+ * the reference date (rolling 7-day windows, most-recent last). Used as the
+ * prior-week context for checkCumulativeProgression so the first plan week
+ * can't spike past the runner's real pre-plan volume.
+ */
+export function computeRecentWeeklyVolumes(
+  activities: SafetyActivity[],
+  weeksBack: number,
+  referenceDate: Date = new Date(),
+): number[] {
+  const weekMs = 7 * 24 * 60 * 60 * 1000
+  const anchorMs = referenceDate.getTime()
+  const weeks: number[] = []
+  for (let w = weeksBack; w >= 1; w--) {
+    const end = anchorMs - (w - 1) * weekMs
+    const start = end - weekMs
+    const km = activities
+      .filter((a) => {
+        const t = new Date(a.date).getTime()
+        return t >= start && t < end
+      })
+      .reduce((s, a) => s + a.distance_km, 0)
+    weeks.push(km)
+  }
+  return weeks
 }
 
 // ── ACWR load safety ──────────────────────────────────────────────────────────
@@ -628,8 +680,11 @@ export function validateAndAdjustPlan(
   }
 
   // Step 2b: Clamp cumulative progression over 3-week windows
+  // Pass the runner's last 3 actual weekly km as prior context so the
+  // cap catches a plan week 1 that jumps past a high pre-plan load.
   const updatedTargets = adjustedWeeks.map((w) => w.targetKm)
-  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel)
+  const priorWeeklyVolumes = computeRecentWeeklyVolumes(activities, 3)
+  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel, priorWeeklyVolumes)
   for (const v of cumulativeViolations) {
     const idx = v.weekNumber - 1
     if (idx >= 0 && idx < adjustedWeeks.length) {
