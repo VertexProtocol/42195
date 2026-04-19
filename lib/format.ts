@@ -306,3 +306,13 @@ export function weeklyMetricUnit(metric: string): string {
       return ""
   }
 }
+
+/**
+ * True for any running-flavored activity type (Run, Trail Run, Virtual Run,
+ * Treadmill, Race). Used to scope training stats and the calendar to runs
+ * only, excluding rides, swims, walks, etc.
+ */
+export function isRunActivity(type: string): boolean {
+  const t = type.toLowerCase()
+  return t.includes("run") || t === "race" || t === "treadmill"
+}

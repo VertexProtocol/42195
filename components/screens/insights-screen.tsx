@@ -20,7 +20,8 @@ import {
   formatTargetTime,
   formatPace,
   formatDateShort,
-  formatDistance
+  formatDistance,
+  isRunActivity
 } from "@/lib/format"
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
@@ -75,13 +76,20 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const [testRuns, setTestRuns] = useState<TestRun[]>([])
   const [testRunsLoading, setTestRunsLoading] = useState(true)
 
-  const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
+  // Scope insights to running activities only — rides, swims, walks etc.
+  // are tracked but not relevant to the running stats / calendar / predictions.
+  const runActivities = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)),
+    [activities],
+  )
+
+  const personalRecords = useMemo(() => detectPersonalRecords(runActivities), [runActivities])
   // Apply prediction adjustment from test run validation feedback
   const predictionAdjustment = useMemo(() => {
     if (testRuns.length === 0) return 0
     return computePredictionAdjustment(testRuns).exponentAdjustment
   }, [testRuns])
-  const racePredictions = useMemo(() => predictRaceTimes(activities, predictionAdjustment), [activities, predictionAdjustment])
+  const racePredictions = useMemo(() => predictRaceTimes(runActivities, predictionAdjustment), [runActivities, predictionAdjustment])
 
   type StatsPeriod = "30d" | "year" | "last_year" | "all"
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>("30d")
@@ -91,16 +99,16 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     if (statsPeriod === "30d") {
       const cutoff = new Date()
       cutoff.setDate(now.getDate() - 30)
-      return activities.filter(a => new Date(a.date) >= cutoff)
+      return runActivities.filter(a => new Date(a.date) >= cutoff)
     }
     if (statsPeriod === "year") {
-      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
+      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
     }
     if (statsPeriod === "last_year") {
-      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
+      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
     }
-    return activities
-  }, [activities, statsPeriod])
+    return runActivities
+  }, [runActivities, statsPeriod])
 
   const totalKm = useMemo(() => filteredActivities.reduce((sum, a) => sum + Number(a.distance_km), 0), [filteredActivities])
   const longestRunKm = useMemo(() => filteredActivities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [filteredActivities])
@@ -626,7 +634,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
           {t("calendar.section")}
         </h3>
         <TrainingCalendarCard
-          activities={activities}
+          activities={runActivities}
           goals={goals}
           testRuns={testRuns}
           onViewGoal={onViewGoal}
