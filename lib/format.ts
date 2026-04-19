@@ -212,6 +212,15 @@ export interface PerformanceGoalStatus {
  * Distance-only goal (target_time_seconds null, e.g. "First 20 km"):
  *   - reached = any single run with distance >= target_distance_km
  *   - progress = min(100, longestRun / targetDistance * 100)
+ *
+ * ── DESIGN CHOICE ─────────────────────────────────────────────────────────
+ * No date filtering against target_date. A performance goal asks "can you
+ * do this?" not "did you do this by X?", so a marathon completed a week
+ * after the planned race date still counts as reached. The target_date
+ * drives plan timing, not achievement validation. If a use case needs
+ * time-bounded evaluation (e.g. "first marathon in 2026"), add a separate
+ * before-date filter at the call site rather than baking it in here.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 export function evaluatePerformanceGoal(
   activities: Activity[],

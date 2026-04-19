@@ -109,6 +109,20 @@ export function isCheckpointDue(
   if (currentWeekIndex < midpoint) return false // not at midpoint yet
   if (currentWeekIndex >= totalWeeks) return false // past the end of the block
 
+  // ── DESIGN CHOICE ──────────────────────────────────────────────────────────
+  // One checkpoint per block, by intent. Re-running the checkpoint after the
+  // first adjustment would create plan churn — the runner would see their
+  // remaining weeks change every time they logged an off-target run, which
+  // erodes trust in the plan and makes it harder to commit to it.
+  //
+  // If responsiveness becomes more important than stability later, options are:
+  //   (a) allow a second checkpoint when the runner is on a streak that
+  //       deviates >50% from the post-adjustment target,
+  //   (b) make the existing /api/ai/training-plan POST (full regen) the
+  //       escape hatch — which the auto-regen-on-injury feature already uses.
+  // For now: one checkpoint, with full regeneration as the explicit override.
+  // ──────────────────────────────────────────────────────────────────────────
+
   // If a checkpoint was already applied for *this* block, don't re-run
   if (existingCheckpoint?.adjustmentApplied && existingCheckpoint.blockStartDate === blockStartDate) {
     return false
