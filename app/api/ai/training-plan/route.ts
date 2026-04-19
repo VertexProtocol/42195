@@ -883,12 +883,34 @@ export async function POST(req: NextRequest) {
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
-        const jsonMatch = (textBlock as { type: "text"; text: string }).text.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error("No JSON found in Claude response")
+        const rawClaudeText = (textBlock as { type: "text"; text: string }).text
+        const jsonMatch = rawClaudeText.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) {
+          console.error("[plan-generation] No JSON in Claude response. Raw preview:", rawClaudeText.slice(0, 500))
+          throw new Error("No JSON found in Claude response")
+        }
 
-        const parsed = TrainingPlanSchema.safeParse(JSON.parse(jsonMatch[0]))
+        let rawJson: unknown
+        try {
+          rawJson = JSON.parse(jsonMatch[0])
+        } catch (parseErr) {
+          console.error(
+            "[plan-generation] Claude returned invalid JSON:",
+            parseErr,
+            "Raw preview:",
+            rawClaudeText.slice(0, 500),
+          )
+          throw new Error("Claude response was not valid JSON")
+        }
+
+        const parsed = TrainingPlanSchema.safeParse(rawJson)
         if (!parsed.success) {
-          console.error("Invalid plan structure from Claude:", parsed.error.message)
+          console.error(
+            "[plan-generation] Plan failed schema validation:",
+            parsed.error.message,
+            "Raw preview:",
+            rawClaudeText.slice(0, 1000),
+          )
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
         const plan = parsed.data
@@ -1123,7 +1145,19 @@ export async function POST(req: NextRequest) {
           )
 
         if (upsertError) {
-          console.error("Failed to cache training plan:", upsertError)
+          // Log the full plan so ops can recover the generated output if the
+          // user chooses not to regenerate. Truncate to keep log size sane.
+          const planPreview = JSON.stringify(safePlan).slice(0, 2000)
+          console.error(
+            "[plan-generation] DB upsert failed — Claude output is not persisted. Error:",
+            upsertError,
+            "\nGoal:",
+            goalId,
+            "\nUser:",
+            user.id,
+            "\nPlan preview:",
+            planPreview,
+          )
           send({ status: "error", error: "Plan was generated but failed to save. Please try again." })
           return
         }
