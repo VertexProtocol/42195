@@ -33,8 +33,17 @@ export const TRAINING_LOAD_OUTPUT_DAYS = 90
 // ── Load Progression ─────────────────────────────────────────────────────────
 
 /**
- * A week whose volume drops below this fraction of the prior week is treated
- * as a recovery/deload week and exempt from progression caps.
+ * A week whose PLANNED volume drops below this fraction of the PRIOR planned
+ * week is treated as a recovery week and exempt from forward progression
+ * caps. Used by checkSkipLoadSpike to suppress warnings when the next week
+ * is an intentional taper.
+ *
+ * Not the same as CHECKPOINT_DELOAD_WEEK_THRESHOLD (0.75): that one looks
+ * retrospectively at COMPLETED weeks relative to the BLOCK AVERAGE, and
+ * only excludes them from the mid-block adherence calculation. The two
+ * concepts have similar "this is a reduction week" shape but live in
+ * different analyses (forward-looking vs backwards-looking) with
+ * deliberately different thresholds.
  */
 export const RECOVERY_WEEK_THRESHOLD = 0.85
 /** Long run must not exceed this fraction of the weekly total distance */
@@ -83,7 +92,16 @@ export const CHECKPOINT_UNDER_THRESHOLD = 0.70
 export const CHECKPOINT_OVER_THRESHOLD = 1.35
 /** Minimum block length (weeks) for a checkpoint to be applicable */
 export const CHECKPOINT_MIN_BLOCK_WEEKS = 4
-/** Weeks below this fraction of the block average are treated as deload weeks */
+/**
+ * During checkpoint adherence analysis, a completed week whose PLANNED
+ * volume is below this fraction of the BLOCK AVERAGE is treated as a
+ * deload week for scaling purposes (see adjustRemainingWeeks).
+ *
+ * Distinct from RECOVERY_WEEK_THRESHOLD (0.85) — that threshold is
+ * forward-looking (next-week planned / prior-week planned) and feeds
+ * the skip-load spike check, not the checkpoint. Kept as separate
+ * constants so each analysis can tune its own sensitivity.
+ */
 export const CHECKPOINT_DELOAD_WEEK_THRESHOLD = 0.75
 /** Completed weeks below this fraction of planned are treated as missed (excluded from adherence) */
 export const CHECKPOINT_MISSED_WEEK_THRESHOLD = 0.20
