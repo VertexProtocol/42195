@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Flag } from "lucide-react"
 import type { Activity, Goal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
@@ -64,6 +64,7 @@ export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCard
     year: today.getFullYear(),
     month: today.getMonth(),
   })
+  const [selectedGoalDay, setSelectedGoalDay] = useState<string | null>(null)
 
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>()
@@ -162,6 +163,25 @@ export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCard
   const atCurrentMonth =
     year === today.getFullYear() && month === today.getMonth()
 
+  // Clear selection when navigating months
+  useEffect(() => {
+    setSelectedGoalDay(null)
+  }, [year, month])
+
+  const selectedGoals = useMemo(() => {
+    if (!selectedGoalDay) return []
+    return goalsByDay.get(selectedGoalDay) ?? []
+  }, [selectedGoalDay, goalsByDay])
+
+  const goalDateFmt = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale === "no" ? "nb-NO" : "en-US", {
+        day: "numeric",
+        month: "short",
+      }),
+    [locale],
+  )
+
   const weekdayKeys = [
     "calendar.mon",
     "calendar.tue",
@@ -225,15 +245,9 @@ export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCard
           const hasData = d.stats !== null && d.stats.km > 0
           const hasGoal = d.goals.length > 0
           const todayCell = isToday(d.date)
-          return (
-            <div
-              key={d.key}
-              className={`aspect-square rounded-lg flex flex-col items-center p-1 ${
-                hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
-              } ${!d.inMonth ? "opacity-40" : ""} ${
-                todayCell ? "ring-2 ring-primary" : ""
-              }`}
-            >
+          const isSelected = hasGoal && selectedGoalDay === d.key
+          const cellContent = (
+            <>
               <span
                 className={`text-[10px] leading-none pt-0.5 ${
                   hasData
@@ -259,11 +273,53 @@ export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCard
                   </span>
                 )}
               </div>
+            </>
+          )
+          const cellClass = `aspect-square rounded-lg flex flex-col items-center p-1 ${
+            hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
+          } ${!d.inMonth ? "opacity-40" : ""} ${
+            todayCell ? "ring-2 ring-primary" : ""
+          } ${isSelected ? "ring-2 ring-amber-500" : ""}`
+          if (hasGoal) {
+            return (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() =>
+                  setSelectedGoalDay((prev) => (prev === d.key ? null : d.key))
+                }
+                className={`${cellClass} active:scale-95 transition-transform`}
+              >
+                {cellContent}
+              </button>
+            )
+          }
+          return (
+            <div key={d.key} className={cellClass}>
+              {cellContent}
             </div>
           )
         })}
       </div>
 
+
+      {/* Selected goal info */}
+      {selectedGoals.length > 0 && (
+        <div className="space-y-1 border-t border-border pt-2.5">
+          {selectedGoals.map((g) => (
+            <div key={g.id} className="flex items-center gap-2 text-xs">
+              <Flag
+                size={11}
+                className="text-amber-500 fill-amber-500 shrink-0"
+              />
+              <span className="font-mono text-muted-foreground shrink-0">
+                {goalDateFmt.format(new Date(g.target_date))}
+              </span>
+              <span className="truncate text-card-foreground">{g.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Footer totals */}
       <div className="flex items-center justify-center gap-3 border-t border-border pt-2.5 text-xs text-muted-foreground">
