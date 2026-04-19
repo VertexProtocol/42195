@@ -263,7 +263,8 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
                   <Flag
                     aria-label="Goal target date"
                     size={14}
-                    className="text-amber-500 fill-amber-500"
+                    strokeWidth={2.5}
+                    className="fill-amber-400 text-background"
                   />
                 )}
                 {hasData && (
