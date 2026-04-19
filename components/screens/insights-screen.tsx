@@ -617,7 +617,7 @@ export function InsightsScreen({ activities, goals }: InsightsScreenProps) {
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("calendar.section")}
         </h3>
-        <TrainingCalendarCard activities={activities} />
+        <TrainingCalendarCard activities={activities} goals={goals} />
       </section>
 
       {/* Empty state if no data */}

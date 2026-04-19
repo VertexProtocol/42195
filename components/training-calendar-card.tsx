@@ -1,14 +1,15 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import type { Activity } from "@/lib/types"
+import { ChevronLeft, ChevronRight, Flag } from "lucide-react"
+import type { Activity, Goal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { AppCard } from "@/components/ui/app-card"
 import { formatElapsed } from "@/lib/format"
 
 interface TrainingCalendarCardProps {
   activities: Activity[]
+  goals: Goal[]
 }
 
 interface DayStats {
@@ -22,6 +23,7 @@ interface DayCell {
   key: string
   inMonth: boolean
   stats: DayStats | null
+  goals: Goal[]
 }
 
 const localDateKey = (date: Date): string => {
@@ -51,7 +53,7 @@ const intensityClass = (km: number, maxKm: number): string => {
   return "bg-primary/15"
 }
 
-export function TrainingCalendarCard({ activities }: TrainingCalendarCardProps) {
+export function TrainingCalendarCard({ activities, goals }: TrainingCalendarCardProps) {
   const { t, locale } = useI18n()
   const today = useMemo(() => {
     const d = new Date()
@@ -76,6 +78,17 @@ export function TrainingCalendarCard({ activities }: TrainingCalendarCardProps) 
     return map
   }, [activities])
 
+  const goalsByDay = useMemo(() => {
+    const map = new Map<string, Goal[]>()
+    for (const g of goals) {
+      const key = localDateKey(new Date(g.target_date))
+      const list = map.get(key) ?? []
+      list.push(g)
+      map.set(key, list)
+    }
+    return map
+  }, [goals])
+
   const { year, month } = viewMonth
   const gridStart = useMemo(() => startOfMonthGrid(year, month), [year, month])
 
@@ -90,10 +103,11 @@ export function TrainingCalendarCard({ activities }: TrainingCalendarCardProps) 
         key,
         inMonth: d.getFullYear() === year && d.getMonth() === month,
         stats: byDay.get(key) ?? null,
+        goals: goalsByDay.get(key) ?? [],
       })
     }
     return arr
-  }, [gridStart, year, month, byDay])
+  }, [gridStart, year, month, byDay, goalsByDay])
 
   // Trim to 5 rows if the last row is entirely out-of-month (typical Feb)
   const visibleDays = useMemo(() => {
@@ -209,11 +223,12 @@ export function TrainingCalendarCard({ activities }: TrainingCalendarCardProps) 
       <div className="grid grid-cols-7 gap-1">
         {visibleDays.map((d) => {
           const hasData = d.stats !== null && d.stats.km > 0
+          const hasGoal = d.goals.length > 0
           const todayCell = isToday(d.date)
           return (
             <div
               key={d.key}
-              className={`aspect-square rounded-lg flex flex-col items-center justify-between p-1 ${
+              className={`aspect-square rounded-lg flex flex-col items-center p-1 ${
                 hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
               } ${!d.inMonth ? "opacity-40" : ""} ${
                 todayCell ? "ring-2 ring-primary" : ""
@@ -228,17 +243,27 @@ export function TrainingCalendarCard({ activities }: TrainingCalendarCardProps) 
               >
                 {d.date.getDate()}
               </span>
-              {hasData && (
-                <span className="text-[10px] font-mono font-semibold text-foreground leading-none pb-0.5">
-                  {d.stats!.km < 10
-                    ? d.stats!.km.toFixed(1)
-                    : Math.round(d.stats!.km)}
-                </span>
-              )}
+              <div className="flex-1 flex flex-col items-center justify-center gap-0.5">
+                {hasGoal && (
+                  <Flag
+                    aria-label="Goal target date"
+                    size={14}
+                    className="text-amber-500 fill-amber-500"
+                  />
+                )}
+                {hasData && (
+                  <span className="text-[10px] font-mono font-semibold text-foreground leading-none">
+                    {d.stats!.km < 10
+                      ? d.stats!.km.toFixed(1)
+                      : Math.round(d.stats!.km)}
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
       </div>
+
 
       {/* Footer totals */}
       <div className="flex items-center justify-center gap-3 border-t border-border pt-2.5 text-xs text-muted-foreground">
