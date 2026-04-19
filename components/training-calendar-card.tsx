@@ -263,7 +263,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
                   <Flag
                     aria-label="Goal target date"
                     size={14}
-                    className="fill-amber-600 text-amber-600 dark:fill-teal-400 dark:text-teal-400"
+                    className="fill-amber-600 text-amber-600 dark:fill-blue-900 dark:text-blue-900"
                   />
                 )}
                 {hasData && (
@@ -280,7 +280,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
             hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
           } ${!d.inMonth ? "opacity-40" : ""} ${
             todayCell ? "ring-2 ring-primary" : ""
-          } ${isSelected ? "ring-2 ring-amber-500 dark:ring-teal-400" : ""}`
+          } ${isSelected ? "ring-2 ring-amber-500 dark:ring-blue-900" : ""}`
           if (hasGoal) {
             return (
               <button
@@ -312,7 +312,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
               <>
                 <Flag
                   size={11}
-                  className="fill-amber-600 text-amber-600 dark:fill-teal-400 dark:text-teal-400 shrink-0"
+                  className="fill-amber-600 text-amber-600 dark:fill-blue-900 dark:text-blue-900 shrink-0"
                 />
                 <span className="font-mono text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
