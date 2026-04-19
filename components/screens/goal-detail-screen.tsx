@@ -102,7 +102,10 @@ function PreferencesForm({
 }: {
   goalId: string
   initial: GoalPreferences
-  onSaved: (prefs: GoalPreferences) => void
+  onSaved: (
+    prefs: GoalPreferences,
+    meta?: { shouldRegenerate: boolean; regenerateReason: string | null },
+  ) => void
 }) {
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
@@ -157,23 +160,29 @@ function PreferencesForm({
           plan_mode: planMode,
         }),
       })
+      const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
         setSaveError(body.error ?? "Failed to save — please try again.")
         return
       }
-      onSaved({
-        goal_id: goalId,
-        sessions_per_week: sessions,
-        focus,
-        notes: notes || null,
-        injury_notes: injuryNotes || null,
-        weekly_increase_pct: increasePct,
-        block_weeks: blockWeeks,
-        regenerate_every_weeks: regenEvery,
-        plan_mode: planMode,
-        notes_history: localHistory,
-      })
+      onSaved(
+        {
+          goal_id: goalId,
+          sessions_per_week: sessions,
+          focus,
+          notes: notes || null,
+          injury_notes: injuryNotes || null,
+          weekly_increase_pct: increasePct,
+          block_weeks: blockWeeks,
+          regenerate_every_weeks: regenEvery,
+          plan_mode: planMode,
+          notes_history: localHistory,
+        },
+        {
+          shouldRegenerate: body.shouldRegenerate === true,
+          regenerateReason: body.regenerateReason ?? null,
+        },
+      )
     } catch {
       setSaveError("Network error — please check your connection and try again.")
     } finally {
@@ -1378,9 +1387,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             <PreferencesForm
               goalId={goal.id}
               initial={prefs}
-              onSaved={(saved) => {
+              onSaved={(saved, meta) => {
                 setPrefs(saved)
                 setActiveTab("plan")
+                if (meta?.shouldRegenerate && meta.regenerateReason === "new_active_injury") {
+                  // A brand-new active injury was logged — auto-regenerate the
+                  // plan so the comeback + injury caps apply immediately.
+                  handleGenerate("Auto-regenerated after a new active injury was logged.")
+                }
               }}
             />
           </AppCard>

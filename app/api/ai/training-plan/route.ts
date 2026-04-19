@@ -11,7 +11,7 @@ import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
-import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury } from "@/lib/notes-history"
+import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
 import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
@@ -1500,5 +1500,14 @@ export async function PUT(req: NextRequest) {
     console.warn("Could not persist plan_mode (migration may not be applied):", modeError.message)
   }
 
-  return NextResponse.json({ ok: true })
+  // Signal the client to regenerate the plan immediately when a new active
+  // injury was just logged. Resolving an existing injury or adding a coach
+  // note does NOT auto-regenerate — the user can trigger that manually.
+  const newActiveInjury = containsNewActiveInjury(newEntries)
+
+  return NextResponse.json({
+    ok: true,
+    shouldRegenerate: newActiveInjury,
+    regenerateReason: newActiveInjury ? "new_active_injury" : null,
+  })
 }
