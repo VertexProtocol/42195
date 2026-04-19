@@ -40,6 +40,15 @@ export const RECOVERY_WEEK_THRESHOLD = 0.85
 /** Long run must not exceed this fraction of the weekly total distance */
 export const LONG_RUN_MAX_FRACTION = 0.35
 
+/**
+ * Tolerance band for "relevant" reference runs around a goal distance.
+ * 0.25 means runs within 75–125% of the goal qualify. Wider than the
+ * original 20% so half-marathon goals can borrow from a 17 km long run
+ * (close enough to extrapolate via Riegel without losing meaningful
+ * accuracy — exponent 1.06 yields ≈3% error at 25%).
+ */
+export const BEST_RELEVANT_RUN_WINDOW = 0.25
+
 // ── Fatigue Detection ────────────────────────────────────────────────────────
 
 /** Minimum total qualifying runs needed to compute a fatigue signal */
