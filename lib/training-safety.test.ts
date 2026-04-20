@@ -168,6 +168,27 @@ describe("checkWeeklyLoadProgression", () => {
     const advViolations = checkWeeklyLoadProgression([50, 55], "advanced")
     expect(advViolations).toHaveLength(0) // 55 <= 50*1.12=56
   })
+
+  it("applies the absolute cap above the percentage at high baselines (advanced)", () => {
+    // Advanced 12% on 100 km = 112 km. Absolute cap is +10 km → 110 km.
+    // Plan week 2 at 112 km should now be flagged and clamped to 110.
+    const violations = checkWeeklyLoadProgression([100, 112], "advanced")
+    expect(violations.length).toBe(1)
+    expect(violations[0].adjustedKm).toBe(110)
+  })
+
+  it("leaves normal volumes untouched by the absolute cap", () => {
+    // 30 km baseline × 1.10 = 33. Absolute cap would be 40 — % binds.
+    const violations = checkWeeklyLoadProgression([30, 33], "intermediate")
+    expect(violations).toHaveLength(0)
+  })
+
+  it("caps aggressive elite-volume plans at the absolute ceiling", () => {
+    // 150 km baseline, advanced 12% → 168 km. Absolute cap: 160 km.
+    const violations = checkWeeklyLoadProgression([150, 168], "advanced")
+    expect(violations.length).toBe(1)
+    expect(violations[0].adjustedKm).toBe(160)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -233,6 +254,27 @@ describe("checkCumulativeProgression", () => {
     const withoutPriors = checkCumulativeProgression([50, 60, 70, 80], "beginner")
     const withEmptyPriors = checkCumulativeProgression([50, 60, 70, 80], "beginner", [])
     expect(withEmptyPriors).toEqual(withoutPriors)
+  })
+
+  it("applies the absolute cumulative cap at high baselines (advanced)", () => {
+    // Advanced 30% on 100 km = 130 km. Absolute cumulative cap: +25 km → 125.
+    // Plan pushes to 130 at index 3 (vs reference 100) — should flag and
+    // clamp to 125 because the absolute cap binds first.
+    const violations = checkCumulativeProgression(
+      [110, 120, 130, 135],
+      "advanced",
+      [100],
+    )
+    expect(violations.length).toBeGreaterThan(0)
+    const hit = violations.find((v) => v.adjustedKm === 125)
+    expect(hit).toBeDefined()
+  })
+
+  it("leaves cumulative increases within the absolute cap unflagged", () => {
+    // 30 km reference, intermediate 25% → 37.5. Absolute cap: 55. % binds.
+    // Plan climbs 30 → 37 → OK.
+    const violations = checkCumulativeProgression([30, 32, 34, 37], "intermediate")
+    expect(violations).toHaveLength(0)
   })
 })
 
