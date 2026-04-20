@@ -20,6 +20,8 @@ import {
   ACWR_UNSAFE_THRESHOLD,
   RECOVERY_WEEK_THRESHOLD,
   LONG_RUN_MAX_FRACTION,
+  MAX_ABSOLUTE_WEEKLY_INCREASE_KM,
+  MAX_ABSOLUTE_CUMULATIVE_INCREASE_KM,
   FATIGUE_MIN_QUALIFYING_RUNS,
   FATIGUE_RECENT_RUNS_COUNT,
   FATIGUE_HR_ELEVATION_BPM,
@@ -93,7 +95,12 @@ export function checkWeeklyLoadProgression(
   for (let i = 1; i < weekTargets.length; i++) {
     const prev = weekTargets[i - 1]
     const curr = weekTargets[i]
-    const maxAllowed = Math.round(prev * (1 + maxIncrease))
+    // Hybrid cap: percentage-based increase bounded by an absolute km
+    // ceiling. The absolute cap keeps high-volume runners from piling on
+    // 15–20 km in a single week even when the percentage allows it.
+    const pctCap = prev * (1 + maxIncrease)
+    const absCap = prev + MAX_ABSOLUTE_WEEKLY_INCREASE_KM
+    const maxAllowed = Math.round(Math.min(pctCap, absCap))
 
     // Skip recovery weeks (defined as weeks that drop ≥15% from previous week)
     const isRecoveryWeek = curr < prev * RECOVERY_WEEK_THRESHOLD
@@ -177,9 +184,15 @@ export function checkCumulativeProgression(
     // Skip if current week is a recovery/taper (lower than reference)
     if (current <= reference) continue
 
-    const pctIncrease = (current - reference) / reference
-    if (pctIncrease > maxCumulative) {
-      const maxAllowed = Math.round(reference * (1 + maxCumulative))
+    // Hybrid cap: percentage-based + absolute km ceiling. At high baselines
+    // (e.g. 100 km/wk, advanced 30% cap) the pure percentage would allow
+    // +30 km over 3 weeks, which exceeds what the body can actually
+    // absorb. The absolute cap keeps the total jump reasonable regardless.
+    const pctCap = reference * (1 + maxCumulative)
+    const absCap = reference + MAX_ABSOLUTE_CUMULATIVE_INCREASE_KM
+    const maxAllowed = Math.round(Math.min(pctCap, absCap))
+    if (current > maxAllowed) {
+      const pctIncrease = (current - reference) / reference
       const planWeekNumber = i - priorCount + 1 // 1-based within plan
       violations.push({
         weekNumber: planWeekNumber,

@@ -50,6 +50,23 @@ export const RECOVERY_WEEK_THRESHOLD = 0.85
 export const LONG_RUN_MAX_FRACTION = 0.35
 
 /**
+ * Absolute per-week km ceiling applied on top of the percentage-based cap.
+ * Rationale: at high baselines (80+ km/wk) the percentage rule can allow
+ * biomechanically unsafe absolute jumps (e.g. 150 km → 168 km = +18 km in
+ * one week). This ceiling doesn't bite for normal volumes — it kicks in
+ * where Pfitzinger / Daniels explicitly recommend more conservative
+ * progression than a straight percentage.
+ */
+export const MAX_ABSOLUTE_WEEKLY_INCREASE_KM = 10
+
+/**
+ * Absolute 3-week cumulative km ceiling, same principle as the weekly one.
+ * ~2.5× the weekly cap gives 3 weeks of headroom without allowing a huge
+ * absolute ramp for high-volume runners.
+ */
+export const MAX_ABSOLUTE_CUMULATIVE_INCREASE_KM = 25
+
+/**
  * Tolerance band for "relevant" reference runs around a goal distance.
  * 0.25 means runs within 75–125% of the goal qualify. Wider than the
  * original 20% so half-marathon goals can borrow from a 17 km long run
