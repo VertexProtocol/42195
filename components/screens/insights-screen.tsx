@@ -20,7 +20,8 @@ import {
   formatTargetTime,
   formatPace,
   formatDateShort,
-  formatDistance
+  formatDistance,
+  isRunActivity
 } from "@/lib/format"
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
@@ -75,13 +76,20 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const [testRuns, setTestRuns] = useState<TestRun[]>([])
   const [testRunsLoading, setTestRunsLoading] = useState(true)
 
-  const personalRecords = useMemo(() => detectPersonalRecords(activities), [activities])
+  // Scope insights to running activities only — rides, swims, walks etc.
+  // are tracked but not relevant to the running stats / calendar / predictions.
+  const runActivities = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)),
+    [activities],
+  )
+
+  const personalRecords = useMemo(() => detectPersonalRecords(runActivities), [runActivities])
   // Apply prediction adjustment from test run validation feedback
   const predictionAdjustment = useMemo(() => {
     if (testRuns.length === 0) return 0
     return computePredictionAdjustment(testRuns).exponentAdjustment
   }, [testRuns])
-  const racePredictions = useMemo(() => predictRaceTimes(activities, predictionAdjustment), [activities, predictionAdjustment])
+  const racePredictions = useMemo(() => predictRaceTimes(runActivities, predictionAdjustment), [runActivities, predictionAdjustment])
 
   type StatsPeriod = "30d" | "year" | "last_year" | "all"
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>("30d")
@@ -91,16 +99,16 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     if (statsPeriod === "30d") {
       const cutoff = new Date()
       cutoff.setDate(now.getDate() - 30)
-      return activities.filter(a => new Date(a.date) >= cutoff)
+      return runActivities.filter(a => new Date(a.date) >= cutoff)
     }
     if (statsPeriod === "year") {
-      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
+      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
     }
     if (statsPeriod === "last_year") {
-      return activities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
+      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
     }
-    return activities
-  }, [activities, statsPeriod])
+    return runActivities
+  }, [runActivities, statsPeriod])
 
   const totalKm = useMemo(() => filteredActivities.reduce((sum, a) => sum + Number(a.distance_km), 0), [filteredActivities])
   const longestRunKm = useMemo(() => filteredActivities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [filteredActivities])
@@ -112,7 +120,6 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     { key: "last_year", label: "Last yr" },
     { key: "all", label: "All" },
   ]
-  const runsLabel = statsPeriod === "30d" ? "runs (30d)" : statsPeriod === "year" ? "runs (this yr)" : statsPeriod === "last_year" ? "runs (last yr)" : "total runs"
 
   // Fetch test runs for benchmarks section
   useEffect(() => {
@@ -375,16 +382,16 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
 
       {/* Training Stats */}
       {activities.length > 0 && (
-        <AppCard variant="flush">
-          {/* Period switcher */}
-          <div className="flex justify-center gap-1 pt-3 px-3">
+        <AppCard>
+          {/* Period switcher — compact, right-aligned */}
+          <div className="mb-3 flex justify-center gap-0.5">
             {STATS_PERIODS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setStatsPeriod(key)}
-                className={`px-3 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
                   statsPeriod === key
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -392,21 +399,29 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-3 divide-x divide-border">
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <TrendingUp size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{totalKm.toFixed(0)}</span>
-              <span className="text-[10px] text-muted-foreground text-center">km logged</span>
+
+          {/* Stats — 3 subtle cards with accent icons */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <TrendingUp size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {totalKm.toFixed(0)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">km</span>
             </div>
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <Footprints size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{longestRunKm.toFixed(1)}</span>
-              <span className="text-[10px] text-muted-foreground text-center">longest run</span>
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <Footprints size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {longestRunKm.toFixed(1)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">{t("stats.longest")}</span>
             </div>
-            <div className="flex flex-col items-center gap-1 px-3 py-4">
-              <Clock size={14} className="text-muted-foreground" />
-              <span className="text-base font-bold font-mono text-foreground">{recentRunCount}</span>
-              <span className="text-[10px] text-muted-foreground text-center">{runsLabel}</span>
+            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
+              <Clock size={14} className="text-primary" />
+              <span className="text-xl font-bold font-mono text-foreground leading-none">
+                {recentRunCount}
+              </span>
+              <span className="text-[10px] text-muted-foreground">{t("stats.runs")}</span>
             </div>
           </div>
         </AppCard>
@@ -618,7 +633,12 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("calendar.section")}
         </h3>
-        <TrainingCalendarCard activities={activities} goals={goals} onViewGoal={onViewGoal} />
+        <TrainingCalendarCard
+          activities={runActivities}
+          goals={goals}
+          testRuns={testRuns}
+          onViewGoal={onViewGoal}
+        />
       </section>
 
       {/* Empty state if no data */}

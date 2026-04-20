@@ -528,6 +528,32 @@ export function useAppData(initialData?: InitialData | null) {
     const userId = authData.user?.id
     if (!userId) return false
 
+    // Defensive validation — the manual-activity form already checks these,
+    // but this hook is also called from other flows and we don't want bad
+    // rows landing in the DB (they'd break aggregates and plan generation).
+    // The same bounds are enforced by DB CHECK constraints (migration 022)
+    // so we fail fast with a clear log rather than relying on the insert
+    // error text.
+    if (!(activity.distance_km > 0 && activity.distance_km <= 500)) {
+      console.error("Rejected activity: distance_km out of range", activity.distance_km)
+      return false
+    }
+    if (!(activity.duration_seconds > 0)) {
+      console.error("Rejected activity: duration_seconds must be positive", activity.duration_seconds)
+      return false
+    }
+    if (
+      activity.avg_heart_rate != null &&
+      (activity.avg_heart_rate < 30 || activity.avg_heart_rate > 230)
+    ) {
+      console.error("Rejected activity: avg_heart_rate out of range", activity.avg_heart_rate)
+      return false
+    }
+    if (activity.elevation_gain_m != null && activity.elevation_gain_m < 0) {
+      console.error("Rejected activity: elevation_gain_m negative", activity.elevation_gain_m)
+      return false
+    }
+
     const { data, error } = await supabase
       .from("activities")
       .insert({

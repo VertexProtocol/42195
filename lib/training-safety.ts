@@ -24,6 +24,7 @@ import {
   FATIGUE_RECENT_RUNS_COUNT,
   FATIGUE_HR_ELEVATION_BPM,
   FATIGUE_PACE_DECLINE_FACTOR,
+  FATIGUE_FRESHNESS_DAYS,
   PROLONGED_FATIGUE_TSB_THRESHOLD,
   PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
   PROLONGED_FATIGUE_DELOAD_MULTIPLIER,
@@ -135,17 +136,40 @@ export interface CumulativeLoadViolation {
  * doesn't exceed level-appropriate limits. This catches scenarios where
  * 3 consecutive small increases compound to a dangerous total increase.
  */
+/**
+ * Clamps 3-week cumulative volume jumps against the runner's rolling history.
+ *
+ * @param weekTargets         Planned km for each week in the NEW plan.
+ * @param level               Athlete tier — drives the max cumulative cap.
+ * @param priorWeekTargets    Weekly km for the 1–3 weeks immediately BEFORE
+ *                            the plan starts. Optional, but without it the
+ *                            cap can't see a pre-plan high-load window and
+ *                            the first 3 plan weeks are effectively exempt.
+ *                            Pass oldest-first (index 0 = earliest).
+ *
+ * Violations are always reported with a 1-based weekNumber within the PLAN
+ * (priorWeekTargets never produce violations themselves — we can't adjust
+ * the past).
+ */
 export function checkCumulativeProgression(
   weekTargets: number[],
   level: AthleteLevel,
+  priorWeekTargets: number[] = [],
 ): CumulativeLoadViolation[] {
   const maxCumulative = MAX_CUMULATIVE_INCREASE[level]
   const violations: CumulativeLoadViolation[] = []
   const windowSize = 3
 
-  for (let i = windowSize; i < weekTargets.length; i++) {
-    const reference = weekTargets[i - windowSize]
-    const current = weekTargets[i]
+  // Build a combined view so the reference week can live in the prior segment.
+  const combined = [...priorWeekTargets, ...weekTargets]
+  const priorCount = priorWeekTargets.length
+
+  // Start at the first index where (a) we have `windowSize` lookback and
+  // (b) we're inside the plan (so we don't emit violations for priors).
+  const startIdx = Math.max(windowSize, priorCount)
+  for (let i = startIdx; i < combined.length; i++) {
+    const reference = combined[i - windowSize]
+    const current = combined[i]
 
     // Skip if reference week was a recovery week (very low volume)
     if (reference < 5) continue
@@ -156,8 +180,9 @@ export function checkCumulativeProgression(
     const pctIncrease = (current - reference) / reference
     if (pctIncrease > maxCumulative) {
       const maxAllowed = Math.round(reference * (1 + maxCumulative))
+      const planWeekNumber = i - priorCount + 1 // 1-based within plan
       violations.push({
-        weekNumber: i + 1,
+        weekNumber: planWeekNumber,
         targetKm: current,
         referenceKm: reference,
         cumulativePct: Math.round(pctIncrease * 100),
@@ -170,11 +195,60 @@ export function checkCumulativeProgression(
   return violations
 }
 
+/**
+ * Prepends a short safety-adjustment prefix to a week's coachNote so the
+ * displayed text stays consistent with the mutated targetKm. Claude's
+ * original note is preserved — we only annotate, never replace.
+ */
+function annotateSafetyAdjustment(
+  coachNote: string | null | undefined,
+  adjustmentLine: string,
+): string {
+  if (!coachNote || coachNote.trim().length === 0) return adjustmentLine
+  // Don't double-prefix if the note already carries a safety annotation.
+  if (coachNote.startsWith("Safety:")) return coachNote
+  return `${adjustmentLine} ${coachNote}`
+}
+
+/**
+ * Computes the runner's actual weekly km for the N weeks immediately before
+ * the reference date (rolling 7-day windows, most-recent last). Used as the
+ * prior-week context for checkCumulativeProgression so the first plan week
+ * can't spike past the runner's real pre-plan volume.
+ */
+export function computeRecentWeeklyVolumes(
+  activities: SafetyActivity[],
+  weeksBack: number,
+  referenceDate: Date = new Date(),
+): number[] {
+  const weekMs = 7 * 24 * 60 * 60 * 1000
+  const anchorMs = referenceDate.getTime()
+  const weeks: number[] = []
+  for (let w = weeksBack; w >= 1; w--) {
+    const end = anchorMs - (w - 1) * weekMs
+    const start = end - weekMs
+    const km = activities
+      .filter((a) => {
+        const t = new Date(a.date).getTime()
+        return t >= start && t < end
+      })
+      .reduce((s, a) => s + a.distance_km, 0)
+    weeks.push(km)
+  }
+  return weeks
+}
+
 // ── ACWR load safety ──────────────────────────────────────────────────────────
 
 export interface AcwrSafety {
   ratio: number
-  risk: "low" | "moderate" | "high" | "unsafe"
+  /**
+   * - "no_baseline" — no chronic load to compare against (new user or
+   *   returning after a long pause). Treat any reported ratio as meaningless
+   *   and start cautiously.
+   * - "low" / "moderate" / "high" / "unsafe" — normal ACWR tiers.
+   */
+  risk: "no_baseline" | "low" | "moderate" | "high" | "unsafe"
   /** Recommended multiplier to apply to the first week's target (e.g. 0.8 for 20% cut) */
   weekOneMultiplier: number
   message: string | null
@@ -186,6 +260,19 @@ export interface AcwrSafety {
  */
 export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
   const { acuteLoad, chronicLoad, ratio } = computeACWR(activities)
+
+  // No chronic load = no baseline to compare against. Distinct from "low"
+  // because the runner needs to ramp UP cautiously, not because they're
+  // "fine" — the message must reflect "build a base first", not "all good".
+  if (chronicLoad <= 0) {
+    return {
+      ratio: 0,
+      risk: "no_baseline",
+      weekOneMultiplier: 0.85,
+      message:
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+    }
+  }
 
   if (ratio > ACWR_UNSAFE_THRESHOLD) {
     return {
@@ -280,6 +367,16 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   if (runs.length < FATIGUE_MIN_QUALIFYING_RUNS) {
+    return { signal: "none", description: null, intensityMultiplier: 1.0 }
+  }
+
+  // Freshness guard: if the latest qualifying run is older than
+  // FATIGUE_FRESHNESS_DAYS, comparing its HR/pace to even older baseline runs
+  // produces a stale signal the runner cannot act on. Skip detection during
+  // multi-week pauses — the comeback calculator handles return-to-training.
+  const latestMs = new Date(runs[0].date).getTime()
+  const ageDays = (Date.now() - latestMs) / (24 * 60 * 60 * 1000)
+  if (ageDays > FATIGUE_FRESHNESS_DAYS) {
     return { signal: "none", description: null, intensityMultiplier: 1.0 }
   }
 
@@ -474,7 +571,7 @@ export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFa
 
 // ── Composite training load status ───────────────────────────────────────────
 
-export type LoadStatus = "optimal" | "high" | "overtraining_risk"
+export type LoadStatus = "insufficient_data" | "optimal" | "high" | "overtraining_risk"
 
 export interface TrainingLoadStatus {
   status: LoadStatus
@@ -496,7 +593,11 @@ export function computeTrainingLoadStatus(activities: SafetyActivity[]): Trainin
 
   let status: LoadStatus = "optimal"
 
-  if (
+  // No baseline trumps all other signals — there's nothing meaningful to
+  // grade because chronic load is zero (new user / long pause).
+  if (acwr.risk === "no_baseline") {
+    status = "insufficient_data"
+  } else if (
     acwr.risk === "unsafe" ||
     prolongedFatigue.detected ||
     fatigue.signal === "both"
@@ -590,12 +691,21 @@ export function validateAndAdjustPlan(
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (${athleteLevel} cap: +${Math.round(MAX_WEEKLY_INCREASE[athleteLevel] * 100)}%/week)`
       safetyNotes.push(note)
       console.warn(`[safety] ${note}`)
+      // Keep Claude's original coachNote but prefix the adjustment so the
+      // shown text stays consistent with the (now-reduced) targetKm.
+      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
+        adjustedWeeks[idx].coachNote,
+        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, weekly cap).`,
+      )
     }
   }
 
   // Step 2b: Clamp cumulative progression over 3-week windows
+  // Pass the runner's last 3 actual weekly km as prior context so the
+  // cap catches a plan week 1 that jumps past a high pre-plan load.
   const updatedTargets = adjustedWeeks.map((w) => w.targetKm)
-  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel)
+  const priorWeeklyVolumes = computeRecentWeeklyVolumes(activities, 3)
+  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel, priorWeeklyVolumes)
   for (const v of cumulativeViolations) {
     const idx = v.weekNumber - 1
     if (idx >= 0 && idx < adjustedWeeks.length) {
@@ -603,6 +713,10 @@ export function validateAndAdjustPlan(
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (cumulative ${v.cumulativePct}% over 3 weeks exceeds ${v.maxAllowedPct}% cap for ${athleteLevel})`
       safetyNotes.push(note)
       console.warn(`[safety] ${note}`)
+      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
+        adjustedWeeks[idx].coachNote,
+        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, 3-wk cumulative cap).`,
+      )
     }
   }
 

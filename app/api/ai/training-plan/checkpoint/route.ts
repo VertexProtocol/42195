@@ -26,6 +26,7 @@ import {
   adjustRemainingWeeks,
   buildAdjustmentNote,
 } from "@/lib/training-checkpoint"
+import { detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -96,16 +97,38 @@ export async function POST(req: NextRequest) {
 
   const { data: activities } = await supabase
     .from("activities")
-    .select("date, distance_km")
+    .select("type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
     .gte("date", sixWeeksAgo.toISOString())
     .order("date", { ascending: false })
     .limit(300)
 
-  const acts = (activities ?? []).map((a: { date: string; distance_km: number }) => ({
+  const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
+  const allActs = activities ?? []
+  const acts = allActs.map((a: { date: string; distance_km: number }) => ({
     date: a.date,
     distance_km: Number(a.distance_km),
   }))
+
+  // Fatigue detection uses running activities with HR + pace metadata
+  const safetyActs: SafetyActivity[] = allActs
+    .filter((a: { type: string }) => RUN_TYPES.has(a.type))
+    .map((a: {
+      date: string
+      distance_km: number
+      duration_seconds: number
+      pace_min_per_km: number | null
+      avg_heart_rate: number | null
+      elevation_gain_m: number | null
+    }) => ({
+      date: a.date,
+      distance_km: Number(a.distance_km),
+      duration_seconds: Number(a.duration_seconds),
+      pace_min_per_km: a.pace_min_per_km != null ? Number(a.pace_min_per_km) : null,
+      avg_heart_rate: a.avg_heart_rate != null ? Number(a.avg_heart_rate) : null,
+      elevation_gain_m: a.elevation_gain_m != null ? Number(a.elevation_gain_m) : null,
+    }))
+  const fatigue = detectFatigue(safetyActs)
 
   // Run adherence analysis
   const { currentWeekIndex, completedWeeks, activeWeeks, missedWeekCount, overallAdherencePct, isWayOff, direction } =
@@ -114,14 +137,25 @@ export async function POST(req: NextRequest) {
   let adjustmentApplied = false
   let adjustmentNote: string | null = null
   let updatedPlan = plan
+  let fatigueAdjustmentApplied = false
 
-  if (isWayOff && activeWeeks.length > 0) {
-    // Base the scale factor on active weeks only — sick/missed weeks are excluded
+  // Fatigue can trigger an adjustment even when km-adherence looks on track:
+  // a runner who hit their volume but shows HR/pace drift is overreaching and
+  // should deload regardless of what the km ledger says.
+  const shouldAttemptAdjust = (isWayOff || fatigue.signal !== "none") && activeWeeks.length > 0
+
+  if (shouldAttemptAdjust) {
+    // Base the scale factor on active weeks only — sick/missed weeks are excluded.
+    // If isWayOff is false (fatigue-only trigger), the adherence-derived scale
+    // will be close to 1.0 and the fatigue cap will take over inside adjustRemainingWeeks.
     const actualAvgKm = activeWeeks.reduce((s, w) => s + w.actualKm, 0) / activeWeeks.length
 
-    const { adjustedWeeks, scaleFactor } = adjustRemainingWeeks(plan, currentWeekIndex, actualAvgKm, {
+    const result = adjustRemainingWeeks(plan, currentWeekIndex, actualAvgKm, {
       skipSessionScaling: prefsRow?.focus === "workouts",
+      fatigueSignal: fatigue.signal,
     })
+    const { adjustedWeeks, scaleFactor } = result
+    fatigueAdjustmentApplied = result.fatigueAdjustmentApplied
 
     // Only save the adjustment if the remaining weeks actually changed
     const remainingChanged = adjustedWeeks
@@ -137,6 +171,7 @@ export async function POST(req: NextRequest) {
         scaleFactor,
         activeWeeks.length,
         missedWeekCount,
+        fatigue.signal,
       )
     }
   }
@@ -153,6 +188,8 @@ export async function POST(req: NextRequest) {
     direction,
     adjustmentApplied,
     adjustmentNote,
+    fatigueSignal: fatigue.signal,
+    fatigueAdjustmentApplied,
   }
 
   // Dry-run: return analysis without persisting

@@ -33,12 +33,30 @@ export const TRAINING_LOAD_OUTPUT_DAYS = 90
 // ── Load Progression ─────────────────────────────────────────────────────────
 
 /**
- * A week whose volume drops below this fraction of the prior week is treated
- * as a recovery/deload week and exempt from progression caps.
+ * A week whose PLANNED volume drops below this fraction of the PRIOR planned
+ * week is treated as a recovery week and exempt from forward progression
+ * caps. Used by checkSkipLoadSpike to suppress warnings when the next week
+ * is an intentional taper.
+ *
+ * Not the same as CHECKPOINT_DELOAD_WEEK_THRESHOLD (0.75): that one looks
+ * retrospectively at COMPLETED weeks relative to the BLOCK AVERAGE, and
+ * only excludes them from the mid-block adherence calculation. The two
+ * concepts have similar "this is a reduction week" shape but live in
+ * different analyses (forward-looking vs backwards-looking) with
+ * deliberately different thresholds.
  */
 export const RECOVERY_WEEK_THRESHOLD = 0.85
 /** Long run must not exceed this fraction of the weekly total distance */
 export const LONG_RUN_MAX_FRACTION = 0.35
+
+/**
+ * Tolerance band for "relevant" reference runs around a goal distance.
+ * 0.25 means runs within 75–125% of the goal qualify. Wider than the
+ * original 20% so half-marathon goals can borrow from a 17 km long run
+ * (close enough to extrapolate via Riegel without losing meaningful
+ * accuracy — exponent 1.06 yields ≈3% error at 25%).
+ */
+export const BEST_RELEVANT_RUN_WINDOW = 0.25
 
 // ── Fatigue Detection ────────────────────────────────────────────────────────
 
@@ -50,6 +68,12 @@ export const FATIGUE_RECENT_RUNS_COUNT = 4
 export const FATIGUE_HR_ELEVATION_BPM = 5
 /** Pace must exceed baseline median by this factor to signal pace fatigue (5% slower) */
 export const FATIGUE_PACE_DECLINE_FACTOR = 1.05
+/**
+ * If the most recent qualifying run is older than this many days, fatigue
+ * detection returns "none" — comparing pre-pause runs to even older runs
+ * produces stale signals that the runner can't act on.
+ */
+export const FATIGUE_FRESHNESS_DAYS = 10
 
 // ── Prolonged Fatigue / Forced Deload ────────────────────────────────────────
 
@@ -68,7 +92,16 @@ export const CHECKPOINT_UNDER_THRESHOLD = 0.70
 export const CHECKPOINT_OVER_THRESHOLD = 1.35
 /** Minimum block length (weeks) for a checkpoint to be applicable */
 export const CHECKPOINT_MIN_BLOCK_WEEKS = 4
-/** Weeks below this fraction of the block average are treated as deload weeks */
+/**
+ * During checkpoint adherence analysis, a completed week whose PLANNED
+ * volume is below this fraction of the BLOCK AVERAGE is treated as a
+ * deload week for scaling purposes (see adjustRemainingWeeks).
+ *
+ * Distinct from RECOVERY_WEEK_THRESHOLD (0.85) — that threshold is
+ * forward-looking (next-week planned / prior-week planned) and feeds
+ * the skip-load spike check, not the checkpoint. Kept as separate
+ * constants so each analysis can tune its own sensitivity.
+ */
 export const CHECKPOINT_DELOAD_WEEK_THRESHOLD = 0.75
 /** Completed weeks below this fraction of planned are treated as missed (excluded from adherence) */
 export const CHECKPOINT_MISSED_WEEK_THRESHOLD = 0.20
@@ -76,6 +109,17 @@ export const CHECKPOINT_MISSED_WEEK_THRESHOLD = 0.20
 export const CHECKPOINT_MIN_SCALE = 0.55
 /** Maximum scale factor when adjusting over-performing plans */
 export const CHECKPOINT_MAX_SCALE = 1.30
+
+// ── Comeback after Pause ─────────────────────────────────────────────────────
+
+/** Minimum gap (days) since last run that qualifies as a pause requiring a ramp */
+export const COMEBACK_PAUSE_THRESHOLD_DAYS = 7
+/** Further volume reduction applied when an active injury is noted in notes_history */
+export const COMEBACK_INJURY_REDUCTION = 0.80
+/** Weeks of history used to compute the runner's pre-pause weekly average */
+export const COMEBACK_PREPAUSE_WINDOW_WEEKS = 4
+/** Week-one floor — never recommend less than this many km on return */
+export const COMEBACK_FLOOR_KM = 3
 
 // ── Intra-block Pace Progression ─────────────────────────────────────────────
 
@@ -118,9 +162,19 @@ export const RIEGEL_EXPONENT = 1.06
 export const RIEGEL_EXPONENT_MIN = 1.01
 /** Upper bound on the exponent (less-trained athletes) */
 export const RIEGEL_EXPONENT_MAX = 1.12
-/** Optimistic confidence bound (faster end of prediction range) */
+/**
+ * Optimistic confidence bound — produces the FASTER end of the prediction
+ * range. In Riegel's T_goal = T_ref × (D_goal / D_ref)^exp, a LOWER exponent
+ * yields a smaller multiplier and therefore a shorter (faster) predicted
+ * time at longer distances. Optimistic here means "optimistic about your
+ * performance" — you're projecting toward a well-trained athlete's curve.
+ */
 export const RIEGEL_EXPONENT_OPTIMISTIC = 1.03
-/** Conservative confidence bound (slower end of prediction range) */
+/**
+ * Conservative confidence bound — produces the SLOWER end of the prediction
+ * range. Higher exponent = bigger multiplier = longer (slower) predicted
+ * time at longer distances. Conservative here means "don't over-promise".
+ */
 export const RIEGEL_EXPONENT_CONSERVATIVE = 1.09
 /** Lookback window for selecting the reference activity for race prediction */
 export const RACE_PREDICTION_LOOKBACK_DAYS = 90

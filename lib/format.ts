@@ -1,4 +1,5 @@
 import type { Activity, WeeklyGoalMetric } from "@/lib/types"
+import { BEST_RELEVANT_RUN_WINDOW } from "@/lib/training-constants"
 
 export function formatDistance(km: number): string {
   return km.toFixed(1) + " km"
@@ -211,6 +212,15 @@ export interface PerformanceGoalStatus {
  * Distance-only goal (target_time_seconds null, e.g. "First 20 km"):
  *   - reached = any single run with distance >= target_distance_km
  *   - progress = min(100, longestRun / targetDistance * 100)
+ *
+ * ── DESIGN CHOICE ─────────────────────────────────────────────────────────
+ * No date filtering against target_date. A performance goal asks "can you
+ * do this?" not "did you do this by X?", so a marathon completed a week
+ * after the planned race date still counts as reached. The target_date
+ * drives plan timing, not achievement validation. If a use case needs
+ * time-bounded evaluation (e.g. "first marathon in 2026"), add a separate
+ * before-date filter at the call site rather than baking it in here.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 export function evaluatePerformanceGoal(
   activities: Activity[],
@@ -253,15 +263,19 @@ export function evaluatePerformanceGoal(
   }
 }
 
-/** Best run at approximately the goal distance (±20%) by fastest time */
+/**
+ * Best run within ±BEST_RELEVANT_RUN_WINDOW of the goal distance, ranked by
+ * fastest time. Used to surface a "best run at this distance" indicator on
+ * event-training goal cards.
+ */
 export function bestRelevantRun(
   activities: Activity[],
   targetDistanceKm: number,
   startDate?: string | null,
   endDate?: string | null,
 ): Activity | null {
-  const lo = targetDistanceKm * 0.8
-  const hi = targetDistanceKm * 1.2
+  const lo = targetDistanceKm * (1 - BEST_RELEVANT_RUN_WINDOW)
+  const hi = targetDistanceKm * (1 + BEST_RELEVANT_RUN_WINDOW)
   const from = startDate ? new Date(startDate).getTime() : 0
   const to = endDate ? new Date(endDate).getTime() : Infinity
   const candidates = activities.filter((a) => {
@@ -305,4 +319,14 @@ export function weeklyMetricUnit(metric: string): string {
     default:
       return ""
   }
+}
+
+/**
+ * True for any running-flavored activity type (Run, Trail Run, Virtual Run,
+ * Treadmill, Race). Used to scope training stats and the calendar to runs
+ * only, excluding rides, swims, walks, etc.
+ */
+export function isRunActivity(type: string): boolean {
+  const t = type.toLowerCase()
+  return t.includes("run") || t === "race" || t === "treadmill"
 }

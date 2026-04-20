@@ -162,6 +162,8 @@ const translations = {
     "insights.basedOn": "Based on",
     "insights.on": "on",
     "insights.emptyState": "Complete more activities to see your personal records and predictions",
+    "stats.longest": "longest",
+    "stats.runs": "runs",
     // Pace calculator
     "paceCalc.section": "Pace Calculator",
     "paceCalc.title": "Pace",
@@ -442,6 +444,7 @@ const translations = {
     "loadIndicator.optimal": "Optimal",
     "loadIndicator.high": "High Load",
     "loadIndicator.overtraining": "Overtraining Risk",
+    "loadIndicator.insufficientData": "Building Baseline",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Fatigue",
     "loadIndicator.level": "Level",
@@ -680,6 +683,8 @@ const translations = {
     "insights.basedOn": "Basert pa",
     "insights.on": "den",
     "insights.emptyState": "Fullfør flere aktiviteter for a se dine personlige rekorder og estimater",
+    "stats.longest": "lengste",
+    "stats.runs": "løp",
     // Pace calculator
     "paceCalc.section": "Pace-kalkulator",
     "paceCalc.title": "Pace",
@@ -910,6 +915,7 @@ const translations = {
     "loadIndicator.optimal": "Optimal",
     "loadIndicator.high": "H\u00f8y belastning",
     "loadIndicator.overtraining": "Overtreningsrisiko",
+    "loadIndicator.insufficientData": "Bygger grunnlag",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Tretthet",
     "loadIndicator.level": "Niv\u00e5",

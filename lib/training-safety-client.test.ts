@@ -41,27 +41,33 @@ describe("classifyAthleteLevel", () => {
     expect(classifyAthleteLevel([old])).toBe("beginner")
   })
 
-  it("classifies advanced when weekly km > 50 AND sessions/week > 4", () => {
-    // 12 weeks × 5 sessions × 12 km/session = 60 km/wk avg, 5 sessions/wk
-    const activities = Array.from({ length: 60 }, (_, i) =>
-      makeActivity(i + 1, 12),
-    )
+  it("classifies advanced when active-week km > 50 AND sessions/active-week > 4", () => {
+    // 12 active weeks × 5 sessions × 12 km = 60 km/wk, 5 sessions/wk
+    const activities = Array.from({ length: 60 }, (_, i) => {
+      const week = Math.floor(i / 5)
+      const dayInWeek = i % 5
+      return makeActivity(week * 7 + dayInWeek + 1, 12)
+    })
     expect(classifyAthleteLevel(activities)).toBe("advanced")
   })
 
-  it("does NOT classify advanced when sessions/week is exactly 4 (needs > 4)", () => {
-    // 12 weeks × 4 sessions × 15 km = 60 km/wk, 4.0 sessions/wk — not > 4
-    const activities = Array.from({ length: 48 }, (_, i) =>
-      makeActivity(i + 1, 15),
-    )
+  it("does NOT classify advanced when sessions/active-week is exactly 4 (needs > 4)", () => {
+    // 12 active weeks × 4 sessions × 15 km = 60 km/wk, 4.0 sessions/wk — not > 4
+    const activities = Array.from({ length: 48 }, (_, i) => {
+      const week = Math.floor(i / 4)
+      const dayInWeek = i % 4
+      return makeActivity(week * 7 + dayInWeek + 1, 15)
+    })
     expect(classifyAthleteLevel(activities)).not.toBe("advanced")
   })
 
-  it("classifies intermediate when weekly km > 20 AND sessions/week >= 2", () => {
-    // 12 weeks × 3 sessions × 9 km = 27 km/wk, 3 sessions/wk
-    const activities = Array.from({ length: 36 }, (_, i) =>
-      makeActivity(i + 1, 9),
-    )
+  it("classifies intermediate when active-week km > 20 AND sessions/active-week >= 2", () => {
+    // 12 active weeks × 3 sessions × 9 km = 27 km/wk, 3 sessions/wk
+    const activities = Array.from({ length: 36 }, (_, i) => {
+      const week = Math.floor(i / 3)
+      const dayInWeek = i % 3
+      return makeActivity(week * 7 + dayInWeek + 1, 9)
+    })
     expect(classifyAthleteLevel(activities)).toBe("intermediate")
   })
 
@@ -73,20 +79,48 @@ describe("classifyAthleteLevel", () => {
     expect(classifyAthleteLevel(activities)).toBe("beginner")
   })
 
-  it("falls back to beginner when volume is low regardless of frequency", () => {
-    // 4 sessions/wk × 3 km = 12 km/wk — below 20 km threshold
+  it("falls back to beginner when volume per active week is low", () => {
+    // 48 sessions × 2 km over ~7 active weeks ≈ 14 km / active wk — below 20
     const activities = Array.from({ length: 48 }, (_, i) =>
-      makeActivity(i + 1, 3),
+      makeActivity(i + 1, 2),
     )
     expect(classifyAthleteLevel(activities)).toBe("beginner")
   })
 
+  it("preserves advanced for a runner with a planned mid-window break", () => {
+    // 8 weeks at 5 sessions × 12 km (active), then 4 weeks of nothing.
+    // Active-week avg = 60 km, sessions/active-wk = 5, consistency = 8/12 = 67%
+    const activities: SafetyActivity[] = []
+    for (let week = 0; week < 8; week++) {
+      const baseDay = week * 7
+      for (let s = 0; s < 5; s++) {
+        activities.push(makeActivity(baseDay + s + 1, 12))
+      }
+    }
+    expect(classifyAthleteLevel(activities)).toBe("advanced")
+  })
+
+  it("does not promote a sporadic high-volume runner past the consistency gate", () => {
+    // 3 active weeks × 100 km = high active-week avg, but 3/12 = 25% active
+    // consistency below 33% blocks even intermediate
+    const activities: SafetyActivity[] = []
+    for (let week = 0; week < 3; week++) {
+      const baseDay = week * 7
+      for (let s = 0; s < 5; s++) {
+        activities.push(makeActivity(baseDay + s + 1, 20))
+      }
+    }
+    expect(classifyAthleteLevel(activities)).toBe("beginner")
+  })
+
   it("exactly at the advanced km threshold (50) without > 4 sessions is intermediate", () => {
-    // 50 km/wk exactly is NOT > 50 → not advanced
-    // Use 3 sessions/wk × ~16.7 km to hit exactly 50 km/wk with >= 2 sessions
-    const activities = Array.from({ length: 36 }, (_, i) =>
-      makeActivity(i + 1, 50 / 3),
-    )
+    // 50 km/active wk exactly is NOT > 50 → not advanced
+    // 12 active weeks × 3 sessions × ~16.7 km = exactly 50 km/active wk with >= 2 sessions
+    const activities = Array.from({ length: 36 }, (_, i) => {
+      const week = Math.floor(i / 3)
+      const dayInWeek = i % 3
+      return makeActivity(week * 7 + dayInWeek + 1, 50 / 3)
+    })
     expect(classifyAthleteLevel(activities)).toBe("intermediate")
   })
 })

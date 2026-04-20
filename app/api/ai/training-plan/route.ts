@@ -11,7 +11,8 @@ import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
-import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt } from "@/lib/notes-history"
+import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
+import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
@@ -309,6 +310,7 @@ function buildPrompt(
   hrSummary?: string | null,
   testRunSection?: string | null,
   blockPosition?: { blockNum: number; totalBlocks: number; phaseName: string; weekInPlan: number; totalWeeks: number } | null,
+  comeback?: ComebackRecommendation,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -419,7 +421,29 @@ ${(() => {
       : ""
   return [coachLine, injuryLine].filter(Boolean).join("\n")
 })()}
-${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}
+${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}${(() => {
+  if (!comeback?.needsRamp) return ""
+  const categoryLabel: Record<string, string> = {
+    short: "short (7-10 days)",
+    moderate: "moderate (11-14 days)",
+    long: "long (15-21 days)",
+    extended: "extended (22-28 days)",
+    rebuild: "rebuild (over 28 days)",
+  }
+  const catText = categoryLabel[comeback.category] ?? comeback.category
+  const limitingFactorNote = comeback.limitingFactor === "acwr"
+    ? " (tightened further by acute:chronic workload ratio safety)"
+    : comeback.limitingFactor === "injury"
+      ? " (tightened further because an injury is still active)"
+      : ""
+  return `
+## Comeback Constraint (HARD CAP — do not exceed)
+The runner is returning after a ${comeback.pauseDays}-day pause — classified as ${catText}.
+Week 1 of this plan MUST NOT exceed ${comeback.weekOneKm} km total${limitingFactorNote}.
+Keep every Week 1 session easy or moderate effort only — no tempo, intervals, or race-pace work.
+Ramp volume gradually in subsequent weeks (+10-15% per week is a safe ceiling).
+`
+})()}
 ## Recent Training History (most recent first)
 ${weekSummaryText}
 
@@ -566,6 +590,20 @@ export async function POST(req: NextRequest) {
     (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
+  // Reject plans for past target dates. A target_date in the past collapses
+  // maxWeeksUntilRace to 0 downstream, producing a degenerate empty plan and
+  // wasting a Claude call. Front-end shouldn't allow it, but the API also
+  // has to be safe when called directly.
+  if (daysUntilRace <= 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot generate a plan — the race date has already passed. Update the goal's target date before regenerating.",
+      },
+      { status: 400 },
+    )
+  }
+
   // Compute ACWR and safety metrics from running activities only — cycling/hiking inflate
   // chronic load and cause the plan generator to produce overly conservative running plans.
   const acts = activities ?? []
@@ -582,6 +620,14 @@ export async function POST(req: NextRequest) {
   const chronicLoad = chronicTotal / 4
   const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
   const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
+
+  // Comeback volume cap: when the runner has paused >= 7 days, compute a
+  // deterministic week-one volume ceiling that Claude must respect.
+  const comeback = assessComeback(
+    runActs.map((a) => ({ date: a.date, distance_km: Number(a.distance_km) })),
+    hasActiveInjury(prefs.notes_history),
+  )
+
   const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
   const recentEasyPace = actsWithPace.length > 0
     ? actsWithPace
@@ -594,8 +640,11 @@ export async function POST(req: NextRequest) {
     ? Math.min(...actsWithPace.map((a) => Number(a.pace_min_per_km)))
     : null
 
-  // Build heart rate summary for the prompt, including HR zone boundaries
-  const actsWithHr = acts.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
+  // Build heart rate summary for the prompt, including HR zone boundaries.
+  // HR stats must be run-only — cycling hits much higher sustained HR than
+  // running so including it inflates maxHr and the derived zone boundaries,
+  // which would make Claude's intensity prescriptions too conservative.
+  const actsWithHr = runActs.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
   let hrSummary: string | null = null
   if (actsWithHr.length > 0) {
     const avgHr = Math.round(actsWithHr.reduce((s, a) => s + Number(a.avg_heart_rate), 0) / actsWithHr.length)
@@ -605,10 +654,11 @@ export async function POST(req: NextRequest) {
     const hrTrend = recentAvgHr > avgHr + 5 ? "elevated (possible fatigue)" : recentAvgHr < avgHr - 5 ? "lower than average (good fitness)" : "stable"
     hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}\n- Estimated max HR: ~${Math.round(maxHr * 1.1)} bpm (from activity data)`
 
-    // Add HR zone boundaries from the analysis engine if we have enough data
+    // Add HR zone boundaries from the analysis engine if we have enough data.
+    // Pass runActs (not all activities) so zones reflect running HR only.
     if (actsWithHr.length >= 5) {
       const hrAnalysis = analyzeHeartRateZones(
-        acts.map((a) => ({
+        runActs.map((a) => ({
           id: "", user_id: "", strava_id: 0, type: "Run", created_at: "",
           name: a.name ?? "Activity", date: a.date,
           distance_km: Number(a.distance_km), duration_seconds: a.duration_seconds,
@@ -785,6 +835,7 @@ export async function POST(req: NextRequest) {
     hrSummary,
     testRunSection,
     blockPositionArg,
+    comeback,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
@@ -836,12 +887,34 @@ export async function POST(req: NextRequest) {
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
-        const jsonMatch = (textBlock as { type: "text"; text: string }).text.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error("No JSON found in Claude response")
+        const rawClaudeText = (textBlock as { type: "text"; text: string }).text
+        const jsonMatch = rawClaudeText.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) {
+          console.error("[plan-generation] No JSON in Claude response. Raw preview:", rawClaudeText.slice(0, 500))
+          throw new Error("No JSON found in Claude response")
+        }
 
-        const parsed = TrainingPlanSchema.safeParse(JSON.parse(jsonMatch[0]))
+        let rawJson: unknown
+        try {
+          rawJson = JSON.parse(jsonMatch[0])
+        } catch (parseErr) {
+          console.error(
+            "[plan-generation] Claude returned invalid JSON:",
+            parseErr,
+            "Raw preview:",
+            rawClaudeText.slice(0, 500),
+          )
+          throw new Error("Claude response was not valid JSON")
+        }
+
+        const parsed = TrainingPlanSchema.safeParse(rawJson)
         if (!parsed.success) {
-          console.error("Invalid plan structure from Claude:", parsed.error.message)
+          console.error(
+            "[plan-generation] Plan failed schema validation:",
+            parsed.error.message,
+            "Raw preview:",
+            rawClaudeText.slice(0, 1000),
+          )
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
         const plan = parsed.data
@@ -866,7 +939,20 @@ export async function POST(req: NextRequest) {
         // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue.
         // Pass running activities only so cross-training doesn't skew ACWR and fatigue detection.
         const safetyResult = validateAndAdjustPlan(plan, runActs as unknown as SafetyActivity[], prefs)
-        const safePlan = safetyResult.adjustedPlan
+        let safePlan = safetyResult.adjustedPlan
+
+        // Comeback cap: deterministic enforcement on Week 1 if the runner is
+        // returning after a 7+ day pause. The prompt already tells Claude the
+        // ceiling, but we belt-and-suspenders it here in case the model overshoots.
+        if (comeback.needsRamp) {
+          const { plan: cappedPlan, capped, previousTargetKm } = applyComebackCap(safePlan, comeback)
+          if (capped) {
+            console.log(
+              `[plan-generation] Comeback cap applied: Week 1 ${previousTargetKm} km → ${comeback.weekOneKm} km (${comeback.category}, pause ${comeback.pauseDays}d)`,
+            )
+          }
+          safePlan = cappedPlan
+        }
 
         // Pace guide: deterministic pace targets per session based on test runs + race predictions
         // Use running activities only so cycling/hiking don't skew Riegel predictions
@@ -1063,7 +1149,19 @@ export async function POST(req: NextRequest) {
           )
 
         if (upsertError) {
-          console.error("Failed to cache training plan:", upsertError)
+          // Log the full plan so ops can recover the generated output if the
+          // user chooses not to regenerate. Truncate to keep log size sane.
+          const planPreview = JSON.stringify(safePlan).slice(0, 2000)
+          console.error(
+            "[plan-generation] DB upsert failed — Claude output is not persisted. Error:",
+            upsertError,
+            "\nGoal:",
+            goalId,
+            "\nUser:",
+            user.id,
+            "\nPlan preview:",
+            planPreview,
+          )
           send({ status: "error", error: "Plan was generated but failed to save. Please try again." })
           return
         }
@@ -1454,5 +1552,14 @@ export async function PUT(req: NextRequest) {
     console.warn("Could not persist plan_mode (migration may not be applied):", modeError.message)
   }
 
-  return NextResponse.json({ ok: true })
+  // Signal the client to regenerate the plan immediately when a new active
+  // injury was just logged. Resolving an existing injury or adding a coach
+  // note does NOT auto-regenerate — the user can trigger that manually.
+  const newActiveInjury = containsNewActiveInjury(newEntries)
+
+  return NextResponse.json({
+    ok: true,
+    shouldRegenerate: newActiveInjury,
+    regenerateReason: newActiveInjury ? "new_active_injury" : null,
+  })
 }

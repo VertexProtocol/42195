@@ -1,7 +1,39 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { hasActiveInjury, type NoteHistoryEntry } from "@/lib/notes-history"
+import { assessComeback } from "@/lib/training-comeback"
+
+const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
+
+/** Race-strategy JSON shape Claude is asked to return. */
+const RaceStrategySchema = z.object({
+  targetTime: z.string().min(1),
+  pacingStrategy: z.object({
+    overall: z.string().min(1),
+    segments: z.array(
+      z.object({
+        name: z.string().min(1),
+        pace: z.string().min(1),
+        notes: z.string().min(1),
+      }),
+    ),
+  }),
+  preRace: z.object({
+    week: z.string().min(1),
+    dayBefore: z.string().min(1),
+    morning: z.string().min(1),
+  }),
+  nutrition: z.object({
+    before: z.string().min(1),
+    during: z.string().min(1),
+    hydration: z.string().min(1),
+  }),
+  mentalStrategy: z.string().min(1),
+  keyReminders: z.array(z.string().min(1)).min(1),
+})
 
 const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal, and fitness level, create a detailed pacing and preparation plan.
 
@@ -69,10 +101,14 @@ export async function POST(req: NextRequest) {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - 56)
 
+  // Race strategy is running-only — cycling/hiking pace would corrupt the
+  // avgPace/longestRun stats passed to Claude and produce hallucinated
+  // target times.
   const { data: activities } = await supabase
     .from("activities")
     .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate")
     .eq("user_id", user.id)
+    .in("type", RUN_TYPES)
     .gte("date", cutoff.toISOString())
     .order("date", { ascending: false })
     .limit(100)
@@ -97,6 +133,23 @@ export async function POST(req: NextRequest) {
     .eq("goal_id", goalId)
     .eq("user_id", user.id)
     .maybeSingle()
+
+  // Runner-state context — active injury + comeback status. Without this,
+  // Claude's strategy assumed a healthy, fully-trained runner and could
+  // prescribe race-pace work on top of an active injury or a fresh return.
+  const { data: prefsRow } = await supabase
+    .from("goal_preferences")
+    .select("notes_history")
+    .eq("goal_id", goalId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const notesHistory = (prefsRow?.notes_history as NoteHistoryEntry[] | null) ?? []
+  const activeInjury = hasActiveInjury(notesHistory)
+  const comeback = assessComeback(
+    acts.map((a) => ({ date: a.date, distance_km: Number(a.distance_km) })),
+    activeInjury,
+  )
 
   const formatPace = (minPerKm: number) => {
     const min = Math.floor(minPerKm)
@@ -126,10 +179,23 @@ export async function POST(req: NextRequest) {
     riegelPrediction = `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
 
+  const runnerStateLines: string[] = []
+  runnerStateLines.push(
+    `- Active injury: ${activeInjury ? "YES — bias the strategy toward conservative pacing and cap mid-race intensity" : "no"}`,
+  )
+  if (comeback.needsRamp) {
+    runnerStateLines.push(
+      `- Return-from-pause: ${comeback.pauseDays}-day gap since last run (${comeback.category}). Treat target paces as ceilings, not goals, and include explicit fallback cues if HR drifts early.`,
+    )
+  }
+
   const prompt = `Create a race-day strategy for this runner:
 
 RACE: ${goal.name} (${goal.target_distance_km} km)
 DATE: ${goal.target_date} (${daysUntilRace} days away)${targetTimeStr ? `\nTARGET TIME: ${targetTimeStr}` : ""}${riegelPrediction ? `\nPREDICTED TIME (Riegel): ${riegelPrediction}` : ""}
+
+RUNNER STATE:
+${runnerStateLines.join("\n")}
 
 TRAINING (last 8 weeks):
 - ${totalRuns} runs, avg ${avgWeeklyKm.toFixed(1)} km/week
@@ -174,11 +240,30 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block")
 
-        const jsonMatch = (textBlock as { type: "text"; text: string }).text.match(/\{[\s\S]*\}/)
+        const rawText = (textBlock as { type: "text"; text: string }).text
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
         if (!jsonMatch) throw new Error("No JSON found in response")
 
-        const strategy = JSON.parse(jsonMatch[0])
-        send({ status: "done", strategy })
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(jsonMatch[0])
+        } catch {
+          console.error("[race-strategy] Claude returned invalid JSON:", rawText.slice(0, 500))
+          throw new Error("Response was not valid JSON")
+        }
+
+        const strategyResult = RaceStrategySchema.safeParse(parsed)
+        if (!strategyResult.success) {
+          console.error(
+            "[race-strategy] Response failed schema validation:",
+            strategyResult.error.issues,
+            "raw:",
+            rawText.slice(0, 500),
+          )
+          throw new Error("Response missing required fields")
+        }
+
+        send({ status: "done", strategy: strategyResult.data })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Race strategy error:", msg)

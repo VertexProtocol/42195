@@ -29,6 +29,30 @@ export function getPhaseLabel(weekIndex: number, totalWeeks: number): string {
   return "taper"
 }
 
+/**
+ * True if the history has at least one injury entry that hasn't been marked
+ * as resolved. Used by plan generation to apply a tighter volume cap on
+ * return from pause.
+ */
+export function hasActiveInjury(
+  history: NoteHistoryEntry[] | null | undefined,
+): boolean {
+  if (!history) return false
+  return history.some((e) => e.type === "injury" && !e.resolved_at)
+}
+
+/**
+ * True if any of the supplied entries is a newly-logged active injury (type
+ * "injury", resolved_at null). Used by the preferences save endpoint to flag
+ * that the current plan should be regenerated immediately.
+ */
+export function containsNewActiveInjury(
+  entries: NoteHistoryEntry[] | null | undefined,
+): boolean {
+  if (!entries) return false
+  return entries.some((e) => e.type === "injury" && !e.resolved_at)
+}
+
 function formatEntryLabel(entry: NoteHistoryEntry): string {
   const date = new Date(entry.added_at).toLocaleDateString("en-US", {
     month: "short",

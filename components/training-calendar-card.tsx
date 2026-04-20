@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Flag } from "lucide-react"
-import type { Activity, Goal } from "@/lib/types"
+import type { Activity, Goal, TestRun } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { AppCard } from "@/components/ui/app-card"
 import { formatElapsed } from "@/lib/format"
@@ -10,6 +10,7 @@ import { formatElapsed } from "@/lib/format"
 interface TrainingCalendarCardProps {
   activities: Activity[]
   goals: Goal[]
+  testRuns?: TestRun[]
   onViewGoal?: (goal: Goal) => void
 }
 
@@ -25,6 +26,7 @@ interface DayCell {
   inMonth: boolean
   stats: DayStats | null
   goals: Goal[]
+  isTestRun: boolean
 }
 
 const localDateKey = (date: Date): string => {
@@ -54,7 +56,7 @@ const intensityClass = (km: number, maxKm: number): string => {
   return "bg-primary/15"
 }
 
-export function TrainingCalendarCard({ activities, goals, onViewGoal }: TrainingCalendarCardProps) {
+export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewGoal }: TrainingCalendarCardProps) {
   const { t, locale } = useI18n()
   const today = useMemo(() => {
     const d = new Date()
@@ -91,6 +93,16 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
     return map
   }, [goals])
 
+  const testRunDays = useMemo(() => {
+    const set = new Set<string>()
+    for (const tr of testRuns) {
+      const act = activities.find((a) => a.id === tr.activity_id)
+      if (!act) continue
+      set.add(localDateKey(new Date(act.date)))
+    }
+    return set
+  }, [testRuns, activities])
+
   const { year, month } = viewMonth
   const gridStart = useMemo(() => startOfMonthGrid(year, month), [year, month])
 
@@ -106,10 +118,11 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
         inMonth: d.getFullYear() === year && d.getMonth() === month,
         stats: byDay.get(key) ?? null,
         goals: goalsByDay.get(key) ?? [],
+        isTestRun: testRunDays.has(key),
       })
     }
     return arr
-  }, [gridStart, year, month, byDay, goalsByDay])
+  }, [gridStart, year, month, byDay, goalsByDay, testRunDays])
 
   // Trim to 5 rows if the last row is entirely out-of-month (typical Feb)
   const visibleDays = useMemo(() => {
@@ -245,7 +258,12 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
         {visibleDays.map((d) => {
           const hasData = d.stats !== null && d.stats.km > 0
           const hasGoal = d.goals.length > 0
+          const hasTestRun = d.isTestRun && !hasGoal
           const todayCell = isToday(d.date)
+          const showFlag = hasGoal || hasTestRun
+          const flagClass = hasGoal
+            ? "fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400"
+            : "fill-violet-500 text-violet-500"
           const isSelected = hasGoal && selectedGoalDay === d.key
           const cellContent = (
             <>
@@ -259,11 +277,11 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
                 {d.date.getDate()}
               </span>
               <div className="flex-1 flex flex-col items-center justify-center gap-0.5">
-                {hasGoal && (
+                {showFlag && (
                   <Flag
-                    aria-label="Goal target date"
+                    aria-label={hasGoal ? "Goal target date" : "Test run"}
                     size={14}
-                    className="text-amber-500 fill-amber-500"
+                    className={flagClass}
                   />
                 )}
                 {hasData && (
@@ -280,7 +298,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
             hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
           } ${!d.inMonth ? "opacity-40" : ""} ${
             todayCell ? "ring-2 ring-primary" : ""
-          } ${isSelected ? "ring-2 ring-amber-500" : ""}`
+          } ${isSelected ? "ring-2 ring-amber-500 dark:ring-teal-400" : ""}`
           if (hasGoal) {
             return (
               <button
@@ -312,7 +330,7 @@ export function TrainingCalendarCard({ activities, goals, onViewGoal }: Training
               <>
                 <Flag
                   size={11}
-                  className="text-amber-500 fill-amber-500 shrink-0"
+                  className="fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400 shrink-0"
                 />
                 <span className="font-mono text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
