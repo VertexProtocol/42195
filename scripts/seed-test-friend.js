@@ -8,9 +8,16 @@
  * approved.
  *
  * Usage:
- *   SUPABASE_URL=https://xxx.supabase.co \
- *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
- *   node scripts/seed-test-friend.js
+ *   npm run seed:friend
+ *
+ * The script auto-loads .env.local (or .env) thanks to Node's built-in
+ * --env-file-if-exists flag wired up in the npm script. Required vars:
+ *
+ *   NEXT_PUBLIC_SUPABASE_URL  — your Supabase project URL
+ *   SUPABASE_SERVICE_ROLE_KEY — service role key (Settings → API in dashboard)
+ *
+ * Or pass them inline:
+ *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run seed:friend
  *
  * Optional env vars:
  *   FRIEND_EMAIL        default: "testkompis@example.com"
@@ -52,7 +59,15 @@ async function supaFetch(path, opts = {}) {
     const body = await res.text()
     throw new Error(`${opts.method ?? "GET"} ${path} -> ${res.status}: ${body}`)
   }
-  return res.status === 204 ? null : res.json()
+  // PostgREST returns empty bodies on POST/PATCH/DELETE when the caller
+  // doesn't ask for a representation — don't JSON.parse "".
+  const text = await res.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
 }
 
 function isoDaysAgo(days, hour = 7) {
