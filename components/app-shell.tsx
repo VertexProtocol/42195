@@ -274,7 +274,6 @@ export function AppShell({ initialData }: AppShellProps) {
             onToggleStar={data.toggleStarGoal}
             onEditGoal={handleEditGoal}
             onAddGoal={() => handleAddGoal("performance")}
-            onAddEventGoal={() => handleAddGoal("event_training")}
             onEditWeeklyGoal={handleEditWeeklyGoal}
             onAddWeeklyGoal={handleAddWeeklyGoal}
             onSelectGoal={handleSelectGoal}

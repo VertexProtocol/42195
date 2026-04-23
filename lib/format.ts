@@ -288,6 +288,103 @@ export function bestRelevantRun(
   )
 }
 
+// ── Event goal evaluation + unified archive status ─────────────────────────
+
+/** Window around target_date where a qualifying activity counts as completing the event */
+export const EVENT_COMPLETION_WINDOW_DAYS = 7
+/** Minimum fraction of target_distance an activity must cover to count */
+export const EVENT_COMPLETION_RATIO = 0.95
+
+export type EventGoalOutcome = "pending" | "achieved" | "missed"
+
+export interface EventGoalEvaluation {
+  outcome: EventGoalOutcome
+  completedActivity: Activity | null
+}
+
+/**
+ * Evaluates an event-training goal: did the user actually run the race?
+ * Looks for an activity within ±EVENT_COMPLETION_WINDOW_DAYS of the target
+ * whose distance is at least EVENT_COMPLETION_RATIO of the target.
+ *
+ * A marathon goal is "achieved" when a ≥40.0 km run shows up within a week
+ * of race day. "Missed" when we're past that window and nothing qualifies.
+ * "Pending" otherwise.
+ */
+export function evaluateEventGoal(
+  activities: Activity[],
+  targetDate: string,
+  targetDistanceKm: number,
+): EventGoalEvaluation {
+  const target = new Date(targetDate.split("T")[0] + "T12:00:00")
+  const windowMs = EVENT_COMPLETION_WINDOW_DAYS * 86400_000
+  const minMs = target.getTime() - windowMs
+  const maxMs = target.getTime() + windowMs
+  const qualifyingDistance = targetDistanceKm * EVENT_COMPLETION_RATIO
+
+  const completed = activities
+    .filter((a) => {
+      const t = new Date(a.date).getTime()
+      return a.distance_km >= qualifyingDistance && t >= minMs && t <= maxMs
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+  if (completed) return { outcome: "achieved", completedActivity: completed }
+
+  const now = Date.now()
+  if (now > maxMs) return { outcome: "missed", completedActivity: null }
+  return { outcome: "pending", completedActivity: null }
+}
+
+export interface GoalArchiveStatus {
+  /** Should this goal be hidden from the active list and shown in archive */
+  archived: boolean
+  /** Did the user reach the goal? */
+  achieved: boolean
+  /** Activity that satisfied the goal (if any) */
+  completionActivity: Activity | null
+}
+
+/**
+ * Unified archive/achievement status for both performance and event goals.
+ * Used by the Goals screen to move finished goals out of the active list.
+ */
+export function evaluateGoalArchiveStatus(
+  goal: {
+    goal_category: "performance" | "event_training"
+    target_distance_km: number
+    target_time_seconds: number | null
+    target_date: string
+  },
+  activities: Activity[],
+): GoalArchiveStatus {
+  if (goal.goal_category === "performance") {
+    const status = evaluatePerformanceGoal(
+      activities,
+      goal.target_distance_km,
+      goal.target_time_seconds,
+    )
+    if (status.reached) {
+      return { archived: true, achieved: true, completionActivity: status.bestActivity }
+    }
+    // Past without reaching → archived as missed
+    if (isDatePast(goal.target_date)) {
+      return { archived: true, achieved: false, completionActivity: null }
+    }
+    return { archived: false, achieved: false, completionActivity: null }
+  }
+
+  // event_training
+  const evalRes = evaluateEventGoal(activities, goal.target_date, goal.target_distance_km)
+  if (evalRes.outcome === "achieved") {
+    return { archived: true, achieved: true, completionActivity: evalRes.completedActivity }
+  }
+  if (evalRes.outcome === "missed") {
+    return { archived: true, achieved: false, completionActivity: null }
+  }
+  return { archived: false, achieved: false, completionActivity: null }
+}
+
 /** Longest single run within a date range */
 export function longestRun(
   activities: Activity[],

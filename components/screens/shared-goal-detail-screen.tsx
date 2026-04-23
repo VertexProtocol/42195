@@ -15,10 +15,12 @@ import {
   LogOut,
   Trash2,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react"
 import { formatDistance, formatDate, daysUntil, isDatePast } from "@/lib/format"
 import type { Goal } from "@/lib/types"
 import { AppCard } from "@/components/ui/app-card"
+import { useI18n } from "@/lib/i18n"
 import { InviteMemberSheet } from "@/components/social/invite-member-sheet"
 
 interface LinkedGoal {
@@ -76,8 +78,7 @@ interface Props {
   onBack: () => void
 }
 
-/** Compute a team-wide "virtual route" progress. The combined km of all
- * accepted members toward a shared total of N·target_distance_km. */
+/** Combined km across all accepted members toward a shared total. */
 function computeTeamProgress(members: Member[], targetPerPerson: number) {
   const accepted = members.filter((m) => m.status === "accepted")
   const totalKm = accepted.reduce(
@@ -93,7 +94,7 @@ function computeTeamProgress(members: Member[], targetPerPerson: number) {
   }
 }
 
-/** Simple gamification: crown the member with the highest weekly km. */
+/** Crown the member with the highest weekly km. */
 function pickWeeklyLeader(members: Member[]) {
   const accepted = members.filter((m) => m.status === "accepted")
   if (accepted.length < 2) return null
@@ -106,12 +107,14 @@ function pickWeeklyLeader(members: Member[]) {
 }
 
 export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, onBack }: Props) {
+  const { t } = useI18n()
   const [data, setData] = useState<ShareResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [acting, setActing] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -150,7 +153,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
     setActing(true)
     try {
       const res = await fetch(`/api/goal-shares/${sharedGoalId}/members`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Kunne ikke forlate felles mål")
+      if (!res.ok) throw new Error(t("shared.cannotLeave"))
       onBack()
     } catch (err) {
       setError((err as Error).message)
@@ -159,11 +162,10 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
   }
 
   const handleDelete = async () => {
-    if (!confirm("Slette dette felles målet for alle medlemmer?")) return
     setActing(true)
     try {
       const res = await fetch(`/api/goal-shares/${sharedGoalId}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Kunne ikke slette")
+      if (!res.ok) throw new Error(t("shared.cannotDelete"))
       onBack()
     } catch (err) {
       setError((err as Error).message)
@@ -175,7 +177,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Laster felles mål…</p>
+        <p className="text-sm text-muted-foreground">{t("shared.loading")}</p>
       </div>
     )
   }
@@ -183,15 +185,25 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
   if (error || !data || !share || !team) {
     return (
       <div className="flex flex-col gap-4 px-5 pt-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 self-start text-sm font-medium text-primary">
-          <ArrowLeft size={18} /> Tilbake
+        <button
+          onClick={onBack}
+          className="flex min-h-[44px] items-center gap-1.5 self-start text-sm font-medium text-primary active:opacity-70"
+        >
+          <ArrowLeft size={18} /> {t("shared.back")}
         </button>
         <AppCard>
           <div className="flex items-start gap-2 p-4">
-            <AlertCircle size={18} className="mt-0.5 text-destructive" />
-            <div>
-              <p className="font-medium text-foreground">Kunne ikke laste felles mål</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error ?? "Ukjent feil"}</p>
+            <AlertCircle size={18} className="mt-0.5 shrink-0 text-destructive" />
+            <div className="flex-1">
+              <p className="font-medium text-foreground">{t("shared.failedToLoad")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{error ?? t("shared.unknownError")}</p>
+              <button
+                onClick={load}
+                className="mt-3 flex min-h-[44px] items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground active:opacity-80"
+              >
+                <RefreshCw size={14} />
+                {t("shared.retry")}
+              </button>
             </div>
           </div>
         </AppCard>
@@ -201,16 +213,19 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
 
   return (
     <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
-      <button onClick={onBack} className="flex items-center gap-1.5 self-start text-sm font-medium text-primary">
+      <button
+        onClick={onBack}
+        className="flex min-h-[44px] items-center gap-1.5 self-start text-sm font-medium text-primary active:opacity-70"
+      >
         <ArrowLeft size={18} />
-        <span>Felles mål</span>
+        <span>{t("shared.backButton")}</span>
       </button>
 
       {/* Header */}
       <header className="flex flex-col gap-2">
         <div className="inline-flex items-center gap-1.5">
           <Users size={14} className="text-primary" />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Felles mål</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">{t("shared.sectionTitle")}</span>
         </div>
         <h1 className="text-2xl font-bold leading-tight">{share.name}</h1>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
@@ -218,19 +233,19 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
           <span className="flex items-center gap-1"><CalendarCheck size={13} /> {formatDate(share.target_date)}</span>
           {!past && days > 0 && (
             <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold text-foreground">
-              {days} dager igjen
+              {days} {t("shared.daysLeft")}
             </span>
           )}
         </div>
       </header>
 
-      {/* Team combined progress (gamification) */}
+      {/* Team combined progress */}
       <AppCard>
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Felles distanse
+                {t("shared.teamDistance")}
               </p>
               <p className="mt-1 text-2xl font-bold tabular-nums">
                 {team.totalKm.toFixed(1)} km
@@ -248,12 +263,15 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            {team.accepted.length} medlem{team.accepted.length === 1 ? "" : "mer"} på vei mot {formatDistance(share.target_distance_km)} hver
+            {team.accepted.length}{" "}
+            {team.accepted.length === 1 ? t("shared.member") : t("shared.members")}
+            {" "}{t("shared.onTheWayTo")}{" "}
+            {formatDistance(share.target_distance_km)}{" "}{t("shared.teamProgressEach")}
           </p>
         </div>
       </AppCard>
 
-      {/* Weekly leader badge (gamification) */}
+      {/* Weekly leader */}
       {weeklyLeader && (
         <div className="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-3 ring-1 ring-amber-500/20">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
@@ -261,12 +279,12 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">
-              Ukens leder
+              {t("shared.weekLeader")}
             </p>
             <p className="truncate text-sm font-semibold text-foreground">
               {weeklyLeader.display_name}
               <span className="ml-1.5 font-normal text-muted-foreground">
-                · {weeklyLeader.week_distance_km.toFixed(1)} km denne uka
+                · {weeklyLeader.week_distance_km.toFixed(1)} {t("shared.kmThisWeek")}
               </span>
             </p>
           </div>
@@ -276,7 +294,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
       {/* Members */}
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Medlemmer
+          {t("shared.membersTitle")}
         </h2>
 
         {data.members.map((m) => (
@@ -289,7 +307,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
             className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
           >
             <UserPlus size={18} />
-            Inviter medlem
+            {t("shared.inviteMember")}
           </button>
         )}
       </section>
@@ -297,40 +315,38 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
       {/* Bottom actions */}
       <div className="mt-4 flex flex-col gap-2 pt-2 text-center">
         {isOwner ? (
-          <button
-            onClick={handleDelete}
-            disabled={acting}
-            className="flex items-center justify-center gap-1.5 text-xs text-destructive active:opacity-70 disabled:opacity-40"
-          >
-            <Trash2 size={13} /> Slett felles mål
-          </button>
+          confirmDelete ? (
+            <ConfirmRow
+              question={t("shared.confirmDelete")}
+              cancelLabel={t("shared.cancel")}
+              confirmLabel={t("shared.yesDelete")}
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={handleDelete}
+              acting={acting}
+            />
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex min-h-[44px] items-center justify-center gap-1.5 text-xs text-destructive active:opacity-70 disabled:opacity-40"
+            >
+              <Trash2 size={13} /> {t("shared.delete")}
+            </button>
+          )
+        ) : confirmLeave ? (
+          <ConfirmRow
+            cancelLabel={t("shared.cancel")}
+            confirmLabel={t("shared.yesLeave")}
+            onCancel={() => setConfirmLeave(false)}
+            onConfirm={handleLeave}
+            acting={acting}
+          />
         ) : (
-          <>
-            {!confirmLeave ? (
-              <button
-                onClick={() => setConfirmLeave(true)}
-                className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground active:text-destructive"
-              >
-                <LogOut size={13} /> Forlat felles mål
-              </button>
-            ) : (
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setConfirmLeave(false)}
-                  className="rounded-lg bg-secondary px-3 py-1.5 text-xs font-medium active:opacity-80"
-                >
-                  Avbryt
-                </button>
-                <button
-                  onClick={handleLeave}
-                  disabled={acting}
-                  className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground active:opacity-80 disabled:opacity-40"
-                >
-                  Ja, forlat
-                </button>
-              </div>
-            )}
-          </>
+          <button
+            onClick={() => setConfirmLeave(true)}
+            className="flex min-h-[44px] items-center justify-center gap-1.5 text-xs text-muted-foreground active:text-destructive"
+          >
+            <LogOut size={13} /> {t("shared.leave")}
+          </button>
         )}
       </div>
 
@@ -350,7 +366,48 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
 
 // ----------------------------------------------------------
 
+function ConfirmRow({
+  question,
+  cancelLabel,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+  acting,
+}: {
+  question?: string
+  cancelLabel: string
+  confirmLabel: string
+  onCancel: () => void
+  onConfirm: () => void
+  acting: boolean
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {question && (
+        <p className="text-xs text-muted-foreground">{question}</p>
+      )}
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={onCancel}
+          disabled={acting}
+          className="min-h-[44px] rounded-lg bg-secondary px-4 text-xs font-medium active:opacity-80 disabled:opacity-40"
+        >
+          {cancelLabel}
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={acting}
+          className="min-h-[44px] rounded-lg bg-destructive px-4 text-xs font-medium text-destructive-foreground active:opacity-80 disabled:opacity-40"
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
+  const { t } = useI18n()
   const goal = member.linked_goal
   const personalPct = goal && goal.target_distance_km > 0
     ? Math.min(100, (goal.current_distance_km / goal.target_distance_km) * 100)
@@ -364,7 +421,7 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">{member.display_name}</p>
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock size={11} /> Venter på svar
+              <Clock size={11} /> {t("shared.waitingForResponse")}
             </p>
           </div>
         </div>
@@ -379,7 +436,7 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           <Avatar name={member.display_name} url={member.avatar_url} />
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">{member.display_name}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Avslo invitasjonen</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("shared.declinedInvitation")}</p>
           </div>
         </div>
       </AppCard>
@@ -389,16 +446,15 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
   return (
     <AppCard state={isMe ? "active" : "idle"}>
       <div className="flex flex-col gap-3 p-3">
-        {/* Header row */}
         <div className="flex items-center gap-3">
           <Avatar name={member.display_name} url={member.avatar_url} />
           <div className="flex-1 min-w-0">
             <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
               {member.display_name}
-              {isMe && <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">Deg</span>}
+              {isMe && <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">{t("shared.you")}</span>}
               {member.role === "owner" && (
                 <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                  Eier
+                  {t("shared.owner")}
                 </span>
               )}
             </p>
@@ -410,12 +466,11 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           </div>
         </div>
 
-        {/* Personal plan progress */}
         {goal && (
           <div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground tabular-nums">
-                {goal.current_distance_km.toFixed(1)} km logget
+                {goal.current_distance_km.toFixed(1)} {t("shared.kmLogged")}
               </span>
               <span className="font-medium tabular-nums text-foreground">
                 {personalPct.toFixed(0)}%
@@ -430,11 +485,10 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           </div>
         )}
 
-        {/* This week */}
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-secondary/60 px-2.5 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Uka
+              {t("shared.week")}
             </p>
             <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
               {member.week_distance_km.toFixed(1)} km
@@ -442,7 +496,7 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           </div>
           <div className="rounded-lg bg-secondary/60 px-2.5 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Økter
+              {t("shared.sessions")}
             </p>
             <p className="mt-0.5 flex items-center gap-1 text-sm font-semibold tabular-nums text-foreground">
               <Flame size={12} className="text-orange-500" />
@@ -451,11 +505,10 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
           </div>
         </div>
 
-        {/* Recent activities (compact) */}
         {member.recent_activities.length > 0 && (
           <div className="border-t border-border pt-2">
             <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Siste økter
+              {t("shared.recentSessions")}
             </p>
             <ul className="flex flex-col gap-1">
               {member.recent_activities.slice(0, 3).map((a) => (
@@ -479,7 +532,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
     .split(/\s+/)
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? "")
-    .join("") || "R"
+    .join("") || "?"
 
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
@@ -491,3 +544,4 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
     </div>
   )
 }
+

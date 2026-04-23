@@ -37,10 +37,12 @@ import {
   formatTargetTime,
   computeWeeklyProgress,
   evaluatePerformanceGoal,
+  evaluateGoalArchiveStatus,
   computeDistanceInRange,
   bestRelevantRun,
   longestRun,
 } from "@/lib/format"
+import { XCircle } from "lucide-react"
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { AppCard } from '@/components/ui/app-card'
@@ -70,7 +72,6 @@ interface GoalsScreenProps {
   onToggleStar: (goalId: string) => void // [STAR]
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
-  onAddEventGoal: () => void
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
   onAddWeeklyGoal: () => void
   onSelectGoal: (goal: Goal) => void
@@ -150,7 +151,6 @@ export function GoalsScreen({
   onToggleStar, // [STAR]
   onEditGoal,
   onAddGoal,
-  onAddEventGoal,
   onEditWeeklyGoal,
   onAddWeeklyGoal,
   onSelectGoal,
@@ -240,6 +240,27 @@ export function GoalsScreen({
       ),
     [performanceGoals, activities],
   )
+
+  // Archive status for all race goals — splits the list into "active" (shown up top)
+  // and "archived" (achieved or missed, collapsed in a section at the bottom).
+  const archiveStatuses = useMemo(
+    () =>
+      new Map(
+        orderedRaceGoals.map((g) => [g.id, evaluateGoalArchiveStatus(g, activities)]),
+      ),
+    [orderedRaceGoals, activities],
+  )
+
+  const activeRaceGoals = useMemo(
+    () => orderedRaceGoals.filter((g) => !archiveStatuses.get(g.id)?.archived),
+    [orderedRaceGoals, archiveStatuses],
+  )
+  const archivedRaceGoals = useMemo(
+    () => orderedRaceGoals.filter((g) => archiveStatuses.get(g.id)?.archived),
+    [orderedRaceGoals, archiveStatuses],
+  )
+
+  const [showArchived, setShowArchived] = useState(false)
 
   return (
     <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
@@ -428,25 +449,16 @@ export function GoalsScreen({
       {/* ── Race Goals tab (merged Performance + Events) ── */}
       {tab === "race" && (
         <div className="flex flex-col gap-3">
-          {/* Add buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={onAddGoal}
-              className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
-            >
-              <Timer size={16} />
-              {t("goals.addPerfGoal")}
-            </button>
-            <button
-              onClick={onAddEventGoal}
-              className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
-            >
-              <CalendarCheck size={16} />
-              {t("plan.addEvent")}
-            </button>
-          </div>
+          {/* Add button — single, compact; editor handles category choice */}
+          <button
+            onClick={onAddGoal}
+            className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-sm font-medium text-muted-foreground active:bg-secondary transition-colors"
+          >
+            <Plus size={16} />
+            {t("goals.newGoal")}
+          </button>
 
-          {/* Empty state */}
+          {/* Empty state — only when there are NO goals at all (not even archived) */}
           {orderedRaceGoals.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
@@ -458,10 +470,10 @@ export function GoalsScreen({
               </p>
             </div>
           ) : (
-            // [DND] DnD context wraps the sortable goal list
+            // [DND] DnD context wraps the sortable goal list (active only)
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={orderedRaceGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
-                {orderedRaceGoals.map((goal) => {
+              <SortableContext items={activeRaceGoals.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                {activeRaceGoals.map((goal) => {
               const isPerformance = goal.goal_category === "performance"
               const isExpanded = expandedGoalIds.has(goal.id)
               const days = daysUntil(goal.target_date)
@@ -486,7 +498,6 @@ export function GoalsScreen({
                   <AppCard
                     variant="flush"
                     state={status?.reached ? 'complete' : goal.is_active ? 'active' : 'idle'}
-                    className={isPast && !status?.reached ? 'opacity-60' : ''}
                   >
                     {/* Collapsed header: [drag handle] [expand button] */}
                     <div className="flex items-center">
@@ -693,10 +704,102 @@ export function GoalsScreen({
             </DndContext>
           )}
 
+          {/* Completed / archived goals — collapsible section */}
+          {archivedRaceGoals.length > 0 && (
+            <section className="flex flex-col gap-2 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex min-h-[44px] items-center justify-between rounded-xl bg-secondary/60 px-4 py-2 text-left active:bg-secondary transition-colors"
+                aria-expanded={showArchived}
+              >
+                <div className="flex items-center gap-2">
+                  <Trophy size={14} className="text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t("goals.completedGoals")} ({archivedRaceGoals.length})
+                  </span>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`text-muted-foreground transition-transform ${showArchived ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {showArchived && (
+                <div className="flex flex-col gap-2">
+                  {archivedRaceGoals.map((goal) => {
+                    const archived = archiveStatuses.get(goal.id)!
+                    return (
+                      <ArchivedGoalCard
+                        key={goal.id}
+                        goal={goal}
+                        achieved={archived.achieved}
+                        achievedLabel={t("goals.achieved")}
+                        missedLabel={t("goals.notCompleted")}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Social: shared goals for this user */}
           <SharedGoalsSection myGoals={goals} onSelectShare={onSelectSharedGoal} />
         </div>
       )}
     </div>
+  )
+}
+
+// ── Archived goal card ──────────────────────────────────────────────────────
+// Compact representation for goals that are done (achieved or missed).
+function ArchivedGoalCard({
+  goal,
+  achieved,
+  achievedLabel,
+  missedLabel,
+}: {
+  goal: Goal
+  achieved: boolean
+  achievedLabel: string
+  missedLabel: string
+}) {
+  const isPerformance = goal.goal_category === "performance"
+  return (
+    <AppCard variant="flush">
+      <div className="flex items-center gap-3 px-3 py-3">
+        <div
+          className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+            achieved ? "bg-success/15" : "bg-secondary"
+          }`}
+        >
+          {achieved ? (
+            <Trophy size={16} className="text-success" />
+          ) : (
+            <XCircle size={16} className="text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+            {goal.name}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span>{formatDistance(goal.target_distance_km)}</span>
+            <span>·</span>
+            <span>{formatDateShort(goal.target_date)}</span>
+            <span>·</span>
+            <span className={achieved ? "font-medium text-success" : ""}>
+              {achieved ? achievedLabel : missedLabel}
+            </span>
+          </p>
+        </div>
+        {isPerformance ? (
+          <Timer size={14} className="shrink-0 text-muted-foreground/50" />
+        ) : (
+          <Footprints size={14} className="shrink-0 text-muted-foreground/50" />
+        )}
+      </div>
+    </AppCard>
   )
 }

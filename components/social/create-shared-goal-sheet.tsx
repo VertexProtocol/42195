@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { X, Users } from "lucide-react"
 import type { Goal } from "@/lib/types"
 import { formatDate } from "@/lib/format"
+import { useI18n } from "@/lib/i18n"
 
 interface Props {
   myGoals: Goal[]
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
+  const { t } = useI18n()
   const eligible = myGoals.filter((g) => g.goal_category === "event_training" && !isPastDate(g.target_date))
 
   const [linkedGoalId, setLinkedGoalId] = useState<string | null>(eligible[0]?.id ?? null)
@@ -21,7 +23,6 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Auto-fill fields from the selected linked goal
   useEffect(() => {
     const g = eligible.find((x) => x.id === linkedGoalId)
     if (!g) return
@@ -53,7 +54,7 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
         }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? `Status ${res.status}`)
+      if (!res.ok) throw new Error(body.error ?? t("shared.cannotCreate"))
       onCreated(body.share.id)
     } catch (err) {
       setError((err as Error).message)
@@ -64,7 +65,12 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
   return (
     <>
       <div className="fixed inset-0 z-[60] bg-foreground/30" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
+      <div
+        className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-shared-goal-title"
+      >
         <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
           <div className="flex shrink-0 justify-center pt-3 pb-1">
             <div className="h-1 w-10 rounded-full bg-border" />
@@ -73,11 +79,11 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
             <button
               onClick={onClose}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary active:bg-accent"
-              aria-label="Lukk"
+              aria-label={t("shared.close")}
             >
               <X size={18} className="text-muted-foreground" />
             </button>
-            <h2 className="text-base font-semibold">Nytt felles mål</h2>
+            <h2 id="create-shared-goal-title" className="text-base font-semibold">{t("shared.newSharedGoal")}</h2>
             <button
               onClick={submit}
               disabled={!canSave || busy}
@@ -85,29 +91,24 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
                 canSave && !busy ? "bg-primary text-primary-foreground active:opacity-80" : "bg-secondary text-muted-foreground"
               }`}
             >
-              {busy ? "Oppretter…" : "Opprett"}
+              {busy ? t("shared.creating") : t("shared.create")}
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             <div className="flex flex-col gap-5 px-5 pb-6 pt-2">
-              {/* Intro */}
               <div className="flex items-start gap-2.5 rounded-xl bg-primary/5 p-3 ring-1 ring-primary/10">
                 <Users size={16} className="mt-0.5 text-primary" />
-                <p className="text-xs text-muted-foreground">
-                  Et felles mål lar deg og vennene dine se hverandres progresjon mot samme løp. Alle beholder
-                  sin egen treningsplan og aktiviteter.
-                </p>
+                <p className="text-xs text-muted-foreground">{t("shared.intro")}</p>
               </div>
 
-              {/* Pick own goal to link */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Koble til ditt eget mål
+                  {t("shared.linkToYourGoal")}
                 </label>
                 {eligible.length === 0 ? (
                   <div className="rounded-xl bg-secondary/60 p-3 text-xs text-muted-foreground">
-                    Du har ingen aktive løpsmål. Opprett et event-mål først for å koble det til.
+                    {t("shared.noActiveGoals")}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
@@ -136,27 +137,27 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
                 )}
               </div>
 
-              {/* Shared goal name */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Navn på felles mål
+                <label htmlFor="shared-goal-name" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("shared.nameLabel")}
                 </label>
                 <input
+                  id="shared-goal-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="f.eks. Oslo Maraton 2026"
+                  placeholder={t("shared.namePlaceholder")}
                   className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
 
-              {/* Target distance + date */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Distanse (km)
+                  <label htmlFor="shared-goal-distance" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {t("shared.distanceLabel")}
                   </label>
                   <input
+                    id="shared-goal-distance"
                     type="text"
                     inputMode="decimal"
                     value={targetDistance}
@@ -166,10 +167,11 @@ export function CreateSharedGoalSheet({ myGoals, onClose, onCreated }: Props) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Dato
+                  <label htmlFor="shared-goal-date" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {t("shared.dateLabel")}
                   </label>
                   <input
+                    id="shared-goal-date"
                     type="date"
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
