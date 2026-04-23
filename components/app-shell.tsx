@@ -20,6 +20,7 @@ const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-de
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
 const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
 const InsightsScreen = lazy(() => import("@/components/screens/insights-screen").then(m => ({ default: m.InsightsScreen })))
+const SharedGoalDetailScreen = lazy(() => import("@/components/screens/shared-goal-detail-screen").then(m => ({ default: m.SharedGoalDetailScreen })))
 
 // Lightweight URL sync — updates the URL bar without triggering Next.js server navigation
 function getSearchString() {
@@ -67,6 +68,7 @@ export function AppShell({ initialData }: AppShellProps) {
   const activeTab: TabId = urlTab && VALID_TABS.has(urlTab) ? urlTab : "home"
   const activityId = searchParams.get("activity")
   const goalId = searchParams.get("goal")
+  const sharedGoalId = searchParams.get("sharedGoal")
 
   // Keep InsightsScreen mounted after first visit so its fetch doesn't re-run on tab switch
   const [insightsMounted, setInsightsMounted] = useState(activeTab === "insights")
@@ -112,8 +114,8 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleTabChange = useCallback((tab: TabId) => {
     navigate(tab === "home"
-      ? { tab: null, activity: null, goal: null }
-      : { tab, activity: null, goal: null })
+      ? { tab: null, activity: null, goal: null, sharedGoal: null }
+      : { tab, activity: null, goal: null, sharedGoal: null })
   }, [navigate])
 
   const handleSelectGoal = useCallback((goal: Goal) => {
@@ -122,6 +124,14 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleBackFromGoalDetail = useCallback(() => {
     navigate({ goal: null })
+  }, [navigate])
+
+  const handleSelectSharedGoal = useCallback((id: string) => {
+    navigate({ sharedGoal: id, goal: null })
+  }, [navigate])
+
+  const handleBackFromSharedGoal = useCallback(() => {
+    navigate({ sharedGoal: null })
   }, [navigate])
 
   const handleSelectActivity = useCallback((activity: Activity) => {
@@ -255,7 +265,7 @@ export function AppShell({ initialData }: AppShellProps) {
           </Suspense>
         )}
 
-        {activeTab === "goals" && !selectedGoal && (
+        {activeTab === "goals" && !selectedGoal && !sharedGoalId && (
           <GoalsScreen
             goals={data.goals}
             activities={data.activities}
@@ -270,16 +280,28 @@ export function AppShell({ initialData }: AppShellProps) {
             onSelectGoal={handleSelectGoal}
             onReorderGoals={data.reorderGoals}
             onReorderWeeklyGoals={data.reorderWeeklyGoals}
+            onSelectSharedGoal={handleSelectSharedGoal}
           />
         )}
 
-        {activeTab === "goals" && selectedGoal && (
+        {activeTab === "goals" && selectedGoal && !sharedGoalId && (
           <Suspense fallback={<ScreenFallback />}>
             <GoalDetailScreen
               goal={selectedGoal}
               activities={data.activities}
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
+            />
+          </Suspense>
+        )}
+
+        {activeTab === "goals" && sharedGoalId && (
+          <Suspense fallback={<ScreenFallback />}>
+            <SharedGoalDetailScreen
+              sharedGoalId={sharedGoalId}
+              currentUserId={data.user?.id ?? ""}
+              myGoals={data.goals}
+              onBack={handleBackFromSharedGoal}
             />
           </Suspense>
         )}
