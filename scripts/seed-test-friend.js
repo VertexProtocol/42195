@@ -164,6 +164,7 @@ async function createGoal(userId) {
       method: "POST",
       headers: { "Prefer": "resolution=merge-duplicates" },
       body: JSON.stringify({
+        user_id: userId,
         goal_id: goal.id,
         sessions_per_week: 4,
         focus: "balanced",
