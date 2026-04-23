@@ -252,6 +252,9 @@ const translations = {
     "intervals.consistency_variable": "Variable (±{n} s/km)",
     "intervals.sourceLaps": "Based on lap-button presses",
     "intervals.sourceStreams": "Detected from pause/resume pattern",
+    // Activity-detail group dividers
+    "activityDetail.groupStrava": "Strava data",
+    "activityDetail.groupAnalysis": "Analysis",
     // HR zones
     "hrZone.recovery": "Recovery",
     "hrZone.aerobic": "Aerobic",
@@ -901,6 +904,9 @@ const translations = {
     "intervals.consistency_variable": "Varierende (±{n} s/km)",
     "intervals.sourceLaps": "Basert på lap-knapp",
     "intervals.sourceStreams": "Detektert fra pause/resume",
+    // Activity-detail group dividers
+    "activityDetail.groupStrava": "Fra Strava",
+    "activityDetail.groupAnalysis": "Analyse",
     // HR zones
     "hrZone.recovery": "Restitusjon",
     "hrZone.aerobic": "Aerob",
