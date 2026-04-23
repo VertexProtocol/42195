@@ -171,7 +171,7 @@ export function HomeScreen({
             {syncStatus.state === "success" && <CheckCircle2 size={10} />}
             <span>
               {syncStatus.state === "syncing" ? t("profile.syncing") :
-               syncStatus.state === "error" ? "Sync failed" :
+               syncStatus.state === "error" ? t("home.syncFailed") :
                t("profile.synced")}
             </span>
           </div>
@@ -233,13 +233,13 @@ export function HomeScreen({
                               {planBadges[goal.id]?.checkpoint && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                                   <CheckCircle2 size={9} />
-                                  Checkpoint
+                                  {t("home.checkpoint")}
                                 </span>
                               )}
                               {planBadges[goal.id]?.blockCompleted && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                                   <CheckCircle2 size={9} />
-                                  Block done
+                                  {t("home.blockDone")}
                                 </span>
                               )}
                             </div>

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
+import { evaluateGoalArchiveStatus } from "@/lib/format"
 // import { toast } from "sonner" // Temporarily disabled
 import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
 
@@ -195,13 +196,16 @@ export function useAppData(initialData?: InitialData | null) {
 
   // ----- Derived data -----
   const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
-  // [STAR] Event goals pinned to the home screen, sorted by user-defined display_order
+  // [STAR] Event goals pinned to the home screen, sorted by user-defined display_order.
+  // Archived goals (achieved or missed) are excluded — they live in the "Completed"
+  // section on the Goals screen, not on the dashboard.
   const starredGoals = useMemo(
     () =>
       goals
         .filter((g) => g.is_starred)
+        .filter((g) => !evaluateGoalArchiveStatus(g, activities).archived)
         .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)),
-    [goals],
+    [goals, activities],
   )
 
   const { currentWeekMonday, weeklySummary } = useMemo(() => {
