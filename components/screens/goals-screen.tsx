@@ -44,6 +44,7 @@ import {
 import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { AppCard } from '@/components/ui/app-card'
+import { SharedGoalsSection } from '@/components/social/shared-goals-section'
 
 type GoalTab = "weekly" | "race"
 
@@ -75,6 +76,7 @@ interface GoalsScreenProps {
   onSelectGoal: (goal: Goal) => void
   onReorderGoals: (orderedIds: string[]) => Promise<void> // [DND]
   onReorderWeeklyGoals: (orderedIds: string[]) => Promise<void> // [DND]
+  onSelectSharedGoal: (sharedGoalId: string) => void
 }
 
 // [DND] Wrapper that makes a goal card sortable and provides drag listeners to children
@@ -154,6 +156,7 @@ export function GoalsScreen({
   onSelectGoal,
   onReorderGoals, // [DND]
   onReorderWeeklyGoals, // [DND]
+  onSelectSharedGoal,
 }: GoalsScreenProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<GoalTab>("race")
@@ -689,6 +692,9 @@ export function GoalsScreen({
               </SortableContext>
             </DndContext>
           )}
+
+          {/* Social: shared goals for this user */}
+          <SharedGoalsSection myGoals={goals} onSelectShare={onSelectSharedGoal} />
         </div>
       )}
     </div>

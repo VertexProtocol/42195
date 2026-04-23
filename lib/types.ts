@@ -246,6 +246,41 @@ export interface WeekAdherence {
   adherencePct: number
 }
 
+// ---- Shared Goals (social) ----
+
+export type GoalShareMemberStatus = "pending" | "accepted" | "declined"
+export type GoalShareMemberRole = "owner" | "member"
+
+export interface GoalShare {
+  id: string
+  name: string
+  target_date: string
+  target_distance_km: number
+  created_by: string
+  created_at: string
+}
+
+export interface GoalShareMember {
+  id: string
+  goal_share_id: string
+  user_id: string
+  goal_id: string | null
+  status: GoalShareMemberStatus
+  role: GoalShareMemberRole
+  invited_by: string | null
+  invited_at: string
+  responded_at: string | null
+  /** Joined display data (server-side only) */
+  display_name?: string
+  avatar_url?: string | null
+}
+
+export interface GoalShareWithMembers extends GoalShare {
+  members: GoalShareMember[]
+  /** My own membership row, if any (convenience for the client) */
+  my_membership: GoalShareMember | null
+}
+
 export interface MidBlockCheckpoint {
   checkedAt: string
   blockStartDate: string
