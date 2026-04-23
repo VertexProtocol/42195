@@ -11,6 +11,8 @@ import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics, 
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { AppCard } from '@/components/ui/app-card'
+import { analyzeIntervals } from "@/lib/interval-analysis"
+import { IntervalAnalysisCard } from "@/components/interval-analysis-card"
 
 interface ActivityDetailScreenProps {
   activity: Activity
@@ -341,6 +343,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const paceZones = useMemo(
     () => (streams ? analyzePaceZones(streams) : []),
     [streams],
+  )
+
+  // Interval analysis: detects pause/resume pattern in streams or manual lap-button
+  // presses and classifies each segment's intensity. Only returns { detected: true }
+  // when the activity looks structured; otherwise the card is hidden.
+  const intervalAnalysis = useMemo(
+    () => analyzeIntervals(activity, laps, streams, estimatedMaxHr || null),
+    [activity, laps, streams, estimatedMaxHr],
   )
 
   return (
@@ -946,6 +956,12 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             )}
           </div>
         </section>
+      )}
+
+      {/* Interval analysis — uses streams (pause detection) or manual laps
+          to identify work/rest structure and classify intensity. */}
+      {intervalAnalysis?.detected && (
+        <IntervalAnalysisCard analysis={intervalAnalysis} />
       )}
 
       {/* Laps */}
