@@ -8,9 +8,16 @@
  * approved.
  *
  * Usage:
- *   SUPABASE_URL=https://xxx.supabase.co \
- *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
- *   node scripts/seed-test-friend.js
+ *   npm run seed:friend
+ *
+ * The script auto-loads .env.local (or .env) thanks to Node's built-in
+ * --env-file-if-exists flag wired up in the npm script. Required vars:
+ *
+ *   NEXT_PUBLIC_SUPABASE_URL  — your Supabase project URL
+ *   SUPABASE_SERVICE_ROLE_KEY — service role key (Settings → API in dashboard)
+ *
+ * Or pass them inline:
+ *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run seed:friend
  *
  * Optional env vars:
  *   FRIEND_EMAIL        default: "testkompis@example.com"
