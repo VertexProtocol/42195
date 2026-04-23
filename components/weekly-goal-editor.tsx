@@ -106,7 +106,12 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
         aria-hidden="true"
       />
 
-      <div className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
+      <div
+        className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="weekly-goal-editor-title"
+      >
         <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
           {/* Handle */}
           <div className="flex shrink-0 justify-center pt-3 pb-1">
@@ -122,7 +127,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             >
               <X size={18} className="text-muted-foreground" />
             </button>
-            <h2 className="text-base font-semibold text-card-foreground">
+            <h2 id="weekly-goal-editor-title" className="text-base font-semibold text-card-foreground">
               {isNew ? t("weeklyGoalEditor.newGoal") : t("weeklyGoalEditor.editGoal")}
             </h2>
             <button

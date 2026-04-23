@@ -614,14 +614,14 @@ export function GoalsScreen({
                           <div className="mt-4 flex items-center justify-between">
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                              className="flex min-h-[44px] items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
                             >
                               <Pencil size={14} />
-                              Edit
+                              {t("common.edit")}
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); onToggleActive(goal.id); }}
-                              className={`flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                              className={`flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                                 goal.is_active
                                   ? "bg-primary/10 text-primary active:bg-primary/20"
                                   : "bg-secondary text-secondary-foreground active:bg-accent"
@@ -679,16 +679,16 @@ export function GoalsScreen({
                           <div className="mt-4 flex items-center justify-between">
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditGoal(goal); }}
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
+                              className="flex min-h-[44px] items-center gap-1.5 text-xs text-muted-foreground active:text-foreground transition-colors"
                             >
                               <Pencil size={14} />
-                              Edit
+                              {t("common.edit")}
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); onSelectGoal(goal); }}
-                              className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary active:bg-primary/20 transition-colors"
+                              className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary active:bg-primary/20 transition-colors"
                             >
-                              View Plan
+                              {t("plan.viewPlan")}
                             </button>
                           </div>
                         </>

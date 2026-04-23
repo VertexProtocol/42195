@@ -213,7 +213,9 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
                 { role: "assistant", content: event.error ?? t("coach.genericError") },
               ])
             }
-          } catch {}
+          } catch (err) {
+            console.error("Failed to parse coach stream chunk:", err)
+          }
         }
       }
     } catch {

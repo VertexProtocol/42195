@@ -73,7 +73,7 @@ function decodePolyline(encoded: string): [number, number][] {
 }
 
 /** Render a lightweight SVG map from polyline coordinates */
-function RouteMap({ polyline }: { polyline: string }) {
+function RouteMap({ polyline, label }: { polyline: string; label: string }) {
   const points = useMemo(() => decodePolyline(polyline), [polyline])
 
   if (points.length < 2) return null
@@ -112,7 +112,7 @@ function RouteMap({ polyline }: { polyline: string }) {
     <AppCard>
       <div className="mb-3 flex items-center gap-2">
         <MapPin size={14} className="text-muted-foreground" />
-        <p className="text-xs font-medium text-card-foreground">Route</p>
+        <p className="text-xs font-medium text-card-foreground">{label}</p>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
@@ -176,12 +176,15 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     fetch(`/api/ai/activity-analysis?activityId=${activity.id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (!cancelled && data?.analysis) setAiAnalysis(data.analysis) })
-      .catch(() => {})
+      .catch((err) => console.error("Failed to prefetch activity analysis:", err))
     return () => { cancelled = true }
   }, [activity.id])
 
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+
   const handleGetAnalysis = useCallback(async () => {
     setAiAnalysisLoading(true)
+    setAnalysisError(null)
     try {
       const res = await fetch("/api/ai/activity-analysis", {
         method: "POST",
@@ -191,8 +194,13 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       if (res.ok) {
         const data = await res.json()
         setAiAnalysis(data.analysis)
+      } else {
+        setAnalysisError(`Request failed (${res.status})`)
       }
-    } catch {}
+    } catch (err) {
+      console.error("Failed to get activity analysis:", err)
+      setAnalysisError((err as Error).message ?? "Unknown error")
+    }
     setAiAnalysisLoading(false)
   }, [activity.id])
 
@@ -204,11 +212,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       fetch(`/api/activities/${activity.id}/streams`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => { if (!cancelled && data?.points) setStreams(data.points) })
-        .catch(() => {}),
+        .catch((err) => console.error("Failed to load streams:", err)),
       fetch(`/api/activities/${activity.id}/laps`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => { if (!cancelled && data?.laps) setLaps(data.laps) })
-        .catch(() => {}),
+        .catch((err) => console.error("Failed to load laps:", err)),
     ]).finally(() => { if (!cancelled) setLoadingCharts(false) })
 
     return () => { cancelled = true }
@@ -225,7 +233,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           if (match) setTestRun(match)
         }
       })
-      .catch(() => {})
+      .catch((err) => console.error("Failed to load test runs:", err))
     return () => { cancelled = true }
   }, [activity.id])
 
@@ -442,23 +450,30 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
           </AppCard>
         ) : (
-          <button
-            onClick={handleGetAnalysis}
-            disabled={aiAnalysisLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-primary shadow-sm ring-1 ring-border transition-colors hover:bg-muted/50 disabled:opacity-50 active:opacity-80"
-          >
-            {aiAnalysisLoading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                {t("analysis.analyzing")}
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} />
-                {t("analysis.getAnalysis")}
-              </>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleGetAnalysis}
+              disabled={aiAnalysisLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-primary shadow-sm ring-1 ring-border transition-colors hover:bg-muted/50 disabled:opacity-50 active:opacity-80"
+            >
+              {aiAnalysisLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  {t("analysis.analyzing")}
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  {t("analysis.getAnalysis")}
+                </>
+              )}
+            </button>
+            {analysisError && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {analysisError}
+              </p>
             )}
-          </button>
+          </div>
         )}
       </section>
 
@@ -665,7 +680,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Route Map */}
       {activity.map_polyline && (
         <section>
-          <RouteMap polyline={activity.map_polyline} />
+          <RouteMap polyline={activity.map_polyline} label={t("activityDetail.route")} />
         </section>
       )}
 

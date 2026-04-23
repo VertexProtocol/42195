@@ -26,14 +26,26 @@ interface ProfileScreenProps {
   onSignOut: () => void
 }
 
-// HR zone configuration (5-zone model)
+// HR zone configuration (5-zone model). Labels are translated at render
+// time via hrZoneLabelKey() — this object only carries non-translatable
+// presentation data (colours + % ranges).
 const HR_ZONES = [
-  { zone: 1, label: "Recovery", color: "var(--chart-1)", pct: "50–60%" },
-  { zone: 2, label: "Aerobic", color: "var(--chart-2)", pct: "60–70%" },
-  { zone: 3, label: "Tempo", color: "var(--chart-3)", pct: "70–80%" },
-  { zone: 4, label: "Threshold", color: "var(--chart-4)", pct: "80–90%" },
-  { zone: 5, label: "Max", color: "var(--chart-5)", pct: "90–100%" },
+  { zone: 1, color: "var(--chart-1)", pct: "50–60%" },
+  { zone: 2, color: "var(--chart-2)", pct: "60–70%" },
+  { zone: 3, color: "var(--chart-3)", pct: "70–80%" },
+  { zone: 4, color: "var(--chart-4)", pct: "80–90%" },
+  { zone: 5, color: "var(--chart-5)", pct: "90–100%" },
 ]
+
+function hrZoneLabelKey(zone: number): "hrZone.recovery" | "hrZone.aerobic" | "hrZone.tempo" | "hrZone.threshold" | "hrZone.max" {
+  switch (zone) {
+    case 1: return "hrZone.recovery"
+    case 2: return "hrZone.aerobic"
+    case 3: return "hrZone.tempo"
+    case 4: return "hrZone.threshold"
+    default: return "hrZone.max"
+  }
+}
 
 export function ProfileScreen({
   user,
@@ -640,7 +652,7 @@ export function ProfileScreen({
                                   i < 4 ? "border-b border-border" : ""
                                 }`}
                               >
-                                <span className="font-medium text-card-foreground">Z{rec.zone} {rec.label}</span>
+                                <span className="font-medium text-card-foreground">Z{rec.zone} {t(hrZoneLabelKey(rec.zone))}</span>
                                 <span className="text-center text-muted-foreground font-mono">{cur.min}–{cur.max}</span>
                                 <span className="text-center font-mono text-card-foreground">{rec.min}–{rec.max}</span>
                                 <span className={`text-right font-mono ${
