@@ -886,6 +886,195 @@ function TrainingTimelineView({
   )
 }
 
+// ---- Plan status banner ----
+// Single adaptive surface that consolidates what used to be three separate
+// banners + three action buttons. Shows exactly one of:
+//   (1) block complete + "Start next block" CTA,
+//   (2) mid-block checkpoint offer + "Adjust plan" CTA (way off target),
+//   (3) previously-applied checkpoint acknowledgement,
+//   (4) nothing (on track).
+//
+// Secondary actions ("Customise plan", "Start over") live below the week cards
+// in <SecondaryPlanActions> so they don't compete with the primary CTA here.
+function PlanStatusBanner({
+  t,
+  blockComplete,
+  blockStats,
+  pendingCheckpoint,
+  appliedCheckpoint,
+  isApplyingCheckpoint,
+  onApplyCheckpoint,
+  onStartNextBlock,
+}: {
+  t: (k: TranslationKey) => string
+  blockComplete: boolean
+  blockStats: { weeks: number; totalKm: number; completedSessions: number; totalSessions: number } | null
+  pendingCheckpoint: MidBlockCheckpoint | null
+  appliedCheckpoint: MidBlockCheckpoint | null
+  isApplyingCheckpoint: boolean
+  onApplyCheckpoint: () => void
+  onStartNextBlock: () => void
+}) {
+  // Precedence: block complete > pending checkpoint > applied checkpoint > nothing
+  if (blockComplete && blockStats) {
+    return (
+      <div className="flex flex-col gap-3 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
+        <div className="flex gap-2.5">
+          <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-foreground">{t("planStatus.blockComplete")}</p>
+            <p className="text-xs text-muted-foreground">
+              {`${blockStats.weeks}w · ${blockStats.totalKm} km · ${blockStats.completedSessions}/${blockStats.totalSessions} ${t("planStatus.blockCompleteDesc").toLowerCase().includes("ready") ? "sessions" : "økter"}`}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("planStatus.blockCompleteDesc")}</p>
+          </div>
+        </div>
+        <button
+          onClick={onStartNextBlock}
+          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+        >
+          <Sparkles size={16} />
+          {t("planStatus.startNextBlock")}
+        </button>
+      </div>
+    )
+  }
+
+  if (pendingCheckpoint) {
+    const pct = Math.round(pendingCheckpoint.overallAdherencePct)
+    const titleKey: TranslationKey =
+      pendingCheckpoint.direction === "under" ? "planStatus.fallenBehind" : "planStatus.aheadOfPlan"
+    const descKey: TranslationKey =
+      pendingCheckpoint.direction === "under" ? "planStatus.fallenBehindDesc" : "planStatus.aheadOfPlanDesc"
+    return (
+      <div className="flex flex-col gap-3 rounded-2xl bg-amber-500/10 px-4 py-3.5 ring-1 ring-amber-500/30">
+        <div className="flex gap-2.5">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-foreground">{t(titleKey)}</p>
+            <p className="text-xs text-muted-foreground">
+              {pct}% · {pendingCheckpoint.completedWeeks.length}w
+            </p>
+            <p className="text-xs text-muted-foreground">{t(descKey)}</p>
+          </div>
+        </div>
+        <button
+          onClick={onApplyCheckpoint}
+          disabled={isApplyingCheckpoint}
+          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
+        >
+          <Sparkles size={16} />
+          {isApplyingCheckpoint ? t("planStatus.adjusting") : t("planStatus.adjustPlan")}
+        </button>
+      </div>
+    )
+  }
+
+  if (appliedCheckpoint) {
+    return (
+      <div className="flex gap-2.5 rounded-2xl bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
+        <Lightbulb size={15} className="mt-0.5 shrink-0 text-primary" />
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-foreground">{t("planStatus.adjusted")}</p>
+          {appliedCheckpoint.adjustmentNote && (
+            <p className="text-xs text-muted-foreground">{appliedCheckpoint.adjustmentNote}</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+// ---- Secondary plan actions ----
+// "Customise plan" (freetext note → regenerate with it) and "Start over"
+// (full fresh regeneration with confirmation). Placed below the week cards
+// so they're reachable but don't compete with the top banner's primary CTA.
+function SecondaryPlanActions({
+  t,
+  showAdjustForm,
+  onToggleAdjust,
+  adjustNote,
+  setAdjustNote,
+  onRegenerateWithNote,
+  onStartOver,
+}: {
+  t: (k: TranslationKey) => string
+  showAdjustForm: boolean
+  onToggleAdjust: () => void
+  adjustNote: string
+  setAdjustNote: (v: string) => void
+  onRegenerateWithNote: () => void
+  onStartOver: () => void
+}) {
+  const [confirmStartOver, setConfirmStartOver] = useState(false)
+
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <button
+        onClick={onToggleAdjust}
+        className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium text-secondary-foreground transition-colors active:bg-accent"
+      >
+        <Pencil size={14} />
+        {showAdjustForm ? t("planStatus.cancel") : t("planStatus.customize")}
+      </button>
+
+      {showAdjustForm && (
+        <AppCard className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground">{t("planStatus.customizeHint")}</p>
+          <textarea
+            value={adjustNote}
+            onChange={(e) => setAdjustNote(e.target.value)}
+            placeholder={t("planStatus.customizePlaceholder")}
+            className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            rows={3}
+          />
+          <button
+            onClick={onRegenerateWithNote}
+            disabled={!adjustNote.trim()}
+            className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
+          >
+            <Sparkles size={16} />
+            {t("planStatus.customizeBtn")}
+          </button>
+        </AppCard>
+      )}
+
+      {!confirmStartOver ? (
+        <button
+          onClick={() => setConfirmStartOver(true)}
+          className="flex min-h-[44px] items-center justify-center gap-2 text-xs font-medium text-muted-foreground active:text-destructive transition-colors"
+        >
+          <RefreshCw size={13} />
+          {t("planStatus.startOver")}
+        </button>
+      ) : (
+        <div className="flex flex-col items-center gap-2 pt-1">
+          <p className="text-xs text-muted-foreground">{t("planStatus.startOverConfirm")}</p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setConfirmStartOver(false)}
+              className="min-h-[44px] rounded-lg bg-secondary px-4 text-xs font-medium active:opacity-80"
+            >
+              {t("planStatus.cancel")}
+            </button>
+            <button
+              onClick={() => {
+                setConfirmStartOver(false)
+                onStartOver()
+              }}
+              className="min-h-[44px] rounded-lg bg-destructive px-4 text-xs font-medium text-destructive-foreground active:opacity-80"
+            >
+              {t("planStatus.yesStartOver")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- Main screen ----
 export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalDetailScreenProps) {
   const { t } = useI18n()
@@ -911,7 +1100,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [error, setError] = useState<string | null>(null)
   const [checkpoint, setCheckpoint] = useState<MidBlockCheckpoint | null>(null)
   const [pendingCheckpoint, setPendingCheckpoint] = useState<MidBlockCheckpoint | null>(null)
-  const [showCheckpointReview, setShowCheckpointReview] = useState(false)
   const [isApplyingCheckpoint, setIsApplyingCheckpoint] = useState(false)
 
   // Load existing plan + preferences on mount
@@ -1076,7 +1264,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         )
       }
       setPendingCheckpoint(null)
-      setShowCheckpointReview(false)
     } catch {
       // silently ignore
     } finally {
@@ -1105,7 +1292,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       setShowAdjustForm(false)
       setCheckpoint(null) // new block — reset checkpoint display
       setPendingCheckpoint(null)
-      setShowCheckpointReview(false)
 
       try {
         const res = await fetch("/api/ai/training-plan", {
@@ -1453,18 +1639,23 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
-            {/* Block completion summary */}
-            {isBlockExpired && blockCompletionStats && (
-              <div className="flex gap-2.5 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
-                <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Block complete</p>
-                  <p className="text-xs text-muted-foreground">
-                    {blockCompletionStats.weeks}w · {blockCompletionStats.totalKm} km · {blockCompletionStats.completedSessions}/{blockCompletionStats.totalSessions} sessions · Regenerate when ready
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Adaptive plan status banner — one clear next action */}
+            <PlanStatusBanner
+              t={t}
+              blockComplete={isBlockExpired && !!blockCompletionStats}
+              blockStats={blockCompletionStats}
+              pendingCheckpoint={
+                !checkpoint?.adjustmentApplied && pendingCheckpoint?.isWayOff
+                  ? pendingCheckpoint
+                  : null
+              }
+              appliedCheckpoint={
+                checkpoint?.adjustmentApplied && !isBlockExpired ? checkpoint : null
+              }
+              isApplyingCheckpoint={isApplyingCheckpoint}
+              onApplyCheckpoint={handleApplyCheckpoint}
+              onStartNextBlock={() => handleGenerate()}
+            />
 
             {/* Skip-load spike warning */}
             {skipWarning && !isBlockExpired && (
@@ -1486,17 +1677,6 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                       : `Last week you ran ${skipWarning.actualKm} km. Next week\u2019s plan calls for ${skipWarning.nextPlannedKm} km (+${skipWarning.spikePct}%). A safe target would be ~${skipWarning.safeMaxKm} km. Consider adjusting your plan.`
                     }
                   </p>
-                </div>
-              </div>
-            )}
-
-            {/* Mid-block checkpoint banner */}
-            {checkpoint?.adjustmentApplied && !isBlockExpired && (
-              <div className="flex gap-2.5 rounded-2xl bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
-                <Lightbulb size={15} className="mt-0.5 shrink-0 text-primary" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Mid-block plan adjusted</p>
-                  <p className="text-xs text-muted-foreground">{checkpoint.adjustmentNote}</p>
                 </div>
               </div>
             )}
@@ -1553,97 +1733,16 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               </div>
             )}
 
-            {/* Adjust / Regenerate */}
-            <div className="flex flex-col gap-2 pt-1">
-              {(() => {
-                const checkpointPending = !!pendingCheckpoint?.isWayOff && !checkpoint?.adjustmentApplied
-                return (
-                  <>
-                    <button
-                      onClick={() => {
-                        if (checkpointPending) {
-                          setShowCheckpointReview((v) => !v)
-                          setShowAdjustForm(false)
-                        } else {
-                          setShowAdjustForm((v) => !v)
-                          setShowCheckpointReview(false)
-                        }
-                      }}
-                      className={
-                        "flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors active:bg-accent " +
-                        (checkpointPending
-                          ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 dark:text-amber-400"
-                          : "bg-secondary text-secondary-foreground")
-                      }
-                    >
-                      {checkpointPending && (
-                        <span className="relative flex h-2 w-2 shrink-0">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
-                        </span>
-                      )}
-                      {showAdjustForm || showCheckpointReview
-                        ? "Cancel"
-                        : checkpointPending
-                          ? "Review mid-block adjustment"
-                          : "Adjust plan"}
-                    </button>
-
-                    {showCheckpointReview && pendingCheckpoint && (
-                      <AppCard className="flex flex-col gap-3">
-                        <div className="flex gap-2.5">
-                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
-                          <div className="flex flex-col gap-1">
-                            <p className="text-sm font-medium text-foreground">Plan adjustment available</p>
-                            <p className="text-xs text-muted-foreground">
-                              {`After ${pendingCheckpoint.completedWeeks.length} completed ${pendingCheckpoint.completedWeeks.length === 1 ? "week" : "weeks"} at ${Math.round(pendingCheckpoint.overallAdherencePct)}% of planned volume, the remaining weeks can be scaled ${pendingCheckpoint.direction === "under" ? "down" : "up"} to better match your actual training.`}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleApplyCheckpoint}
-                          disabled={isApplyingCheckpoint}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
-                        >
-                          {isApplyingCheckpoint ? "Applying…" : "Apply adjustment"}
-                        </button>
-                      </AppCard>
-                    )}
-                  </>
-                )
-              })()}
-
-              {showAdjustForm && (
-                <AppCard className="flex flex-col gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    Tell Claude what to change — e.g. "fewer runs but longer", "no tempo work yet", "I can only run at weekends"
-                  </p>
-                  <textarea
-                    value={adjustNote}
-                    onChange={(e) => setAdjustNote(e.target.value)}
-                    placeholder="What would you like to change?"
-                    className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    rows={3}
-                  />
-                  <button
-                    onClick={() => handleGenerate(adjustNote)}
-                    disabled={!adjustNote.trim()}
-                    className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
-                  >
-                    <Sparkles size={16} />
-                    Regenerate with changes
-                  </button>
-                </AppCard>
-              )}
-
-              <button
-                onClick={() => handleGenerate()}
-                className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground transition-colors active:bg-accent"
-              >
-                <RefreshCw size={14} />
-                Regenerate (fresh start)
-              </button>
-            </div>
+            {/* Secondary actions: customize (freetext) + start over */}
+            <SecondaryPlanActions
+              t={t}
+              showAdjustForm={showAdjustForm}
+              onToggleAdjust={() => setShowAdjustForm((v) => !v)}
+              adjustNote={adjustNote}
+              setAdjustNote={setAdjustNote}
+              onRegenerateWithNote={() => handleGenerate(adjustNote)}
+              onStartOver={() => handleGenerate()}
+            />
 
             {/* Previous plans */}
             {aiPlan.previous_plans.length > 0 && (
