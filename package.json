@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:friend": "node --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/seed-test-friend.js"
+    "seed:friend": "node --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/seed-test-friend.js",
+    "remove:friend": "node --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/remove-test-friend.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
