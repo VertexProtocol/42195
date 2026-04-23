@@ -59,7 +59,15 @@ async function supaFetch(path, opts = {}) {
     const body = await res.text()
     throw new Error(`${opts.method ?? "GET"} ${path} -> ${res.status}: ${body}`)
   }
-  return res.status === 204 ? null : res.json()
+  // PostgREST returns empty bodies on POST/PATCH/DELETE when the caller
+  // doesn't ask for a representation — don't JSON.parse "".
+  const text = await res.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
 }
 
 function isoDaysAgo(days, hour = 7) {
