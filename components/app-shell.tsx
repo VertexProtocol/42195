@@ -225,7 +225,7 @@ export function AppShell({ initialData }: AppShellProps) {
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-background">
       {/* Screen content */}
-      <main className="relative pb-20">
+      <main className="relative pb-24">
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}
