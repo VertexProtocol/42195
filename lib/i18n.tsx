@@ -223,6 +223,16 @@ const translations = {
     "home.syncFailed": "Sync failed",
     "home.checkpoint": "Checkpoint",
     "home.blockDone": "Block done",
+    // Onboarding
+    "onboarding.stravaConnected": "Strava connected",
+    // Plan tab — common action
+    "plan.viewPlan": "View plan",
+    // HR zones
+    "hrZone.recovery": "Recovery",
+    "hrZone.aerobic": "Aerobic",
+    "hrZone.tempo": "Tempo",
+    "hrZone.threshold": "Threshold",
+    "hrZone.max": "Max",
     "profile.syncing": "Syncing...",
     "profile.pace": "pace",
     "profile.trainingSettings": "Training Settings",
@@ -382,6 +392,7 @@ const translations = {
     "profile.hrError": "Could not load HR analysis. Please try again.",
     // End added keys
     "common.cancel": "Cancel",
+    "common.edit": "Edit",
     "common.h": "h",
     "common.m": "m",
     "common.s": "s",
@@ -702,6 +713,7 @@ const translations = {
     "profile.hrError": "Kunne ikke laste pulssoneanalyse. Prøv igjen.",
     // End added keys
     "common.cancel": "Avbryt",
+    "common.edit": "Rediger",
     // Goals
     "goals.title": "Mål",
     "goals.subtitle": "Ukentlige mål og ytelsesbenchmarks",
@@ -835,6 +847,16 @@ const translations = {
     "home.syncFailed": "Synkronisering feilet",
     "home.checkpoint": "Sjekkpunkt",
     "home.blockDone": "Blokk fullført",
+    // Onboarding
+    "onboarding.stravaConnected": "Strava tilkoblet",
+    // Plan tab — common action
+    "plan.viewPlan": "Se plan",
+    // HR zones
+    "hrZone.recovery": "Restitusjon",
+    "hrZone.aerobic": "Aerob",
+    "hrZone.tempo": "Tempo",
+    "hrZone.threshold": "Terskel",
+    "hrZone.max": "Maks",
     "profile.syncing": "Synkroniserer...",
     "profile.pace": "tempo",
     "profile.trainingSettings": "Treningsinnstillinger",

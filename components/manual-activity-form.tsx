@@ -83,9 +83,14 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-      <div className="w-full max-w-md animate-in slide-in-from-bottom rounded-t-3xl bg-card p-5 pb-8 shadow-xl">
+      <div
+        className="w-full max-w-md animate-in slide-in-from-bottom rounded-t-3xl bg-card p-5 pb-8 shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-activity-title"
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-card-foreground">{t("manualActivity.addActivity")}</h2>
+          <h2 id="manual-activity-title" className="text-lg font-bold text-card-foreground">{t("manualActivity.addActivity")}</h2>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent"

@@ -84,7 +84,7 @@ export function Onboarding({ stravaConnected, onConnectStrava, onCreateGoal, onD
           {isStravaStep && stravaConnected && (
             <div className="mb-6 flex items-center gap-2 rounded-full bg-green-500/10 px-4 py-2 text-sm text-green-600">
               <Check className="h-4 w-4" />
-              <span>Strava connected</span>
+              <span>{t("onboarding.stravaConnected")}</span>
             </div>
           )}
 
