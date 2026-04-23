@@ -917,15 +917,44 @@ function PlanStatusBanner({
 }) {
   // Precedence: block complete > pending checkpoint > applied checkpoint > nothing
   if (blockComplete && blockStats) {
+    // Distinguish "mostly completed" from "mostly missed" — same CTA target
+    // (a fresh plan generation) but different framing so the user feels
+    // supported rather than blamed when a block didn't go well.
+    const adherence = blockStats.totalSessions > 0
+      ? blockStats.completedSessions / blockStats.totalSessions
+      : 0
+    const underCompleted = adherence < 0.5
+    const sessionsLabel = `${blockStats.weeks}w · ${blockStats.totalKm} km · ${blockStats.completedSessions}/${blockStats.totalSessions}`
+
+    if (underCompleted) {
+      return (
+        <div className="flex flex-col gap-3 rounded-2xl bg-secondary/80 px-4 py-3.5 ring-1 ring-border">
+          <div className="flex gap-2.5">
+            <AlertCircle size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-foreground">{t("planStatus.blockEnded")}</p>
+              <p className="text-xs text-muted-foreground tabular-nums">{sessionsLabel}</p>
+              <p className="text-xs text-muted-foreground">{t("planStatus.blockEndedDesc")}</p>
+            </div>
+          </div>
+          <button
+            onClick={onStartNextBlock}
+            className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+          >
+            <Sparkles size={16} />
+            {t("planStatus.startFresh")}
+          </button>
+        </div>
+      )
+    }
+
     return (
       <div className="flex flex-col gap-3 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
         <div className="flex gap-2.5">
           <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-foreground">{t("planStatus.blockComplete")}</p>
-            <p className="text-xs text-muted-foreground">
-              {`${blockStats.weeks}w · ${blockStats.totalKm} km · ${blockStats.completedSessions}/${blockStats.totalSessions} ${t("planStatus.blockCompleteDesc").toLowerCase().includes("ready") ? "sessions" : "økter"}`}
-            </p>
+            <p className="text-xs text-muted-foreground tabular-nums">{sessionsLabel}</p>
             <p className="text-xs text-muted-foreground">{t("planStatus.blockCompleteDesc")}</p>
           </div>
         </div>
