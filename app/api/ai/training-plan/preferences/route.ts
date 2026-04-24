@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       block_weeks: data.block_weeks ?? 4,
       regenerate_every_weeks: data.regenerate_every_weeks ?? 4,
       plan_mode: data.plan_mode ?? "block",
+      intensity_metric: (data as any).intensity_metric ?? "auto",
     },
   })
 }

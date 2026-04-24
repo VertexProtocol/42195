@@ -114,7 +114,10 @@ function PreferencesForm({
   const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
   const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
   const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
-  const [planMode] = useState<"block" | "full_cycle">(initial.plan_mode ?? "block")
+  const [planMode, setPlanMode] = useState<"block" | "full_cycle">(initial.plan_mode ?? "block")
+  const [intensityMetric, setIntensityMetric] = useState<"auto" | "pace" | "hr_zone">(
+    initial.intensity_metric ?? "auto",
+  )
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [localHistory, setLocalHistory] = useState(initial.notes_history)
@@ -158,6 +161,7 @@ function PreferencesForm({
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
           plan_mode: planMode,
+          intensity_metric: intensityMetric,
         }),
       })
       const body = await res.json().catch(() => ({}))
@@ -176,6 +180,7 @@ function PreferencesForm({
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
           plan_mode: planMode,
+          intensity_metric: intensityMetric,
           notes_history: localHistory,
         },
         {
@@ -323,6 +328,65 @@ function PreferencesForm({
             Your plan will regenerate before the mid-block checkpoint can run. Set to at least {blockWeeks}w to benefit from automatic adjustments.
           </p>
         )}
+      </div>
+
+      {/* Plan mode — block vs full cycle to race day */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Plan length
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          Block: a short training block you regenerate regularly.
+          Full cycle: one periodised plan from today through race day (max 20 weeks).
+        </p>
+        <div className="flex gap-2">
+          {([
+            { value: "block", label: "Block" },
+            { value: "full_cycle", label: "Full cycle" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setPlanMode(opt.value)}
+              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+                planMode === opt.value
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Intensity metric — pace vs HR for structured workout targets */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Intensity targets
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground/70">
+          Auto picks pace targets if you have recent test runs, otherwise HR zones.
+          Pick explicitly to override.
+        </p>
+        <div className="flex gap-2">
+          {([
+            { value: "auto", label: "Auto" },
+            { value: "pace", label: "Pace" },
+            { value: "hr_zone", label: "HR zones" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setIntensityMetric(opt.value)}
+              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+                intensityMetric === opt.value
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground active:bg-accent"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Notes */}

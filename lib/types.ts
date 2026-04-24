@@ -112,6 +112,18 @@ export interface Lap {
 export type TrainingFocus = "volume" | "workouts" | "balanced"
 export type PlanMode = "block" | "full_cycle"
 
+/**
+ * Which metric the AI should use for intensity targets in structured workouts.
+ *   "auto"    — system decides based on available data (test runs → pace,
+ *               HR analysis → hr_zone, otherwise pace with a caveat).
+ *   "pace"    — always pace targets like "4:30/km" or "4:25–4:35 /km".
+ *   "hr_zone" — always HR-zone targets like "Z4 — 175–185 bpm".
+ *
+ * The choice is resolved server-side at plan generation and passed to Claude
+ * as a single explicit mode so the plan stays internally consistent.
+ */
+export type IntensityMetric = "auto" | "pace" | "hr_zone"
+
 export interface GoalPreferences {
   goal_id: string
   sessions_per_week: number
@@ -123,6 +135,30 @@ export interface GoalPreferences {
   block_weeks: number           // total weeks per training block (2/3/4/6)
   regenerate_every_weeks: number // how often user plans to regenerate (2/4/6/8)
   plan_mode?: PlanMode          // "block" (default) or "full_cycle" for complete race prep
+  intensity_metric?: IntensityMetric // default "auto" — system picks pace vs HR
+}
+
+// ---- Structured workout blocks ----
+//
+// Set on TrainingSession.workout for session types that benefit from a
+// concrete breakdown (tempo, intervals, fartlek). Omitted for easy runs,
+// long runs, and recovery jogs — those stay as a single free-text session.
+export type WorkoutBlock =
+  | { kind: "warmup"; minutes: number }
+  | { kind: "cooldown"; minutes: number }
+  | {
+      kind: "reps"
+      count: number
+      distance_m: number
+      pace_target?: string       // "4:30/km" or "Z4 — 175–185 bpm"
+      recovery_m?: number
+      recovery_minutes?: number
+    }
+  | { kind: "steady"; distance_km: number; pace_target?: string }
+  | { kind: "fartlek"; total_minutes: number; description: string }
+
+export interface Workout {
+  blocks: WorkoutBlock[]
 }
 
 export interface TrainingSession {
@@ -131,6 +167,8 @@ export interface TrainingSession {
   effort: string            // e.g. "Easy — conversational pace"
   purpose: string           // e.g. "Build endurance base"
   suggestedPace?: string    // e.g. "5:20–5:30 /km" — computed deterministically post-AI
+  /** Optional structured breakdown for interval/tempo/fartlek sessions. */
+  workout?: Workout
 }
 
 export interface TrainingWeek {
