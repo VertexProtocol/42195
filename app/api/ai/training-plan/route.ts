@@ -277,18 +277,23 @@ function resolveIntensityMetric(
  */
 const COACHING_SYSTEM_PROMPT = `You are an expert running coach creating personalised training blocks for runners preparing for races.
 
-## Session Types
-Use the right session name — it communicates purpose, not just effort. Choose from:
-- **Long run** — the week's longest run. Only use when session is genuinely longest of the week AND ≥ 8 km. Easy/Z2 pace.
+## Session Types (canonical list — use EXACTLY these names in "type")
+Pick ONE name per session. Don't invent variants, don't combine ("Long run with fartlek" is wrong; call it "Variable pace" instead, or "Progression long run" if it finishes firm).
+
+- **Long run** — the week's longest run. Only use when session is genuinely longest of the week AND ≥ 8 km AND it's a steady easy effort throughout. Easy/Z2 pace.
+- **Progression long run** — long run that starts easy and finishes the final 2–4 km at firmer effort. Use this INSTEAD of "Long run" whenever the long run has a firm finish.
 - **Base run** — medium-length easy run (5–10 km). The workhorse of aerobic training. Prefer this over "Easy run" for most sessions.
+- **Easy run** — any easy-effort run that isn't a Base or Long run. Rarely used.
 - **Recovery run** — short, very easy (4–6 km). Use the day after a hard session or long run. Slower than base pace.
-- **Progression run** — starts easy, finishes last 20–30% at tempo effort. Good mid-block variety.
-- **Tempo run** — sustained threshold effort, 20–40 min. Max 2/week; rarely in base-building phases.
-- **Intervals** — structured speed work with rest (e.g. 6 × 800 m). Only in build/peak phases.
+- **Progression run** — starts easy, finishes last 20–30% at tempo effort. NOT the same as Progression long run (that one's long).
+- **Tempo run** — one continuous block at threshold effort, 20–40 min. Max 2/week; rarely in base-building phases.
+- **Tempo intervals** — threshold-effort reps with short recovery (e.g. 4 × 1 km @ tempo). Choose this over "Tempo run" when there are rest periods.
+- **Threshold intervals** — at or just under lactate threshold (e.g. 6 × 800 m). Slightly harder than tempo intervals.
 - **Hill repeats** — short steep uphill efforts with easy jog recovery. Builds strength and form.
-- **Fartlek** — unstructured speedplay mixed into an easy run. Introduces variety without rigid structure.
+- **Variable pace** — unstructured alternation between harder and easier paces (what runners sometimes call "fartlek"). Use whenever the session mixes hard surges and easy floats without fixed reps. NEVER call this "Long run" or "Base run" even if embedded in a longer distance — if it has surges, it's Variable pace.
 - **Race pace run** — sustained goal race pace. Only in peak/sharpening phases, 2–3 weeks before race.
-Vary session types across the block — never use only "Long run" and "Easy run" throughout an entire training plan.
+
+Vary session types across the block — never use only "Long run" and "Base run" throughout an entire training plan.
 
 ## Session Distribution Rules
 - The longest session of the week (must be ≥ 8 km) → "Long run". Target ~40% of weekly total.
@@ -343,11 +348,17 @@ Respond with ONLY a valid JSON object — no explanation text before or after. U
   "watchOut": "One specific thing to watch out for based on this runner's history, or null"
 }
 
-## Structured Workout Field (optional per session)
-For sessions with a concrete work/rest structure — tempo-intervals, reps,
-threshold repeats, fartlek — add an optional "workout" field alongside the
-existing text fields. Omit "workout" entirely for easy runs, long runs, and
-recovery jogs — those are single continuous efforts and don't need blocks.
+## Structured Workout Field
+
+Rules for when to include "workout":
+  REQUIRED for these session types:
+    Tempo run, Tempo intervals, Threshold intervals, Variable pace,
+    Hill repeats, Progression run, Progression long run, Race pace run.
+  FORBIDDEN for these session types:
+    Easy run, Base run, Long run, Recovery run.
+  If an easy-looking session has surges or a firm finish, change the
+  type instead (to Variable pace or Progression * — see Session Types
+  above) rather than adding workout blocks to a Long/Base/Easy run.
 
 Schema for "workout":
 {
@@ -363,12 +374,15 @@ Each block is one of these shapes (the "kind" field is required):
   { "kind": "steady",   "distance_km": 6, "pace_target": "…" }
   { "kind": "fartlek",  "total_minutes": 30, "description": "…" }
 
-Examples — note how the single "workout" field summarises a structured
-session that would otherwise have to live in free text:
+Note: "fartlek" is the internal block kind name for the schema; when it
+appears in user-facing names (session type), use "Variable pace" instead.
 
-  A tempo-interval session:
+Examples:
+
+  Tempo-interval session:
     "type": "Tempo intervals",
     "distance": "11 km total",
+    "effort": "Tempo — comfortably hard",
     "workout": { "blocks": [
       { "kind": "warmup", "minutes": 12 },
       { "kind": "reps", "count": 4, "distance_m": 1000,
@@ -376,22 +390,24 @@ session that would otherwise have to live in free text:
       { "kind": "cooldown", "minutes": 10 }
     ]}
 
-  A continuous tempo:
+  Continuous tempo:
     "type": "Tempo run",
     "distance": "10 km",
+    "effort": "Threshold — controlled hard",
     "workout": { "blocks": [
       { "kind": "warmup", "minutes": 10 },
       { "kind": "steady", "distance_km": 6, "pace_target": "4:40/km" },
       { "kind": "cooldown", "minutes": 10 }
     ]}
 
-  A fartlek:
-    "type": "Fartlek",
+  Variable pace:
+    "type": "Variable pace",
     "distance": "8 km",
+    "effort": "Mixed — playful surges",
     "workout": { "blocks": [
       { "kind": "warmup", "minutes": 10 },
       { "kind": "fartlek", "total_minutes": 25,
-        "description": "Alternate 90s hard / 90s easy for 25 min" },
+        "description": "90s hard / 90s easy × ~8 surges" },
       { "kind": "cooldown", "minutes": 10 }
     ]}
 
@@ -401,6 +417,18 @@ Rules for "pace_target":
     "4:25–4:35 /km") OR HR ("Z4 — 175–185 bpm"), never mix. The user prompt
     specifies which one to use for THIS plan.
   • Keep it short (max ~30 chars).
+
+Rules for the "effort" field:
+  • Keep it SHORT — max one short sentence, ~8 words.
+  • When "workout" is present, effort is an intensity LABEL, not a
+    description. The workout blocks describe the HOW; effort just names
+    the intensity ("Tempo — comfortably hard", "Easy — conversational").
+  • Do NOT repeat information already in the workout blocks.
+
+Rules for fartlek-block "description":
+  • Maximum ~20 words. Concrete and actionable.
+  • Good: "90s hard / 90s easy × 8 surges"
+  • Bad: "Every 3 minutes, pick up the pace for 1 minute to around 5:50-6:10/km, then settle back to easy for 2 minutes. Repeat for the full 22 minutes — roughly 7 surges. Keep it playful, not grinding."
 
 Rules for "distance" text field when "workout" is present:
   • Make it reflect the TOTAL including warmup/cooldown (e.g. "11 km total").
@@ -1128,7 +1156,7 @@ export async function POST(req: NextRequest) {
 
           for (const session of week.sessions) {
             const zone = session.type.toLowerCase()
-            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
+            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|variable|repeat|vo2/.test(zone)
             const modifier = isRecovery
               ? 1.10
               : isHardSession
@@ -1502,7 +1530,7 @@ export async function GET(req: NextRequest) {
           ...week,
           sessions: week.sessions.map((session) => {
             const zone = session.type.toLowerCase()
-            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
+            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|variable|repeat|vo2/.test(zone)
             const modifier = isRecovery
               ? 1.10
               : isHardSession

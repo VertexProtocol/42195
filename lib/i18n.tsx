@@ -254,7 +254,7 @@ const translations = {
     "intervals.sourceStreams": "Detected from pause/resume pattern",
     // Structured workout blocks (plan view)
     "workout.recovery": "rec",
-    "workout.fartlek": "Fartlek",
+    "workout.fartlek": "Variable pace",
     "workout.steady": "Steady",
     // Activity-detail group dividers
     "activityDetail.groupStrava": "Strava data",
@@ -911,7 +911,7 @@ const translations = {
     "intervals.sourceStreams": "Detektert fra pause/resume",
     // Structured workout blocks (plan view)
     "workout.recovery": "pause",
-    "workout.fartlek": "Fartlek",
+    "workout.fartlek": "Variert tempo",
     "workout.steady": "Jevnt",
     // Activity-detail group dividers
     "activityDetail.groupStrava": "Fra Strava",
