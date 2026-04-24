@@ -68,7 +68,7 @@ export function IntervalAnalysisCard({ analysis }: Props) {
 
   return (
     <AppCard>
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-3">
         {/* Header */}
         <div className="flex items-center gap-2">
           <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10">

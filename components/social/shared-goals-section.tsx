@@ -86,8 +86,8 @@ export function SharedGoalsSection({ myGoals, onSelectShare }: Props) {
           <SkeletonCard />
         </div>
       ) : accepted.length === 0 && pending.length === 0 ? (
-        <AppCard>
-          <div className="flex flex-col items-center justify-center gap-2 px-5 py-6 text-center">
+        <AppCard padding="lg">
+          <div className="flex flex-col items-center justify-center gap-2 text-center">
             <Inbox size={22} className="text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">{t("shared.noSharedGoalsYet")}</p>
             <p className="max-w-[280px] text-xs text-muted-foreground">
@@ -102,8 +102,8 @@ export function SharedGoalsSection({ myGoals, onSelectShare }: Props) {
             onClick={() => onSelectShare(s.id)}
             className="text-left"
           >
-            <AppCard>
-              <div className="flex items-center gap-3 p-3">
+            <AppCard padding="sm">
+              <div className="flex items-center gap-3">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                   <Users size={18} className="text-primary" />
                 </div>
@@ -158,13 +158,15 @@ export function SharedGoalsSection({ myGoals, onSelectShare }: Props) {
 
 function SkeletonCard() {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
-      <div className="size-10 shrink-0 rounded-xl bg-secondary animate-pulse" />
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="h-3 w-2/3 rounded bg-secondary animate-pulse" />
-        <div className="h-2.5 w-1/2 rounded bg-secondary/60 animate-pulse" />
+    <AppCard padding="sm">
+      <div className="flex items-center gap-3">
+        <div className="size-10 shrink-0 rounded-xl bg-secondary animate-pulse" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="h-3 w-2/3 rounded bg-secondary animate-pulse" />
+          <div className="h-2.5 w-1/2 rounded bg-secondary/60 animate-pulse" />
+        </div>
       </div>
-    </div>
+    </AppCard>
   )
 }
 
@@ -207,8 +209,8 @@ function PendingInviteCard({
   }
 
   return (
-    <AppCard>
-      <div className="flex flex-col gap-3 p-3 ring-1 ring-primary/20 rounded-2xl">
+    <AppCard state="active">
+      <div className="flex flex-col gap-3">
         <div className="flex items-start gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
             <Clock size={18} className="text-primary" />

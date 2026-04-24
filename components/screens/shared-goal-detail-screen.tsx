@@ -192,7 +192,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
           <ArrowLeft size={18} /> {t("shared.back")}
         </button>
         <AppCard>
-          <div className="flex items-start gap-2 p-4">
+          <div className="flex items-start gap-2">
             <AlertCircle size={18} className="mt-0.5 shrink-0 text-destructive" />
             <div className="flex-1">
               <p className="font-medium text-foreground">{t("shared.failedToLoad")}</p>
@@ -241,7 +241,7 @@ export function SharedGoalDetailScreen({ sharedGoalId, currentUserId, myGoals, o
 
       {/* Team combined progress */}
       <AppCard>
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -415,8 +415,8 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
 
   if (member.status === "pending") {
     return (
-      <AppCard>
-        <div className="flex items-center gap-3 p-3">
+      <AppCard padding="sm">
+        <div className="flex items-center gap-3">
           <Avatar name={member.display_name} url={member.avatar_url} />
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">{member.display_name}</p>
@@ -431,8 +431,8 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
 
   if (member.status === "declined") {
     return (
-      <AppCard>
-        <div className="flex items-center gap-3 p-3 opacity-60">
+      <AppCard padding="sm" className="opacity-60">
+        <div className="flex items-center gap-3">
           <Avatar name={member.display_name} url={member.avatar_url} />
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">{member.display_name}</p>
@@ -445,7 +445,7 @@ function MemberCard({ member, isMe }: { member: Member; isMe: boolean }) {
 
   return (
     <AppCard state={isMe ? "active" : "idle"}>
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Avatar name={member.display_name} url={member.avatar_url} />
           <div className="flex-1 min-w-0">
