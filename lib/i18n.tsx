@@ -486,6 +486,7 @@ const translations = {
     "analysis.coachAnalysis": "Coach Analysis",
     "analysis.getAnalysis": "Get AI analysis",
     "analysis.analyzing": "Analyzing your run\u2026",
+    "analysis.ready": "Ready",
     // Training load indicator
     "loadIndicator.optimal": "Optimal",
     "loadIndicator.high": "High Load",
@@ -1087,6 +1088,7 @@ const translations = {
     "analysis.coachAnalysis": "Treneranalyse",
     "analysis.getAnalysis": "Få AI-analyse",
     "analysis.analyzing": "Analyserer løpet ditt\u2026",
+    "analysis.ready": "Klar",
     // Training load indicator
     "loadIndicator.optimal": "Optimal",
     "loadIndicator.high": "H\u00f8y belastning",
