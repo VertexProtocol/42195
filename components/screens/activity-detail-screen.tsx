@@ -157,21 +157,6 @@ function RouteMap({ polyline, label }: { polyline: string; label: string }) {
   )
 }
 
-// Group divider — uppercase label + trailing hairline, same style as the
-// section headers elsewhere but wraps multiple related <section>s so the
-// user can orient between "raw from Strava" and "what we analyse" at a
-// glance without long scrolls.
-function GroupDivider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 pt-2">
-      <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-        {label}
-      </h2>
-      <div className="h-px flex-1 bg-border" />
-    </div>
-  )
-}
-
 export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities }: ActivityDetailScreenProps) {
   const { t } = useI18n()
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
@@ -181,6 +166,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [activeDetailTab, setActiveDetailTab] = useState<"strava" | "analysis">("strava")
   // Test run state
   const [testRun, setTestRun] = useState<TestRun | null>(null)
   const [testRunLoading, setTestRunLoading] = useState<TestRunType | "remove" | false>(false)
@@ -399,9 +385,6 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         </h1>
       </header>
 
-      {/* ── Group: Strava data ────────────────────────────────────── */}
-      <GroupDivider label={t("activityDetail.groupStrava")} />
-
       {/* Primary Stats */}
       <section>
         <h2 className="sr-only">Key metrics</h2>
@@ -414,110 +397,8 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         </div>
       </section>
 
-      {/* Secondary Stats */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("activityDetail.details")}
-        </h3>
-        <AppCard variant="flush" className="flex flex-col gap-0">
-          {activity.elevation_gain_m !== null && (
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <Mountain size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.elevationGain")}</span>
-              </div>
-              <span className="text-sm font-semibold text-card-foreground">
-                {activity.elevation_gain_m} m
-              </span>
-            </div>
-          )}
-          {activity.avg_heart_rate !== null && (
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <Heart size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.avgHeartRate")}</span>
-              </div>
-              <span className="text-sm font-semibold text-card-foreground">
-                {activity.avg_heart_rate} bpm
-              </span>
-            </div>
-          )}
-          {activity.avg_cadence !== null && (
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <ActivityIcon size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
-              </div>
-              <span className="text-sm font-semibold text-card-foreground">
-                {activity.avg_cadence} spm
-              </span>
-            </div>
-          )}
-          {activity.calories !== null && (
-            <div className="flex items-center justify-between px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <Flame size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.calories")}</span>
-              </div>
-              <span className="text-sm font-semibold text-card-foreground">
-                {activity.calories} kcal
-              </span>
-            </div>
-          )}
-        </AppCard>
-      </section>
-
-      {/* Route Map */}
-      {activity.map_polyline && (
-        <section>
-          <RouteMap polyline={activity.map_polyline} label={t("activityDetail.route")} />
-        </section>
-      )}
-
-      {/* Laps — auto-lap splits or manual lap-button presses, as recorded by the watch */}
-      {laps !== null && laps.length > 1 && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("activityDetail.laps")}
-          </h3>
-          <AppCard variant="flush">
-            <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
-              <span className="text-[11px] font-medium text-muted-foreground">#</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.pace")}</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.hr")}</span>
-            </div>
-            {laps.map((lap, i) => (
-              <div
-                key={lap.index}
-                className={`grid grid-cols-4 gap-2 px-4 py-3 ${i < laps.length - 1 ? "border-b border-border" : ""}`}
-              >
-                <span className="text-sm font-medium text-card-foreground">{lap.index}</span>
-                <span className="text-right text-sm text-card-foreground">
-                  {formatDistance(lap.distance_km)}
-                </span>
-                <span className="text-right text-sm text-card-foreground">
-                  {formatPace(lap.pace_min_per_km)}
-                </span>
-                <span className="text-right text-sm text-card-foreground">
-                  {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "—"}
-                </span>
-              </div>
-            ))}
-          </AppCard>
-        </section>
-      )}
-
-      {/* ── Group: Analysis ────────────────────────────────────── */}
-      <GroupDivider label={t("activityDetail.groupAnalysis")} />
-
-      {/* Interval analysis — detects pause/resume pattern in streams or manual
-          laps to identify work/rest structure and classify intensity. Only
-          renders when the algorithm flags the activity as interval-like. */}
-      {intervalAnalysis?.detected && (
-        <IntervalAnalysisCard analysis={intervalAnalysis} />
-      )}
-
+      {/* AI coach and test run surfaced above the tabs — easy access regardless
+          of which tab is active, since both are commonly used. */}
       {/* AI Analysis */}
       <section>
         {aiAnalysis ? (
@@ -756,71 +637,123 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         )}
       </section>
 
+      {/* Tab switcher: raw Strava data vs computed analysis */}
+      <div className="flex rounded-xl bg-secondary p-1">
+        <button
+          onClick={() => setActiveDetailTab("strava")}
+          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+            activeDetailTab === "strava"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground active:text-foreground"
+          }`}
+        >
+          {t("activityDetail.groupStrava")}
+        </button>
+        <button
+          onClick={() => setActiveDetailTab("analysis")}
+          className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+            activeDetailTab === "analysis"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground active:text-foreground"
+          }`}
+        >
+          {t("activityDetail.groupAnalysis")}
+        </button>
+      </div>
 
-      {/* Heart Rate Zones */}
-      {hrZones.length > 0 && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("activityDetail.hrZones")}
-          </h3>
-          <AppCard>
-            <div className="flex flex-col gap-2.5">
-              {hrZones.map((zone) => (
-                <div key={zone.zone} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-card-foreground">
-                      Z{zone.zone} {zone.label}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {zone.percentage}% · {formatElapsed(zone.seconds)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${zone.percentage}%`,
-                        backgroundColor: zone.color,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+      {/* ── Strava tab ────────────────────────────────────── */}
+      {activeDetailTab === "strava" && (
+        <>
+      {/* Secondary Stats */}
+      <section>
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t("activityDetail.details")}
+        </h3>
+        <AppCard variant="flush" className="flex flex-col gap-0">
+          {activity.elevation_gain_m !== null && (
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <Mountain size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.elevationGain")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.elevation_gain_m} m
+              </span>
             </div>
-          </AppCard>
+          )}
+          {activity.avg_heart_rate !== null && (
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <Heart size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.avgHeartRate")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.avg_heart_rate} bpm
+              </span>
+            </div>
+          )}
+          {activity.avg_cadence !== null && (
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <ActivityIcon size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.avg_cadence} spm
+              </span>
+            </div>
+          )}
+          {activity.calories !== null && (
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <Flame size={18} className="text-muted-foreground" />
+                <span className="text-sm text-card-foreground">{t("activityDetail.calories")}</span>
+              </div>
+              <span className="text-sm font-semibold text-card-foreground">
+                {activity.calories} kcal
+              </span>
+            </div>
+          )}
+        </AppCard>
+      </section>
+
+      {/* Route Map */}
+      {activity.map_polyline && (
+        <section>
+          <RouteMap polyline={activity.map_polyline} label={t("activityDetail.route")} />
         </section>
       )}
 
-      {/* Pace Zones */}
-      {paceZones.length > 0 && (
+      {/* Laps — auto-lap splits or manual lap-button presses, as recorded by the watch */}
+      {laps !== null && laps.length > 1 && (
         <section>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("activityDetail.paceDistribution")}
+            {t("activityDetail.laps")}
           </h3>
-          <AppCard>
-            <div className="flex flex-col gap-2.5">
-              {paceZones.filter((z) => z.percentage > 0).map((zone) => (
-                <div key={zone.zone} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-card-foreground">
-                      {zone.label}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {zone.percentage}% · {formatElapsed(zone.seconds)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${zone.percentage}%`,
-                        backgroundColor: zone.color,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+          <AppCard variant="flush">
+            <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
+              <span className="text-[11px] font-medium text-muted-foreground">#</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.pace")}</span>
+              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.hr")}</span>
             </div>
+            {laps.map((lap, i) => (
+              <div
+                key={lap.index}
+                className={`grid grid-cols-4 gap-2 px-4 py-3 ${i < laps.length - 1 ? "border-b border-border" : ""}`}
+              >
+                <span className="text-sm font-medium text-card-foreground">{lap.index}</span>
+                <span className="text-right text-sm text-card-foreground">
+                  {formatDistance(lap.distance_km)}
+                </span>
+                <span className="text-right text-sm text-card-foreground">
+                  {formatPace(lap.pace_min_per_km)}
+                </span>
+                <span className="text-right text-sm text-card-foreground">
+                  {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "—"}
+                </span>
+              </div>
+            ))}
           </AppCard>
         </section>
       )}
@@ -1019,6 +952,90 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             )}
           </div>
         </section>
+      )}
+        </>
+      )}
+
+      {/* ── Analysis tab ─────────────────────────────────── */}
+      {activeDetailTab === "analysis" && (
+        <>
+
+      {/* Interval analysis — detects pause/resume pattern in streams or manual
+          laps to identify work/rest structure and classify intensity. Only
+          renders when the algorithm flags the activity as interval-like. */}
+      {intervalAnalysis?.detected && (
+        <IntervalAnalysisCard analysis={intervalAnalysis} />
+      )}
+
+
+      {/* Heart Rate Zones */}
+      {hrZones.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("activityDetail.hrZones")}
+          </h3>
+          <AppCard>
+            <div className="flex flex-col gap-2.5">
+              {hrZones.map((zone) => (
+                <div key={zone.zone} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-card-foreground">
+                      Z{zone.zone} {zone.label}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {zone.percentage}% · {formatElapsed(zone.seconds)}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${zone.percentage}%`,
+                        backgroundColor: zone.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AppCard>
+        </section>
+      )}
+
+      {/* Pace Zones */}
+      {paceZones.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("activityDetail.paceDistribution")}
+          </h3>
+          <AppCard>
+            <div className="flex flex-col gap-2.5">
+              {paceZones.filter((z) => z.percentage > 0).map((zone) => (
+                <div key={zone.zone} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-card-foreground">
+                      {zone.label}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {zone.percentage}% · {formatElapsed(zone.seconds)}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${zone.percentage}%`,
+                        backgroundColor: zone.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AppCard>
+        </section>
+      )}
+        </>
       )}
 
 
