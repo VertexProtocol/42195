@@ -164,6 +164,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [loadingCharts, setLoadingCharts] = useState(true)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  const [aiExpanded, setAiExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [activeDetailTab, setActiveDetailTab] = useState<"strava" | "analysis">("strava")
@@ -197,6 +198,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       if (res.ok) {
         const data = await res.json()
         setAiAnalysis(data.analysis)
+        setAiExpanded(true) // auto-expand the fresh result
       } else {
         setAnalysisError(`Request failed (${res.status})`)
       }
@@ -402,13 +404,32 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* AI Analysis */}
       <section>
         {aiAnalysis ? (
-          <AppCard>
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles size={14} className="text-primary" />
-              <span className="text-xs font-medium text-primary">{t("analysis.coachAnalysis")}</span>
-            </div>
-            <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
-          </AppCard>
+          <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
+            <button
+              onClick={() => setAiExpanded((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 active:bg-secondary/50 transition-colors"
+              aria-expanded={aiExpanded}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles size={14} className="shrink-0 text-primary" />
+                <span className="text-xs font-medium text-primary">{t("analysis.coachAnalysis")}</span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                  <span className="size-1.5 rounded-full bg-success" />
+                  {t("analysis.ready")}
+                </span>
+              </div>
+              {aiExpanded ? (
+                <ChevronUp size={14} className="shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
+              )}
+            </button>
+            {aiExpanded && (
+              <div className="border-t border-border px-4 py-3">
+                <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             <button
