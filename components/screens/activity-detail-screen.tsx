@@ -164,6 +164,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [loadingCharts, setLoadingCharts] = useState(true)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  const [aiAnalysisChecked, setAiAnalysisChecked] = useState(false)
   const [aiExpanded, setAiExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -177,10 +178,12 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   // Load cached analysis on mount
   useEffect(() => {
     let cancelled = false
+    setAiAnalysisChecked(false)
     fetch(`/api/ai/activity-analysis?activityId=${activity.id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (!cancelled && data?.analysis) setAiAnalysis(data.analysis) })
       .catch((err) => console.error("Failed to prefetch activity analysis:", err))
+      .finally(() => { if (!cancelled) setAiAnalysisChecked(true) })
     return () => { cancelled = true }
   }, [activity.id])
 
@@ -403,7 +406,12 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           of which tab is active, since both are commonly used. */}
       {/* AI Analysis */}
       <section>
-        {aiAnalysis ? (
+        {!aiAnalysisChecked ? (
+          /* Skeleton while we check whether an analysis already exists for
+             this activity — prevents the "Get analysis" button from
+             flashing in for a moment before the cached result loads. */
+          <div className="h-12 animate-pulse rounded-2xl bg-card ring-1 ring-border" />
+        ) : aiAnalysis ? (
           <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border overflow-hidden">
             <button
               onClick={() => setAiExpanded((v) => !v)}
