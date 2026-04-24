@@ -166,6 +166,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
   const [aiAnalysisChecked, setAiAnalysisChecked] = useState(false)
   const [aiExpanded, setAiExpanded] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [activeDetailTab, setActiveDetailTab] = useState<"strava" | "analysis">("strava")
@@ -175,19 +176,49 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [showTestRunPicker, setShowTestRunPicker] = useState(false)
   const [testRunExpanded, setTestRunExpanded] = useState(false)
 
-  // Load cached analysis on mount
+  // Load cached analysis on mount.
+  //
+  // sessionStorage caches the analysis text per activity so revisiting an
+  // activity in the same session shows the collapsed Klar-card immediately
+  // instead of flashing a skeleton while the API round-trips. Cache is
+  // refreshed in the background so a regenerated analysis still propagates.
   useEffect(() => {
     let cancelled = false
-    setAiAnalysisChecked(false)
+    const cacheKey = `ai-analysis-${activity.id}`
+    let hadCache = false
+    try {
+      const cached = sessionStorage.getItem(cacheKey)
+      if (cached) {
+        setAiAnalysis(cached)
+        setAiAnalysisChecked(true)
+        hadCache = true
+      } else {
+        setAiAnalysis(null)
+        setAiAnalysisChecked(false)
+      }
+    } catch {
+      setAiAnalysis(null)
+      setAiAnalysisChecked(false)
+    }
+    setAiExpanded(false)
+    setAnalysisError(null)
+
     fetch(`/api/ai/activity-analysis?activityId=${activity.id}`)
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (!cancelled && data?.analysis) setAiAnalysis(data.analysis) })
+      .then((data) => {
+        if (cancelled) return
+        if (data?.analysis) {
+          setAiAnalysis(data.analysis)
+          try { sessionStorage.setItem(cacheKey, data.analysis) } catch {}
+        } else if (!hadCache) {
+          // No analysis exists yet — only clear if we hadn't shown a cached one
+          setAiAnalysis(null)
+        }
+      })
       .catch((err) => console.error("Failed to prefetch activity analysis:", err))
       .finally(() => { if (!cancelled) setAiAnalysisChecked(true) })
     return () => { cancelled = true }
   }, [activity.id])
-
-  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   const handleGetAnalysis = useCallback(async () => {
     setAiAnalysisLoading(true)
@@ -202,6 +233,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         const data = await res.json()
         setAiAnalysis(data.analysis)
         setAiExpanded(true) // auto-expand the fresh result
+        try {
+          sessionStorage.setItem(`ai-analysis-${activity.id}`, data.analysis)
+        } catch {}
       } else {
         setAnalysisError(`Request failed (${res.status})`)
       }
