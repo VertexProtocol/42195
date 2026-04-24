@@ -13,6 +13,7 @@ import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
 import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
 import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
+import { reconcileWorkoutDistances } from "@/lib/workout-validation"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
@@ -434,6 +435,16 @@ Rules for "distance" text field when "workout" is present:
   • Make it reflect the TOTAL including warmup/cooldown (e.g. "11 km total").
   • The "distance" field still parses client-side for week-km totals, so
     keep it numeric-looking.
+  • CONSISTENCY REQUIREMENT — the declared distance MUST match the block
+    sum within ~10%. Compute it before answering:
+        time-based blocks (warmup/cooldown/fartlek): minutes ÷ estimated
+          pace (~6:30/km easy, ~4:30/km hard, ~5:30/km blended for fartlek)
+        reps block: count × distance_m/1000 + recovery_m contribution
+        steady block: distance_km
+    If your blocks would cover 6.7 km, don't declare "7.5 km total" —
+    either shorten the blocks or lower the declared number until they
+    agree. A plan that says 7.5 km but actually only covers 6 km of
+    running is wrong and will be auto-corrected downstream.
 `
 
 function buildPrompt(
@@ -1091,7 +1102,25 @@ export async function POST(req: NextRequest) {
           )
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
-        const plan = parsed.data
+        const rawPlan = parsed.data
+
+        // Reconcile structured workout distances: if Claude declared a total
+        // that doesn't match the sum of its blocks (within 15% tolerance),
+        // rewrite the declared distance to match the blocks — the blocks are
+        // the authoritative description of what the runner will actually do.
+        const { reconciledPlan, issues: distanceIssues } = reconcileWorkoutDistances(
+          rawPlan,
+          { easyPaceMinPerKm: recentEasyPace ?? null },
+        )
+        if (distanceIssues.length > 0) {
+          console.warn(
+            `[plan-validation] Corrected ${distanceIssues.length} session(s) with distance/block mismatch:`,
+            distanceIssues.map((i) =>
+              `W${i.weekNumber}.s${i.sessionIndex} ${i.sessionType}: declared ${i.declaredKm} → expected ${i.expectedKm} (${i.deviationPct}%)`,
+            ),
+          )
+        }
+        const plan = reconciledPlan
 
         // Post-generation structural validation logging
         for (const week of plan.weeks) {
