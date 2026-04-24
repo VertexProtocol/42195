@@ -252,6 +252,10 @@ const translations = {
     "intervals.consistency_variable": "Variable (±{n} s/km)",
     "intervals.sourceLaps": "Based on lap-button presses",
     "intervals.sourceStreams": "Detected from pause/resume pattern",
+    // Structured workout blocks (plan view)
+    "workout.recovery": "rec",
+    "workout.fartlek": "Fartlek",
+    "workout.steady": "Steady",
     // Activity-detail group dividers
     "activityDetail.groupStrava": "Strava data",
     "activityDetail.groupAnalysis": "Analysis",
@@ -905,6 +909,10 @@ const translations = {
     "intervals.consistency_variable": "Varierende (±{n} s/km)",
     "intervals.sourceLaps": "Basert på lap-knapp",
     "intervals.sourceStreams": "Detektert fra pause/resume",
+    // Structured workout blocks (plan view)
+    "workout.recovery": "pause",
+    "workout.fartlek": "Fartlek",
+    "workout.steady": "Jevnt",
     // Activity-detail group dividers
     "activityDetail.groupStrava": "Fra Strava",
     "activityDetail.groupAnalysis": "Analyse",

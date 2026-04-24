@@ -34,6 +34,7 @@ import type {
   TrainingWeek,
   PlanSnapshot,
   MidBlockCheckpoint,
+  WorkoutBlock,
 } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
@@ -533,6 +534,48 @@ function parseSessionKm(distance: string): number | null {
   return null
 }
 
+/**
+ * Format a single workout block as a short one-line description for the
+ * session card. Matches the concise row style of the surrounding effort/pace
+ * text — no punctuation bloat, no labels repeated when obvious.
+ */
+function formatWorkoutBlock(
+  block: WorkoutBlock,
+  t: (k: TranslationKey) => string,
+  min: string,
+): string {
+  switch (block.kind) {
+    case "warmup":
+      return `${t("intervals.type_warmup")} ${block.minutes} ${min}`
+    case "cooldown":
+      return `${t("intervals.type_cooldown")} ${block.minutes} ${min}`
+    case "steady": {
+      const pace = block.pace_target ? ` @ ${block.pace_target}` : ""
+      return `${t("workout.steady")} ${block.distance_km} km${pace}`
+    }
+    case "fartlek":
+      return `${t("workout.fartlek")} ${block.total_minutes} ${min} — ${block.description}`
+    case "reps": {
+      const distLabel = block.distance_m >= 1000
+        ? `${(block.distance_m / 1000).toFixed(block.distance_m % 1000 === 0 ? 0 : 1)} km`
+        : `${block.distance_m} m`
+      const pace = block.pace_target ? ` @ ${block.pace_target}` : ""
+      const recoveryParts: string[] = []
+      if (block.recovery_m) {
+        const rd = block.recovery_m >= 1000
+          ? `${(block.recovery_m / 1000).toFixed(1)} km`
+          : `${block.recovery_m} m`
+        recoveryParts.push(rd)
+      }
+      if (block.recovery_minutes) recoveryParts.push(`${block.recovery_minutes} ${min}`)
+      const recovery = recoveryParts.length
+        ? ` (${t("workout.recovery")} ${recoveryParts.join(" / ")})`
+        : ""
+      return `${block.count} × ${distLabel}${pace}${recovery}`
+    }
+  }
+}
+
 /** Snap a date to the Monday of its ISO week (Mon=start of week) */
 function toMonday(date: Date): Date {
   const d = new Date(date)
@@ -615,6 +658,7 @@ function WeekCard({
   weekStart: Date
   weekEnd: Date
 }) {
+  const { t } = useI18n()
   const [expanded, setExpanded] = useState(isCurrent)
   const [coachNoteOpen, setCoachNoteOpen] = useState(false)
 
@@ -748,6 +792,21 @@ function WeekCard({
                         <span className="shrink-0 font-mono text-xs text-primary/70">{session.suggestedPace}</span>
                       )}
                     </div>
+
+                    {/* Structured workout breakdown — only for interval/tempo/fartlek sessions */}
+                    {session.workout && session.workout.blocks.length > 0 && (
+                      <ul className="mt-1 flex flex-col gap-0.5">
+                        {session.workout.blocks.map((block, bi) => (
+                          <li
+                            key={bi}
+                            className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
+                          >
+                            <span className="mt-1 size-1 shrink-0 rounded-full bg-muted-foreground/50" />
+                            <span className="font-mono">{formatWorkoutBlock(block, t, t("common.min"))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               )

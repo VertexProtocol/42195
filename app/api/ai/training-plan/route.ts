@@ -4,7 +4,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
-import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
+import type { Activity, GoalPreferences, IntensityMetric, TrainingPlan, TrainingWeek } from "@/lib/types"
 import { validateAndAdjustPlan, parseSessionDistanceKm, detectFatigue, classifyAthleteLevel, type SafetyActivity } from "@/lib/training-safety"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
@@ -15,6 +15,33 @@ import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasA
 import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
 
 const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
+
+const WorkoutBlockSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("warmup"), minutes: z.number().min(0).max(60) }),
+  z.object({ kind: z.literal("cooldown"), minutes: z.number().min(0).max(60) }),
+  z.object({
+    kind: z.literal("reps"),
+    count: z.number().int().min(1).max(40),
+    distance_m: z.number().int().min(50).max(5000),
+    pace_target: z.string().max(40).optional(),
+    recovery_m: z.number().int().min(0).max(2000).optional(),
+    recovery_minutes: z.number().min(0).max(15).optional(),
+  }),
+  z.object({
+    kind: z.literal("steady"),
+    distance_km: z.number().min(0.5).max(50),
+    pace_target: z.string().max(40).optional(),
+  }),
+  z.object({
+    kind: z.literal("fartlek"),
+    total_minutes: z.number().int().min(5).max(180),
+    description: z.string().max(200),
+  }),
+])
+
+const WorkoutSchema = z.object({
+  blocks: z.array(WorkoutBlockSchema).min(1).max(12),
+})
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -30,6 +57,7 @@ const TrainingPlanSchema = z.object({
           effort: z.string(),
           purpose: z.string(),
           suggestedPace: z.string().optional(),
+          workout: WorkoutSchema.optional(),
         }),
       ),
       coachNote: z.string().nullable(),
@@ -218,6 +246,32 @@ function calcFullCycleTargets(
 
 
 /**
+ * Picks a single intensity metric for structured workout pace targets.
+ * The plan is never allowed to mix pace and HR — it's one or the other
+ * throughout, to keep prescriptions internally consistent.
+ *
+ *   • user explicit "pace" or "hr_zone" → honour it
+ *   • user "auto" (default) → pace if there's a recent test run to
+ *     calibrate against, else HR zones if HR analysis is well-calibrated,
+ *     else pace as a last resort
+ */
+type ResolvedMetric = "pace" | "hr_zone"
+
+function resolveIntensityMetric(
+  userChoice: IntensityMetric | undefined,
+  hasRecentTestRun: boolean,
+  hrWellCalibrated: boolean,
+): ResolvedMetric {
+  if (userChoice === "pace") return "pace"
+  if (userChoice === "hr_zone") return "hr_zone"
+  // auto
+  if (hasRecentTestRun) return "pace"
+  if (hrWellCalibrated) return "hr_zone"
+  return "pace"
+}
+
+
+/**
  * Cacheable system prompt — identical for all users.
  * Marked with cache_control so Anthropic can reuse it across requests.
  */
@@ -287,7 +341,72 @@ Respond with ONLY a valid JSON object — no explanation text before or after. U
   ],
   "keyPrinciples": ["3-4 short training principles specific to this runner and block"],
   "watchOut": "One specific thing to watch out for based on this runner's history, or null"
-}`
+}
+
+## Structured Workout Field (optional per session)
+For sessions with a concrete work/rest structure — tempo-intervals, reps,
+threshold repeats, fartlek — add an optional "workout" field alongside the
+existing text fields. Omit "workout" entirely for easy runs, long runs, and
+recovery jogs — those are single continuous efforts and don't need blocks.
+
+Schema for "workout":
+{
+  "blocks": [ WorkoutBlock, ... ]
+}
+
+Each block is one of these shapes (the "kind" field is required):
+
+  { "kind": "warmup",   "minutes": 10 }
+  { "kind": "cooldown", "minutes": 10 }
+  { "kind": "reps",     "count": 4, "distance_m": 1000,
+    "pace_target": "…", "recovery_m": 400, "recovery_minutes": 2 }
+  { "kind": "steady",   "distance_km": 6, "pace_target": "…" }
+  { "kind": "fartlek",  "total_minutes": 30, "description": "…" }
+
+Examples — note how the single "workout" field summarises a structured
+session that would otherwise have to live in free text:
+
+  A tempo-interval session:
+    "type": "Tempo intervals",
+    "distance": "11 km total",
+    "workout": { "blocks": [
+      { "kind": "warmup", "minutes": 12 },
+      { "kind": "reps", "count": 4, "distance_m": 1000,
+        "pace_target": "4:30/km", "recovery_m": 400 },
+      { "kind": "cooldown", "minutes": 10 }
+    ]}
+
+  A continuous tempo:
+    "type": "Tempo run",
+    "distance": "10 km",
+    "workout": { "blocks": [
+      { "kind": "warmup", "minutes": 10 },
+      { "kind": "steady", "distance_km": 6, "pace_target": "4:40/km" },
+      { "kind": "cooldown", "minutes": 10 }
+    ]}
+
+  A fartlek:
+    "type": "Fartlek",
+    "distance": "8 km",
+    "workout": { "blocks": [
+      { "kind": "warmup", "minutes": 10 },
+      { "kind": "fartlek", "total_minutes": 25,
+        "description": "Alternate 90s hard / 90s easy for 25 min" },
+      { "kind": "cooldown", "minutes": 10 }
+    ]}
+
+Rules for "pace_target":
+  • Leave it out if the pace is obvious from "effort" (easy runs in steady blocks).
+  • Use a CONSISTENT format across the whole plan — either pace ("4:30/km" or
+    "4:25–4:35 /km") OR HR ("Z4 — 175–185 bpm"), never mix. The user prompt
+    specifies which one to use for THIS plan.
+  • Keep it short (max ~30 chars).
+
+Rules for "distance" text field when "workout" is present:
+  • Make it reflect the TOTAL including warmup/cooldown (e.g. "11 km total").
+  • The "distance" field still parses client-side for week-km totals, so
+    keep it numeric-looking.
+`
 
 function buildPrompt(
   goal: {
@@ -311,6 +430,7 @@ function buildPrompt(
   testRunSection?: string | null,
   blockPosition?: { blockNum: number; totalBlocks: number; phaseName: string; weekInPlan: number; totalWeeks: number } | null,
   comeback?: ComebackRecommendation,
+  intensityMetric?: ResolvedMetric,
 ): string {
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
@@ -395,6 +515,14 @@ function buildPrompt(
     ? `\n${testRunSection}\n`
     : ""
 
+  const intensitySection = intensityMetric
+    ? `\n## Intensity Target Style\n${
+        intensityMetric === "pace"
+          ? 'Use PACE for all "pace_target" fields in structured workouts (e.g. "4:30/km" or "4:25–4:35 /km"). Do not use HR zones.'
+          : 'Use HR ZONES for all "pace_target" fields in structured workouts (e.g. "Z4 — 175–185 bpm"). Do not use pace. Use the zones provided in the Current Fitness section above.'
+      }\nApply this consistently throughout the entire plan — never mix pace and HR targets.\n`
+    : ""
+
   return `Create a ${blockWeeks}-week training block for this runner.
 
 ## The Runner's Goal
@@ -421,7 +549,7 @@ ${(() => {
       : ""
   return [coachLine, injuryLine].filter(Boolean).join("\n")
 })()}
-${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}${(() => {
+${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testRunPromptSection}${intensitySection}${(() => {
   if (!comeback?.needsRamp) return ""
   const categoryLabel: Record<string, string> = {
     short: "short (7-10 days)",
@@ -544,6 +672,7 @@ export async function POST(req: NextRequest) {
     block_weeks: prefsRow?.block_weeks ?? 4,
     regenerate_every_weeks: prefsRow?.regenerate_every_weeks ?? 4,
     plan_mode: prefsRow?.plan_mode ?? "block",
+    intensity_metric: (prefsRow as any)?.intensity_metric ?? "auto",
   }
 
   // Fetch last 12 weeks of activities
@@ -646,6 +775,7 @@ export async function POST(req: NextRequest) {
   // which would make Claude's intensity prescriptions too conservative.
   const actsWithHr = runActs.filter((a) => a.avg_heart_rate && Number(a.avg_heart_rate) > 0)
   let hrSummary: string | null = null
+  let hrCalibrationStatus: "insufficient_data" | "likely_misconfigured" | "slightly_misaligned" | "well_calibrated" | null = null
   if (actsWithHr.length > 0) {
     const avgHr = Math.round(actsWithHr.reduce((s, a) => s + Number(a.avg_heart_rate), 0) / actsWithHr.length)
     const maxHr = Math.max(...actsWithHr.map((a) => Number(a.avg_heart_rate)))
@@ -669,6 +799,7 @@ export async function POST(req: NextRequest) {
         })),
         Math.round(maxHr * 1.1),
       )
+      hrCalibrationStatus = hrAnalysis.calibrationStatus
       if (hrAnalysis.calibrationStatus !== "insufficient_data") {
         const zoneLines = hrAnalysis.recommendedZones
           .map((z) => `  Z${z.zone} ${z.label}: ${z.min}–${z.max} bpm`)
@@ -820,6 +951,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Resolve intensity metric (pace vs HR) once, pass to the prompt.
+  // We only use "well_calibrated" HR analysis — otherwise the zones are
+  // estimates and pace targets are safer.
+  const ninetyDaysAgoMs = Date.now() - 90 * 86400_000
+  const hasRecentTestRun = !!(testRuns ?? []).some(
+    (tr) => new Date(tr.created_at).getTime() > ninetyDaysAgoMs,
+  )
+  const hrWellCalibrated = hrCalibrationStatus === "well_calibrated"
+  const resolvedIntensityMetric = resolveIntensityMetric(
+    prefs.intensity_metric,
+    hasRecentTestRun,
+    hrWellCalibrated,
+  )
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -836,6 +981,7 @@ export async function POST(req: NextRequest) {
     testRunSection,
     blockPositionArg,
     comeback,
+    resolvedIntensityMetric,
   )
 
   // Stream Claude response via SSE to avoid timeouts and provide progress feedback
