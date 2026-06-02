@@ -667,8 +667,8 @@ export function useAppData(initialData?: InitialData | null) {
   // ----- Connect Strava via OAuth -----
   const connectStrava = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
     // Always use the full OAuth flow so each user authorises their own Strava
-    // account. The old bootstrap endpoint (/api/auth/strava/setup) used a
-    // single shared refresh token and would bind the wrong athlete to new users.
+    // account. (A removed single-user bootstrap path used one shared refresh
+    // token, which would have bound the wrong athlete to every new user.)
     window.location.href = "/api/auth/strava"
     return { ok: true }
   }, [])
