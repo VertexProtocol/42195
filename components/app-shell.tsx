@@ -39,7 +39,11 @@ function useLocationSearch() {
 function ScreenFallback() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      <div
+        className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/10 border-t-primary"
+        role="status"
+        aria-label="Loading"
+      />
     </div>
   )
 }
@@ -204,18 +208,20 @@ export function AppShell({ initialData }: AppShellProps) {
   if (data.isLoading) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
+        <div
+          className="h-7 w-7 animate-spin rounded-full border-2 border-foreground/10 border-t-primary"
+          role="status"
+          aria-label="Loading"
+        />
       </div>
     )
   }
 
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-background">
-      {/* Screen content */}
-      <main className="relative pb-20">
+      {/* Screen content. Bottom padding clears the tab bar plus the home
+          indicator on devices that have one. */}
+      <main className="relative pb-[calc(5rem+env(safe-area-inset-bottom))]">
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}

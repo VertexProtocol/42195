@@ -46,7 +46,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#f5f3ef",
+  // Matches --background in each scheme, so the browser chrome and the status
+  // bar blend into the app instead of framing it with a mismatched strip.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbf8f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#100c0a" },
+  ],
 }
 
 export default function RootLayout({

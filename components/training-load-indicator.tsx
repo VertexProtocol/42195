@@ -156,7 +156,7 @@ export function TrainingLoadIndicator({ activities, compact = false, warnings = 
             <p className={`text-sm font-semibold ${cfg.textClass}`}>{cfg.label}</p>
             {latest && (
               <span className="text-xs text-muted-foreground" suppressHydrationWarning>
-                Fitness {fitnessArrow} {latest.ctl.toFixed(1)}
+                {t("loadIndicator.fitness")} {fitnessArrow} {latest.ctl.toFixed(1)}
               </span>
             )}
           </div>
@@ -166,7 +166,7 @@ export function TrainingLoadIndicator({ activities, compact = false, warnings = 
       {/* Load bar 0–100 */}
       <div className="border-t border-border/40 px-4 py-3">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1.5">
-          <span>Training Load</span>
+          <span>{t("home.trainingLoad")}</span>
           <span className="font-medium tabular-nums">
             {acwr.ratio > 0 ? Math.min(Math.round((acwr.ratio / 1.5) * 100), 100) : 0}
             <span className="text-muted-foreground/60"> / 100</span>
@@ -181,9 +181,9 @@ export function TrainingLoadIndicator({ activities, compact = false, warnings = 
           )}
         </div>
         <div className="flex justify-between text-[9px] text-muted-foreground/60 mt-1">
-          <span>Low</span>
-          <span className="text-emerald-600/70 dark:text-emerald-400/70">Optimal</span>
-          <span>High</span>
+          <span>{t("loadIndicator.scaleLow")}</span>
+          <span className="text-success/80">{t("loadIndicator.scaleOptimal")}</span>
+          <span>{t("loadIndicator.scaleHigh")}</span>
         </div>
       </div>
 

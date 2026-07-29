@@ -6,41 +6,46 @@ import { cn } from '@/lib/utils'
  *
  * Variants
  * ─────────
- * default   rounded-2xl bg-card p-{padding} shadow-sm ring-1 ring-border
- *           Use for: stat cards, summary cards, section content cards.
+ * default   Padded surface. Stat cards, summary cards, section content.
+ * flush     Same surface, no padding, clips children. Children own their
+ *           padding (list rows, settings sections, divided lists).
+ * featured  Brand-tinted surface with a brand border. AI coach card,
+ *           highlighted CTAs. One per screen, at most.
  *
- * flush     Same as default but overflow-hidden and no padding.
- *           Children own their own padding (e.g. list rows, divider sections).
- *           Use for: activity rows, settings sections, historical lists.
+ * Elevation
+ * ─────────
+ * flat      Border only. Use when the card sits inside another card, or
+ *           when a grid of cards would otherwise turn into a shadow field.
+ * raised    Border + contact shadow. The default.
+ * lifted    Border + ambient shadow. Only for the one element on a screen
+ *           that should read as floating above the rest.
  *
- * featured  Gradient bg with primary ring.
- *           Use for: AI coach card, highlighted CTAs.
- *
- * Padding (ignored for flush/featured — those manage their own)
+ * Padding (ignored by `flush`, which has none by definition)
  * ───────
- * sm  → p-3    compact cards
- * md  → p-4    standard (default)
- * lg  → p-5    spacious / empty-state cards
+ * sm → p-3   compact          md → p-4   standard (default)
+ * lg → p-5   spacious / empty states
  *
- * State (applies a coloured ring, replaces the default ring-border)
+ * State — a coloured border replacing the neutral one
  * ─────
- * idle     → ring-1 ring-border   (default)
- * active   → ring-2 ring-primary/40
- * complete → ring-2 ring-success/40
+ * idle · active · complete
  *
  * Interactive
  * ───────────
- * Pass interactive to add a subtle press scale for tappable cards.
+ * `interactive` adds the shared `.press` depress. Pass it whenever the
+ * card itself is tappable, so a card, a list row and a tab all respond
+ * identically to touch.
  */
 
 export type AppCardVariant = 'default' | 'flush' | 'featured'
 export type AppCardPadding = 'sm' | 'md' | 'lg'
 export type AppCardState = 'idle' | 'active' | 'complete'
+export type AppCardElevation = 'flat' | 'raised' | 'lifted'
 
 interface AppCardProps extends React.ComponentProps<'div'> {
   variant?: AppCardVariant
   padding?: AppCardPadding
   state?: AppCardState
+  elevation?: AppCardElevation
   interactive?: boolean
 }
 
@@ -50,40 +55,37 @@ const paddingMap: Record<AppCardPadding, string> = {
   lg: 'p-5',
 }
 
-const stateRingMap: Record<AppCardState, string> = {
-  idle: 'ring-1 ring-border',
-  active: 'ring-2 ring-primary/40',
-  complete: 'ring-2 ring-success/40',
+const elevationMap: Record<AppCardElevation, string> = {
+  flat: '',
+  raised: 'shadow-e1',
+  lifted: 'shadow-e2',
+}
+
+const stateBorderMap: Record<AppCardState, string> = {
+  idle: 'border-border',
+  active: 'border-primary/45',
+  complete: 'border-success/45',
 }
 
 export function AppCard({
   variant = 'default',
   padding = 'md',
   state = 'idle',
+  elevation = 'raised',
   interactive = false,
   className,
   ...props
 }: AppCardProps) {
-  if (variant === 'featured') {
-    return (
-      <div
-        className={cn(
-          'rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 p-5 shadow-sm ring-1 ring-primary/20',
-          interactive && 'active:scale-[0.98] transition-transform cursor-pointer',
-          className,
-        )}
-        {...props}
-      />
-    )
-  }
-
   return (
     <div
       className={cn(
-        'rounded-2xl bg-card shadow-sm transition-all',
-        stateRingMap[state],
-        variant === 'flush' ? 'overflow-hidden' : paddingMap[padding],
-        interactive && 'active:scale-[0.98]',
+        'rounded-2xl border',
+        variant === 'featured'
+          ? 'border-primary/25 bg-primary-subtle'
+          : cn('bg-card', stateBorderMap[state]),
+        elevationMap[elevation],
+        variant === 'flush' ? 'overflow-hidden' : paddingMap[variant === 'featured' ? 'lg' : padding],
+        interactive && 'press cursor-pointer',
         className,
       )}
       {...props}
