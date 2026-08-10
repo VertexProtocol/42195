@@ -32,11 +32,11 @@ export function CollapsibleSection({
         aria-expanded={!isCollapsed}
       >
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {title}
           </h3>
           {badge !== undefined && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">
               {badge}
             </span>
           )}

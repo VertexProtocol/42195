@@ -4,6 +4,9 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { useI18n } from "@/lib/i18n"
+import { AuthShell, AuthError, Field } from "@/components/auth-shell"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 export default function ForgotPasswordPage() {
   const { t } = useI18n()
@@ -20,19 +23,16 @@ export default function ForgotPasswordPage() {
     startTransition(async () => {
       try {
         const supabase = createClient()
-        // Use the canonical site URL from the environment so the reset link
-        // always points to the correct host, regardless of preview/staging context.
-        // Falls back to window.location.origin for local development.
+        // The canonical site URL keeps the reset link pointing at the right
+        // host regardless of preview/staging context.
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${siteUrl}/auth/callback?next=/auth/reset-password`,
         })
 
         if (error) {
-          // Do NOT expose the raw Supabase error — rate-limit messages can be
-          // scoped to a specific email and enable indirect user enumeration.
-          // The UI already shows a neutral "check your email" screen on success,
-          // so any failure path should also reveal nothing about the account.
+          // Never relay the raw Supabase error: rate-limit messages are scoped
+          // to a specific address and would enable user enumeration.
           setError(t("auth.errorDefault"))
           return
         }
@@ -46,68 +46,45 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">{t("auth.checkEmailTitle")}</h1>
-            <p className="text-sm text-muted-foreground">{t("auth.checkEmailDesc")}</p>
-          </div>
-          <Link
-            href="/auth/login"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90"
-          >
-            {t("auth.backToSignIn")}
-          </Link>
-        </div>
-      </div>
+      <AuthShell title={t("auth.checkEmailTitle")} lede={t("auth.checkEmailDesc")}>
+        <Button asChild block>
+          <Link href="/auth/login">{t("auth.backToSignIn")}</Link>
+        </Button>
+      </AuthShell>
     )
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">{t("auth.resetPasswordTitle")}</h1>
-          <p className="text-sm text-muted-foreground">{t("auth.resetPasswordDesc")}</p>
-        </div>
+    <AuthShell
+      title={t("auth.resetPasswordTitle")}
+      lede={t("auth.resetPasswordDesc")}
+      footer={
+        <Link
+          href="/auth/login"
+          className="font-semibold text-primary underline-offset-4 hover:underline"
+        >
+          {t("auth.backToSignIn")}
+        </Link>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {error && <AuthError>{error}</AuthError>}
 
-        {error && (
-          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        <Field id="email" label={t("auth.emailLabel")}>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="you@example.com"
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              {t("auth.emailLabel")}
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-          >
-            {isPending ? t("auth.sending") : t("auth.sendResetLink")}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            {t("auth.backToSignIn")}
-          </Link>
-        </p>
-      </div>
-    </div>
+        <Button type="submit" block loading={isPending} className="mt-1">
+          {isPending ? t("auth.sending") : t("auth.sendResetLink")}
+        </Button>
+      </form>
+    </AuthShell>
   )
 }

@@ -1,9 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Trash2, RefreshCw, Calendar } from "lucide-react"
+import { Trash2, Repeat, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { BottomSheet } from "@/components/ui/bottom-sheet"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 const METRIC_OPTIONS: { value: WeeklyGoalMetric; labelKey: "weeklyGoalEditor.distance" | "weeklyGoalEditor.sessions" | "weeklyGoalEditor.duration" | "weeklyGoalEditor.elevation"; placeholder: string; unit: string }[] = [
   { value: "distance_km", labelKey: "weeklyGoalEditor.distance", placeholder: "40", unit: "km" },
@@ -82,6 +85,9 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       session_min_distance_km: metric === "sessions" && sessionMinDistance
         ? parseFloat(sessionMinDistance)
         : null,
+      // Ordering belongs to the Plan screen, not this editor; carrying it
+      // through stops an edit from jumping the goal to the top of the list.
+      display_order: isNew ? undefined : goal!.display_order,
     }
     onSave(saved)
   }
@@ -96,196 +102,169 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
     }
   }
 
-  if (!open) return null
-
   return (
-    <>
-      <div
-        className="fixed inset-0 z-[60] bg-foreground/30 transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      <div className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
-        <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
-          {/* Handle */}
-          <div className="flex shrink-0 justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-border" />
-          </div>
-
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-2">
-            <button
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary active:bg-accent transition-colors"
-              aria-label="Close"
-            >
-              <X size={18} className="text-muted-foreground" />
-            </button>
-            <h2 className="text-base font-semibold text-card-foreground">
-              {isNew ? t("weeklyGoalEditor.newGoal") : t("weeklyGoalEditor.editGoal")}
-            </h2>
-            <button
-              onClick={handleSave}
-              disabled={!canSave}
-              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                canSave
-                  ? "bg-primary text-primary-foreground active:opacity-80"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              {t("weeklyGoalEditor.save")}
-            </button>
-          </div>
-
-          {/* Form — scrollable */}
-          <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-5 px-5 pb-4">
-
-            {/* Recurring / One-off toggle */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {t("weeklyGoalEditor.frequency")}
-              </label>
-              <div className="flex rounded-xl bg-secondary p-1">
-                <button
-                  onClick={() => setIsRecurring(false)}
-                  className={`flex flex-1 min-h-[40px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all ${
-                    !isRecurring
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground active:text-foreground"
-                  }`}
-                >
-                  <Calendar size={14} />
-                  {t("weeklyGoalEditor.thisWeekOnly")}
-                </button>
-                <button
-                  onClick={() => setIsRecurring(true)}
-                  className={`flex flex-1 min-h-[40px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all ${
-                    isRecurring
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground active:text-foreground"
-                  }`}
-                >
-                  <RefreshCw size={14} />
-                  {t("weeklyGoalEditor.everyWeek")}
-                </button>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {isRecurring
-                  ? t("weeklyGoalEditor.recurringHint")
-                  : t("weeklyGoalEditor.oneOffHint")}
-              </span>
-            </div>
-
-            {/* Metric selector */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {t("weeklyGoalEditor.metric")}
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {METRIC_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setMetric(option.value)}
-                    className={`flex min-h-[48px] items-center justify-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                      metric === option.value
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground active:bg-accent"
-                    }`}
-                  >
-                    {t(option.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Target value */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {`${t("weeklyGoalEditor.weeklyTarget")} (${selectedOption.unit})`}
-              </label>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder={selectedOption.placeholder}
-                step={metric === "sessions" ? "1" : "0.1"}
-                min="0"
-                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-
-            {/* Per-session requirements (sessions metric only) */}
-            {metric === "sessions" && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t("weeklyGoalEditor.perSessionReq")}
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  {t("weeklyGoalEditor.perSessionHint")}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="w-28 text-sm text-foreground">{t("weeklyGoalEditor.minDuration")}</span>
-                    <div className="flex flex-1 items-center gap-2">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={sessionMinDuration}
-                        onChange={(e) => setSessionMinDuration(e.target.value)}
-                        placeholder="e.g. 30"
-                        min="0"
-                        step="1"
-                        className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                      <span className="shrink-0 text-sm text-muted-foreground">{t("common.min")}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="w-28 text-sm text-foreground">{t("weeklyGoalEditor.minDistance")}</span>
-                    <div className="flex flex-1 items-center gap-2">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={sessionMinDistance}
-                        onChange={(e) => setSessionMinDistance(e.target.value)}
-                        placeholder="e.g. 10"
-                        min="0"
-                        step="0.1"
-                        className="h-10 w-full rounded-xl border-0 bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                      <span className="shrink-0 text-sm text-muted-foreground">{t("common.km")}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-          </div>{/* end scrollable form */}
-
-          {/* Delete button */}
-          {!isNew && (
-            <div className="shrink-0 border-t border-border px-5 py-4">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={isNew ? t("weeklyGoalEditor.newGoal") : t("weeklyGoalEditor.editGoal")}
+      closeLabel={t("common.cancel")}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          handleSave()
+        }}
+        className="flex flex-col gap-5"
+      >
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {t("weeklyGoalEditor.frequency")}
+          </legend>
+          <div className="flex rounded-md bg-surface-sunken p-1">
+            {(
+              [
+                [false, Calendar, t("weeklyGoalEditor.thisWeekOnly")],
+                [true, Repeat, t("weeklyGoalEditor.everyWeek")],
+              ] as const
+            ).map(([value, Icon, label]) => (
               <button
-                onClick={handleDelete}
-                className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors ${
-                  showConfirmDelete
-                    ? "bg-destructive/10 text-destructive active:bg-destructive/20"
-                    : "bg-secondary text-destructive active:bg-accent"
+                key={label}
+                type="button"
+                onClick={() => setIsRecurring(value)}
+                aria-pressed={isRecurring === value}
+                className={`press flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-sm text-label font-semibold ${
+                  isRecurring === value
+                    ? "bg-card text-foreground shadow-e1"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Trash2 size={16} />
-                {showConfirmDelete ? t("weeklyGoalEditor.tapToConfirm") : t("weeklyGoalEditor.deleteGoal")}
+                <Icon size={14} aria-hidden />
+                {label}
               </button>
-            </div>
-          )}
+            ))}
+          </div>
+          <p className="text-micro leading-relaxed text-muted-foreground">
+            {isRecurring
+              ? t("weeklyGoalEditor.recurringHint")
+              : t("weeklyGoalEditor.oneOffHint")}
+          </p>
+        </fieldset>
 
-          <div className="h-8 shrink-0" />
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {t("weeklyGoalEditor.metric")}
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {METRIC_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setMetric(option.value)}
+                aria-pressed={metric === option.value}
+                className={`press flex min-h-[44px] items-center justify-center rounded-md px-3 text-label font-semibold ${
+                  metric === option.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+                }`}
+              >
+                {t(option.labelKey)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="weekly-target" className="text-label font-medium text-foreground">
+            {`${t("weeklyGoalEditor.weeklyTarget")} (${selectedOption.unit})`}
+          </label>
+          <Input
+            id="weekly-target"
+            type="number"
+            inputMode="decimal"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder={selectedOption.placeholder}
+            step={metric === "sessions" ? "1" : "0.1"}
+            min="0"
+          />
         </div>
-      </div>
-    </>
+
+        {metric === "sessions" && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-label font-medium text-foreground">
+              {t("weeklyGoalEditor.perSessionReq")}
+            </legend>
+            <p className="text-micro leading-relaxed text-muted-foreground">
+              {t("weeklyGoalEditor.perSessionHint")}
+            </p>
+            <div className="mt-1 flex flex-col gap-2.5">
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor="session-min-duration"
+                  className="w-28 shrink-0 text-label text-foreground"
+                >
+                  {t("weeklyGoalEditor.minDuration")}
+                </label>
+                <Input
+                  id="session-min-duration"
+                  type="number"
+                  inputMode="numeric"
+                  value={sessionMinDuration}
+                  onChange={(e) => setSessionMinDuration(e.target.value)}
+                  placeholder="30"
+                  min="0"
+                  step="1"
+                />
+                <span className="shrink-0 text-label text-muted-foreground">
+                  {t("common.min")}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor="session-min-distance"
+                  className="w-28 shrink-0 text-label text-foreground"
+                >
+                  {t("weeklyGoalEditor.minDistance")}
+                </label>
+                <Input
+                  id="session-min-distance"
+                  type="number"
+                  inputMode="decimal"
+                  value={sessionMinDistance}
+                  onChange={(e) => setSessionMinDistance(e.target.value)}
+                  placeholder="10"
+                  min="0"
+                  step="0.1"
+                />
+                <span className="shrink-0 text-label text-muted-foreground">
+                  {t("common.km")}
+                </span>
+              </div>
+            </div>
+          </fieldset>
+        )}
+
+        <Button type="submit" block disabled={!canSave}>
+          {t("weeklyGoalEditor.save")}
+        </Button>
+
+        {!isNew && (
+          <div className="border-t border-border pt-4">
+            <Button
+              type="button"
+              variant={showConfirmDelete ? "danger" : "ghost"}
+              block
+              onClick={handleDelete}
+              className={showConfirmDelete ? "" : "text-destructive"}
+            >
+              <Trash2 size={16} />
+              {showConfirmDelete
+                ? t("weeklyGoalEditor.tapToConfirm")
+                : t("weeklyGoalEditor.deleteGoal")}
+            </Button>
+          </div>
+        )}
+      </form>
+    </BottomSheet>
   )
 }

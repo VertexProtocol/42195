@@ -1,10 +1,9 @@
 "use client"
 
 import { useMemo, lazy, Suspense, useEffect, useState } from "react"
-import { TrendingUp, Clock, Footprints, AlertCircle, CheckCircle2, RefreshCw, Star } from "lucide-react"
+import { ChevronRight, Star } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import {
   formatDistance,
   formatDuration,
@@ -19,14 +18,31 @@ import {
 } from "@/lib/format"
 import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
-import { AppCard } from '@/components/ui/app-card'
+import { AppCard, CardRow } from "@/components/ui/app-card"
+import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
+import { Stat, StatGroup } from "@/components/ui/stat"
+import { Meter } from "@/components/ui/meter"
+import { Pill } from "@/components/ui/pill"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 
-const TrainingLoadIndicator = lazy(() => import("@/components/training-load-indicator").then(m => ({ default: m.TrainingLoadIndicator })))
+const TrainingLoadIndicator = lazy(() =>
+  import("@/components/training-load-indicator").then((m) => ({ default: m.TrainingLoadIndicator })),
+)
 import type { Warning, WarningType } from "@/lib/training-warnings"
 
+/**
+ * Today.
+ *
+ * Reading order is the runner's order: the race that matters and how much of
+ * the runway is gone, then whether the body is handling the load, then the
+ * week so far, then what was run last. Everything below the first screenful is
+ * reference; everything above it is decision.
+ */
+
 interface HomeScreenProps {
-  starredGoals: Goal[] // [STAR] goals pinned to home screen
+  starredGoals: Goal[]
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
@@ -46,21 +62,20 @@ export function HomeScreen({
   activities,
   weeklySummary,
   recentActivities,
-  syncStatus,
-  stravaConnected,
   onViewActivities,
   onViewGoal,
   onViewGoals,
-  onViewInsights,
   onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
 
-  const [planBadges, setPlanBadges] = useState<Record<string, { checkpoint: boolean; blockCompleted: boolean }>>({})
+  const [planBadges, setPlanBadges] = useState<
+    Record<string, { checkpoint: boolean; blockCompleted: boolean }>
+  >({})
   const [warnings, setWarnings] = useState<Warning[]>([])
 
-  // Load proactive training warnings once on mount. Guard against running
-  // before the user has logged any activities — the engine needs history.
+  // Proactive training warnings need history before the engine can say
+  // anything useful, so we do not ask for them on a near-empty account.
   useEffect(() => {
     if (activities.length < 7) return
     let cancelled = false
@@ -71,7 +86,9 @@ export function HomeScreen({
         setWarnings(data.warnings as Warning[])
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [activities.length])
 
   const handleDismissWarning = async (type: WarningType) => {
@@ -82,8 +99,8 @@ export function HomeScreen({
         body: JSON.stringify({ type }),
       })
     } catch {
-      // Network error — the card will still hide locally; next load will
-      // re-check and the cooldown only applies if the POST succeeded.
+      // Network error — the card still hides locally; the cooldown only
+      // applies once the POST has actually landed.
     }
   }
 
@@ -93,7 +110,10 @@ export function HomeScreen({
     supabase
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-      .in("goal_id", starredGoals.map((g) => g.id))
+      .in(
+        "goal_id",
+        starredGoals.map((g) => g.id),
+      )
       .then(({ data }) => {
         if (!data) return
         const now = new Date()
@@ -101,7 +121,8 @@ export function HomeScreen({
         for (const row of data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const weeks = (row.plan as any)?.weeks
-          // Snap to Monday (same as goal-detail-screen) so blockEnd matches the week boundary
+          // Snap to Monday (same as goal-detail-screen) so blockEnd lands on a
+          // week boundary.
           const blockStart = new Date(row.block_start_date)
           blockStart.setHours(0, 0, 0, 0)
           const dow = blockStart.getDay()
@@ -128,7 +149,7 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
-  // Pre-compute goal metrics outside JSX so we don't run O(goals * activities) on every render
+  // Precomputed outside JSX so we never run O(goals × activities) per render.
   const goalMetrics = useMemo(
     () =>
       starredGoals.map((goal) => {
@@ -149,37 +170,121 @@ export function HomeScreen({
     [starredGoals, activities],
   )
 
-  return (
-    <div className="flex flex-col gap-5 px-4 pb-6 pt-4">
-      {/* Header */}
-      <header className="flex items-baseline justify-between">
-        <div>
-          <h1 className="font-mono text-3xl font-bold tracking-tight text-foreground">
-            42195
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">{t("app.tagline")}</p>
-        </div>
-        {/* Sync status pill */}
-        {syncStatus && stravaConnected && syncStatus.state !== "never" && (
-          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-            syncStatus.state === "syncing" ? "bg-primary/10 text-primary" :
-            syncStatus.state === "error" ? "bg-destructive/10 text-destructive" :
-            "bg-success/10 text-success"
-          }`}>
-            {syncStatus.state === "syncing" && <RefreshCw size={10} className="animate-spin" />}
-            {syncStatus.state === "error" && <AlertCircle size={10} />}
-            {syncStatus.state === "success" && <CheckCircle2 size={10} />}
-            <span>
-              {syncStatus.state === "syncing" ? t("profile.syncing") :
-               syncStatus.state === "error" ? "Sync failed" :
-               t("profile.synced")}
-            </span>
-          </div>
-        )}
-      </header>
+  const WEEKLY_LABELS: Record<string, TranslationKey> = {
+    distance_km: "goals.weeklyDistance",
+    sessions: "goals.trainingSessions",
+    duration_minutes: "goals.activeMinutes",
+    elevation_m: "goals.elevationGain",
+  }
 
-      {/* Training Load Indicator (Optimal / High Load / Overtraining Risk)
-          with embedded proactive warnings rendered as dismissible rows. */}
+  return (
+    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+      {/* ── The race, and how much runway is left ─────────────────────── */}
+      {starredGoals.length > 0 ? (
+        <Section>
+          <SectionHeader
+            title={t("home.activeGoals")}
+            action={
+              starredGoals.length > 1 ? (
+                <span className="text-micro text-muted-foreground">
+                  {starredGoals.length} {t("home.goals")}
+                </span>
+              ) : undefined
+            }
+          />
+          <div className="flex flex-col gap-3">
+            {starredGoals.map((goal, i) => {
+              const m = goalMetrics[i]
+              const badge = planBadges[goal.id]
+              return (
+                <button
+                  key={goal.id}
+                  onClick={() => onViewGoal(goal)}
+                  className="press surface w-full p-4 text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-primary">
+                        <Star size={12} fill="currentColor" aria-hidden />
+                        <span className="text-micro font-semibold">{t("home.activeGoal")}</span>
+                      </div>
+
+                      {/* The countdown leads. It is the one number the runner
+                          opens this screen to check, so it is the only thing on
+                          it set at display size. */}
+                      <p className="mt-2 flex items-baseline gap-1.5">
+                        <span className="measure text-display font-semibold leading-none text-card-foreground">
+                          {m.days}
+                        </span>
+                        <span className="text-label text-muted-foreground">
+                          {t("home.daysLeft")}
+                        </span>
+                      </p>
+
+                      <h3 className="mt-2 line-clamp-2 text-lead font-semibold text-card-foreground">
+                        {goal.name}
+                      </h3>
+
+                      <p className="mt-1.5 text-label text-muted-foreground">
+                        <span className="measure font-semibold text-foreground">
+                          {formatDistance(m.logged)}
+                        </span>{" "}
+                        {t("home.logged")}
+                        {goal.target_time_seconds ? (
+                          <>
+                            {" · "}
+                            {t("home.target")}{" "}
+                            <span className="measure font-semibold text-foreground">
+                              {formatTargetTime(goal.target_time_seconds)}
+                            </span>
+                          </>
+                        ) : null}
+                      </p>
+
+                      {(badge?.checkpoint || badge?.blockCompleted) && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {badge?.checkpoint && (
+                            <Pill tone="action">{t("plan.checkpointBadge")}</Pill>
+                          )}
+                          {badge?.blockCompleted && (
+                            <Pill tone="positive">{t("plan.blockDoneBadge")}</Pill>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 flex-col items-center gap-1.5">
+                      <ProgressRing
+                        percentage={m.timeProgress}
+                        size={60}
+                        strokeWidth={4}
+                        label={`${goal.name} — ${t("home.elapsed")}`}
+                      >
+                        <span className="measure text-micro font-semibold leading-none text-foreground">
+                          {m.timeProgress}%
+                        </span>
+                      </ProgressRing>
+                      <span className="text-micro text-muted-foreground">{t("home.elapsed")}</span>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </Section>
+      ) : (
+        <EmptyState
+          title={t("home.noActiveGoals")}
+          body={t("home.noActiveGoalsBody")}
+          action={
+            <Button size="sm" onClick={onViewGoals}>
+              {t("home.setGoal")}
+            </Button>
+          }
+        />
+      )}
+
+      {/* ── Is the body handling it ───────────────────────────────────── */}
       {activities.length >= 7 && (
         <Suspense fallback={null}>
           <TrainingLoadIndicator
@@ -190,147 +295,25 @@ export function HomeScreen({
         </Suspense>
       )}
 
-      {/* [STAR] Starred goals carousel */}
-      {starredGoals.length > 0 ? (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Star size={11} className="text-amber-500" fill="currentColor" />
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {t("home.activeGoals")}
-              </h3>
-            </div>
-            {starredGoals.length > 1 && (
-              <span className="text-xs text-muted-foreground">
-                {starredGoals.length} {t("home.goals")}
-              </span>
-            )}
-          </div>
-          <Carousel opts={{ align: "start", dragFree: false }}>
-            <CarouselContent className="-ml-3">
-              {starredGoals.map((goal, i) => {
-                const m = goalMetrics[i]
+      {/* ── The week so far ───────────────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("home.thisWeek")} />
+        <AppCard>
+          <StatGroup>
+            <Stat
+              label={t("stats.distance")}
+              value={weeklySummary.total_distance_km.toFixed(1)}
+              unit="km"
+            />
+            <Stat
+              label={t("activityDetail.duration")}
+              value={formatDuration(weeklySummary.total_time_seconds)}
+            />
+            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count} />
+          </StatGroup>
 
-                return (
-                  <CarouselItem
-                    key={goal.id}
-                    className={`pl-3 ${starredGoals.length > 1 ? "basis-[88%]" : "basis-full"}`}
-                  >
-                    <button
-                      onClick={() => onViewGoal(goal)}
-                      className="relative w-full overflow-hidden rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform min-h-[108px]"
-                    >
-                      <div className="flex items-start justify-between h-full">
-                        <div className="flex-1 pr-4 flex flex-col">
-                          <p className="text-xs font-medium uppercase tracking-wider text-primary">
-                            {t("home.activeGoal")}
-                          </p>
-                          <h2 className="mt-1 text-base font-semibold text-card-foreground text-balance line-clamp-1">
-                            {goal.name}
-                          </h2>
-                          {(planBadges[goal.id]?.checkpoint || planBadges[goal.id]?.blockCompleted) && (
-                            <div className="mt-1.5 flex items-center gap-1.5">
-                              {planBadges[goal.id]?.checkpoint && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                                  <CheckCircle2 size={9} />
-                                  Checkpoint
-                                </span>
-                              )}
-                              {planBadges[goal.id]?.blockCompleted && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                  <CheckCircle2 size={9} />
-                                  Block done
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <div className="mt-auto pt-2.5 flex flex-col gap-1">
-                            <div className="flex items-center gap-4">
-                              <span className="text-sm text-muted-foreground">
-                                {m.days} {t("home.daysLeft")}
-                              </span>
-                              <span className="text-sm font-medium text-primary">
-                                {formatDistance(m.logged)} {t("home.logged")}
-                              </span>
-                            </div>
-                            <span className="text-xs text-muted-foreground h-4">
-                              {goal.target_time_seconds 
-                                ? `${t("home.target")}: ${formatTargetTime(goal.target_time_seconds)}`
-                                : "\u00A0"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="relative flex shrink-0 items-center justify-center">
-                          <ProgressRing
-                            percentage={m.timeProgress}
-                            size={64}
-                            strokeWidth={5}
-                          />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-[10px] font-bold text-foreground">{m.timeProgress}%</span>
-                            <span className="text-[8px] text-muted-foreground">{t("home.elapsed")}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  </CarouselItem>
-                )
-              })}
-            </CarouselContent>
-          </Carousel>
-        </section>
-      ) : (
-        <AppCard padding="lg">
-          <p className="text-sm text-muted-foreground">{t("home.noActiveGoals")}</p>
-          <button
-            onClick={onViewGoals}
-            className="mt-2 text-sm font-medium text-primary active:opacity-70"
-          >
-            {t("home.setGoal")}
-          </button>
-        </AppCard>
-      )}
-
-      {/* Weekly Summary */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("home.thisWeek")}
-        </h3>
-        <div className="grid grid-cols-3 gap-3">
-          <AppCard padding="sm" className="flex flex-col items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-              <TrendingUp size={16} className="text-primary" />
-            </div>
-            <span className="text-base font-bold text-card-foreground">
-              {weeklySummary.total_distance_km.toFixed(1)}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.km")}</span>
-          </AppCard>
-          <AppCard padding="sm" className="flex flex-col items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-              <Clock size={16} className="text-primary" />
-            </div>
-            <span className="text-base font-bold text-card-foreground">
-              {formatDuration(weeklySummary.total_time_seconds)}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.time")}</span>
-          </AppCard>
-          <AppCard padding="sm" className="flex flex-col items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-              <Footprints size={16} className="text-primary" />
-            </div>
-            <span className="text-base font-bold text-card-foreground">
-              {weeklySummary.run_count}
-            </span>
-            <span className="text-xs text-muted-foreground">{t("home.runs")}</span>
-          </AppCard>
-        </div>
-
-        {/* Weekly goal progress rings */}
-        {currentWeekGoals.length > 0 && (() => {
-          const KEYS: Record<string, TranslationKey> = { distance_km: "goals.weeklyDistance", sessions: "goals.trainingSessions", duration_minutes: "goals.activeMinutes", elevation_m: "goals.elevationGain" }
-          return (
-            <div className="mt-3 grid grid-cols-3 gap-3">
+          {currentWeekGoals.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
               {currentWeekGoals.slice(0, 3).map((wg) => {
                 const current = computeWeeklyProgress(
                   activities,
@@ -341,87 +324,84 @@ export function HomeScreen({
                 )
                 const progress = progressPercentage(current, wg.target)
                 const isComplete = current >= wg.target
+                const label = t(WEEKLY_LABELS[wg.metric]) || wg.label
+                const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(
+                  wg.target,
+                  wg.metric,
+                )}`
                 return (
                   <button
                     key={wg.id}
                     onClick={onViewGoals}
-                    className="flex flex-col items-center gap-1.5 active:opacity-70 transition-opacity"
+                    className="press w-full rounded-sm text-left"
                   >
-                    <div className="relative flex items-center justify-center">
-                      <ProgressRing
-                        percentage={progress}
-                        size={64}
-                        strokeWidth={5}
-                      />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className={`text-[11px] font-bold tabular-nums leading-none ${isComplete ? "text-success" : "text-foreground"}`}>
-                          {progress}%
-                        </span>
-                      </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate text-label font-medium text-card-foreground">
+                        {label}
+                      </span>
+                      <span
+                        className={`measure shrink-0 text-micro ${
+                          isComplete ? "text-success" : "text-muted-foreground"
+                        }`}
+                      >
+                        {valueText}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2 px-1">
-                      {t(KEYS[wg.metric]) || wg.label}
-                    </span>
+                    <Meter
+                      className="mt-1.5"
+                      size="sm"
+                      value={progress}
+                      tone={isComplete ? "done" : "action"}
+                      label={label}
+                      valueText={valueText}
+                    />
                   </button>
                 )
               })}
             </div>
-          )
-        })()}
-      </section>
+          )}
+        </AppCard>
+      </Section>
 
-
-      {/* Recent Activities Carousel */}
+      {/* ── What was run ──────────────────────────────────────────────── */}
       {recentActivities.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t("home.recentActivities")}
-            </h3>
-            <button
-              onClick={onViewActivities}
-              className="text-xs font-medium text-primary active:opacity-70"
-            >
-              {t("home.seeAll")}
-            </button>
-          </div>
-          <Carousel opts={{ align: "start", dragFree: true }}>
-            <CarouselContent className="-ml-3">
-              {recentActivities.map((activity) => (
-                <CarouselItem key={activity.id} className="pl-3 basis-[68%]">
-                  <button
-                    onClick={() => onSelectActivity(activity)}
-                    className="w-full rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
-                  >
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                      {activity.type}
-                    </p>
-                    <h4 className="mt-1 truncate text-sm font-semibold text-card-foreground">
+        <Section>
+          <SectionHeader
+            title={t("home.recentActivities")}
+            action={<SectionAction onClick={onViewActivities}>{t("home.seeAll")}</SectionAction>}
+          />
+          <AppCard variant="rows">
+            {recentActivities.map((activity) => (
+              <CardRow key={activity.id} className="p-0">
+                <button
+                  onClick={() => onSelectActivity(activity)}
+                  className="press flex w-full items-center gap-3 px-4 py-3 text-left"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-label font-semibold text-card-foreground">
                       {activity.name}
-                    </h4>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {formatDateShort(activity.date)}
                     </p>
-                    <div className="mt-3 flex items-center gap-3">
-                      <span className="font-mono text-sm font-bold text-card-foreground">
-                        {formatDistance(activity.distance_km)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDuration(activity.duration_seconds)}
-                      </span>
-                    </div>
-                  </button>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </section>
+                    <p className="mt-0.5 text-micro text-muted-foreground">
+                      {formatDateShort(activity.date)} · {activity.type}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="measure text-label font-semibold text-card-foreground">
+                      {formatDistance(activity.distance_km)}
+                    </p>
+                    <p className="measure mt-0.5 text-micro text-muted-foreground">
+                      {formatDuration(activity.duration_seconds)}
+                    </p>
+                  </div>
+                  <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+                </button>
+              </CardRow>
+            ))}
+          </AppCard>
+        </Section>
       )}
 
-      {/* Strava attribution */}
-      {activities.length > 0 && (
-        <PoweredByStrava className="mt-2" />
-      )}
+      {activities.length > 0 && <PoweredByStrava className="pt-1" />}
     </div>
   )
 }

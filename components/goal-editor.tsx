@@ -1,9 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Trash2, Timer, CalendarCheck } from "lucide-react"
+import { Trash2, Timer, CalendarCheck } from "lucide-react"
 import type { Goal, GoalCategory } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { BottomSheet } from "@/components/ui/bottom-sheet"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 interface GoalEditorProps {
   goal: Goal | null
@@ -103,6 +106,11 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       current_distance_km: isNew ? 0 : goal!.current_distance_km,
       is_active: isNew ? false : goal!.is_active,
       created_at: isNew ? new Date().toISOString() : goal!.created_at,
+      // The editor does not own ordering or the Today pin, but it replaces the
+      // goal object in local state — carrying them through stops an edit from
+      // silently unpinning a goal or sending it to the bottom of the list.
+      display_order: isNew ? undefined : goal!.display_order,
+      is_starred: isNew ? false : goal!.is_starred,
     }
     onSave(saved)
   }
@@ -117,245 +125,200 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
     }
   }
 
-  if (!open) return null
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[60] bg-foreground/30 transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-md animate-in slide-in-from-bottom duration-300">
-        <div className="flex max-h-[92dvh] flex-col rounded-t-3xl bg-card shadow-2xl ring-1 ring-border">
-          {/* Handle */}
-          <div className="flex shrink-0 justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-border" />
-          </div>
-
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-2">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={isNew ? t("goalEditor.newGoal") : t("goalEditor.editGoal")}
+      closeLabel={t("common.cancel")}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          handleSave()
+        }}
+        className="flex flex-col gap-5"
+      >
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {t("goalEditor.goalType")}
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary active:bg-accent transition-colors"
-              aria-label="Close"
-            >
-              <X size={18} className="text-muted-foreground" />
-            </button>
-            <h2 className="text-base font-semibold text-card-foreground">
-              {isNew ? t("goalEditor.newGoal") : t("goalEditor.editGoal")}
-            </h2>
-            <button
-              onClick={handleSave}
-              disabled={!canSave}
-              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                canSave
-                  ? "bg-primary text-primary-foreground active:opacity-80"
-                  : "bg-secondary text-muted-foreground"
+              type="button"
+              onClick={() => setCategory("performance")}
+              aria-pressed={category === "performance"}
+              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-semibold ${
+                category === "performance"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
               }`}
             >
-              {t("goalEditor.save")}
+              <Timer size={16} aria-hidden />
+              {t("goalEditor.performance")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategory("event_training")}
+              aria-pressed={category === "event_training"}
+              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-semibold ${
+                category === "event_training"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+              }`}
+            >
+              <CalendarCheck size={16} aria-hidden />
+              {t("goalEditor.eventTraining")}
             </button>
           </div>
+          <p className="text-micro leading-relaxed text-muted-foreground">
+            {category === "performance" ? t("goalEditor.perfDesc") : t("goalEditor.eventDesc")}
+          </p>
+        </fieldset>
 
-          {/* Form - scrollable */}
-          <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-5 px-5 pb-4">
-
-            {/* Goal category */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {t("goalEditor.goalType")}
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setCategory("performance")}
-                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                    category === "performance"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground active:bg-accent"
-                  }`}
-                >
-                  <Timer size={16} />
-                  {t("goalEditor.performance")}
-                </button>
-                <button
-                  onClick={() => setCategory("event_training")}
-                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                    category === "event_training"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground active:bg-accent"
-                  }`}
-                >
-                  <CalendarCheck size={16} />
-                  {t("goalEditor.eventTraining")}
-                </button>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {category === "performance"
-                  ? t("goalEditor.perfDesc")
-                  : t("goalEditor.eventDesc")}
-              </span>
-            </div>
-
-            {/* Name */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? t("goalEditor.eventName") : t("goalEditor.goalName")}
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                placeholder={
-                  category === "event_training"
-                    ? t("goalEditor.eventPlaceholder")
-                    : t("goalEditor.goalPlaceholder")
-                }
-                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 ${
-                  errors.name ? "ring-2 ring-destructive" : "focus:ring-primary/40"
-                }`}
-              />
-              {errors.name && (
-                <span className="text-xs text-destructive">{t("validation.required")}</span>
-              )}
-            </div>
-
-            {/* Target distance */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? t("goalEditor.raceDistance") : t("goalEditor.targetDistance")}
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={targetDistance}
-                onChange={(e) => setTargetDistance(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, distance: true }))}
-                placeholder="42,195"
-                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 ${
-                  errors.distance ? "ring-2 ring-destructive" : "focus:ring-primary/40"
-                }`}
-              />
-              {errors.distance && (
-                <span className="text-xs text-destructive">{t("validation.validDistance")}</span>
-              )}
-            </div>
-
-            {/* Target time */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "performance" ? t("goalEditor.targetTimeRequired") : t("goalEditor.targetTimeOptional")}
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="flex flex-1 items-center gap-1">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={targetTimeH}
-                    onChange={(e) => setTargetTimeH(clampTime(e.target.value, 99))}
-                    placeholder="0"
-                    className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <span className="text-xs text-muted-foreground shrink-0">{t("common.h")}</span>
-                </div>
-                <div className="flex flex-1 items-center gap-1">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={targetTimeM}
-                    maxLength={2}
-                    onChange={(e) => setTargetTimeM(clampTime(e.target.value, 59))}
-                    placeholder="00"
-                    className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <span className="text-xs text-muted-foreground shrink-0">{t("common.m")}</span>
-                </div>
-                <div className="flex flex-1 items-center gap-1">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={targetTimeS}
-                    maxLength={2}
-                    onChange={(e) => setTargetTimeS(clampTime(e.target.value, 59))}
-                    placeholder="00"
-                    className="h-12 w-full rounded-xl border-0 bg-secondary px-3 text-center text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <span className="text-xs text-muted-foreground shrink-0">{t("common.s")}</span>
-                </div>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {category === "performance"
-                  ? t("goalEditor.targetTimeHintPerf")
-                  : t("goalEditor.targetTimeHintEvent")}
-              </span>
-            </div>
-
-            {/* Training start date */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? t("goalEditor.trainingStartDate") : t("goalEditor.startCountingFrom")}
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              <span className="text-xs text-muted-foreground">
-                {category === "event_training"
-                  ? t("goalEditor.startDateHintEvent")
-                  : t("goalEditor.startDateHintPerf")}
-              </span>
-            </div>
-
-            {/* Target / event date */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {category === "event_training" ? t("goalEditor.raceDate") : t("goalEditor.targetDate")}
-              </label>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, date: true }))}
-                className={`h-12 rounded-xl border-0 bg-secondary px-4 text-base text-foreground focus:outline-none focus:ring-2 ${
-                  errors.date ? "ring-2 ring-destructive" : "focus:ring-primary/40"
-                }`}
-              />
-              {errors.date && (
-                <span className="text-xs text-destructive">{t("validation.required")}</span>
-              )}
-            </div>
-
-          </div>
-          </div>{/* end scrollable form */}
-
-          {/* Delete button */}
-          {!isNew && (
-            <div className="shrink-0 border-t border-border px-5 py-4">
-              <button
-                onClick={handleDelete}
-                className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors ${
-                  showConfirmDelete
-                    ? "bg-destructive/10 text-destructive active:bg-destructive/20"
-                    : "bg-secondary text-destructive active:bg-accent"
-                }`}
-              >
-                <Trash2 size={16} />
-                {showConfirmDelete ? t("goalEditor.tapToConfirm") : t("goalEditor.deleteGoal")}
-              </button>
-            </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="goal-name" className="text-label font-medium text-foreground">
+            {category === "event_training" ? t("goalEditor.eventName") : t("goalEditor.goalName")}
+          </label>
+          <Input
+            id="goal-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+            aria-invalid={errors.name || undefined}
+            aria-describedby={errors.name ? "goal-name-error" : undefined}
+            placeholder={
+              category === "event_training"
+                ? t("goalEditor.eventPlaceholder")
+                : t("goalEditor.goalPlaceholder")
+            }
+          />
+          {errors.name && (
+            <p id="goal-name-error" className="text-micro text-destructive">
+              {t("validation.required")}
+            </p>
           )}
-
-          {/* Safe area spacer */}
-          <div className="h-8 shrink-0" />
         </div>
-      </div>
-    </>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="goal-distance" className="text-label font-medium text-foreground">
+            {category === "event_training"
+              ? t("goalEditor.raceDistance")
+              : t("goalEditor.targetDistance")}
+          </label>
+          <Input
+            id="goal-distance"
+            type="text"
+            inputMode="decimal"
+            value={targetDistance}
+            onChange={(e) => setTargetDistance(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, distance: true }))}
+            aria-invalid={errors.distance || undefined}
+            aria-describedby={errors.distance ? "goal-distance-error" : undefined}
+            placeholder="42,195"
+          />
+          {errors.distance && (
+            <p id="goal-distance-error" className="text-micro text-destructive">
+              {t("validation.validDistance")}
+            </p>
+          )}
+        </div>
+
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {category === "performance"
+              ? t("goalEditor.targetTimeRequired")
+              : t("goalEditor.targetTimeOptional")}
+          </legend>
+          <div className="flex items-center gap-2">
+            {(
+              [
+                [targetTimeH, (v: string) => setTargetTimeH(clampTime(v, 99)), t("common.h"), "0", 2],
+                [targetTimeM, (v: string) => setTargetTimeM(clampTime(v, 59)), t("common.m"), "00", 2],
+                [targetTimeS, (v: string) => setTargetTimeS(clampTime(v, 59)), t("common.s"), "00", 2],
+              ] as const
+            ).map(([value, set, unit, placeholder, maxLength]) => (
+              <div key={unit} className="flex flex-1 items-center gap-1.5">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={maxLength}
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  aria-label={unit}
+                  placeholder={placeholder}
+                  className="measure text-center"
+                />
+                <span className="shrink-0 text-micro text-muted-foreground">{unit}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-micro leading-relaxed text-muted-foreground">
+            {category === "performance"
+              ? t("goalEditor.targetTimeHintPerf")
+              : t("goalEditor.targetTimeHintEvent")}
+          </p>
+        </fieldset>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="goal-start" className="text-label font-medium text-foreground">
+            {category === "event_training"
+              ? t("goalEditor.trainingStartDate")
+              : t("goalEditor.startCountingFrom")}
+          </label>
+          <Input
+            id="goal-start"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <p className="text-micro leading-relaxed text-muted-foreground">
+            {category === "event_training"
+              ? t("goalEditor.startDateHintEvent")
+              : t("goalEditor.startDateHintPerf")}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="goal-target-date" className="text-label font-medium text-foreground">
+            {category === "event_training" ? t("goalEditor.raceDate") : t("goalEditor.targetDate")}
+          </label>
+          <Input
+            id="goal-target-date"
+            type="date"
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, date: true }))}
+            aria-invalid={errors.date || undefined}
+            aria-describedby={errors.date ? "goal-date-error" : undefined}
+          />
+          {errors.date && (
+            <p id="goal-date-error" className="text-micro text-destructive">
+              {t("validation.required")}
+            </p>
+          )}
+        </div>
+
+        <Button type="submit" block disabled={!canSave}>
+          {t("goalEditor.save")}
+        </Button>
+
+        {!isNew && (
+          <div className="border-t border-border pt-4">
+            <Button
+              type="button"
+              variant={showConfirmDelete ? "danger" : "ghost"}
+              block
+              onClick={handleDelete}
+              className={showConfirmDelete ? "" : "text-destructive"}
+            >
+              <Trash2 size={16} />
+              {showConfirmDelete ? t("goalEditor.tapToConfirm") : t("goalEditor.deleteGoal")}
+            </Button>
+          </div>
+        )}
+      </form>
+    </BottomSheet>
   )
 }

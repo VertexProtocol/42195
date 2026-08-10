@@ -90,7 +90,7 @@ export function ConnectWithStravaButton({ onClick, disabled, connecting }: Conne
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[44px] w-full items-center justify-center gap-2.5 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="press flex h-11 w-full items-center justify-center gap-2.5 rounded-md px-5 text-label font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
       style={{ backgroundColor: STRAVA_ORANGE }}
     >
       {connecting ? (
@@ -116,8 +116,8 @@ interface PoweredByStravaProps {
 export function PoweredByStrava({ className = "" }: PoweredByStravaProps) {
   return (
     <div className={`flex items-center justify-center gap-1.5 py-1 ${className}`}>
-      <span className="text-[10px] font-medium text-muted-foreground/60">Powered by</span>
-      <StravaWordmark className="h-2.5 w-auto" color={STRAVA_ORANGE} />
+      <span className="text-micro font-medium text-muted-foreground">Powered by</span>
+      <StravaWordmark className="h-3 w-auto" color={STRAVA_ORANGE} />
     </div>
   )
 }
@@ -129,7 +129,7 @@ export function PoweredByStravaInline({ className = "" }: PoweredByStravaProps) 
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <StravaIcon size={12} color={STRAVA_ORANGE} />
-      <span className="text-[10px] text-muted-foreground/50">via Strava</span>
+      <span className="text-micro text-muted-foreground">via Strava</span>
     </span>
   )
 }

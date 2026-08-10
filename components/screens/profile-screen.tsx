@@ -4,9 +4,26 @@ import { useState, useEffect, useRef, useCallback, useTransition } from "react"
 import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
-  RefreshCw, LogOut, AlertCircle, Clock, User, Moon, Sun,
-  Link2, Link2Off, Globe, AlertTriangle, Check, RotateCcw,
-  Shield, Trash2, Heart, Loader2, ChevronDown, ChevronUp, Info, Pencil, KeyRound, Eye, EyeOff,
+  RefreshCw,
+  LogOut,
+  TriangleAlert,
+  Moon,
+  Sun,
+  Monitor,
+  Link2,
+  Link2Off,
+  Check,
+  RotateCcw,
+  Shield,
+  Trash2,
+  Heart,
+  Loader2,
+  ChevronDown,
+  Pencil,
+  KeyRound,
+  Eye,
+  EyeOff,
+  User,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { createClient } from "@/lib/supabase/client"
@@ -14,7 +31,20 @@ import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 import type { HrAnalysisResult } from "@/lib/hr-analysis-engine"
-import { AppCard } from '@/components/ui/app-card'
+import { AppCard, CardRow } from "@/components/ui/app-card"
+import { Section, SectionHeader } from "@/components/ui/section"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Pill } from "@/components/ui/pill"
+
+/**
+ * Profile — account, connections, calibration, appearance, and the two
+ * irreversible actions, in that order of frequency.
+ *
+ * Destructive and irreversible steps confirm inline, on the row they belong
+ * to, rather than in a modal: a settings page is exactly the surface where a
+ * modal is the lazy answer.
+ */
 
 interface ProfileScreenProps {
   user: UserProfile
@@ -26,52 +56,46 @@ interface ProfileScreenProps {
   onSignOut: () => void
 }
 
-// HR zone configuration (5-zone model)
-const HR_ZONES = [
-  { zone: 1, label: "Recovery", color: "var(--chart-1)", pct: "50–60%" },
-  { zone: 2, label: "Aerobic", color: "var(--chart-2)", pct: "60–70%" },
-  { zone: 3, label: "Tempo", color: "var(--chart-3)", pct: "70–80%" },
-  { zone: 4, label: "Threshold", color: "var(--chart-4)", pct: "80–90%" },
-  { zone: 5, label: "Max", color: "var(--chart-5)", pct: "90–100%" },
-]
-
 export function ProfileScreen({
   user,
   syncStatus,
   stravaConnected,
   onSync,
   onFullSync,
-  onConnectStrava,
   onSignOut,
 }: ProfileScreenProps) {
-  const { resolvedTheme, setTheme } = useTheme()
-  const isDarkMode = resolvedTheme === "dark"
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const { locale, setLocale, t } = useI18n()
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   const [connecting, setConnecting] = useState(false)
-  const [connectError, setConnectError] = useState<string | null>(null)
   const [showResyncConfirm, setShowResyncConfirm] = useState(false)
   const [syncSuccess, setSyncSuccess] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  // HR analysis state — seed from server-fetched cache so it persists across sessions
-  const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(user.hr_analysis_cache ?? null)
+
+  const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(
+    user.hr_analysis_cache ?? null,
+  )
   const [hrLoading, setHrLoading] = useState(false)
   const [hrExpanded, setHrExpanded] = useState(false)
   const [hrError, setHrError] = useState<string | null>(null)
-  // Edit name state
+
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(user.display_name)
   const [nameError, setNameError] = useState<string | null>(null)
   const [namePending, startNameTransition] = useTransition()
-  // Change password state
+
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [pwError, setPwError] = useState<string | null>(null)
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwPending, startPwTransition] = useTransition()
   const [showPw, setShowPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
-  // Displayed name (local state so it updates immediately after save)
+
   const [displayedName, setDisplayedName] = useState(user.display_name)
 
   const fetchHrAnalysis = useCallback(async () => {
@@ -91,7 +115,6 @@ export function ProfileScreen({
     setHrLoading(false)
   }, [t])
 
-  // Auto-run HR analysis on mount if no cached result exists
   useEffect(() => {
     if (!hrAnalysis) fetchHrAnalysis()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,7 +129,14 @@ export function ProfileScreen({
     setNameError(null)
     startNameTransition(async () => {
       const supabase = createClient()
-      await supabase.from("profiles").update({ display_name: trimmed }).eq("id", user.id)
+      const { error } = await supabase
+        .from("profiles")
+        .update({ display_name: trimmed })
+        .eq("id", user.id)
+      if (error) {
+        setNameError(error.message)
+        return
+      }
       setDisplayedName(trimmed)
       setEditingName(false)
     })
@@ -119,18 +149,29 @@ export function ProfileScreen({
     const confirm = fd.get("confirm_password") as string
     setPwError(null)
     setPwSuccess(false)
-    if (pw !== confirm) { setPwError(t("profile.passwordMismatch")); return }
-    if (pw.length < 8) { setPwError(t("profile.passwordTooShort")); return }
+    if (pw !== confirm) {
+      setPwError(t("profile.passwordMismatch"))
+      return
+    }
+    if (pw.length < 8) {
+      setPwError(t("profile.passwordTooShort"))
+      return
+    }
     startPwTransition(async () => {
       const supabase = createClient()
       const { error } = await supabase.auth.updateUser({ password: pw })
-      if (error) { setPwError(error.message); return }
+      if (error) {
+        setPwError(error.message)
+        return
+      }
       setPwSuccess(true)
-      setTimeout(() => { setShowChangePassword(false); setPwSuccess(false) }, 2000)
+      setTimeout(() => {
+        setShowChangePassword(false)
+        setPwSuccess(false)
+      }, 2000)
     })
   }
 
-  // Detect sync completion for brief success feedback
   const prevSyncStateRef = useRef(syncStatus.state)
   useEffect(() => {
     const prev = prevSyncStateRef.current
@@ -146,24 +187,9 @@ export function ProfileScreen({
 
   function handleConnect() {
     setConnecting(true)
-    setConnectError(null)
-    // Always redirect to full OAuth — each user authorises their own Strava account
+    // Every user authorises their own Strava account, so this is always the
+    // full OAuth redirect.
     window.location.href = "/api/auth/strava"
-  }
-
-  function handleReconnect() {
-    window.location.href = "/api/auth/strava"
-  }
-
-  function handleSync() {
-    setSyncSuccess(false)
-    onSync()
-  }
-
-  function handleFullSync() {
-    setShowResyncConfirm(false)
-    setSyncSuccess(false)
-    onFullSync()
   }
 
   async function handleDeleteAccount() {
@@ -172,581 +198,452 @@ export function ProfileScreen({
     try {
       const res = await fetch("/api/account/delete", { method: "DELETE" })
       if (!res.ok) {
-        const data = await res.json()
-        setDeleteError(data.error ?? "Failed to delete account")
+        const data = await res.json().catch(() => ({}))
+        setDeleteError(data.error ?? t("profile.deleteFailed"))
         setIsDeleting(false)
         return
       }
-      // Redirect to login after successful deletion
       window.location.href = "/auth/login"
     } catch {
-      setDeleteError("Network error. Please try again.")
+      setDeleteError(t("profile.networkError"))
       setIsDeleting(false)
     }
   }
 
   return (
-    <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">{t("profile.title")}</h1>
-      </header>
-
-      {/* ── ACCOUNT ─────────────────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.account")}
-        </h3>
-        <AppCard variant="flush">
-          {/* User info */}
-          <div className="flex items-center gap-4 px-4 py-4 border-b border-border">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-              {user.avatar_url ? (
-                <Image
-                  src={user.avatar_url}
-                  alt={user.display_name}
-                  width={48}
-                  height={48}
-                  className="h-12 w-12 rounded-full object-cover"
-                  crossOrigin="anonymous"
-                />
-              ) : (
-                <User size={22} className="text-primary" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              {editingName ? (
-                <form onSubmit={handleSaveName} className="flex items-center gap-2">
-                  <input
-                    autoFocus
-                    value={nameValue}
-                    onChange={(e) => setNameValue(e.target.value)}
-                    className="flex-1 min-w-0 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <button
-                    type="submit"
-                    disabled={namePending}
-                    className="shrink-0 text-xs font-semibold text-primary disabled:opacity-50"
-                  >
-                    {namePending ? t("profile.nameSaving") : t("profile.saveName")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setEditingName(false); setNameValue(displayedName); setNameError(null) }}
-                    className="shrink-0 text-xs text-muted-foreground"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </form>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate text-sm font-semibold text-card-foreground">{displayedName}</p>
-                  <button
-                    onClick={() => { setEditingName(true); setNameValue(displayedName) }}
-                    className="shrink-0 text-muted-foreground active:opacity-70"
-                    aria-label={t("profile.editName")}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                </div>
-              )}
-              {nameError && <p className="mt-0.5 text-xs text-destructive">{nameError}</p>}
-              <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-            </div>
-          </div>
-
-          {/* Change password */}
-          {!showChangePassword ? (
-            <button
-              onClick={() => { setShowChangePassword(true); setPwError(null); setPwSuccess(false) }}
-              className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-sm font-medium text-card-foreground transition-colors active:bg-accent"
-            >
-              <KeyRound size={16} className="text-muted-foreground" />
-              {t("profile.changePassword")}
-            </button>
+    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+      {/* ── Identity ──────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3.5">
+        {user.avatar_url ? (
+          <Image
+            src={user.avatar_url}
+            alt=""
+            width={56}
+            height={56}
+            className="size-14 shrink-0 rounded-full object-cover"
+            crossOrigin="anonymous"
+          />
+        ) : (
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-muted-foreground">
+            <User size={24} />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          {editingName ? (
+            <form onSubmit={handleSaveName} className="flex items-center gap-2">
+              <Input
+                autoFocus
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                aria-label={t("profile.editName")}
+                aria-invalid={nameError ? true : undefined}
+                className="h-10"
+              />
+              <Button type="submit" size="sm" loading={namePending}>
+                {t("profile.saveName")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setEditingName(false)
+                  setNameValue(displayedName)
+                  setNameError(null)
+                }}
+              >
+                {t("common.cancel")}
+              </Button>
+            </form>
           ) : (
-            <div className="border-b border-border px-4 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-card-foreground">{t("profile.changePassword")}</span>
-                <button onClick={() => setShowChangePassword(false)} className="text-xs text-muted-foreground active:opacity-70">
-                  {t("common.cancel")}
-                </button>
-              </div>
-              {pwSuccess ? (
-                <p className="text-sm text-success flex items-center gap-1.5">
-                  <Check size={14} /> {t("profile.passwordUpdated")}
-                </p>
-              ) : (
-                <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
-                  {pwError && (
-                    <p className="text-xs text-destructive">{pwError}</p>
-                  )}
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="new_password" className="text-xs font-medium text-card-foreground">
-                      {t("auth.newPasswordLabel")}
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="new_password"
-                        name="new_password"
-                        type={showPw ? "text" : "password"}
-                        autoComplete="new-password"
-                        required
-                        minLength={8}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw(!showPw)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground active:opacity-70"
-                        aria-label={showPw ? "Hide password" : "Show password"}
-                      >
-                        {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="confirm_password" className="text-xs font-medium text-card-foreground">
-                      {t("auth.confirmPasswordLabel")}
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="confirm_password"
-                        name="confirm_password"
-                        type={showConfirmPw ? "text" : "password"}
-                        autoComplete="new-password"
-                        required
-                        minLength={8}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPw(!showConfirmPw)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground active:opacity-70"
-                        aria-label={showConfirmPw ? "Hide password" : "Show password"}
-                      >
-                        {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={pwPending}
-                    className="flex h-9 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground disabled:opacity-50"
-                  >
-                    {pwPending ? t("profile.updating") : t("auth.updatePassword")}
-                  </button>
-                </form>
-              )}
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-title font-semibold text-foreground">{displayedName}</p>
+              <button
+                onClick={() => {
+                  setEditingName(true)
+                  setNameValue(displayedName)
+                }}
+                className="press flex size-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                aria-label={t("profile.editName")}
+              >
+                <Pencil size={14} />
+              </button>
             </div>
           )}
+          {nameError && (
+            <p role="alert" className="mt-1 text-micro text-destructive">
+              {nameError}
+            </p>
+          )}
+          <p className="truncate text-label text-muted-foreground">{user.email}</p>
+        </div>
+      </div>
 
-          {/* Sign out */}
-          <button
-            onClick={onSignOut}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-destructive transition-colors active:bg-destructive/5"
-          >
-            <LogOut size={16} />
-            {t("profile.signOut")}
-          </button>
-        </AppCard>
-      </section>
-
-      {/* ── CONNECTED SERVICES ──────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.connectedServices")}
-        </h3>
-        <AppCard variant="flush">
-          {/* Strava connection row */}
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${stravaConnected ? "bg-success/10" : "bg-secondary"}`}>
-                {stravaConnected ? (
-                  <Link2 size={15} className="text-success" />
-                ) : (
-                  <Link2Off size={15} className="text-muted-foreground" />
-                )}
-              </div>
-              <span className={`text-sm font-medium ${stravaConnected ? "text-success" : "text-muted-foreground"}`}>
+      {/* ── Strava ────────────────────────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("profile.connectedServices")} />
+        <AppCard variant="rows">
+          <CardRow className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              {stravaConnected ? (
+                <Link2 size={16} className="shrink-0 text-success" aria-hidden />
+              ) : (
+                <Link2Off size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+              )}
+              <span className="truncate text-label font-medium text-card-foreground">
                 {stravaConnected ? t("profile.stravaConnected") : t("profile.stravaNotConnected")}
               </span>
             </div>
-            {stravaConnected ? (
-              <button
-                onClick={handleReconnect}
-                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground active:opacity-70"
-              >
-                <RotateCcw size={11} />
+            {stravaConnected && (
+              <Button variant="ghost" size="sm" onClick={handleConnect}>
+                <RotateCcw size={13} />
                 {t("profile.reconnect")}
-              </button>
-            ) : (
-              <button
-                onClick={handleConnect}
-                disabled={connecting}
-                className="flex items-center gap-1.5 text-xs font-semibold text-primary active:opacity-70 disabled:opacity-50"
-              >
-                {connecting ? (
-                  <RefreshCw size={12} className="animate-spin" />
-                ) : (
-                  <Link2 size={12} />
-                )}
-                {connecting ? "Connecting…" : t("profile.connect")}
-              </button>
+              </Button>
             )}
-          </div>
+          </CardRow>
 
-          {connectError && (
-            <div className="border-b border-border px-4 py-2">
-              <p className="text-xs text-destructive">{connectError}</p>
-            </div>
-          )}
+          {stravaConnected ? (
+            <>
+              <CardRow className="flex items-center justify-between gap-3">
+                <span className="text-label text-card-foreground">{t("profile.lastSynced")}</span>
+                <span className="text-label text-muted-foreground">
+                  {syncStatus.last_sync_at
+                    ? formatTimeAgo(syncStatus.last_sync_at)
+                    : t("profile.neverSynced")}
+                </span>
+              </CardRow>
 
-          {/* Sync Now button */}
-          {stravaConnected && (
-            <div className="px-4 py-3">
-              <button
-                onClick={handleSync}
-                disabled={isSyncing}
-                className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  syncSuccess
-                    ? "bg-success/10 text-success"
-                    : "bg-secondary text-secondary-foreground active:bg-accent"
-                }`}
-              >
-                {isSyncing ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    {t("profile.syncing")}
-                  </>
-                ) : syncSuccess ? (
-                  <>
-                    <Check size={16} />
-                    {t("profile.synced")}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={16} />
-                    {t("profile.syncWithStrava")}
-                  </>
+              <CardRow>
+                <Button
+                  variant={syncSuccess ? "outline" : "secondary"}
+                  block
+                  onClick={() => {
+                    setSyncSuccess(false)
+                    onSync()
+                  }}
+                  loading={isSyncing}
+                >
+                  {!isSyncing && (syncSuccess ? <Check size={16} /> : <RefreshCw size={16} />)}
+                  {isSyncing
+                    ? t("profile.syncing")
+                    : syncSuccess
+                      ? t("profile.synced")
+                      : t("profile.syncWithStrava")}
+                </Button>
+
+                {syncStatus.state === "error" && syncStatus.error_message && (
+                  <p role="alert" className="mt-2 text-micro text-destructive">
+                    {syncStatus.error_message}
+                  </p>
                 )}
-              </button>
+              </CardRow>
 
-              {syncStatus.state === "error" && syncStatus.error_message && (
-                <div className="mt-2 flex items-start gap-2 rounded-lg bg-destructive/5 px-3 py-2">
-                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
-                  <p className="text-xs text-destructive">{syncStatus.error_message}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Not connected: official "Connect with Strava" button */}
-          {!stravaConnected && (
-            <div className="px-4 py-3 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Connect Strava to sync your activities automatically.
+              <CardRow>
+                {!showResyncConfirm ? (
+                  <Button
+                    variant="ghost"
+                    block
+                    className="justify-start px-0 text-muted-foreground"
+                    disabled={isSyncing}
+                    onClick={() => setShowResyncConfirm(true)}
+                  >
+                    <TriangleAlert size={16} className="text-warning" />
+                    {t("profile.fullResync")}
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    <p className="text-label leading-relaxed text-muted-foreground">
+                      {t("profile.fullResyncWarning")}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        loading={isSyncing}
+                        onClick={() => {
+                          setShowResyncConfirm(false)
+                          setSyncSuccess(false)
+                          onFullSync()
+                        }}
+                      >
+                        {t("profile.fullResyncConfirm")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={isSyncing}
+                        onClick={() => setShowResyncConfirm(false)}
+                      >
+                        {t("common.cancel")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardRow>
+            </>
+          ) : (
+            <CardRow className="flex flex-col gap-2.5">
+              <p className="text-label leading-relaxed text-muted-foreground">
+                {t("profile.stravaConnectBlurb")}
               </p>
               <ConnectWithStravaButton
                 onClick={handleConnect}
                 disabled={connecting}
                 connecting={connecting}
               />
-            </div>
+            </CardRow>
           )}
         </AppCard>
-      </section>
+      </Section>
 
-      {/* ── SYNC SETTINGS ───────────────────────────────────── */}
-      {stravaConnected && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("profile.syncSettings")}
-          </h3>
-          <AppCard variant="flush">
-            {/* Last synced */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <Clock size={16} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("profile.lastSynced")}</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {syncStatus.last_sync_at
-                  ? formatTimeAgo(syncStatus.last_sync_at)
-                  : t("profile.neverSynced")}
-              </span>
+      {/* ── Heart-rate calibration ────────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("profile.trainingSettings")} />
+        <AppCard>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-label font-semibold text-card-foreground">
+                <Heart size={15} className="text-muted-foreground" aria-hidden />
+                {t("profile.hrZones")}
+              </p>
+              <p className="mt-1 max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
+                {t("profile.hrZonesDesc")}
+              </p>
             </div>
-
-            {/* Full Resync */}
-            {!showResyncConfirm ? (
-              <button
-                onClick={() => setShowResyncConfirm(true)}
-                disabled={isSyncing}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-muted-foreground transition-colors active:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <AlertTriangle size={16} className="text-amber-500" />
-                {t("profile.fullResync")}
-              </button>
+            {hrLoading ? (
+              <Loader2 size={16} className="mt-1 shrink-0 animate-spin text-muted-foreground" />
             ) : (
-              <div className="bg-amber-500/5 p-4 ring-1 ring-amber-500/20 rounded-b-2xl">
-                <div className="flex items-start gap-2 mb-3">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {t("profile.fullResyncWarning")}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={handleFullSync}
-                    disabled={isSyncing}
-                    className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-opacity active:opacity-80 disabled:opacity-50"
-                  >
-                    {isSyncing ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        {t("profile.syncing")}
-                      </>
-                    ) : (
-                      t("profile.fullResyncConfirm")
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowResyncConfirm(false)}
-                    disabled={isSyncing}
-                    className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-opacity active:opacity-70 disabled:opacity-50"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </div>
+              <Button variant="ghost" size="sm" onClick={fetchHrAnalysis}>
+                {hrAnalysis ? t("profile.hrReanalyze") : t("profile.hrAnalyze")}
+              </Button>
             )}
-          </AppCard>
-        </section>
-      )}
+          </div>
 
-      {/* ── TRAINING SETTINGS ───────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.trainingSettings")}
-        </h3>
-        <AppCard variant="flush">
-          {/* HR Zone Calibration */}
-          <div className="border-b border-border px-4 py-4">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Heart size={15} className="text-muted-foreground" />
-                <span className="text-sm font-medium text-card-foreground">{t("profile.hrZones")}</span>
-              </div>
-              {!hrAnalysis && !hrLoading && (
-                <button
-                  onClick={fetchHrAnalysis}
-                  className="text-xs font-medium text-primary active:opacity-70"
-                >
-                  {t("profile.hrAnalyze")}
-                </button>
-              )}
-              {hrLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">{t("profile.hrZonesDesc")}</p>
+          {hrError && (
+            <p role="alert" className="mt-3 text-micro text-destructive">
+              {hrError}
+            </p>
+          )}
 
-            {hrError && (
-              <p className="mb-2 text-xs text-destructive">{hrError}</p>
-            )}
-
-            {/* Default zone reference when no analysis */}
-            {!hrAnalysis && !hrLoading && (
-              <div className="flex gap-1">
-                {HR_ZONES.map((z) => (
-                  <div key={z.zone} className="flex flex-1 flex-col items-center gap-1">
-                    <div
-                      className="h-6 w-full rounded-md"
-                      style={{ backgroundColor: z.color, opacity: 0.7 }}
-                    />
-                    <span className="text-[9px] text-muted-foreground font-medium">Z{z.zone}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Analysis Results */}
-            {hrAnalysis && (
-              <div className="flex flex-col gap-3">
-                {/* Calibration Status Badge */}
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          {hrAnalysis && (
+            <div className="mt-4 flex flex-col gap-3.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill
+                  tone={
                     hrAnalysis.calibrationStatus === "well_calibrated"
-                      ? "bg-success/10 text-success"
+                      ? "positive"
                       : hrAnalysis.calibrationStatus === "slightly_misaligned"
-                        ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        ? "caution"
                         : hrAnalysis.calibrationStatus === "likely_misconfigured"
-                          ? "bg-destructive/10 text-destructive"
-                          : "bg-muted text-muted-foreground"
-                  }`}>
-                    {t(`profile.hrStatus_${hrAnalysis.calibrationStatus}` as any)}
-                  </span>
-                  {hrAnalysis.zonesMatch && hrAnalysis.calibrationStatus !== "insufficient_data" && (
-                    <span className="text-[10px] text-success flex items-center gap-0.5">
-                      <Check size={10} /> {t("profile.hrZonesMatch")}
+                          ? "negative"
+                          : "neutral"
+                  }
+                >
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {t(`profile.hrStatus_${hrAnalysis.calibrationStatus}` as any)}
+                </Pill>
+                {hrAnalysis.zonesMatch &&
+                  hrAnalysis.calibrationStatus !== "insufficient_data" && (
+                    <span className="inline-flex items-center gap-1 text-micro text-success">
+                      <Check size={12} aria-hidden /> {t("profile.hrZonesMatch")}
                     </span>
                   )}
+              </div>
+
+              <dl className="grid grid-cols-3 gap-x-4">
+                <div>
+                  <dd className="measure text-title font-semibold leading-none text-card-foreground">
+                    {hrAnalysis.estimatedMaxHr}
+                  </dd>
+                  <dt className="mt-1.5 text-micro text-muted-foreground">
+                    {t("profile.hrEstMaxHr")}
+                  </dt>
                 </div>
-
-                {/* Key Metrics */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
-                    <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.estimatedMaxHr}</p>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrEstMaxHr")}</p>
+                {hrAnalysis.estimatedThresholdHr != null && (
+                  <div className="border-l border-border pl-4">
+                    <dd className="measure text-title font-semibold leading-none text-card-foreground">
+                      {hrAnalysis.estimatedThresholdHr}
+                    </dd>
+                    <dt className="mt-1.5 text-micro text-muted-foreground">
+                      {t("profile.hrThreshold")}
+                    </dt>
                   </div>
-                  {hrAnalysis.estimatedThresholdHr != null && (
-                    <div className="rounded-lg bg-secondary/50 p-2 text-center">
-                      <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.estimatedThresholdHr}</p>
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrThreshold")}</p>
-                    </div>
-                  )}
-                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
-                    <p className="text-lg font-bold font-mono text-card-foreground">{hrAnalysis.dataQuality.activitiesWithHr}</p>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{t("profile.hrActivities")}</p>
-                  </div>
+                )}
+                <div className="border-l border-border pl-4">
+                  <dd className="measure text-title font-semibold leading-none text-card-foreground">
+                    {hrAnalysis.dataQuality.activitiesWithHr}
+                  </dd>
+                  <dt className="mt-1.5 text-micro text-muted-foreground">
+                    {t("profile.hrActivities")}
+                  </dt>
                 </div>
+              </dl>
 
-                {/* Recommended Zones */}
-                {hrAnalysis.calibrationStatus !== "insufficient_data" && (
-                  <div>
-                    <button
-                      onClick={() => setHrExpanded(!hrExpanded)}
-                      className="flex w-full items-center justify-between py-1 text-xs font-medium text-card-foreground active:opacity-70"
-                    >
-                      <span>{t("profile.hrRecommendedZones")}</span>
-                      {hrExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
+              {hrAnalysis.calibrationStatus !== "insufficient_data" && (
+                <div>
+                  <button
+                    onClick={() => setHrExpanded(!hrExpanded)}
+                    aria-expanded={hrExpanded}
+                    className="press flex w-full items-center justify-between rounded-sm py-1 text-label font-medium text-card-foreground"
+                  >
+                    <span>{t("profile.hrRecommendedZones")}</span>
+                    <ChevronDown
+                      size={15}
+                      aria-hidden
+                      className="text-muted-foreground"
+                      style={{
+                        transform: hrExpanded ? "rotate(180deg)" : "none",
+                        transition: "transform var(--dur-state) var(--ease-out)",
+                      }}
+                    />
+                  </button>
 
-                    {hrExpanded && (
-                      <div className="mt-2 flex flex-col gap-2">
-                        {/* Zone comparison table */}
-                        <div className="overflow-hidden rounded-xl ring-1 ring-border">
-                          <div className="grid grid-cols-4 gap-0 bg-secondary/30 px-3 py-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                            <span>{t("profile.hrZone")}</span>
-                            <span className="text-center">{t("profile.hrCurrent")}</span>
-                            <span className="text-center">{t("profile.hrRecommended")}</span>
-                            <span className="text-right">{t("profile.hrDiff")}</span>
-                          </div>
+                  {hrExpanded && (
+                    <div className="mt-2.5 flex flex-col gap-3">
+                      <table className="w-full text-micro">
+                        <caption className="sr-only">{t("profile.hrRecommendedZones")}</caption>
+                        <thead>
+                          <tr className="text-muted-foreground">
+                            <th scope="col" className="pb-1.5 text-left font-medium">
+                              {t("profile.hrZone")}
+                            </th>
+                            <th scope="col" className="pb-1.5 text-right font-medium">
+                              {t("profile.hrCurrent")}
+                            </th>
+                            <th scope="col" className="pb-1.5 text-right font-medium">
+                              {t("profile.hrRecommended")}
+                            </th>
+                            <th scope="col" className="pb-1.5 text-right font-medium">
+                              {t("profile.hrDiff")}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           {hrAnalysis.recommendedZones.map((rec, i) => {
                             const cur = hrAnalysis.currentZones[i]
                             const diff = rec.min - cur.min
                             const hasDiff = Math.abs(diff) > 2
                             return (
-                              <div
-                                key={rec.zone}
-                                className={`grid grid-cols-4 gap-0 px-3 py-2 text-xs ${
-                                  i < 4 ? "border-b border-border" : ""
-                                }`}
-                              >
-                                <span className="font-medium text-card-foreground">Z{rec.zone} {rec.label}</span>
-                                <span className="text-center text-muted-foreground font-mono">{cur.min}–{cur.max}</span>
-                                <span className="text-center font-mono text-card-foreground">{rec.min}–{rec.max}</span>
-                                <span className={`text-right font-mono ${
-                                  hasDiff
-                                    ? diff > 0 ? "text-destructive" : "text-success"
-                                    : "text-muted-foreground"
-                                }`}>
+                              <tr key={rec.zone} className="border-t border-border">
+                                <th
+                                  scope="row"
+                                  className="py-2 text-left font-medium text-card-foreground"
+                                >
+                                  Z{rec.zone} {rec.label}
+                                </th>
+                                <td className="measure py-2 text-right text-muted-foreground">
+                                  {cur.min}–{cur.max}
+                                </td>
+                                <td className="measure py-2 text-right text-card-foreground">
+                                  {rec.min}–{rec.max}
+                                </td>
+                                <td
+                                  className={`measure py-2 text-right ${
+                                    hasDiff
+                                      ? diff > 0
+                                        ? "text-destructive"
+                                        : "text-success"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
                                   {hasDiff ? (diff > 0 ? `+${diff}` : `${diff}`) : "—"}
-                                </span>
-                              </div>
+                                </td>
+                              </tr>
                             )
                           })}
-                        </div>
+                        </tbody>
+                      </table>
 
-                        {/* Explanations */}
-                        {hrAnalysis.explanations.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            {hrAnalysis.explanations.map((exp, i) => (
-                              <div key={i} className="flex gap-2 rounded-lg bg-secondary/30 p-2.5">
-                                <Info size={12} className="shrink-0 mt-0.5 text-muted-foreground" />
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">{exp}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      {hrAnalysis.explanations.length > 0 && (
+                        <ul className="flex flex-col gap-1.5">
+                          {hrAnalysis.explanations.map((exp, i) => (
+                            <li
+                              key={i}
+                              className="text-micro leading-relaxed text-muted-foreground"
+                            >
+                              {exp}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
 
-                        {/* Strava manual update guidance */}
-                        {hrAnalysis.calibrationStatus !== "well_calibrated" && !hrAnalysis.zonesMatch && (
-                          <div className="rounded-lg bg-primary/5 p-3 ring-1 ring-primary/10">
-                            <p className="text-[11px] font-medium text-card-foreground mb-1">{t("profile.hrStravaGuide")}</p>
-                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {hrAnalysis.calibrationStatus !== "well_calibrated" &&
+                        !hrAnalysis.zonesMatch && (
+                          <div className="rounded-md bg-surface-sunken p-3">
+                            <p className="text-micro font-semibold text-card-foreground">
+                              {t("profile.hrStravaGuide")}
+                            </p>
+                            <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
                               {t("profile.hrStravaGuideDesc")}
                             </p>
                           </div>
                         )}
-
-                        {/* Re-analyze button */}
-                        <button
-                          onClick={fetchHrAnalysis}
-                          disabled={hrLoading}
-                          className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium text-primary active:opacity-70 disabled:opacity-50"
-                        >
-                          {hrLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          {t("profile.hrReanalyze")}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </AppCard>
-      </section>
+      </Section>
 
-      {/* ── APPEARANCE ──────────────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.appearance")}
-        </h3>
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
-                {isDarkMode ? (
-                  <Moon size={16} className="text-primary" />
-                ) : (
-                  <Sun size={16} className="text-muted-foreground" />
-                )}
-              </div>
-              <span className="text-sm font-medium text-card-foreground">{t("profile.darkMode")}</span>
-            </div>
-            <button
-              role="switch"
-              aria-checked={isDarkMode}
-              aria-label="Toggle dark mode"
-              onClick={() => setTheme(isDarkMode ? "light" : "dark")}
-              className={`relative inline-flex h-[30px] w-[52px] shrink-0 items-center rounded-full transition-colors duration-200 ${
-                isDarkMode ? "bg-primary" : "bg-border"
-              }`}
+      {/* ── Appearance and language ───────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("profile.appearance")} />
+        <AppCard variant="rows">
+          <CardRow className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2.5 text-label font-medium text-card-foreground">
+              {mounted && resolvedTheme === "dark" ? (
+                <Moon size={16} className="text-muted-foreground" aria-hidden />
+              ) : (
+                <Sun size={16} className="text-muted-foreground" aria-hidden />
+              )}
+              {t("profile.theme")}
+            </span>
+            {/* Three states, not a two-state switch: "follow the system" is a
+                real preference and the old toggle could not express it. */}
+            <div
+              className="flex items-center gap-0.5 rounded-full bg-surface-sunken p-0.5"
+              role="group"
+              aria-label={t("profile.theme")}
             >
-              <span
-                className={`inline-block h-[26px] w-[26px] rounded-full bg-card shadow-sm transition-transform duration-200 ${
-                  isDarkMode ? "translate-x-[24px]" : "translate-x-[2px]"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ── LANGUAGE ────────────────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.language")}
-        </h3>
-        <div className="rounded-2xl bg-card shadow-sm ring-1 ring-border">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
-                <Globe size={16} className="text-muted-foreground" />
-              </div>
-              <span className="text-sm font-medium text-card-foreground">{t("profile.language")}</span>
+              {(
+                [
+                  ["light", Sun, t("profile.themeLight")],
+                  ["dark", Moon, t("profile.themeDark")],
+                  ["system", Monitor, t("profile.themeSystem")],
+                ] as const
+              ).map(([value, Icon, label]) => {
+                const active = mounted && theme === value
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setTheme(value)}
+                    aria-pressed={active}
+                    aria-label={label}
+                    title={label}
+                    className={`press flex size-8 items-center justify-center rounded-full ${
+                      active
+                        ? "bg-card text-foreground shadow-e1"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon size={15} />
+                  </button>
+                )
+              })}
             </div>
-            <div className="flex items-center gap-1 rounded-full bg-secondary p-0.5">
+          </CardRow>
+
+          <CardRow className="flex items-center justify-between gap-3">
+            <span className="text-label font-medium text-card-foreground">
+              {t("profile.language")}
+            </span>
+            <div
+              className="flex items-center gap-0.5 rounded-full bg-surface-sunken p-0.5"
+              role="group"
+              aria-label={t("profile.language")}
+            >
               {(["en", "no"] as Locale[]).map((l) => (
                 <button
                   key={l}
@@ -754,85 +651,197 @@ export function ProfileScreen({
                     setLocale(l)
                     createClient().from("profiles").update({ locale: l }).eq("id", user.id)
                   }}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  aria-pressed={locale === l}
+                  className={`press rounded-full px-3 py-1.5 text-micro font-semibold ${
                     locale === l
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground"
+                      ? "bg-card text-foreground shadow-e1"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {l === "en" ? "English" : "Norsk"}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
+          </CardRow>
+        </AppCard>
+      </Section>
 
-      {/* ── LEGAL & DATA ───────────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("profile.legalData")}
-        </h3>
-        <AppCard variant="flush">
-          {/* Privacy Policy */}
-          <a
-            href="/privacy"
-            className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-sm font-medium text-card-foreground transition-colors active:bg-accent"
-          >
-            <Shield size={16} className="text-muted-foreground" />
-            {t("profile.privacyPolicy")}
-          </a>
+      {/* ── Security ──────────────────────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("profile.account")} />
+        <AppCard variant="rows">
+          {!showChangePassword ? (
+            <CardRow className="p-0">
+              <button
+                onClick={() => {
+                  setShowChangePassword(true)
+                  setPwError(null)
+                  setPwSuccess(false)
+                }}
+                className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-left text-label font-medium text-card-foreground"
+              >
+                <KeyRound size={16} className="text-muted-foreground" aria-hidden />
+                {t("profile.changePassword")}
+              </button>
+            </CardRow>
+          ) : (
+            <CardRow>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-label font-semibold text-card-foreground">
+                  {t("profile.changePassword")}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setShowChangePassword(false)}>
+                  {t("common.cancel")}
+                </Button>
+              </div>
+              {pwSuccess ? (
+                <p className="flex items-center gap-1.5 text-label text-success" role="status">
+                  <Check size={15} aria-hidden /> {t("profile.passwordUpdated")}
+                </p>
+              ) : (
+                <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+                  {pwError && (
+                    <p role="alert" className="text-micro text-destructive">
+                      {pwError}
+                    </p>
+                  )}
+                  <PasswordField
+                    id="new_password"
+                    label={t("auth.newPasswordLabel")}
+                    visible={showPw}
+                    onToggle={() => setShowPw(!showPw)}
+                    showLabel={t("auth.showPassword")}
+                    hideLabel={t("auth.hidePassword")}
+                  />
+                  <PasswordField
+                    id="confirm_password"
+                    label={t("auth.confirmPasswordLabel")}
+                    visible={showConfirmPw}
+                    onToggle={() => setShowConfirmPw(!showConfirmPw)}
+                    showLabel={t("auth.showPassword")}
+                    hideLabel={t("auth.hidePassword")}
+                  />
+                  <Button type="submit" block loading={pwPending}>
+                    {t("auth.updatePassword")}
+                  </Button>
+                </form>
+              )}
+            </CardRow>
+          )}
 
-          {/* Delete Account */}
+          <CardRow className="p-0">
+            <a
+              href="/privacy"
+              className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-label font-medium text-card-foreground"
+            >
+              <Shield size={16} className="text-muted-foreground" aria-hidden />
+              {t("profile.privacyPolicy")}
+            </a>
+          </CardRow>
+
+          <CardRow className="p-0">
+            <button
+              onClick={onSignOut}
+              className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-left text-label font-medium text-card-foreground"
+            >
+              <LogOut size={16} className="text-muted-foreground" aria-hidden />
+              {t("profile.signOut")}
+            </button>
+          </CardRow>
+        </AppCard>
+      </Section>
+
+      {/* ── Irreversible ──────────────────────────────────────────────── */}
+      <Section>
+        <SectionHeader title={t("profile.legalData")} />
+        <AppCard>
           {!showDeleteConfirm ? (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-destructive transition-colors active:bg-destructive/5"
+              className="press flex w-full items-center gap-2.5 text-left text-label font-medium text-destructive"
             >
-              <Trash2 size={16} />
+              <Trash2 size={16} aria-hidden />
               {t("profile.deleteAccount")}
             </button>
           ) : (
-            <div className="bg-destructive/5 p-4 ring-1 ring-destructive/20 rounded-b-2xl">
-              <div className="flex items-start gap-2 mb-3">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-destructive" />
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t("profile.deleteAccountWarning")}
-                </p>
-              </div>
+            <div className="flex flex-col gap-3">
+              <p className="text-label leading-relaxed text-foreground">
+                {t("profile.deleteAccountWarning")}
+              </p>
               {deleteError && (
-                <div className="mb-3 flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2">
-                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
-                  <p className="text-xs text-destructive">{deleteError}</p>
-                </div>
+                <p role="alert" className="text-micro text-destructive">
+                  {deleteError}
+                </p>
               )}
-              <div className="flex flex-col gap-2">
-                <button
+              <div className="flex gap-2">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="flex-1"
+                  loading={isDeleting}
                   onClick={handleDeleteAccount}
-                  disabled={isDeleting}
-                  className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-opacity active:opacity-80 disabled:opacity-50"
                 >
-                  {isDeleting ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      {t("profile.deleting")}
-                    </>
-                  ) : (
-                    t("profile.deleteAccountConfirm")
-                  )}
-                </button>
-                <button
-                  onClick={() => { setShowDeleteConfirm(false); setDeleteError(null) }}
+                  {t("profile.deleteAccountConfirm")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={isDeleting}
-                  className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-opacity active:opacity-70 disabled:opacity-50"
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setDeleteError(null)
+                  }}
                 >
                   {t("common.cancel")}
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </AppCard>
-      </section>
+      </Section>
+    </div>
+  )
+}
+
+function PasswordField({
+  id,
+  label,
+  visible,
+  onToggle,
+  showLabel,
+  hideLabel,
+}: {
+  id: string
+  label: string
+  visible: boolean
+  onToggle: () => void
+  showLabel: string
+  hideLabel: string
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-micro font-medium text-card-foreground">
+        {label}
+      </label>
+      <div className="relative">
+        <Input
+          id={id}
+          name={id}
+          type={visible ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          className="pr-11"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="press absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+          aria-label={visible ? hideLabel : showLabel}
+        >
+          {visible ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+      </div>
     </div>
   )
 }

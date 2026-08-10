@@ -3,102 +3,170 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@layer base {
-  .dark {
-    color-scheme: dark;
-  }
-}
+/* ============================================================================
+   42195 — "Tartan"
+   ----------------------------------------------------------------------------
+   The visual world is the running track at the end of the day: a warm clay
+   ground (the tartan surface), chalk-white lane markings (the surfaces you
+   read data on), and one ember accent that only ever means "act on this" or
+   "this is where you are".
+
+   Restrained colour strategy: warm neutrals carry the page, the ember carries
+   action and selection, and the semantic trio (go / hold / stop) carries state.
+   Nothing here is decoration.
+   ========================================================================== */
 
 :root {
-  --background: oklch(0.975 0.004 85);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.63 0.2 30);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.955 0.005 85);
-  --secondary-foreground: oklch(0.25 0 0);
-  --muted: oklch(0.955 0.005 85);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.94 0.035 30);
-  --accent-foreground: oklch(0.35 0.08 30);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.915 0.005 85);
-  --input: oklch(0.915 0.005 85);
-  --ring: oklch(0.63 0.2 30);
-  --chart-1: oklch(0.63 0.2 30);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* ---- Ground and surfaces -------------------------------------------- */
+  /* The page is clay, not off-white. Cards are chalk and genuinely lift. */
+  --background: oklch(0.88 0.014 68);
+  --surface-sunken: oklch(0.845 0.016 68);
+  --card: oklch(0.985 0.006 72);
+  --popover: oklch(0.985 0.006 72);
+
+  /* ---- Ink ------------------------------------------------------------- */
+  --foreground: oklch(0.235 0.02 45);
+  --card-foreground: oklch(0.235 0.02 45);
+  --popover-foreground: oklch(0.235 0.02 45);
+  --muted-foreground: oklch(0.47 0.024 50);
+
+  /* ---- Action ---------------------------------------------------------- */
+  --primary: oklch(0.505 0.17 36);
+  --primary-foreground: oklch(0.985 0.012 70);
+  --primary-soft: oklch(0.505 0.17 36 / 0.1);
+
+  /* ---- Quiet surfaces and lines ---------------------------------------- */
+  --secondary: oklch(0.845 0.016 68);
+  --secondary-foreground: oklch(0.31 0.022 48);
+  --muted: oklch(0.845 0.016 68);
+  --accent: oklch(0.815 0.02 66);
+  --accent-foreground: oklch(0.29 0.022 46);
+  --border: oklch(0.795 0.016 66);
+  --input: oklch(0.795 0.016 66);
+  --ring: oklch(0.505 0.17 36);
+
+  /* ---- State ----------------------------------------------------------- */
+  --success: oklch(0.47 0.11 150);
+  --success-foreground: oklch(0.985 0.012 70);
+  --warning: oklch(0.5 0.12 72);
+  --warning-foreground: oklch(0.985 0.012 70);
+  --destructive: oklch(0.49 0.18 27);
+  --destructive-foreground: oklch(0.985 0.012 70);
+
+  /* ---- Data ------------------------------------------------------------
+     Five series separated by lightness as well as hue, so the set survives
+     greyscale printing and the common colour-vision deficiencies.          */
+  --chart-1: oklch(0.56 0.165 38);
+  --chart-2: oklch(0.52 0.095 150);
+  --chart-3: oklch(0.6 0.13 72);
+  --chart-4: oklch(0.47 0.07 235);
+  --chart-5: oklch(0.56 0.12 340);
+
+  /* ---- Shape -----------------------------------------------------------
+     Cards hold 14px. Controls hold 10px. Pills are for small controls only. */
   --radius: 0.875rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.63 0.2 30);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.63 0.2 30);
-  --success: oklch(0.6 0.17 145);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.75 0.18 75);
-  --warning-foreground: oklch(0.15 0 0);
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  /* ---- Elevation -------------------------------------------------------
+     One depth system: offset + soft blur, tinted from the ground's own hue.
+     Light mode uses shadow; dark mode swaps to a lit edge (below).          */
+  --elevation-1: 0 1px 2px -1px oklch(0.3 0.03 50 / 0.1), 0 2px 6px -2px oklch(0.3 0.03 50 / 0.09);
+  --elevation-2: 0 2px 4px -2px oklch(0.3 0.03 50 / 0.12), 0 8px 20px -6px oklch(0.3 0.03 50 / 0.14);
+  /* A box-shadow list may not contain the keyword `none`, so the "no edge"
+     value is an invisible shadow rather than `none` — otherwise the whole
+     declaration in `.surface` is invalid and the elevation disappears. */
+  --elevation-edge: 0 0 0 0 transparent;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-tap: 110ms;
+  --dur-state: 180ms;
+  --dur-view: 280ms;
+
+  /* Sidebar tokens kept for shadcn primitives that reference them. */
+  --sidebar: oklch(0.985 0.006 72);
+  --sidebar-foreground: oklch(0.235 0.02 45);
+  --sidebar-primary: oklch(0.505 0.17 36);
+  --sidebar-primary-foreground: oklch(0.985 0.012 70);
+  --sidebar-accent: oklch(0.845 0.016 68);
+  --sidebar-accent-foreground: oklch(0.29 0.022 46);
+  --sidebar-border: oklch(0.795 0.016 66);
+  --sidebar-ring: oklch(0.505 0.17 36);
 }
 
-.dark, :root.dark {
-  --background: oklch(0.13 0 0);
-  --foreground: oklch(0.94 0 0);
-  --card: oklch(0.18 0.003 85);
-  --card-foreground: oklch(0.94 0 0);
-  --popover: oklch(0.18 0.003 85);
-  --popover-foreground: oklch(0.94 0 0);
-  --primary: oklch(0.82 0.17 85);
-  --primary-foreground: oklch(0.16 0.02 85);
-  --secondary: oklch(0.22 0.005 85);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.22 0.005 85);
-  --muted-foreground: oklch(0.58 0 0);
-  --accent: oklch(0.28 0.04 85);
-  --accent-foreground: oklch(0.82 0.17 85);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.26 0.005 85);
-  --input: oklch(0.26 0.005 85);
-  --ring: oklch(0.82 0.17 85);
-  --chart-1: oklch(0.82 0.17 85);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.18 0.003 85);
-  --sidebar-foreground: oklch(0.94 0 0);
-  --sidebar-primary: oklch(0.82 0.17 85);
-  --sidebar-primary-foreground: oklch(0.16 0.02 85);
-  --sidebar-accent: oklch(0.22 0.005 85);
-  --sidebar-accent-foreground: oklch(0.94 0 0);
-  --sidebar-border: oklch(0.26 0.005 85);
-  --sidebar-ring: oklch(0.82 0.17 85);
-  --success: oklch(0.6 0.17 145);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.8 0.15 80);
-  --warning-foreground: oklch(0.16 0.02 85);
+.dark,
+:root.dark {
+  color-scheme: dark;
+
+  /* Evening after the run: warm espresso, never neutral black. */
+  --background: oklch(0.185 0.012 55);
+  --surface-sunken: oklch(0.15 0.01 55);
+  --card: oklch(0.255 0.014 58);
+  --popover: oklch(0.255 0.014 58);
+
+  --foreground: oklch(0.945 0.008 75);
+  --card-foreground: oklch(0.945 0.008 75);
+  --popover-foreground: oklch(0.945 0.008 75);
+  --muted-foreground: oklch(0.735 0.018 60);
+
+  /* Same hue family as light — the accent does not change identity by theme. */
+  --primary: oklch(0.715 0.15 42);
+  --primary-foreground: oklch(0.19 0.03 40);
+  --primary-soft: oklch(0.715 0.15 42 / 0.16);
+
+  --secondary: oklch(0.305 0.014 58);
+  --secondary-foreground: oklch(0.9 0.01 70);
+  --muted: oklch(0.305 0.014 58);
+  --accent: oklch(0.345 0.016 58);
+  --accent-foreground: oklch(0.945 0.008 75);
+  --border: oklch(0.345 0.014 58);
+  --input: oklch(0.345 0.014 58);
+  --ring: oklch(0.715 0.15 42);
+
+  --success: oklch(0.76 0.13 150);
+  --success-foreground: oklch(0.19 0.03 150);
+  --warning: oklch(0.8 0.13 75);
+  --warning-foreground: oklch(0.19 0.03 60);
+  --destructive: oklch(0.68 0.17 27);
+  --destructive-foreground: oklch(0.19 0.03 27);
+
+  --chart-1: oklch(0.73 0.15 42);
+  --chart-2: oklch(0.74 0.11 152);
+  --chart-3: oklch(0.8 0.12 75);
+  --chart-4: oklch(0.69 0.09 235);
+  --chart-5: oklch(0.72 0.12 340);
+
+  /* On a dark ground a cast shadow reads as nothing. Depth comes from a lit
+     top edge instead, which is how a raised surface behaves under a light. */
+  --elevation-1: 0 0 0 0 transparent;
+  --elevation-2: 0 8px 24px -8px oklch(0 0 0 / 0.6);
+  --elevation-edge: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 0 0 1px oklch(0.345 0.014 58);
+
+  --sidebar: oklch(0.255 0.014 58);
+  --sidebar-foreground: oklch(0.945 0.008 75);
+  --sidebar-primary: oklch(0.715 0.15 42);
+  --sidebar-primary-foreground: oklch(0.19 0.03 40);
+  --sidebar-accent: oklch(0.305 0.014 58);
+  --sidebar-accent-foreground: oklch(0.945 0.008 75);
+  --sidebar-border: oklch(0.345 0.014 58);
+  --sidebar-ring: oklch(0.715 0.15 42);
 }
 
 @theme inline {
-  --font-sans: var(--font-inter), 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface-sunken: var(--surface-sunken);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -115,29 +183,178 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+
+  --radius-sm: 0.375rem;
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-card);
+  --radius-xl: 1.125rem;
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+
+  /* Type ramp. Fixed rem steps (product UI, not fluid), ratio ≈1.2, and the
+     functional floor is 0.75rem/12px — nothing readable ships below it. */
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1.1rem;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.2rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-lead: 1.0625rem;
+  --text-lead--line-height: 1.55rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.65rem;
+  --text-screen: 1.75rem;
+  --text-screen--line-height: 2.05rem;
+  --text-display: 2.375rem;
+  --text-display--line-height: 2.5rem;
+
+  --animate-rise: rise var(--dur-view) var(--ease-out) both;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
   }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: 'cv05' 1;
+    /* Numbers in this app are measurements. They should never jitter. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Browser surfaces ------------------------------------------------
+     The parts we did not draw still belong to the design.                  */
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 26%, transparent);
+    color: var(--foreground);
+  }
+
+  :where(input, textarea) {
+    caret-color: var(--primary);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 20%, transparent);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 34%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: from-font;
+  }
+
+  ::marker {
+    color: var(--muted-foreground);
+  }
+
+  /* Headings bind to what follows them, so they get more room above than
+     below. Screens set this once; sections inherit the rhythm. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+    letter-spacing: -0.018em;
+  }
+
+  h1 {
+    letter-spacing: -0.026em;
+  }
+}
+
+@layer components {
+  /* The single card surface. One elevation system, never border + shadow. */
+  .surface {
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-1), var(--elevation-edge);
+  }
+
+  .surface-raised {
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-2), var(--elevation-edge);
+  }
+
+  /* Data glyphs: paces, splits, distances, clock times. Mono earns its place
+     here because these are measurements read in columns, not decoration. */
+  .measure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* The one press response in the app. Everything tappable uses it. */
+  .press {
+    transition: transform var(--dur-tap) var(--ease-out),
+      background-color var(--dur-state) var(--ease-out),
+      color var(--dur-state) var(--ease-out),
+      box-shadow var(--dur-state) var(--ease-out);
+  }
+
+  .press:active {
+    transform: scale(0.985);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion keeps state and feedback, drops travel. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .press:active {
+    transform: none;
   }
 }

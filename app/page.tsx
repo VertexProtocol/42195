@@ -91,6 +91,10 @@ export default async function Page() {
           email: profileRes.data.email ?? authUser.email ?? "",
           avatar_url: profileRes.data.avatar_url ?? null,
           locale: profileRes.data.locale ?? null,
+          // The cache is selected above but was never passed through, so the
+          // profile screen re-ran the HR analysis on every visit.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          hr_analysis_cache: (profileRes.data as any).hr_analysis_cache ?? null,
         }
       : {
           id: authUser.id,

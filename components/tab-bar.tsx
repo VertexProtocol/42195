@@ -1,32 +1,48 @@
 "use client"
 
-import { Home, Activity, Target, User, Lightbulb } from "lucide-react"
+import { CalendarDays, Route, Target, LineChart } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import type { TabId } from "@/lib/types"
+
+/**
+ * Four destinations, not five.
+ *
+ * Profile moved into the app bar: it is a place you visit occasionally, not a
+ * peer of the three things you do every day. Dropping it buys each remaining
+ * tab enough width for a legible label instead of the 9px text the five-tab
+ * bar forced.
+ *
+ * The active tab is marked twice — by an ember lane above the icon and by
+ * weight — so the state does not rely on colour alone.
+ */
+
+const tabs: {
+  id: TabId
+  labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.insights"
+  icon: typeof Route
+}[] = [
+  { id: "home", labelKey: "tab.home", icon: CalendarDays },
+  { id: "activities", labelKey: "tab.activities", icon: Route },
+  { id: "goals", labelKey: "tab.goals", icon: Target },
+  { id: "insights", labelKey: "tab.insights", icon: LineChart },
+]
 
 interface TabBarProps {
   activeTab: TabId
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; labelKey: "tab.home" | "tab.activities" | "tab.goals" | "tab.insights" | "tab.profile"; icon: typeof Home }[] = [
-  { id: "home", labelKey: "tab.home", icon: Home },
-  { id: "activities", labelKey: "tab.activities", icon: Activity },
-  { id: "goals", labelKey: "tab.goals", icon: Target },
-  { id: "insights", labelKey: "tab.insights", icon: Lightbulb },
-  { id: "profile", labelKey: "tab.profile", icon: User },
-]
-
 export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   const { t } = useI18n()
+
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="tablist"
-      aria-label="Main navigation"
+      aria-label={t("nav.main")}
     >
-      <div className="mx-auto flex max-w-md items-center justify-around px-0.5 py-1">
+      <div className="mx-auto flex max-w-md items-stretch">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -35,19 +51,29 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               key={tab.id}
               role="tab"
               aria-selected={isActive}
-              aria-label={t(tab.labelKey)}
-              className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground active:text-foreground"
-              }`}
+              className="press relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 pb-1.5 pt-2"
               onClick={() => onTabChange(tab.id)}
             >
+              <span
+                aria-hidden
+                className="absolute inset-x-4 top-0 h-[2px] rounded-full bg-primary"
+                style={{
+                  opacity: isActive ? 1 : 0,
+                  transform: isActive ? "scaleX(1)" : "scaleX(0.4)",
+                  transition:
+                    "opacity var(--dur-state) var(--ease-out), transform var(--dur-state) var(--ease-out)",
+                }}
+              />
               <Icon
                 size={20}
-                strokeWidth={isActive ? 2.5 : 1.8}
+                strokeWidth={isActive ? 2.2 : 1.7}
+                className={isActive ? "text-primary" : "text-muted-foreground"}
               />
-              <span className={`text-[9px] leading-tight truncate max-w-full ${isActive ? "font-semibold" : "font-medium"}`}>
+              <span
+                className={`text-micro leading-none ${
+                  isActive ? "font-semibold text-primary" : "font-medium text-muted-foreground"
+                }`}
+              >
                 {t(tab.labelKey)}
               </span>
             </button>

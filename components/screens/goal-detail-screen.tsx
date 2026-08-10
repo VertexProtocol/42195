@@ -39,6 +39,9 @@ import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
 import { AppCard } from '@/components/ui/app-card'
+import { AppBar } from '@/components/app-bar'
+import { Button } from '@/components/ui/button'
+import { Pill } from '@/components/ui/pill'
 
 interface GoalDetailScreenProps {
   goal: Goal
@@ -62,8 +65,8 @@ function CollapsibleSection({
   const [isOpen, setIsOpen] = useState(defaultOpen)
   
   const baseStyles = variant === "warning"
-    ? "rounded-2xl bg-warning/10 ring-1 ring-warning/30"
-    : "rounded-2xl bg-card shadow-sm ring-1 ring-border"
+    ? "rounded-lg bg-warning/10 ring-1 ring-warning/30"
+    : "surface"
   
   const iconColor = variant === "warning" ? "text-warning" : "text-muted-foreground"
   
@@ -76,7 +79,7 @@ function CollapsibleSection({
       >
         <div className="flex items-center gap-2">
           {variant === "warning" && <AlertCircle size={15} className="text-warning" />}
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-micro font-semibold uppercase tracking-wider text-muted-foreground">
             {title}
           </span>
         </div>
@@ -194,7 +197,7 @@ function PreferencesForm({
     <div className="flex flex-col gap-4">
       {/* Sessions per week */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-muted-foreground">
+        <label className="mb-2 block text-micro font-medium text-muted-foreground">
           Sessions per week
         </label>
         <div className="flex gap-2">
@@ -202,7 +205,7 @@ function PreferencesForm({
             <button
               key={n}
               onClick={() => setSessions(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
                 sessions === n
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground active:bg-accent"
@@ -216,7 +219,7 @@ function PreferencesForm({
 
       {/* Focus */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-muted-foreground">
+        <label className="mb-2 block text-micro font-medium text-muted-foreground">
           What matters most to you?
         </label>
         <div className="flex flex-col gap-2">
@@ -230,16 +233,16 @@ function PreferencesForm({
             <button
               key={opt.value}
               onClick={() => setFocus(opt.value)}
-              className={`flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-colors ${
+              className={`flex flex-col items-start gap-0.5 rounded-md px-4 py-3 text-left transition-colors ${
                 focus === opt.value
                   ? "bg-primary/10 ring-2 ring-primary"
                   : "bg-secondary active:bg-accent"
               }`}
             >
-              <span className={`text-sm font-semibold ${focus === opt.value ? "text-primary" : "text-foreground"}`}>
+              <span className={`text-label font-semibold ${focus === opt.value ? "text-primary" : "text-foreground"}`}>
                 {opt.label}
               </span>
-              <span className="text-xs text-muted-foreground">{opt.desc}</span>
+              <span className="text-micro text-muted-foreground">{opt.desc}</span>
             </button>
           ))}
         </div>
@@ -247,10 +250,10 @@ function PreferencesForm({
 
       {/* Weekly volume increase */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block text-micro font-medium text-muted-foreground">
           Weekly volume increase
         </label>
-        <p className="mb-2 text-xs text-muted-foreground/70">
+        <p className="mb-2 text-micro text-muted-foreground/70">
           How much to increase your weekly km each build week. 10% is the standard guideline for injury prevention.
         </p>
         <div className="flex gap-2">
@@ -258,7 +261,7 @@ function PreferencesForm({
             <button
               key={n}
               onClick={() => setIncreasePct(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
                 increasePct === n
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground active:bg-accent"
@@ -272,10 +275,10 @@ function PreferencesForm({
 
       {/* Block length */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block text-micro font-medium text-muted-foreground">
           Training block length
         </label>
-        <p className="mb-2 text-xs text-muted-foreground/70">
+        <p className="mb-2 text-micro text-muted-foreground/70">
           The last week is always a recovery week (~80% volume). Standard is 4 weeks (3 build + 1 recovery), which works well for most runners.
         </p>
         <div className="flex gap-2">
@@ -283,7 +286,7 @@ function PreferencesForm({
             <button
               key={n}
               onClick={() => setBlockWeeks(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
                 blockWeeks === n
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground active:bg-accent"
@@ -297,10 +300,10 @@ function PreferencesForm({
 
       {/* Regenerate frequency */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block text-micro font-medium text-muted-foreground">
           Regenerate plan every
         </label>
-        <p className="mb-2 text-xs text-muted-foreground/70">
+        <p className="mb-2 text-micro text-muted-foreground/70">
           How often you want to generate a new plan. You'll see a reminder when it's due.
         </p>
         <div className="flex gap-2">
@@ -308,7 +311,7 @@ function PreferencesForm({
             <button
               key={n}
               onClick={() => setRegenEvery(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
                 regenEvery === n
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground active:bg-accent"
@@ -319,7 +322,7 @@ function PreferencesForm({
           ))}
         </div>
         {regenEvery < blockWeeks && (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          <p className="mt-2 text-micro text-warning">
             Your plan will regenerate before the mid-block checkpoint can run. Set to at least {blockWeeks}w to benefit from automatic adjustments.
           </p>
         )}
@@ -327,34 +330,34 @@ function PreferencesForm({
 
       {/* Notes */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block text-micro font-medium text-muted-foreground">
           Coach notes (optional)
         </label>
-        <p className="mb-2 text-xs text-muted-foreground/70">
+        <p className="mb-2 text-micro text-muted-foreground/70">
           Any context for the AI coach — schedule constraints, experience level, etc.
         </p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="e.g. only available Wed + weekends, experienced ultra runner..."
-          className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={3}
         />
       </div>
 
       {/* Injury notes */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block text-micro font-medium text-muted-foreground">
           Injury history (optional)
         </label>
-        <p className="mb-2 text-xs text-muted-foreground/70">
+        <p className="mb-2 text-micro text-muted-foreground/70">
           Recurring issues or injury history the coach should keep in mind for safety.
         </p>
         <textarea
           value={injuryNotes}
           onChange={(e) => setInjuryNotes(e.target.value)}
           placeholder="e.g. recurring left knee pain, previous stress fracture in right foot..."
-          className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           rows={2}
         />
         {injuryHistory.length > 0 && (
@@ -373,17 +376,17 @@ function PreferencesForm({
               return (
                 <div
                   key={entry.added_at}
-                  className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-xs ${
+                  className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-micro ${
                     entry.resolved_at
                       ? "bg-secondary/50 text-muted-foreground"
-                      : "bg-amber-50 dark:bg-amber-950/30 text-foreground ring-1 ring-amber-200 dark:ring-amber-800"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-foreground ring-1 ring-warning"
                   }`}
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className={entry.resolved_at ? "line-through opacity-60" : "font-medium"}>
                       {entry.content}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-micro text-muted-foreground">
                       {resolvedDate ? `Added ${addedDate} · Resolved ${resolvedDate}` : `Added ${addedDate}`}
                       {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase} phase`}
                     </span>
@@ -392,7 +395,7 @@ function PreferencesForm({
                     <button
                       onClick={() => handleResolve(entry.added_at)}
                       disabled={isResolving}
-                      className="shrink-0 rounded-md bg-emerald-100 dark:bg-emerald-900/40 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 active:opacity-70 disabled:opacity-50"
+                      className="shrink-0 rounded-md bg-success px-2 py-1 text-micro font-medium text-success active:opacity-70 disabled:opacity-50"
                     >
                       {isResolving ? "…" : "Resolved"}
                     </button>
@@ -405,12 +408,12 @@ function PreferencesForm({
       </div>
 
       {saveError && (
-        <p className="text-xs text-destructive">{saveError}</p>
+        <p className="text-micro text-destructive">{saveError}</p>
       )}
       <button
         onClick={handleSave}
         disabled={saving}
-        className="flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-50"
+        className="flex min-h-[44px] items-center justify-center rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-50"
       >
         {saving ? "Saving..." : "Save preferences"}
       </button>
@@ -421,7 +424,7 @@ function PreferencesForm({
 // ---- Loading skeletons ----
 function WeekCardSkeleton() {
   return (
-    <AppCard variant="flush">
+    <AppCard variant="rows">
       <div className="flex w-full items-center justify-between px-4 py-3.5">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
@@ -439,11 +442,11 @@ function WeekCardSkeleton() {
 function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusText?: string | null }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-center text-sm text-muted-foreground animate-pulse">
+      <p className="text-center text-label text-muted-foreground animate-pulse">
         {statusText ?? "Analysing your training history…"}
       </p>
       {/* Summary */}
-      <div className="rounded-2xl bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
+      <div className="rounded-lg bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-2/3" />
@@ -574,7 +577,7 @@ function WeekCard({
 
   return (
     <div
-      className={`overflow-hidden rounded-2xl ring-1 transition-all ${
+      className={`overflow-hidden rounded-lg ring-1 transition-all ${
         isCurrent ? "bg-card ring-primary/40 ring-2 shadow-sm" : "bg-card ring-border shadow-sm"
       }`}
     >
@@ -584,7 +587,7 @@ function WeekCard({
       >
         <div className="flex items-center gap-3">
           <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-micro font-bold ${
               isCurrent ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
             }`}
           >
@@ -592,14 +595,14 @@ function WeekCard({
           </div>
           <div className="text-left">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-card-foreground">{week.theme}</p>
-              <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
+              <p className="text-label font-semibold text-card-foreground">{week.theme}</p>
+              <span className="text-micro text-muted-foreground">{dateLabel}</span>
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-muted-foreground">~{week.targetKm} km</p>
+              <p className="text-micro text-muted-foreground">~{week.targetKm} km</p>
               {(isPast || isCurrent) && actualKm !== null && (
                 <span
-                  className={`text-xs font-semibold ${
+                  className={`text-micro font-semibold ${
                     deltaPct !== null && deltaPct >= 0
                       ? "text-primary"
                       : "text-warning"
@@ -609,7 +612,7 @@ function WeekCard({
                 </span>
               )}
               {(isPast || isCurrent) && completedCount > 0 && (
-                <span className="text-[10px] font-medium text-success">
+                <span className="text-micro font-medium text-success">
                   {completedCount}/{totalSessions} done
                 </span>
               )}
@@ -628,7 +631,7 @@ function WeekCard({
           {/* Planned vs actual bar */}
           {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
             <div className="mb-3">
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+              <div className="flex items-center justify-between text-micro text-muted-foreground mb-1">
                 <span>Planned {week.targetKm} km</span>
                 <span>Actual {actualKm.toFixed(1)} km</span>
               </div>
@@ -667,21 +670,21 @@ function WeekCard({
                         </svg>
                       )}
                       {status === "skipped" && (
-                        <span className="text-[8px] font-bold text-muted-foreground">S</span>
+                        <span className="text-micro font-bold text-muted-foreground">S</span>
                       )}
                     </button>
                   )}
                   <div className="flex-1 flex flex-col gap-0.5">
                     <div className="flex items-baseline justify-between">
-                      <span className={`text-sm font-semibold ${status === "completed" ? "text-success line-through" : "text-card-foreground"}`}>
+                      <span className={`text-label font-semibold ${status === "completed" ? "text-success line-through" : "text-card-foreground"}`}>
                         {session.type}
                       </span>
-                      <span className="text-sm font-mono font-bold text-primary">{session.distance}</span>
+                      <span className="text-label measure font-bold text-primary">{session.distance}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">{session.effort}</p>
+                      <p className="text-micro text-muted-foreground">{session.effort}</p>
                       {session.suggestedPace && (
-                        <span className="shrink-0 font-mono text-xs text-primary/70">{session.suggestedPace}</span>
+                        <span className="shrink-0 measure text-micro text-primary/70">{session.suggestedPace}</span>
                       )}
                     </div>
                   </div>
@@ -694,14 +697,14 @@ function WeekCard({
             <div className="mt-3">
               <button
                 onClick={() => setCoachNoteOpen(v => !v)}
-                className="flex w-full items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 transition-colors active:bg-accent"
+                className="flex w-full items-center gap-2 rounded-md bg-secondary px-3 py-2.5 transition-colors active:bg-accent"
               >
                 <Lightbulb size={14} className="shrink-0 text-warning" />
-                <span className="flex-1 text-left text-xs font-medium text-muted-foreground">Coach note</span>
+                <span className="flex-1 text-left text-micro font-medium text-muted-foreground">Coach note</span>
                 <ChevronDown size={13} className={`shrink-0 text-muted-foreground transition-transform ${coachNoteOpen ? "rotate-180" : ""}`} />
               </button>
               {coachNoteOpen && (
-                <p className="mt-1.5 px-3 text-xs text-muted-foreground leading-relaxed">{week.coachNote}</p>
+                <p className="mt-1.5 px-3 text-micro text-muted-foreground leading-relaxed">{week.coachNote}</p>
               )}
             </div>
           )}
@@ -713,11 +716,11 @@ function WeekCard({
 
 // ---- Phase colors & i18n keys ----
 const PHASE_COLORS: Record<TrainingPhaseType, { bg: string; text: string; ring: string; bar: string }> = {
-  base_building:         { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-500/30", bar: "bg-emerald-500" },
-  endurance_development: { bg: "bg-blue-500/10",    text: "text-blue-600 dark:text-blue-400",    ring: "ring-blue-500/30",    bar: "bg-blue-500" },
-  peak_training:         { bg: "bg-amber-500/10",   text: "text-amber-600 dark:text-amber-400",  ring: "ring-amber-500/30",   bar: "bg-amber-500" },
-  taper:                 { bg: "bg-purple-500/10",  text: "text-purple-600 dark:text-purple-400", ring: "ring-purple-500/30",  bar: "bg-purple-500" },
-  race_week:             { bg: "bg-red-500/10",     text: "text-red-600 dark:text-red-400",      ring: "ring-red-500/30",     bar: "bg-red-500" },
+  base_building:         { bg: "bg-success/10", text: "text-success", ring: "ring-success/30", bar: "bg-success" },
+  endurance_development: { bg: "bg-chart-4/10",    text: "text-chart-4",    ring: "ring-chart-4/30",    bar: "bg-chart-4" },
+  peak_training:         { bg: "bg-warning/10",   text: "text-warning",  ring: "ring-warning/30",   bar: "bg-warning" },
+  taper:                 { bg: "bg-chart-5/10",  text: "text-chart-5", ring: "ring-chart-5/30",  bar: "bg-chart-5" },
+  race_week:             { bg: "bg-destructive/10",     text: "text-destructive",      ring: "ring-destructive/30",     bar: "bg-destructive" },
 }
 
 const PHASE_LABEL_KEYS: Record<TrainingPhaseType, TranslationKey> = {
@@ -760,11 +763,11 @@ function TrainingTimelineView({
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex w-full items-center justify-between px-5 py-4 text-left active:bg-secondary/50 transition-colors"
       >
-        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <h3 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
           {t("timeline.title")}
         </h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-micro text-muted-foreground">
             {timeline.weeksRemaining} {t("timeline.weeksRemaining")}
           </span>
           <ChevronDown
@@ -781,24 +784,24 @@ function TrainingTimelineView({
             <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-label font-semibold text-foreground">
                   {t(PHASE_LABEL_KEYS[currentPhase.type])}
                 </span>
                 {weekWithinPhase !== null && (
-                  <span className="text-xs font-medium text-primary">
+                  <span className="text-micro font-medium text-primary">
                     {t("timeline.weekOf")} {weekWithinPhase}
                   </span>
                 )}
                 {blockPosition && (
-                  <span className="text-xs font-medium text-primary/70">
+                  <span className="text-micro font-medium text-primary/70">
                     · {t("timeline.block")} {blockPosition.blockNum}/{blockPosition.totalBlocks}
                   </span>
                 )}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-micro text-muted-foreground">
                   {currentWeeksLabel}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 {t("timeline.weekOf")} {currentPhase.weekStart}–{currentPhase.weekEnd}
               </p>
             </div>
@@ -838,16 +841,16 @@ function TrainingTimelineView({
                 {/* Phase content */}
                 <div className={`flex-1 pb-3 ${isPast && !isCurrent ? "opacity-50" : ""}`}>
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
+                    <span className={`text-label font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>
                       {t(PHASE_LABEL_KEYS[phase.type])}
                     </span>
                     {isCurrent && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">
                         {t("timeline.currentPhase")}
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-micro text-muted-foreground">
                     {isCurrent && weekWithinPhase !== null && (
                       <span className="font-medium text-primary">
                         {t("timeline.weekOf")} {weekWithinPhase} ·{" "}
@@ -861,11 +864,11 @@ function TrainingTimelineView({
           })}
 
           {/* Race day indicator */}
-          <div className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
+          <div className="flex items-center gap-2.5 rounded-md bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
             <Flag size={14} className="text-destructive shrink-0" />
             <div className="flex-1">
-              <span className="text-sm font-semibold text-destructive">{t("timeline.raceDay")}</span>
-              <span className="ml-2 text-xs text-muted-foreground">
+              <span className="text-label font-semibold text-destructive">{t("timeline.raceDay")}</span>
+              <span className="ml-2 text-micro text-muted-foreground">
                 {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </span>
             </div>
@@ -880,7 +883,7 @@ function TrainingTimelineView({
   }
 
   return (
-    <AppCard variant="flush">
+    <AppCard variant="rows">
       {timelineContent}
     </AppCard>
   )
@@ -1273,60 +1276,47 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   }, [aiPlan, currentWeekIndex, weeklyActualKm, activities, isBlockExpired])
 
   return (
-    <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="flex min-h-[44px] min-w-[44px] items-center gap-1.5 self-start text-sm font-medium text-primary active:opacity-70 transition-opacity"
-      >
-        <ArrowLeft size={20} />
-        <span>Plan</span>
-      </button>
-
-      {/* Goal header */}
-      <header>
-        <div className="flex items-start justify-between">
-          <div className="min-w-0 pr-3">
-            {goal.is_active && !past && (
-              <div className="mb-1 flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                  Active plan
-                </span>
-              </div>
-            )}
-            <h1 className="text-2xl font-bold text-foreground leading-tight">{goal.name}</h1>
-          </div>
-          <button
+    <>
+      {/* Detail views reuse the app bar rather than growing a back link of
+          their own, so leaving a screen is the same gesture everywhere. */}
+      <AppBar
+        title={goal.name}
+        onBack={onBack}
+        backLabel={t("tab.goals")}
+        action={
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => onEditGoal(goal)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent transition-colors"
-            aria-label={`Edit ${goal.name}`}
+            aria-label={`${t("common.edit")}: ${goal.name}`}
           >
-            <Pencil size={14} />
-          </button>
-        </div>
+            <Pencil size={16} />
+          </Button>
+        }
+      />
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <MapPin size={13} />
-            <span>{formatDistance(goal.target_distance_km)}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CalendarCheck size={13} />
-            <span>{formatDate(goal.target_date)}</span>
-          </div>
+      <div className="flex flex-col gap-5 px-4 pb-8 pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {goal.is_active && !past && <Pill tone="action">{t("plan.activePlan")}</Pill>}
+          <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
+            <MapPin size={13} aria-hidden />
+            {formatDistance(goal.target_distance_km)}
+          </span>
+          <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
+            <CalendarCheck size={13} aria-hidden />
+            {formatDate(goal.target_date)}
+          </span>
           {!past && days > 0 && (
-            <div className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-foreground">
-              {days} days to go
-            </div>
+            <span className="text-micro font-semibold text-foreground">
+              {days} {t("common.daysLeft")}
+            </span>
           )}
         </div>
-      </header>
 
       {/* Progress bar + Training Timeline (merged) */}
-      <AppCard variant="flush">
+      <AppCard variant="rows">
         <div className="px-5 py-4">
-          <div className="flex items-center justify-between text-xs mb-2">
+          <div className="flex items-center justify-between text-micro mb-2">
             <span className="text-muted-foreground">
               {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
             </span>
@@ -1351,17 +1341,17 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       {/* ---- AI Training Plan section ---- */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h2 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             AI Training Plan
           </h2>
           {aiPlan && activeTab === "plan" && (
             <div className="flex items-center gap-1.5">
               {isDueForRefresh && (
-                <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                <span className="rounded-full bg-warning/20 px-2 py-0.5 text-micro font-semibold text-warning">
                   Due for refresh
                 </span>
               )}
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-micro text-muted-foreground">
                 {generatedAgo === 0 ? "Generated today" : `Generated ${generatedAgo}d ago`}
               </span>
             </div>
@@ -1369,10 +1359,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         </div>
 
         {/* Tab bar */}
-        <div className="mb-3 flex gap-1 rounded-xl bg-secondary p-1">
+        <div className="mb-3 flex gap-1 rounded-md bg-secondary p-1">
           <button
             onClick={() => setActiveTab("plan")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
               activeTab === "plan"
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground"
@@ -1383,7 +1373,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           </button>
           <button
             onClick={() => setActiveTab("preferences")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
               activeTab === "preferences"
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground"
@@ -1419,27 +1409,27 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
         {/* Error */}
         {error && (
-          <div className="mb-3 flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
+          <div className="mb-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3">
             <AlertCircle size={15} className="mt-0.5 shrink-0 text-destructive" />
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-label text-destructive">{error}</p>
           </div>
         )}
 
         {/* No plan yet */}
         {!aiPlan && !isGenerating && (
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-card px-6 py-8 shadow-sm ring-1 ring-border text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+          <div className="flex flex-col items-center gap-4 surface px-6 py-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
               <Sparkles size={24} className="text-primary" />
             </div>
             <div>
               <p className="font-semibold text-card-foreground">Generate your training plan</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-label text-muted-foreground">
                 Claude will analyse your activity history and build a personalised 4-week training block for {goal.name}.
               </p>
             </div>
             <button
               onClick={() => handleGenerate()}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80"
             >
               <Sparkles size={16} />
               Generate plan
@@ -1455,11 +1445,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
           <div className="flex flex-col gap-3">
             {/* Block completion summary */}
             {isBlockExpired && blockCompletionStats && (
-              <div className="flex gap-2.5 rounded-2xl bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
+              <div className="flex gap-2.5 rounded-lg bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
                 <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Block complete</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-label font-medium text-foreground">Block complete</p>
+                  <p className="text-micro text-muted-foreground">
                     {blockCompletionStats.weeks}w · {blockCompletionStats.totalKm} km · {blockCompletionStats.completedSessions}/{blockCompletionStats.totalSessions} sessions · Regenerate when ready
                   </p>
                 </div>
@@ -1468,7 +1458,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
             {/* Skip-load spike warning */}
             {skipWarning && !isBlockExpired && (
-              <div className={`flex gap-2.5 rounded-2xl px-4 py-3.5 ring-1 ${
+              <div className={`flex gap-2.5 rounded-lg px-4 py-3.5 ring-1 ${
                 skipWarning.severity === "danger"
                   ? "bg-destructive/10 ring-destructive/30"
                   : "bg-warning/10 ring-warning/30"
@@ -1477,10 +1467,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                   skipWarning.severity === "danger" ? "text-destructive" : "text-warning"
                 }`} />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-label font-medium text-foreground">
                     {skipWarning.severity === "danger" ? "Unsafe volume jump" : "Volume spike ahead"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-micro text-muted-foreground">
                     {skipWarning.actualKm === 0
                       ? `You had a rest week, but next week plans ${skipWarning.nextPlannedKm} km. Consider regenerating your plan to ease back in safely.`
                       : `Last week you ran ${skipWarning.actualKm} km. Next week\u2019s plan calls for ${skipWarning.nextPlannedKm} km (+${skipWarning.spikePct}%). A safe target would be ~${skipWarning.safeMaxKm} km. Consider adjusting your plan.`
@@ -1492,11 +1482,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
             {/* Mid-block checkpoint banner */}
             {checkpoint?.adjustmentApplied && !isBlockExpired && (
-              <div className="flex gap-2.5 rounded-2xl bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
+              <div className="flex gap-2.5 rounded-lg bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
                 <Lightbulb size={15} className="mt-0.5 shrink-0 text-primary" />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-foreground">Mid-block plan adjusted</p>
-                  <p className="text-xs text-muted-foreground">{checkpoint.adjustmentNote}</p>
+                  <p className="text-label font-medium text-foreground">Mid-block plan adjusted</p>
+                  <p className="text-micro text-muted-foreground">{checkpoint.adjustmentNote}</p>
                 </div>
               </div>
             )}
@@ -1537,15 +1527,15 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
             {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
               <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
-                <p className="text-sm text-foreground">{aiPlan.plan.watchOut}</p>
+                <p className="text-label text-foreground">{aiPlan.plan.watchOut}</p>
               </CollapsibleSection>
             )}
 
             {/* Pace source warning — only shown when pace targets are estimates */}
             {(paceSource === "historical" || paceSource === "none") && (
-              <div className="flex items-start gap-2 rounded-xl bg-secondary px-3 py-2.5">
+              <div className="flex items-start gap-2 rounded-md bg-secondary px-3 py-2.5">
                 <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   {paceSource === "none"
                     ? "Pace suggestions are rough estimates — complete a test run to get accurate, personalised targets."
                     : "Pace suggestions are based on your training history. Complete a test run for more precise targets."}
@@ -1570,16 +1560,16 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                         }
                       }}
                       className={
-                        "flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors active:bg-accent " +
+                        "flex min-h-[44px] items-center justify-center gap-2 rounded-md px-4 text-label font-medium transition-colors active:bg-accent " +
                         (checkpointPending
-                          ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 dark:text-amber-400"
+                          ? "bg-warning/10 text-warning ring-1 ring-warning/40"
                           : "bg-secondary text-secondary-foreground")
                       }
                     >
                       {checkpointPending && (
                         <span className="relative flex h-2 w-2 shrink-0">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-warning" />
                         </span>
                       )}
                       {showAdjustForm || showCheckpointReview
@@ -1592,10 +1582,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                     {showCheckpointReview && pendingCheckpoint && (
                       <AppCard className="flex flex-col gap-3">
                         <div className="flex gap-2.5">
-                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
                           <div className="flex flex-col gap-1">
-                            <p className="text-sm font-medium text-foreground">Plan adjustment available</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-label font-medium text-foreground">Plan adjustment available</p>
+                            <p className="text-micro text-muted-foreground">
                               {`After ${pendingCheckpoint.completedWeeks.length} completed ${pendingCheckpoint.completedWeeks.length === 1 ? "week" : "weeks"} at ${Math.round(pendingCheckpoint.overallAdherencePct)}% of planned volume, the remaining weeks can be scaled ${pendingCheckpoint.direction === "under" ? "down" : "up"} to better match your actual training.`}
                             </p>
                           </div>
@@ -1603,7 +1593,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                         <button
                           onClick={handleApplyCheckpoint}
                           disabled={isApplyingCheckpoint}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
+                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
                         >
                           {isApplyingCheckpoint ? "Applying…" : "Apply adjustment"}
                         </button>
@@ -1615,20 +1605,20 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
               {showAdjustForm && (
                 <AppCard className="flex flex-col gap-2">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-micro text-muted-foreground">
                     Tell Claude what to change — e.g. "fewer runs but longer", "no tempo work yet", "I can only run at weekends"
                   </p>
                   <textarea
                     value={adjustNote}
                     onChange={(e) => setAdjustNote(e.target.value)}
                     placeholder="What would you like to change?"
-                    className="w-full resize-none rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     rows={3}
                   />
                   <button
                     onClick={() => handleGenerate(adjustNote)}
                     disabled={!adjustNote.trim()}
-                    className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
+                    className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
                   >
                     <Sparkles size={16} />
                     Regenerate with changes
@@ -1638,7 +1628,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
 
               <button
                 onClick={() => handleGenerate()}
-                className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground transition-colors active:bg-accent"
+                className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-secondary px-4 text-label font-medium text-muted-foreground transition-colors active:bg-accent"
               >
                 <RefreshCw size={14} />
                 Regenerate (fresh start)
@@ -1650,7 +1640,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               <div className="pt-2">
                 <button
                   onClick={() => setShowPreviousPlans((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-xl bg-secondary px-4 py-3 text-sm transition-colors active:bg-accent"
+                  className="flex w-full items-center justify-between rounded-md bg-secondary px-4 py-3 text-label transition-colors active:bg-accent"
                 >
                   <span className="font-medium text-foreground">
                     Previous plans ({aiPlan.previous_plans.length})
@@ -1677,18 +1667,18 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                       return (
                         <div
                           key={i}
-                          className="flex flex-col gap-1.5 rounded-xl bg-card px-4 py-3 ring-1 ring-border"
+                          className="flex flex-col gap-1.5 rounded-md bg-surface-sunken px-4 py-3"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-card-foreground">{label}</span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-label font-medium text-card-foreground">{label}</span>
+                            <span className="text-micro text-muted-foreground">
                               {weeks.length}w · {totalKm} km
                               {completedSessions !== null ? ` · ${completedSessions}/${totalSessions} sessions` : ""}
                               {prev.adjust_note ? " · adjusted" : ""}
                             </span>
                           </div>
                           {prev.summary && (
-                            <p className="text-xs text-muted-foreground">{prev.summary}</p>
+                            <p className="text-micro text-muted-foreground">{prev.summary}</p>
                           )}
                         </div>
                       )
@@ -1702,6 +1692,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         </>
         )}
       </section>
-    </div>
+      </div>
+    </>
   )
 }

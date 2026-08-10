@@ -71,14 +71,15 @@ export function InfoTooltip({ content }: InfoTooltipProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-muted-foreground active:text-muted-foreground transition-colors"
+        className="press inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
         aria-label="More information"
+        aria-expanded={open}
       >
-        <HelpCircle size={12} />
+        <HelpCircle size={14} />
       </button>
       {open && (
         <div
-          className="fixed z-[100] w-[220px] max-w-[calc(100vw-32px)] rounded-lg bg-foreground px-3 py-2 text-xs text-background shadow-lg animate-in fade-in-0 zoom-in-95"
+          className="fixed z-[100] w-[240px] max-w-[calc(100vw-32px)] rounded-md bg-foreground px-3 py-2.5 text-micro leading-relaxed text-background shadow-e2 animate-in fade-in-0 zoom-in-95"
           style={{
             top: position.top,
             left: position.left,

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useSyncExternalStore, lazy, Suspense } from "react"
 import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
+import { AppBar } from "@/components/app-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { GoalsScreen } from "@/components/screens/goals-screen"
@@ -36,10 +37,16 @@ function useLocationSearch() {
   return new URLSearchParams(search)
 }
 
+/**
+ * Loading a screen shows the shape of what is coming, not a spinner in the
+ * middle of empty space.
+ */
 function ScreenFallback() {
   return (
-    <div className="flex items-center justify-center py-20">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    <div className="flex flex-col gap-3 px-4 pt-4" aria-hidden>
+      <div className="h-24 animate-pulse rounded-lg bg-surface-sunken" />
+      <div className="h-16 animate-pulse rounded-lg bg-surface-sunken" />
+      <div className="h-16 animate-pulse rounded-lg bg-surface-sunken" />
     </div>
   )
 }
@@ -51,7 +58,7 @@ interface AppShellProps {
 export function AppShell({ initialData }: AppShellProps) {
   const data = useAppData(initialData)
   const searchParams = useLocationSearch()
-  const { setLocale } = useI18n()
+  const { setLocale, t } = useI18n()
 
   // Sync locale from DB on mount — overrides localStorage if user has a saved preference
   useEffect(() => {
@@ -200,22 +207,72 @@ export function AppShell({ initialData }: AppShellProps) {
     setOnboardingDismissed(true)
   }, [])
 
+  const handleOpenProfile = useCallback(() => {
+    navigate({ tab: "profile", activity: null, goal: null })
+  }, [navigate])
+
   // ----- Loading state -----
+  // The chrome is already correct while the data arrives, so the shell renders
+  // and only the content region is a skeleton.
   if (data.isLoading) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
+      <div className="mx-auto min-h-dvh max-w-md bg-background">
+        <AppBar title="42195" brand subtitle={t("common.loading")} />
+        <main className="pb-24">
+          <ScreenFallback />
+        </main>
       </div>
     )
   }
 
+  const isDetail = Boolean(
+    (activeTab === "activities" && selectedActivity) || (activeTab === "goals" && selectedGoal),
+  )
+
+  const barTitle =
+    activeTab === "activities"
+      ? t("activities.title")
+      : activeTab === "goals"
+        ? t("goals.title")
+        : activeTab === "insights"
+          ? t("insights.title")
+          : activeTab === "profile"
+            ? t("profile.title")
+            : "42195"
+
+  const barSubtitle =
+    activeTab === "home"
+      ? t("app.tagline")
+      : activeTab === "activities"
+        ? `${data.activities.length} ${
+            data.activities.length === 1 ? t("activities.activity") : t("activities.activities")
+          }`
+        : activeTab === "goals"
+          ? t("goals.subtitle")
+          : activeTab === "insights"
+            ? t("insights.subtitle")
+            : undefined
+
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-background">
+      {/* One app bar for every screen: where you are, whether the data is
+          current, and the way to your account. Detail views swap the profile
+          button for a back button rather than growing a header of their own. */}
+      {!isDetail && (
+        <AppBar
+          title={barTitle}
+          brand={activeTab === "home"}
+          subtitle={barSubtitle}
+          syncStatus={data.syncStatus}
+          stravaConnected={data.stravaConnected}
+          user={data.user}
+          onOpenProfile={activeTab === "profile" ? undefined : handleOpenProfile}
+          onBack={activeTab === "profile" ? () => handleTabChange("home") : undefined}
+        />
+      )}
+
       {/* Screen content */}
-      <main className="relative pb-20">
+      <main className="relative pb-24">
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}

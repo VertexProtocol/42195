@@ -11,6 +11,9 @@ import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics, 
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { AppCard } from '@/components/ui/app-card'
+import { AppBar } from '@/components/app-bar'
+import { Stat, StatGroup } from '@/components/ui/stat'
+import { Pill } from '@/components/ui/pill'
 
 interface ActivityDetailScreenProps {
   activity: Activity
@@ -18,26 +21,6 @@ interface ActivityDetailScreenProps {
   onDelete?: (activityId: string) => Promise<boolean>
   /** All activities — used to compute global max HR for consistent zone calculation */
   allActivities?: Activity[]
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof TrendingUp
-  label: string
-  value: string
-}) {
-  return (
-    <AppCard className="flex flex-col items-center gap-2">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-        <Icon size={20} className="text-primary" />
-      </div>
-      <span className="text-base font-bold text-card-foreground">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </AppCard>
-  )
 }
 
 /** Decode Google's encoded polyline format to [lat, lng] pairs */
@@ -112,11 +95,11 @@ function RouteMap({ polyline }: { polyline: string }) {
     <AppCard>
       <div className="mb-3 flex items-center gap-2">
         <MapPin size={14} className="text-muted-foreground" />
-        <p className="text-xs font-medium text-card-foreground">Route</p>
+        <p className="text-micro font-medium text-card-foreground">Route</p>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full rounded-xl bg-secondary/50"
+        className="w-full rounded-md bg-secondary/50"
         preserveAspectRatio="xMidYMid meet"
       >
         <polyline
@@ -336,61 +319,55 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   )
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
-      {/* Back button */}
-      <button
-        onClick={onBack}
-        className="flex min-h-[44px] min-w-[44px] items-center gap-1.5 self-start text-sm font-medium text-primary active:opacity-70 transition-opacity"
-        aria-label="Back to activities"
-      >
-        <ArrowLeft size={20} />
-        <span>{t("activities.backToActivities")}</span>
-      </button>
+    <>
+      <AppBar title={activity.name} onBack={onBack} backLabel={t("tab.activities")} />
 
-      {/* Header */}
-      <header>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-6 px-4 pb-6 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
           <ActivityTypeBadge type={activity.type} size="md" />
-          <span className="text-xs text-muted-foreground">
-            {formatDate(activity.date)}
-          </span>
+          <span className="text-micro text-muted-foreground">{formatDate(activity.date)}</span>
           {testRun && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
-              <FlaskConical size={10} />
+            <Pill tone="data" icon={<FlaskConical size={10} />}>
               {t("testRun.badge")}
-            </span>
+            </Pill>
           )}
         </div>
-        <h1 className="mt-2 text-2xl font-bold text-foreground text-balance">
-          {activity.name}
-        </h1>
-      </header>
 
-      {/* Primary Stats */}
-      <section>
-        <h2 className="sr-only">Key metrics</h2>
-        <div className={`grid gap-3 ${activity.pace_min_per_km !== null ? "grid-cols-3" : "grid-cols-2"}`}>
-          <StatCard icon={TrendingUp} label={t("activityDetail.distance")} value={formatDistance(activity.distance_km)} />
-          <StatCard icon={Clock} label={t("activityDetail.duration")} value={formatDuration(activity.duration_seconds)} />
-          {activity.pace_min_per_km !== null && (
-            <StatCard icon={Gauge} label={t("activityDetail.pace")} value={formatPace(activity.pace_min_per_km)} />
-          )}
-        </div>
-      </section>
+        {/* The three numbers the run is judged by, read as one instrument
+            panel rather than three separate cards. */}
+        <AppCard>
+          <h2 className="sr-only">{t("activityDetail.details")}</h2>
+          <StatGroup>
+            <Stat
+              label={t("activityDetail.distance")}
+              value={formatDistance(activity.distance_km)}
+            />
+            <Stat
+              label={t("activityDetail.duration")}
+              value={formatDuration(activity.duration_seconds)}
+            />
+            {activity.pace_min_per_km !== null ? (
+              <Stat
+                label={t("activityDetail.pace")}
+                value={formatPace(activity.pace_min_per_km)}
+              />
+            ) : null}
+          </StatGroup>
+        </AppCard>
 
       {/* Secondary Stats */}
       <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
           {t("activityDetail.details")}
         </h3>
-        <AppCard variant="flush" className="flex flex-col gap-0">
+        <AppCard variant="rows" className="flex flex-col gap-0">
           {activity.elevation_gain_m !== null && (
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Mountain size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.elevationGain")}</span>
+                <span className="text-label text-card-foreground">{t("activityDetail.elevationGain")}</span>
               </div>
-              <span className="text-sm font-semibold text-card-foreground">
+              <span className="text-label font-semibold text-card-foreground">
                 {activity.elevation_gain_m} m
               </span>
             </div>
@@ -399,9 +376,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Heart size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.avgHeartRate")}</span>
+                <span className="text-label text-card-foreground">{t("activityDetail.avgHeartRate")}</span>
               </div>
-              <span className="text-sm font-semibold text-card-foreground">
+              <span className="text-label font-semibold text-card-foreground">
                 {activity.avg_heart_rate} bpm
               </span>
             </div>
@@ -410,9 +387,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <ActivityIcon size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.avgCadence")}</span>
+                <span className="text-label text-card-foreground">{t("activityDetail.avgCadence")}</span>
               </div>
-              <span className="text-sm font-semibold text-card-foreground">
+              <span className="text-label font-semibold text-card-foreground">
                 {activity.avg_cadence} spm
               </span>
             </div>
@@ -421,9 +398,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <Flame size={18} className="text-muted-foreground" />
-                <span className="text-sm text-card-foreground">{t("activityDetail.calories")}</span>
+                <span className="text-label text-card-foreground">{t("activityDetail.calories")}</span>
               </div>
-              <span className="text-sm font-semibold text-card-foreground">
+              <span className="text-label font-semibold text-card-foreground">
                 {activity.calories} kcal
               </span>
             </div>
@@ -437,15 +414,15 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           <AppCard>
             <div className="mb-2 flex items-center gap-2">
               <Sparkles size={14} className="text-primary" />
-              <span className="text-xs font-medium text-primary">{t("analysis.coachAnalysis")}</span>
+              <span className="text-micro font-medium text-primary">{t("analysis.coachAnalysis")}</span>
             </div>
-            <p className="text-sm leading-relaxed text-card-foreground">{aiAnalysis}</p>
+            <p className="text-label leading-relaxed text-card-foreground">{aiAnalysis}</p>
           </AppCard>
         ) : (
           <button
             onClick={handleGetAnalysis}
             disabled={aiAnalysisLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-primary shadow-sm ring-1 ring-border transition-colors hover:bg-muted/50 disabled:opacity-50 active:opacity-80"
+            className="flex w-full items-center justify-center gap-2 surface px-4 py-3.5 text-label font-medium text-primary transition-colors hover:bg-muted/50 disabled:opacity-50 active:opacity-80"
           >
             {aiAnalysisLoading ? (
               <>
@@ -465,14 +442,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Test Run Section */}
       <section>
         {testRun ? (
-          <div className="rounded-2xl bg-violet-500/5 ring-1 ring-violet-500/20 overflow-hidden">
+          <div className="rounded-lg bg-chart-5/5 ring-1 ring-chart-5/20 overflow-hidden">
             <button
               onClick={() => setTestRunExpanded(!testRunExpanded)}
-              className="flex w-full items-center justify-between px-4 py-3 active:bg-violet-500/10 transition-colors"
+              className="flex w-full items-center justify-between px-4 py-3 active:bg-chart-5/10 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <FlaskConical size={14} className="text-violet-600 dark:text-violet-400" />
-                <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">
+                <FlaskConical size={14} className="text-chart-5" />
+                <span className="text-label font-semibold text-chart-5">
                   {t("testRun.badge")} — {TEST_RUN_TYPES.find(tt => tt.value === testRun.test_type)?.label ?? testRun.test_type}
                 </span>
               </div>
@@ -480,43 +457,43 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             </button>
 
             {testRunExpanded && (
-              <div className="border-t border-violet-500/20 px-4 py-3">
+              <div className="border-t border-chart-5/20 px-4 py-3">
                 {/* Prediction Validation */}
                 {testRun.prediction_validation && (
-                  <div className="mb-3 rounded-xl bg-card p-3 ring-1 ring-border">
+                  <div className="mb-3 rounded-md bg-surface-sunken p-3">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <Target size={12} className="text-violet-500" />
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                      <Target size={12} className="text-chart-5" />
+                      <span className="text-micro text-muted-foreground uppercase tracking-wide">
                         {testRun.prediction_validation.prediction_distance_label} {t("testRun.predictionTest")}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <div>
-                        <p className="text-[10px] text-muted-foreground">{t("testRun.predictedTime")}</p>
-                        <p className="text-sm font-bold font-mono text-card-foreground">
+                        <p className="text-micro text-muted-foreground">{t("testRun.predictedTime")}</p>
+                        <p className="text-label font-bold measure text-card-foreground">
                           {formatTargetTime(testRun.prediction_validation.predicted_seconds)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-micro text-muted-foreground">
                           {formatPace(testRun.prediction_validation.predicted_pace)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">{t("testRun.actualTime")}</p>
-                        <p className="text-sm font-bold font-mono text-card-foreground">
+                        <p className="text-micro text-muted-foreground">{t("testRun.actualTime")}</p>
+                        <p className="text-label font-bold measure text-card-foreground">
                           {formatTargetTime(testRun.prediction_validation.actual_seconds)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-micro text-muted-foreground">
                           {formatPace(testRun.prediction_validation.actual_pace)}
                         </p>
                       </div>
                     </div>
-                    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-micro font-semibold ${
                       testRun.prediction_validation.result === "validated"
                         ? "bg-success/10 text-success"
                         : testRun.prediction_validation.result === "too_conservative"
-                          ? "bg-blue-500/10 text-blue-500"
+                          ? "bg-chart-4/10 text-chart-4"
                           : testRun.prediction_validation.result === "slightly_optimistic"
-                            ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                            ? "bg-warning/10 text-warning"
                             : "bg-destructive/10 text-destructive"
                     }`}>
                       {t(`testRun.result_${testRun.prediction_validation.result}` as any)}
@@ -527,45 +504,45 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 {/* Derived metrics */}
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   {testRun.derived_metrics.estimated_vo2max != null && (
-                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                    <div className="rounded-md bg-surface-sunken p-3">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Zap size={12} className="text-violet-500" />
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</span>
+                        <Zap size={12} className="text-chart-5" />
+                        <span className="text-micro text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</span>
                       </div>
-                      <span className="text-lg font-bold font-mono text-card-foreground">
+                      <span className="text-lead font-bold measure text-card-foreground">
                         {testRun.derived_metrics.estimated_vo2max.toFixed(1)}
                       </span>
                     </div>
                   )}
                   {testRun.derived_metrics.threshold_pace != null && (
-                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                    <div className="rounded-md bg-surface-sunken p-3">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Gauge size={12} className="text-violet-500" />
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</span>
+                        <Gauge size={12} className="text-chart-5" />
+                        <span className="text-micro text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</span>
                       </div>
-                      <span className="text-lg font-bold font-mono text-card-foreground">
+                      <span className="text-lead font-bold measure text-card-foreground">
                         {formatPace(testRun.derived_metrics.threshold_pace)}
                       </span>
                     </div>
                   )}
                   {testRun.derived_metrics.threshold_hr != null && (
-                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                    <div className="rounded-md bg-surface-sunken p-3">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Heart size={12} className="text-violet-500" />
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</span>
+                        <Heart size={12} className="text-chart-5" />
+                        <span className="text-micro text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</span>
                       </div>
-                      <span className="text-lg font-bold font-mono text-card-foreground">
-                        {testRun.derived_metrics.threshold_hr} <span className="text-xs font-normal text-muted-foreground">bpm</span>
+                      <span className="text-lead font-bold measure text-card-foreground">
+                        {testRun.derived_metrics.threshold_hr} <span className="text-micro font-normal text-muted-foreground">bpm</span>
                       </span>
                     </div>
                   )}
                   {testRun.derived_metrics.running_efficiency != null && (
-                    <div className="rounded-xl bg-card p-3 ring-1 ring-border">
+                    <div className="rounded-md bg-surface-sunken p-3">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <TrendingUp size={12} className="text-violet-500" />
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.efficiency")}</span>
+                        <TrendingUp size={12} className="text-chart-5" />
+                        <span className="text-micro text-muted-foreground uppercase tracking-wide">{t("testRun.efficiency")}</span>
                       </div>
-                      <span className="text-lg font-bold font-mono text-card-foreground">
+                      <span className="text-lead font-bold measure text-card-foreground">
                         {testRun.derived_metrics.running_efficiency.toFixed(1)}
                       </span>
                     </div>
@@ -576,7 +553,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                 <button
                   onClick={handleRemoveTestRun}
                   disabled={!!testRunLoading}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground active:opacity-70 disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-micro text-muted-foreground active:opacity-70 disabled:opacity-50"
                 >
                   {testRunLoading === "remove" ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                   {t("testRun.remove")}
@@ -589,7 +566,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
             {!showTestRunPicker ? (
               <button
                 onClick={() => setShowTestRunPicker(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3.5 text-sm font-medium text-violet-600 dark:text-violet-400 shadow-sm ring-1 ring-border transition-colors hover:bg-violet-500/5 active:opacity-80"
+                className="flex w-full items-center justify-center gap-2 surface px-4 py-3.5 text-label font-medium text-chart-5 transition-colors hover:bg-chart-5/5 active:opacity-80"
               >
                 <FlaskConical size={16} />
                 {t("testRun.markAs")}
@@ -598,8 +575,8 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
               <AppCard>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <FlaskConical size={14} className="text-violet-600 dark:text-violet-400" />
-                    <span className="text-sm font-medium text-card-foreground">{t("testRun.selectType")}</span>
+                    <FlaskConical size={14} className="text-chart-5" />
+                    <span className="text-label font-medium text-card-foreground">{t("testRun.selectType")}</span>
                   </div>
                   <button onClick={() => setShowTestRunPicker(false)} className="p-1 text-muted-foreground active:opacity-70">
                     <X size={14} />
@@ -611,9 +588,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       key={tt.value}
                       onClick={() => handleTagTestRun(tt.value)}
                       disabled={!!testRunLoading}
-                      className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-violet-500/5 active:bg-violet-500/10 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-md px-3 py-2.5 text-label text-card-foreground transition-colors hover:bg-chart-5/5 active:bg-chart-5/10 disabled:opacity-50"
                     >
-                      {testRunLoading === tt.value ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} className="text-violet-500/60" />}
+                      {testRunLoading === tt.value ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} className="text-chart-5/60" />}
                       {tt.label}
                     </button>
                   ))}
@@ -628,7 +605,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                       <div className="my-3 border-t border-border" />
                       <div className="flex items-center gap-1.5 mb-2">
                         <Target size={12} className="text-primary" />
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.predictionTests")}</span>
+                        <span className="text-micro text-muted-foreground uppercase tracking-wide">{t("testRun.predictionTests")}</span>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {preds.predictions.map((pred) => {
@@ -639,15 +616,15 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                               key={pred.distance_label}
                               onClick={() => handleTagTestRun("custom", pred.distance_km)}
                               disabled={!!testRunLoading}
-                              className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 disabled:opacity-50"
+                              className="flex items-center justify-between rounded-md px-3 py-2.5 text-label text-card-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 disabled:opacity-50"
                             >
                               <div className="flex items-center gap-2">
                                 {testRunLoading === "custom" ? <Loader2 size={14} className="animate-spin" /> : <Target size={14} className="text-primary/60" />}
                                 <span>{pred.distance_label} {t("testRun.predictionTest")}</span>
                               </div>
-                              <span className="text-xs font-mono text-muted-foreground">
+                              <span className="text-micro measure text-muted-foreground">
                                 {formatPace(targetPace)} · {formatTargetTime(pred.predicted_seconds)}
-                                <span className="text-[10px] opacity-70"> ({formatTargetTime(pred.low_seconds)}–{formatTargetTime(pred.high_seconds)})</span>
+                                <span className="text-micro opacity-70"> ({formatTargetTime(pred.low_seconds)}–{formatTargetTime(pred.high_seconds)})</span>
                               </span>
                             </button>
                           )
@@ -672,14 +649,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Heart Rate Zones */}
       {hrZones.length > 0 && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.hrZones")}
           </h3>
           <AppCard>
             <div className="flex flex-col gap-2.5">
               {hrZones.map((zone) => (
                 <div key={zone.zone} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-micro">
                     <span className="font-medium text-card-foreground">
                       Z{zone.zone} {zone.label}
                     </span>
@@ -706,14 +683,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Pace Zones */}
       {paceZones.length > 0 && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.paceDistribution")}
           </h3>
           <AppCard>
             <div className="flex flex-col gap-2.5">
               {paceZones.filter((z) => z.percentage > 0).map((zone) => (
                 <div key={zone.zone} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-micro">
                     <span className="font-medium text-card-foreground">
                       {zone.label}
                     </span>
@@ -740,24 +717,24 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Performance Charts */}
       {loadingCharts && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.performance")}
           </h3>
           <div className="flex flex-col gap-3">
-            <div className="h-[170px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
-            <div className="h-[170px] animate-pulse rounded-2xl bg-card shadow-sm ring-1 ring-border" />
+            <div className="h-[170px] animate-pulse rounded-lg bg-surface-sunken" />
+            <div className="h-[170px] animate-pulse rounded-lg bg-surface-sunken" />
           </div>
         </section>
       )}
       {showCharts && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.performance")}
           </h3>
           <div className="flex flex-col gap-3">
             {hasPace && (
               <AppCard>
-                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.pace")}</p>
+                <p className="mb-3 text-micro font-medium text-card-foreground">{t("activityDetail.pace")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={smoothedStreams ?? undefined} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -803,7 +780,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
             {hasHr && (
               <AppCard>
-                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.heartRate")}</p>
+                <p className="mb-3 text-micro font-medium text-card-foreground">{t("activityDetail.heartRate")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -846,7 +823,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
             {hasAltitude && (
               <AppCard>
-                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.elevation")}</p>
+                <p className="mb-3 text-micro font-medium text-card-foreground">{t("activityDetail.elevation")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -889,7 +866,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
             {hasCadence && (
               <AppCard>
-                <p className="mb-3 text-xs font-medium text-card-foreground">{t("activityDetail.cadence")}</p>
+                <p className="mb-3 text-micro font-medium text-card-foreground">{t("activityDetail.cadence")}</p>
                 <ResponsiveContainer width="100%" height={130}>
                   <AreaChart data={streams} margin={{ top: 8, right: 8, left: 8, bottom: 24 }}>
                     <XAxis
@@ -936,29 +913,29 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {/* Laps */}
       {laps !== null && laps.length > 1 && (
         <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-3 text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("activityDetail.laps")}
           </h3>
-          <AppCard variant="flush">
+          <AppCard variant="rows">
             <div className="grid grid-cols-4 gap-2 border-b border-border px-4 py-2">
-              <span className="text-[11px] font-medium text-muted-foreground">#</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.pace")}</span>
-              <span className="text-right text-[11px] font-medium text-muted-foreground">{t("activityDetail.hr")}</span>
+              <span className="text-micro font-medium text-muted-foreground">#</span>
+              <span className="text-right text-micro font-medium text-muted-foreground">{t("activityDetail.dist")}</span>
+              <span className="text-right text-micro font-medium text-muted-foreground">{t("activityDetail.pace")}</span>
+              <span className="text-right text-micro font-medium text-muted-foreground">{t("activityDetail.hr")}</span>
             </div>
             {laps.map((lap, i) => (
               <div
                 key={lap.index}
                 className={`grid grid-cols-4 gap-2 px-4 py-3 ${i < laps.length - 1 ? "border-b border-border" : ""}`}
               >
-                <span className="text-sm font-medium text-card-foreground">{lap.index}</span>
-                <span className="text-right text-sm text-card-foreground">
+                <span className="text-label font-medium text-card-foreground">{lap.index}</span>
+                <span className="text-right text-label text-card-foreground">
                   {formatDistance(lap.distance_km)}
                 </span>
-                <span className="text-right text-sm text-card-foreground">
+                <span className="text-right text-label text-card-foreground">
                   {formatPace(lap.pace_min_per_km)}
                 </span>
-                <span className="text-right text-sm text-card-foreground">
+                <span className="text-right text-label text-card-foreground">
                   {lap.avg_heart_rate !== null ? `${Math.round(lap.avg_heart_rate)}` : "\u2014"}
                 </span>
               </div>
@@ -971,8 +948,8 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {onDelete && (
         <section className="pt-2">
           {confirmDelete ? (
-            <div className="rounded-2xl bg-destructive/10 p-4 ring-1 ring-destructive/20">
-              <p className="mb-3 text-sm text-destructive">
+            <div className="rounded-lg bg-destructive/10 p-4 ring-1 ring-destructive/20">
+              <p className="mb-3 text-label text-destructive">
                 {t("activityDetail.deleteConfirm")}
               </p>
               <div className="flex flex-col gap-2">
@@ -983,14 +960,14 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
                     if (!ok) setDeleting(false)
                   }}
                   disabled={deleting}
-                  className="w-full rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+                  className="w-full rounded-md bg-destructive px-4 py-2.5 text-label font-semibold text-white transition-opacity disabled:opacity-50"
                 >
                   {deleting ? t("activityDetail.deleting") : t("activityDetail.delete")}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
-                  className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground transition-opacity disabled:opacity-50"
+                  className="w-full rounded-md px-4 py-2.5 text-label font-medium text-muted-foreground transition-opacity disabled:opacity-50"
                 >
                   {t("common.cancel")}
                 </button>
@@ -999,7 +976,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 active:opacity-80"
+              className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-label font-medium text-destructive transition-colors hover:bg-destructive/10 active:opacity-80"
             >
               <Trash2 size={16} />
               {t("activityDetail.delete")}
@@ -1012,6 +989,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       {activity.strava_id && (
         <PoweredByStrava className="mt-4 mb-2" />
       )}
-    </div>
+      </div>
+    </>
   )
 }
