@@ -9,6 +9,15 @@ import { Button } from "@/components/ui/button"
 function sanitizeAuthErrorMessage(message: string | undefined): string {
   if (!message) return "Something went wrong on our side. Try signing in again."
   const m = message.toLowerCase()
+  if (m === "not_invited") {
+    return "42195 is invite only right now. Ask for an invite for this address, then create your account."
+  }
+  if (m === "strava_already_linked") {
+    return "That Strava account is already connected to another 42195 account. Disconnect it there first, or sign in with that account."
+  }
+  if (m === "strava_missing_scope") {
+    return "42195 needs permission to read your activities. Connect again and leave every box ticked on Strava's screen."
+  }
   if (
     m.includes("invalid login credentials") ||
     m.includes("invalid credentials") ||

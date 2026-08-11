@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { withStravaRetry, stravaApiFetch, StravaAuthError, StravaUnauthorizedError } from "@/lib/strava"
+import {
+  withStravaRetry,
+  stravaApiFetch,
+  StravaAuthError,
+  StravaRateLimitError,
+  StravaUnauthorizedError,
+} from "@/lib/strava"
 import type { Lap } from "@/lib/types"
 
 interface StravaLap {
@@ -82,6 +88,12 @@ export async function GET(
   } catch (err) {
     if (err instanceof StravaAuthError) {
       return NextResponse.json({ error: "No Strava account connected", code: err.code }, { status: 403 })
+    }
+    if (err instanceof StravaRateLimitError) {
+      return NextResponse.json(
+        { error: err.message, code: "STRAVA_RATE_LIMITED", resume_at: err.resetAt.toISOString() },
+        { status: 429 },
+      )
     }
     return NextResponse.json({ error: "Strava laps fetch failed" }, { status: 502 })
   }

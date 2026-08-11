@@ -1,5 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/service"
-import { withStravaRetry, stravaApiFetch } from "@/lib/strava"
+import {
+  withStravaRetry,
+  stravaApiFetch,
+  StravaRateLimitError,
+  StravaUnauthorizedError,
+} from "@/lib/strava"
 
 // ---------------------------------------------------------------------------
 // Strava type definitions
@@ -103,42 +108,55 @@ function speedToPace(averageSpeedMs: number): number | null {
   return 1000 / averageSpeedMs / 60
 }
 
+/** Unix seconds for a Strava ISO start_date. */
+function toEpochSeconds(startDate: string): number {
+  return Math.floor(new Date(startDate).getTime() / 1000)
+}
+
+/** Maps a Strava activity onto an `activities` row. */
+function toActivityRow(userId: string, a: StravaActivity) {
+  return {
+    user_id: userId,
+    strava_id: a.id,
+    type: mapActivityType(a.sport_type, a.workout_type),
+    name: a.name,
+    date: a.start_date,
+    distance_km: a.distance / 1000,
+    duration_seconds: Math.round(a.moving_time),
+    pace_min_per_km: speedToPace(a.average_speed),
+    elevation_gain_m: a.total_elevation_gain,
+    avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+    avg_cadence: a.average_cadence != null ? Math.round(a.average_cadence) : null,
+    calories: a.calories != null ? Math.round(a.calories) : null,
+  }
+}
+
+const PER_PAGE = 100
+
 /**
- * Fetches activities from Strava, paginating until an empty page.
+ * Reads one page of the athlete's activity list, newest first, older than
+ * `before` (unix seconds).
  */
-const MAX_PAGES = 50 // 50 × 100 = 5 000 activities — sufficient for any real account
-
-export async function fetchStravaActivities(
+async function fetchActivityPage(
   accessToken: string,
-  after?: number,
+  before: number,
+  page: number,
 ): Promise<StravaActivity[]> {
-  const allActivities: StravaActivity[] = []
-  let page = 1
-  const perPage = 100
+  const url = new URL("https://www.strava.com/api/v3/athlete/activities")
+  url.searchParams.set("per_page", String(PER_PAGE))
+  url.searchParams.set("page", String(page))
+  url.searchParams.set("before", String(before))
 
-  while (page <= MAX_PAGES) {
-    const url = new URL("https://www.strava.com/api/v3/athlete/activities")
-    url.searchParams.set("per_page", String(perPage))
-    url.searchParams.set("page", String(page))
-    if (after !== undefined) url.searchParams.set("after", String(after))
+  const res = await stravaApiFetch(url.toString(), accessToken)
 
-    const res = await stravaApiFetch(url.toString(), accessToken)
-
-    if (!res.ok) {
-      const body = await res.text()
-      console.error(`Strava activities fetch failed (${res.status}):`, body)
-      throw new Error(`Strava activities fetch failed: ${res.status}`)
-    }
-
-    const batch = (await res.json()) as StravaActivity[]
-    if (batch.length === 0) break
-
-    allActivities.push(...batch)
-    if (batch.length < perPage) break
-    page++
+  if (res.status === 401) throw new StravaUnauthorizedError()
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`Strava activities fetch failed (${res.status}):`, body)
+    throw new Error(`Strava activities fetch failed: ${res.status}`)
   }
 
-  return allActivities
+  return (await res.json()) as StravaActivity[]
 }
 
 /**
@@ -289,13 +307,50 @@ export interface SyncResult {
   synced: number
   skipped: number
   incremental: boolean
+  /** False when history is left to fetch — call again to continue. */
+  done: boolean
+  /** Where the next run resumes from (unix seconds), null when finished. */
+  resumeCursor: number | null
+  /** Set when the run stopped because Strava's rate limit was spent. */
+  resumeAt: string | null
 }
 
+export interface SyncOptions {
+  fullSync: boolean
+  /** Cursor left by a previous partial run, from sync_status.cursor_before. */
+  resumeCursor?: number | null
+}
+
+/**
+ * How much of the athlete's history one request is allowed to pull.
+ *
+ * The Strava rate limit (100 reads per 15 minutes) is per application, shared
+ * by every athlete using it, and a serverless function has a hard timeout. So a
+ * long history is walked in chunks: each request pulls what it can, saves a
+ * cursor, and the caller comes back for the rest.
+ */
+const MAX_PAGES_PER_RUN = 8 // 8 × 100 = 800 activities per request
+const TIME_BUDGET_MS = 40_000
+
+/**
+ * Pulls activities from Strava into `activities`.
+ *
+ * Pagination walks backwards in time from `resumeCursor` (or now), because a
+ * page cursor cannot survive across requests — activities recorded meanwhile
+ * would shift the pages. An incremental sync stops as soon as it reaches
+ * activities older than the last successful sync; a full sync stops when Strava
+ * runs out of history.
+ *
+ * Each page is written before the next is fetched, so an interrupted run keeps
+ * everything it had already pulled.
+ */
 export async function syncUserActivities(
   userId: string,
-  fullSync: boolean,
+  options: SyncOptions,
 ): Promise<SyncResult> {
+  const { fullSync, resumeCursor = null } = options
   const service = createServiceClient()
+  const startedAt = Date.now()
 
   const { data: prevSync } = await service
     .from("sync_status")
@@ -305,44 +360,82 @@ export async function syncUserActivities(
 
   const lastSyncAt: string | null = prevSync?.last_sync_at ?? null
 
-  // Subtract 1 second to avoid missing activities recorded at the exact same
-  // second as last_sync_at (Strava's `after` param is exclusive).
-  const afterTimestamp = !fullSync && lastSyncAt
+  // Subtract 1 second so an activity recorded in the same second as
+  // last_sync_at is still picked up.
+  const stopAt = !fullSync && lastSyncAt
     ? Math.floor(new Date(lastSyncAt).getTime() / 1000) - 1
     : undefined
 
-  const stravaActivities = await withStravaRetry(userId, (token) =>
-    fetchStravaActivities(token, afterTimestamp)
-  )
+  // An hour of headroom covers clock skew and activities backdated by a device.
+  const before = resumeCursor ?? Math.floor(Date.now() / 1000) + 3600
 
-  const rows = stravaActivities.map((a) => ({
-    user_id: userId,
-    strava_id: a.id,
-    type: mapActivityType(a.sport_type, a.workout_type),
-    name: a.name,
-    date: a.start_date,
-    distance_km: a.distance / 1000,
-    duration_seconds: Math.round(a.moving_time),
-    pace_min_per_km: speedToPace(a.average_speed),
-    elevation_gain_m: a.total_elevation_gain,
-    avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
-    avg_cadence: a.average_cadence != null ? Math.round(a.average_cadence) : null,
-    calories: a.calories != null ? Math.round(a.calories) : null,
-  }))
+  let synced = 0
+  let cursor: number | null = resumeCursor
+  let done = false
+  let resumeAt: string | null = null
+  let page = 1
 
-  if (rows.length > 0) {
-    const { error: upsertError } = await service
-      .from("activities")
-      .upsert(rows, { onConflict: "user_id,strava_id" })
-    if (upsertError) throw upsertError
+  try {
+    while (page <= MAX_PAGES_PER_RUN && Date.now() - startedAt < TIME_BUDGET_MS) {
+      const batch = await withStravaRetry(userId, (token) =>
+        fetchActivityPage(token, before, page),
+      )
+
+      if (batch.length === 0) {
+        done = true
+        break
+      }
+
+      const reachedKnownHistory =
+        stopAt !== undefined && batch.some((a) => toEpochSeconds(a.start_date) <= stopAt)
+
+      const fresh =
+        stopAt === undefined
+          ? batch
+          : batch.filter((a) => toEpochSeconds(a.start_date) > stopAt)
+
+      if (fresh.length > 0) {
+        const { error: upsertError } = await service
+          .from("activities")
+          .upsert(fresh.map((a) => toActivityRow(userId, a)), {
+            onConflict: "user_id,strava_id",
+          })
+        if (upsertError) throw upsertError
+        synced += fresh.length
+      }
+
+      if (reachedKnownHistory || batch.length < PER_PAGE) {
+        done = true
+        break
+      }
+
+      // The oldest activity on this page is where the next run picks up.
+      cursor = batch.reduce(
+        (oldest, a) => Math.min(oldest, toEpochSeconds(a.start_date)),
+        Number.POSITIVE_INFINITY,
+      )
+      page++
+    }
+  } catch (err) {
+    if (err instanceof StravaRateLimitError) {
+      // Keep what was written, tell the caller when to come back.
+      resumeAt = err.resetAt.toISOString()
+    } else {
+      throw err
+    }
   }
 
-  await recalculateGoals(userId)
+  if (synced > 0 || done) {
+    await recalculateGoals(userId)
+  }
 
   return {
-    synced: rows.length,
+    synced,
     skipped: 0,
-    incremental: afterTimestamp !== undefined,
+    incremental: stopAt !== undefined,
+    done,
+    resumeCursor: done ? null : cursor,
+    resumeAt,
   }
 }
 
@@ -363,37 +456,35 @@ export async function syncSingleActivity(
     return { synced: false }
   }
 
-  const row = {
-    user_id: userId,
-    strava_id: activity.id,
-    type: mapActivityType(activity.sport_type, activity.workout_type),
-    name: activity.name,
-    date: activity.start_date,
-    distance_km: activity.distance / 1000,
-    duration_seconds: Math.round(activity.moving_time),
-    pace_min_per_km: speedToPace(activity.average_speed),
-    elevation_gain_m: activity.total_elevation_gain,
-    avg_heart_rate: activity.average_heartrate != null ? Math.round(activity.average_heartrate) : null,
-    avg_cadence: activity.average_cadence != null ? Math.round(activity.average_cadence) : null,
-    calories: activity.calories != null ? Math.round(activity.calories) : null,
-  }
-
   const { error } = await service
     .from("activities")
-    .upsert([row], { onConflict: "user_id,strava_id" })
+    .upsert([toActivityRow(userId, activity)], { onConflict: "user_id,strava_id" })
   if (error) throw error
 
-  // Update sync timestamp
-  await service.from("sync_status").upsert(
-    {
-      user_id: userId,
-      state: "success",
-      last_sync_at: new Date().toISOString(),
-      error_message: null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  )
+  // Update sync timestamp — unless a chunked history sync is still unfinished.
+  // Moving last_sync_at forward while older pages are outstanding would make
+  // the next incremental run stop before it ever reaches them.
+  const { data: syncRow } = await service
+    .from("sync_status")
+    .select("state")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  const historySyncPending =
+    syncRow != null && ["syncing", "partial", "rate_limited"].includes(syncRow.state as string)
+
+  if (!historySyncPending) {
+    await service.from("sync_status").upsert(
+      {
+        user_id: userId,
+        state: "success",
+        last_sync_at: new Date().toISOString(),
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    )
+  }
 
   await recalculateGoals(userId)
 

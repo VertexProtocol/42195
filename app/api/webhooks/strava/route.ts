@@ -67,12 +67,17 @@ export async function POST(request: NextRequest) {
 
   const service = createServiceClient()
 
-  // Look up which user owns this Strava athlete_id
-  const { data: tokenRow } = await service
+  // Look up which user owns this Strava athlete_id. A unique index on
+  // athlete_id (migration 023) keeps this to at most one row; limit(1) means a
+  // database that predates the index degrades to "route to one account"
+  // instead of erroring out and dropping the event for everyone.
+  const { data: tokenRows } = await service
     .from("strava_tokens")
     .select("user_id")
     .eq("athlete_id", event.owner_id)
-    .maybeSingle()
+    .limit(1)
+
+  const tokenRow = tokenRows?.[0]
 
   if (!tokenRow) {
     // Unknown athlete — nothing to do
