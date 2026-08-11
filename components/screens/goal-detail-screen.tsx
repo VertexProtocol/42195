@@ -227,9 +227,9 @@ function PreferencesForm({
         <div className="flex flex-col gap-2">
           {(
             [
-              { value: "volume", label: "Hit the km", desc: "Give me weekly targets, I'll fit in runs when I can" },
-              { value: "workouts", label: "Structured sessions", desc: "Long run, tempo, easy — tell me what type of run" },
-              { value: "balanced", label: "Both", desc: "Sessions with types and a km target" },
+              { value: "volume", label: "Hit the km", desc: "Easy runs and a weekly target. Small weeks get fewer, longer runs rather than more short ones" },
+              { value: "workouts", label: "Structured sessions", desc: "Tempo, intervals and hills where the phase calls for them — always your chosen number of sessions" },
+              { value: "balanced", label: "Both", desc: "Mostly easy running, with quality sessions where they help" },
             ] as { value: TrainingFocus; label: string; desc: string }[]
           ).map((opt) => (
             <button

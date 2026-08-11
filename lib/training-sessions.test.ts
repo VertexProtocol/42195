@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   allocateSessionDistances,
+  supportedSessionCount,
   longRunMaxFraction,
   longRunWithinCap,
   minSessionKm,
@@ -130,5 +131,58 @@ describe("parseSessionDistanceKm", () => {
   it("returns 0 for unparseable input rather than NaN", () => {
     expect(parseSessionDistanceKm("easy 45 minutes")).toBe(0)
     expect(parseSessionDistanceKm("")).toBe(0)
+  })
+})
+
+describe("supportedSessionCount", () => {
+  it("keeps the requested count when the volume supports it", () => {
+    for (const focus of ["volume", "workouts", "balanced"] as const) {
+      expect(supportedSessionCount(45, 3, focus)).toBe(3)
+      expect(supportedSessionCount(60, 5, focus)).toBe(5)
+    }
+  })
+
+  it("trades sessions for length in volume mode when the week is too small", () => {
+    // 12 km across 4 sessions is 3 km each. The runner asked for kilometres, not
+    // for a session count, so they get 6.5 + 5.5 instead of four token jogs.
+    expect(supportedSessionCount(12, 4, "volume")).toBe(2)
+    expect(supportedSessionCount(20, 5, "volume")).toBe(3)
+  })
+
+  it("leaves a week that genuinely supports the count alone", () => {
+    expect(supportedSessionCount(45, 5, "volume")).toBe(5)
+    expect(supportedSessionCount(25, 4, "volume")).toBe(4)
+  })
+
+  it("keeps the count in workouts mode, because the count is the structure", () => {
+    expect(supportedSessionCount(12, 4, "workouts")).toBe(4)
+    expect(supportedSessionCount(10, 4, "balanced")).toBe(4)
+  })
+
+  it("never returns more sessions than were asked for", () => {
+    for (const target of [8, 12, 20, 30, 45, 80]) {
+      for (const requested of [2, 3, 4, 5]) {
+        expect(supportedSessionCount(target, requested, "volume")).toBeLessThanOrEqual(requested)
+      }
+    }
+  })
+
+  it("never drops below one session", () => {
+    expect(supportedSessionCount(3, 4, "volume")).toBe(1)
+    expect(supportedSessionCount(0, 3, "volume")).toBe(1)
+  })
+
+  it("passes a single requested session straight through", () => {
+    expect(supportedSessionCount(40, 1, "volume")).toBe(1)
+    expect(supportedSessionCount(4, 1, "volume")).toBe(1)
+  })
+
+  it("gives volume mode sessions that clear the minimum", () => {
+    // The point of the whole function: what it returns must be allocatable.
+    for (const target of [8, 12, 16, 20, 30, 45]) {
+      const n = supportedSessionCount(target, 5, "volume")
+      const { belowMinimum } = allocateSessionDistances(target, ["Long run", ...Array(n - 1).fill("Base run")])
+      expect(belowMinimum).toBe(false)
+    }
   })
 })
