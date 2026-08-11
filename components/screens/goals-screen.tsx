@@ -261,7 +261,7 @@ export function GoalsScreen({
   )
 
   return (
-    <div className="flex flex-col gap-5 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
       {/* Segmented control */}
       <div
         role="tablist"

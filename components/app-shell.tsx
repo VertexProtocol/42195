@@ -312,6 +312,8 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             weeklySummary={data.weeklySummary}
             recentActivities={data.activities.slice(0, 5)}
+            warnings={data.warnings}
+            planBadges={data.planBadges}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
             onViewActivities={() => handleTabChange("activities")}
@@ -327,6 +329,7 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             stravaConnected={data.stravaConnected}
             syncStatus={data.syncStatus}
+            testRunActivityIds={data.testRunActivityIds}
             onSelectActivity={handleSelectActivity}
             onSync={data.sync}
             onAddActivity={() => setIsManualActivityOpen(true)}
@@ -339,6 +342,7 @@ export function AppShell({ initialData }: AppShellProps) {
               activity={selectedActivity}
               onBack={handleBackFromDetail}
               onDelete={handleDeleteActivity}
+              onTestRunChange={data.setTestRunTag}
               allActivities={data.activities}
             />
           </Suspense>
@@ -368,6 +372,7 @@ export function AppShell({ initialData }: AppShellProps) {
               activities={data.activities}
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
+              onPlanChange={data.refreshPlanBadges}
             />
           </Suspense>
         )}

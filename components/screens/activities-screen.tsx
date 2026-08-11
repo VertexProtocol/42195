@@ -41,6 +41,12 @@ interface ActivitiesScreenProps {
   activities: Activity[]
   stravaConnected: boolean
   syncStatus: SyncStatus
+  /**
+   * Owned by the app shell, not fetched here. This screen unmounts on every
+   * tab change, so fetching it on mount made the test-run filter chip appear a
+   * round-trip late — shifting the chip row — each time the tab was opened.
+   */
+  testRunActivityIds: Set<string>
   onSelectActivity: (activity: Activity) => void
   onSync: () => void
   onAddActivity: () => void
@@ -92,6 +98,7 @@ export function ActivitiesScreen({
   activities,
   stravaConnected,
   syncStatus,
+  testRunActivityIds,
   onSelectActivity,
   onSync,
   onAddActivity,
@@ -100,25 +107,6 @@ export function ActivitiesScreen({
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [syncSuccess, setSyncSuccess] = useState(false)
-  const [testRunActivityIds, setTestRunActivityIds] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    let cancelled = false
-    fetch("/api/test-runs")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.test_runs) {
-          setTestRunActivityIds(
-            new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)),
-          )
-        }
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   // Brief confirmation when a sync lands, so the button reports its own result.
   const prevSyncStateRef = useRef(syncStatus.state)
   useEffect(() => {
@@ -245,7 +233,7 @@ export function ActivitiesScreen({
 
   return (
     <div
-      className="flex flex-col gap-5 px-4 pb-8 pt-1"
+      className="flex flex-col gap-5 px-4 pb-8 screen-body"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

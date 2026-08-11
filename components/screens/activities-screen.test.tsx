@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach } from "vitest"
 import { render, screen, within, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { ActivitiesScreen } from "./activities-screen"
@@ -42,6 +42,7 @@ function renderScreen(activities: Activity[]) {
         activities={activities}
         stravaConnected={false}
         syncStatus={SYNC_STATUS}
+        testRunActivityIds={new Set()}
         onSelectActivity={() => {}}
         onSync={() => {}}
         onAddActivity={() => {}}
@@ -62,11 +63,6 @@ function pageSizeChip(size: number): HTMLElement {
 
 beforeEach(() => {
   localStorage.clear()
-  // The screen asks which activities are benchmark test runs on mount.
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ test_runs: [] }) })),
-  )
 })
 
 describe("ActivitiesScreen — page size", () => {
