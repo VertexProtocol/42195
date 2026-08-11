@@ -24,7 +24,9 @@ import {
   computeWeeklyProgress,
   formatWeeklyMetric,
   progressPercentage,
+  isRunActivity,
 } from "@/lib/format"
+import { LOAD_INDICATOR_MIN_RUNS } from "@/lib/training-constants"
 import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { AppCard, CardRow } from "@/components/ui/app-card"
@@ -90,10 +92,19 @@ export function HomeScreen({
   >({})
   const [warnings, setWarnings] = useState<Warning[]>([])
 
+  // The load engine only ever looks at runs, so the gate counts runs. Counting
+  // activities of any type meant seven bike rides both fetched warnings that
+  // could not exist and mounted a load card that rendered nothing.
+  const runCount = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)).length,
+    [activities],
+  )
+  const hasLoadHistory = runCount >= LOAD_INDICATOR_MIN_RUNS
+
   // Proactive training warnings need history before the engine can say
   // anything useful, so we do not ask for them on a near-empty account.
   useEffect(() => {
-    if (activities.length < 7) return
+    if (!hasLoadHistory) return
     let cancelled = false
     fetch("/api/warnings")
       .then((r) => (r.ok ? r.json() : null))
@@ -105,7 +116,7 @@ export function HomeScreen({
     return () => {
       cancelled = true
     }
-  }, [activities.length])
+  }, [hasLoadHistory])
 
   const handleDismissWarning = async (type: WarningType) => {
     try {
@@ -359,7 +370,7 @@ export function HomeScreen({
       )}
 
       {/* ── Is the body handling it ───────────────────────────────────── */}
-      {activities.length >= 7 && (
+      {hasLoadHistory && (
         <Suspense fallback={null}>
           <TrainingLoadIndicator
             activities={activities}

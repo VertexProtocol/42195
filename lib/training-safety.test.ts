@@ -9,7 +9,10 @@ import {
   checkFrequencyProgression,
   checkLongRunProtection,
   checkProlongedFatigue,
+  computeTrainingLoadStatus,
+  detectFatigue,
 } from "./training-safety"
+import { computeTrainingLoad } from "./training-utils"
 import type { SafetyActivity } from "./training-safety"
 import type { TrainingPlan, TrainingWeek } from "./types"
 
@@ -478,5 +481,201 @@ describe("checkProlongedFatigue", () => {
     const result = checkProlongedFatigue(training)
     // With adequate rest, should not detect prolonged fatigue
     expect(result.detected).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// evaluateAcwrSafety — detraining tier
+// ---------------------------------------------------------------------------
+
+/** Runs spread across days 8–28 back, i.e. a real baseline with a quiet week on top. */
+function lapsedBaseline(kmEach = 8): SafetyActivity[] {
+  const acts: SafetyActivity[] = []
+  for (let d = 8; d <= 28; d += 2) acts.push(makeActivity({ date: daysAgo(d), distance_km: kmEach }))
+  return acts
+}
+
+describe("evaluateAcwrSafety — detraining", () => {
+  it("separates 'under your own baseline' from the safe low tier", () => {
+    const result = evaluateAcwrSafety(lapsedBaseline())
+    expect(result.risk).toBe("detraining")
+    expect(result.ratio).toBeLessThan(0.8)
+    // A message, because there IS something to say — the old "low" tier
+    // reported this state with a null message and a green label.
+    expect(result.message).not.toBeNull()
+  })
+
+  it("does not cut week one for a runner already under their baseline", () => {
+    expect(evaluateAcwrSafety(lapsedBaseline()).weekOneMultiplier).toBe(1.0)
+  })
+
+  it("still reports plain 'low' inside the optimal band", () => {
+    const result = evaluateAcwrSafety(chronicActivities(6, 4, 10))
+    expect(result.risk).toBe("low")
+    expect(result.message).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// detectFatigue — "unknown" vs "none", and like-for-like comparison
+// ---------------------------------------------------------------------------
+
+/** 4 recent runs (days 1–4) and 8 baseline runs (days 6–13) at fixed HR/pace. */
+function fatigueSample(
+  recent: { hr: number | null; pace: number },
+  baseline: { hr: number | null; pace: number },
+): SafetyActivity[] {
+  return [
+    ...Array.from({ length: 4 }, (_, i) =>
+      makeActivity({
+        date: daysAgo(i + 1),
+        avg_heart_rate: recent.hr,
+        pace_min_per_km: recent.pace,
+      }),
+    ),
+    ...Array.from({ length: 8 }, (_, i) =>
+      makeActivity({
+        date: daysAgo(i + 6),
+        avg_heart_rate: baseline.hr,
+        pace_min_per_km: baseline.pace,
+      }),
+    ),
+  ]
+}
+
+describe("detectFatigue — hasEnoughData", () => {
+  it("reports unknown, not 'no fatigue', below the qualifying run count", () => {
+    const runs = Array.from({ length: 7 }, (_, i) => makeActivity({ date: daysAgo(i + 1) }))
+    const result = detectFatigue(runs)
+    expect(result.signal).toBe("none")
+    expect(result.hasEnoughData).toBe(false)
+  })
+
+  it("reports unknown when the newest qualifying run is stale", () => {
+    const runs = Array.from({ length: 12 }, (_, i) =>
+      makeActivity({ date: daysAgo(i + 20), avg_heart_rate: 140 }),
+    )
+    expect(detectFatigue(runs).hasEnoughData).toBe(false)
+  })
+
+  it("reports unknown when neither HR nor pace was recorded", () => {
+    const runs = Array.from({ length: 12 }, (_, i) =>
+      makeActivity({ date: daysAgo(i + 1), avg_heart_rate: null, pace_min_per_km: null }),
+    )
+    const result = detectFatigue(runs)
+    expect(result.signal).toBe("none")
+    expect(result.hasEnoughData).toBe(false)
+  })
+
+  it("reports a genuine 'no fatigue' when the comparison actually ran", () => {
+    const result = detectFatigue(fatigueSample({ hr: 140, pace: 6 }, { hr: 140, pace: 6 }))
+    expect(result.signal).toBe("none")
+    expect(result.hasEnoughData).toBe(true)
+  })
+})
+
+describe("detectFatigue — like-for-like comparison", () => {
+  it("does not call HR elevated when the recent runs were simply faster", () => {
+    // A block of hard sessions against a block of easy ones: HR is up by 10 bpm
+    // because the running was quicker, not because the runner is cooked.
+    const result = detectFatigue(fatigueSample({ hr: 150, pace: 5.4 }, { hr: 140, pace: 6.0 }))
+    expect(result.signal).toBe("none")
+    expect(result.hasEnoughData).toBe(true)
+  })
+
+  it("still calls HR elevated when the pace held steady", () => {
+    const result = detectFatigue(fatigueSample({ hr: 150, pace: 6.0 }, { hr: 140, pace: 6.0 }))
+    expect(result.signal).toBe("hr_elevated")
+  })
+
+  it("does not call pace declining when the recent runs were simply easier", () => {
+    const result = detectFatigue(fatigueSample({ hr: 135, pace: 6.0 }, { hr: 150, pace: 5.5 }))
+    expect(result.signal).toBe("none")
+  })
+
+  it("still calls pace declining when the effort held steady", () => {
+    const result = detectFatigue(fatigueSample({ hr: 149, pace: 6.0 }, { hr: 150, pace: 5.5 }))
+    expect(result.signal).toBe("pace_declining")
+  })
+
+  it("keeps the pace signal for runners with no HR data at all", () => {
+    const result = detectFatigue(fatigueSample({ hr: null, pace: 6.0 }, { hr: null, pace: 5.5 }))
+    expect(result.signal).toBe("pace_declining")
+  })
+
+  it("reports both signals when HR is up and pace is down together", () => {
+    const result = detectFatigue(fatigueSample({ hr: 150, pace: 6.0 }, { hr: 140, pace: 5.5 }))
+    expect(result.signal).toBe("both")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// checkProlongedFatigue — precomputed load series
+// ---------------------------------------------------------------------------
+
+describe("checkProlongedFatigue — precomputed series", () => {
+  it("matches the result of computing the series itself", () => {
+    const ref = new Date("2026-04-19T12:00:00Z")
+    const acts = Array.from({ length: 60 }, (_, i) =>
+      makeActivity({ date: daysAgo(i + 1), distance_km: 12 }),
+    )
+    const points = computeTrainingLoad(acts, ref)
+    expect(checkProlongedFatigue(acts, ref, points)).toEqual(checkProlongedFatigue(acts, ref))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// computeTrainingLoadStatus
+// ---------------------------------------------------------------------------
+
+describe("computeTrainingLoadStatus", () => {
+  it("surfaces detraining as its own status rather than as 'optimal'", () => {
+    const status = computeTrainingLoadStatus(lapsedBaseline())
+    expect(status.acwr.risk).toBe("detraining")
+    expect(status.status).toBe("detraining")
+  })
+
+  it("ranks a fatigue signal above detraining", () => {
+    // Under baseline AND drifting: the drift is the thing worth acting on.
+    const acts = [
+      ...fatigueSample({ hr: 150, pace: 6.0 }, { hr: 140, pace: 6.0 }),
+      ...lapsedBaseline(2),
+    ]
+    const status = computeTrainingLoadStatus(acts)
+    expect(status.fatigue.signal).toBe("hr_elevated")
+    expect(status.status).toBe("high")
+  })
+
+  it("marks the athlete level unknown when the window is too thin to classify", () => {
+    // Two runs inside the 12-week window, the rest far outside it.
+    const acts = [
+      makeActivity({ date: daysAgo(3) }),
+      makeActivity({ date: daysAgo(5) }),
+      makeActivity({ date: daysAgo(200) }),
+      makeActivity({ date: daysAgo(210) }),
+    ]
+    const status = computeTrainingLoadStatus(acts)
+    expect(status.athleteLevelKnown).toBe(false)
+  })
+
+  it("marks the athlete level known once there is history to classify from", () => {
+    const status = computeTrainingLoadStatus(chronicActivities(6, 4, 10))
+    expect(status.athleteLevelKnown).toBe(true)
+  })
+
+  it("exposes the same load series every other field was derived from", () => {
+    const ref = new Date("2026-04-19T12:00:00Z")
+    const acts = chronicActivities(6, 4, 10)
+    const status = computeTrainingLoadStatus(acts, ref)
+    expect(status.loadPoints).toEqual(computeTrainingLoad(acts, ref))
+  })
+
+  it("measures the athlete level from the reference date, not from today", () => {
+    // Runs that sit inside the 12-week window today, but a year before the
+    // reference date this is evaluated against.
+    const acts = chronicActivities(6, 4, 15)
+    const longAfter = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000)
+    expect(computeTrainingLoadStatus(acts, longAfter).athleteLevelKnown).toBe(false)
+    expect(computeTrainingLoadStatus(acts).athleteLevelKnown).toBe(true)
   })
 })
