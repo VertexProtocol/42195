@@ -267,6 +267,11 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
               schema: RACE_STRATEGY_JSON_SCHEMA,
             },
           },
+          // Caches, though not on the strength of the prompt: the system block
+          // is only 156 tokens, and it is the 942-token output schema sitting
+          // in the same prefix that carries the total to 1098, over Opus 5's
+          // 512-token minimum. Measured, not assumed.
+          // See scripts/smoke/smoke.mjs tokens.
           system: [
             {
               type: "text" as const,

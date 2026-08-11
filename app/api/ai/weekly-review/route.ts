@@ -142,11 +142,14 @@ Session completion: ${weekCompletions.filter((c) => c.status === "completed").le
       output_config: {
         format: { type: "json_schema" as const, schema: WEEKLY_REVIEW_JSON_SCHEMA },
       },
+      // No cache_control: measured at 432 tokens including the output schema,
+      // against Haiku 4.5's 4096-token minimum cacheable prefix. Below the
+      // minimum the API caches nothing and says nothing.
+      // See scripts/smoke/smoke.mjs tokens.
       system: [
         {
           type: "text" as const,
           text: REVIEW_SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" as const },
         },
       ],
       messages: [{ role: "user", content: prompt }],

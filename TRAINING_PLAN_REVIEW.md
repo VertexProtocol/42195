@@ -236,6 +236,28 @@ Vi logger ingen `usage`-felter noe sted, så vi vet ikke om cachen treffer, hva 
 eller hvor mange tokens vi bruker på thinking. Det bør logges:
 `cache_read_input_tokens`, `cache_creation_input_tokens`, `input_tokens`, `output_tokens`.
 
+> **Etterord — målt, ikke anslått.** Anslaget over traff verken tallet eller
+> mekanismen. Målt med `messages.count_tokens` og bekreftet mot API-et
+> (`scripts/smoke/smoke.mjs`): det cachebare prefikset rendres som `tools` →
+> `system`, og et structured-output-skjema deler samme prefiks — så begge teller
+> med. Minimum er dessuten per modell og ikke monotont: 512 for Opus 5, 4096 for
+> Haiku 4.5.
+>
+> | Rute | Prefiks | Minimum | Cacher |
+> |---|---:|---:|---|
+> | `training-plan` | 1528 | 512 | ja |
+> | `race-strategy` | 1098 | 512 | ja |
+> | `coach` | 4594 | 4096 | ja |
+> | `plan-check` | 412 | 4096 | nei |
+> | `weekly-review` | 432 | 4096 | nei |
+> | `activity-analysis` | 117 | 4096 | nei |
+>
+> `race-strategy` har en systemprompt på 156 tokens og cacher likevel — det er
+> det 942 tokens store skjemaet som bærer den over grensa. `coach` cacher fordi
+> de åtte verktøyskjemaene ligger foran systemprompten; prompten alene (~3100)
+> ville ikke nådd opp. De tre nederste kan ikke nå minimumet og fikk
+> breakpointene fjernet.
+
 ### 3.5 Prompten er skrevet for en eldre modellgenerasjon
 Nyere modeller følger systemprompten langt tettere, så trykk-språk overtriggrer nå:
 - `"IMPORTANT: Do not specify which day of the week to run"` (`route.ts:459`)
