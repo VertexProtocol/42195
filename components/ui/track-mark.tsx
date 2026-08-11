@@ -58,11 +58,26 @@ function frame(size: number, style: React.CSSProperties | undefined) {
   }
 }
 
-export function TrackMark({ size = 20, className, style, ...props }: MarkProps) {
+interface TrackMarkProps extends MarkProps {
+  /**
+   * Sends the lead arc round the lane. The lap starts where the still mark is
+   * drawn, so a browser that refuses to animate — reduced motion, a document
+   * on its way out — lands on the mark rather than on a broken-looking frame.
+   */
+  running?: boolean
+}
+
+export function TrackMark({
+  size = 20,
+  running = false,
+  className,
+  style,
+  ...props
+}: TrackMarkProps) {
   return (
     <svg {...frame(size, style)} aria-hidden className={cn('shrink-0', className)} {...props}>
       <rect {...LANE} stroke="currentColor" />
-      <rect {...LEAD} className="stroke-primary" />
+      <rect {...LEAD} className={cn('stroke-primary', running && 'animate-lap')} />
     </svg>
   )
 }
