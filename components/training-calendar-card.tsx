@@ -211,13 +211,13 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-semibold capitalize text-card-foreground">
+          <h4 className="text-label font-semibold capitalize text-card-foreground">
             {monthLabel}
           </h4>
           {!atCurrentMonth && (
             <button
               onClick={goToday}
-              className="rounded-full border border-border px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="rounded-full border border-border px-2.5 py-0.5 text-micro font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               {t("calendar.today")}
             </button>
@@ -246,7 +246,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
         {weekdayKeys.map((key) => (
           <div
             key={key}
-            className="text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            className="text-center text-micro font-medium uppercase tracking-wider text-muted-foreground"
           >
             {t(key)}
           </div>
@@ -262,13 +262,13 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
           const todayCell = isToday(d.date)
           const showFlag = hasGoal || hasTestRun
           const flagClass = hasGoal
-            ? "fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400"
-            : "fill-violet-500 text-violet-500"
+            ? "fill-warning text-warning dark:fill-teal-400 dark:text-teal-400"
+            : "fill-chart-5 text-chart-5"
           const isSelected = hasGoal && selectedGoalDay === d.key
           const cellContent = (
             <>
               <span
-                className={`text-[10px] leading-none pt-0.5 ${
+                className={`text-micro leading-none pt-0.5 ${
                   hasData
                     ? "text-foreground font-semibold"
                     : "text-muted-foreground"
@@ -285,7 +285,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
                   />
                 )}
                 {hasData && (
-                  <span className="text-[10px] font-mono font-semibold text-foreground leading-none">
+                  <span className="text-micro measure font-semibold text-foreground leading-none">
                     {d.stats!.km < 10
                       ? d.stats!.km.toFixed(1)
                       : Math.round(d.stats!.km)}
@@ -298,7 +298,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
             hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
           } ${!d.inMonth ? "opacity-40" : ""} ${
             todayCell ? "ring-2 ring-primary" : ""
-          } ${isSelected ? "ring-2 ring-amber-500 dark:ring-teal-400" : ""}`
+          } ${isSelected ? "ring-2 ring-warning dark:ring-teal-400" : ""}`
           if (hasGoal) {
             return (
               <button
@@ -330,9 +330,9 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
               <>
                 <Flag
                   size={11}
-                  className="fill-amber-500 text-amber-500 dark:fill-teal-400 dark:text-teal-400 shrink-0"
+                  className="fill-warning text-warning dark:fill-teal-400 dark:text-teal-400 shrink-0"
                 />
-                <span className="font-mono text-muted-foreground shrink-0">
+                <span className="measure text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
                 </span>
                 <span className="flex-1 truncate text-left text-card-foreground">
@@ -352,14 +352,14 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
                   key={g.id}
                   type="button"
                   onClick={() => onViewGoal(g)}
-                  className="flex w-full items-center gap-2 text-xs rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-muted/50 active:scale-[0.99] transition-all"
+                  className="flex w-full items-center gap-2 text-micro rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-muted/50 active:scale-[0.99] transition-all"
                 >
                   {row}
                 </button>
               )
             }
             return (
-              <div key={g.id} className="flex items-center gap-2 text-xs px-1.5">
+              <div key={g.id} className="flex items-center gap-2 text-micro px-1.5">
                 {row}
               </div>
             )
@@ -368,22 +368,22 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
       )}
 
       {/* Footer totals */}
-      <div className="flex items-center justify-center gap-3 border-t border-border pt-2.5 text-xs text-muted-foreground">
+      <div className="flex items-center justify-center gap-3 border-t border-border pt-2.5 text-micro text-muted-foreground">
         <span>
-          <span className="font-semibold text-foreground font-mono">
+          <span className="font-semibold text-foreground measure">
             {monthTotals.km.toFixed(0)}
           </span>{" "}
           km
         </span>
         <span className="text-border">·</span>
         <span>
-          <span className="font-semibold text-foreground font-mono">
+          <span className="font-semibold text-foreground measure">
             {monthTotals.count}
           </span>{" "}
           {t("calendar.runs")}
         </span>
         <span className="text-border">·</span>
-        <span className="font-semibold text-foreground font-mono">
+        <span className="font-semibold text-foreground measure">
           {formatElapsed(monthTotals.seconds)}
         </span>
       </div>

@@ -5,6 +5,9 @@ import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import { signUpAction } from "./actions"
+import { AuthShell, AuthError, Field } from "@/components/auth-shell"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 export default function SignUpPage() {
   const { t } = useI18n()
@@ -31,118 +34,94 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">42195</h1>
-          <p className="text-sm text-muted-foreground">{t("auth.createAccountTagline")}</p>
-        </div>
-
-        {error && (
-          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="display_name" className="text-sm font-medium">
-              {t("auth.nameLabel")}
-            </label>
-            <input
-              id="display_name"
-              name="display_name"
-              type="text"
-              autoComplete="name"
-              required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder={t("auth.namePlaceholder")}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              {t("auth.emailLabel")}
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              {t("auth.passwordLabel")}
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                required
-                minLength={8}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                placeholder={t("auth.minCharsPlaceholder")}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="confirm" className="text-sm font-medium">
-              {t("auth.confirmPasswordLabel")}
-            </label>
-            <div className="relative">
-              <input
-                id="confirm"
-                name="confirm"
-                type={showConfirm ? "text" : "password"}
-                autoComplete="new-password"
-                required
-                minLength={8}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                placeholder={t("auth.repeatPasswordPlaceholder")}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label={showConfirm ? "Hide password" : "Show password"}
-              >
-                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+    <AuthShell
+      title={t("auth.createAccount")}
+      lede={t("auth.createAccountTagline")}
+      footer={
+        <>
+          {t("auth.haveAccount")}{" "}
+          <Link
+            href="/auth/login"
+            className="font-semibold text-primary underline-offset-4 hover:underline"
           >
-            {isPending ? t("auth.creatingAccount") : t("auth.createAccount")}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          {t("auth.haveAccount")}
-          <Link href="/auth/login" className="font-medium text-primary underline-offset-4 hover:underline">
             {t("auth.signIn")}
           </Link>
-        </p>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {error && <AuthError>{error}</AuthError>}
+
+        <Field id="display_name" label={t("auth.nameLabel")}>
+          <Input
+            id="display_name"
+            name="display_name"
+            type="text"
+            autoComplete="name"
+            required
+            placeholder={t("auth.namePlaceholder")}
+          />
+        </Field>
+
+        <Field id="email" label={t("auth.emailLabel")}>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="you@example.com"
+          />
+        </Field>
+
+        <Field id="password" label={t("auth.passwordLabel")} hint={t("auth.minCharsPlaceholder")}>
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              className="pr-11"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="press absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </Field>
+
+        <Field id="confirm" label={t("auth.confirmPasswordLabel")}>
+          <div className="relative">
+            <Input
+              id="confirm"
+              name="confirm"
+              type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              className="pr-11"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(!showConfirm)}
+              className="press absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+              aria-label={showConfirm ? t("auth.hidePassword") : t("auth.showPassword")}
+            >
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </Field>
+
+        <Button type="submit" block loading={isPending} className="mt-1">
+          {isPending ? t("auth.creatingAccount") : t("auth.createAccount")}
+        </Button>
+      </form>
+    </AuthShell>
   )
 }

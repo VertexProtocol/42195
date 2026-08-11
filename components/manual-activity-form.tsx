@@ -1,14 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { X } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { BottomSheet } from "@/components/ui/bottom-sheet"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Field } from "@/components/auth-shell"
 
 interface ManualActivityFormProps {
   open: boolean
   onClose: () => void
-  onSave: (activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">) => Promise<boolean>
+  onSave: (
+    activity: Omit<Activity, "id" | "user_id" | "strava_id" | "created_at">,
+  ) => Promise<boolean>
 }
 
 const QUICK_TYPES = [
@@ -25,7 +30,35 @@ const OTHER_TYPES = [
   "Golf", "Skateboard", "Surfing", "Rock Climbing",
 ]
 
+function TypeChip({
+  active,
+  onClick,
+  children,
+  className = "",
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`press h-9 rounded-full px-3.5 text-micro font-semibold ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function ManualActivityForm({ open, onClose, onSave }: ManualActivityFormProps) {
+  const { t } = useI18n()
   const [name, setName] = useState("")
   const [type, setType] = useState("Run")
   const [showOtherTypes, setShowOtherTypes] = useState(false)
@@ -36,23 +69,21 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
   const [elevationM, setElevationM] = useState("")
   const [avgHr, setAvgHr] = useState("")
   const [saving, setSaving] = useState(false)
-  const { t } = useI18n()
-
-  if (!open) return null
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const isQuickType = QUICK_TYPES.some((qt) => qt.value === type)
+  const canSave = Boolean(name.trim() && distanceKm && durationMin)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !distanceKm || !durationMin) return
+    if (!canSave) return
 
     const distKm = parseFloat(distanceKm)
     const durSeconds = (parseInt(durationMin) || 0) * 60 + (parseInt(durationSec) || 0)
     const paceMinPerKm = durSeconds > 0 && distKm > 0 ? durSeconds / 60 / distKm : null
-    const elevation = elevationM ? parseInt(elevationM) : null
-    const hr = avgHr ? parseInt(avgHr) : null
 
     setSaving(true)
+    setSaveError(null)
     const ok = await onSave({
       type,
       name: name.trim(),
@@ -60,187 +91,180 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
       distance_km: distKm,
       duration_seconds: durSeconds,
       pace_min_per_km: paceMinPerKm,
-      elevation_gain_m: elevation,
-      avg_heart_rate: hr,
+      elevation_gain_m: elevationM ? parseInt(elevationM) : null,
+      avg_heart_rate: avgHr ? parseInt(avgHr) : null,
       avg_cadence: null,
       calories: null,
       map_polyline: null,
     })
     setSaving(false)
 
-    if (ok) {
-      // Reset form
-      setName("")
-      setDistanceKm("")
-      setDurationMin("")
-      setDurationSec("")
-      setElevationM("")
-      setAvgHr("")
-      setShowOtherTypes(false)
-      onClose()
+    if (!ok) {
+      // The save failed and the form is the only place the runner can see
+      // that; silently closing would look like it worked.
+      setSaveError(t("manualActivity.saveFailed"))
+      return
     }
+
+    setName("")
+    setDistanceKm("")
+    setDurationMin("")
+    setDurationSec("")
+    setElevationM("")
+    setAvgHr("")
+    setShowOtherTypes(false)
+    onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-      <div className="w-full max-w-md animate-in slide-in-from-bottom rounded-t-3xl bg-card p-5 pb-8 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-card-foreground">{t("manualActivity.addActivity")}</h2>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground active:bg-accent"
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={t("manualActivity.addActivity")}
+      closeLabel={t("common.cancel")}
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {saveError && (
+          <p
+            role="alert"
+            className="rounded-md bg-destructive/12 px-3 py-2.5 text-label text-destructive"
           >
-            <X size={16} />
-          </button>
-        </div>
+            {saveError}
+          </p>
+        )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Activity type — quick buttons + Other */}
-          <div className="flex gap-2">
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {t("manualActivity.activityType")}
+          </legend>
+          <div className="flex flex-wrap gap-1.5">
             {QUICK_TYPES.map((at) => (
-              <button
+              <TypeChip
                 key={at.value}
-                type="button"
-                onClick={() => { setType(at.value); setShowOtherTypes(false) }}
-                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
-                  type === at.value
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-secondary-foreground active:bg-accent"
-                }`}
+                active={type === at.value}
+                onClick={() => {
+                  setType(at.value)
+                  setShowOtherTypes(false)
+                }}
               >
                 {t(at.labelKey)}
-              </button>
+              </TypeChip>
             ))}
-            <button
-              type="button"
-              onClick={() => setShowOtherTypes(!showOtherTypes)}
-              className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
-                !isQuickType
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-            >
-              {t("manualActivity.other")}
-            </button>
+            <TypeChip active={!isQuickType} onClick={() => setShowOtherTypes(!showOtherTypes)}>
+              {isQuickType ? t("manualActivity.other") : type}
+            </TypeChip>
           </div>
 
-          {/* Other type picker */}
           {showOtherTypes && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 pt-1">
               {OTHER_TYPES.map((ot) => (
-                <button
+                <TypeChip
                   key={ot}
-                  type="button"
-                  onClick={() => { setType(ot); setShowOtherTypes(false) }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    type === ot
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-muted-foreground active:bg-accent"
-                  }`}
+                  active={type === ot}
+                  onClick={() => {
+                    setType(ot)
+                    setShowOtherTypes(false)
+                  }}
                 >
                   {ot}
-                </button>
+                </TypeChip>
               ))}
             </div>
           )}
+        </fieldset>
 
-          {/* Name */}
-          <input
+        <Field id="activity-name" label={t("manualActivity.activityName")}>
+          <Input
+            id="activity-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t("manualActivity.activityName")}
+            placeholder={t("manualActivity.namePlaceholder")}
             required
-            className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
+        </Field>
 
-          {/* Date */}
-          <input
+        <Field id="activity-date" label={t("manualActivity.date")}>
+          <Input
+            id="activity-date"
             type="date"
             value={date}
+            max={new Date().toISOString().split("T")[0]}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
+        </Field>
 
-          {/* Distance */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.distance")}</label>
-            <input
+        <Field id="activity-distance" label={t("manualActivity.distance")}>
+          <Input
+            id="activity-distance"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={distanceKm}
+            onChange={(e) => setDistanceKm(e.target.value)}
+            placeholder="0.00"
+            required
+          />
+        </Field>
+
+        <fieldset>
+          <legend className="mb-1.5 text-label font-medium text-foreground">
+            {t("manualActivity.duration")}
+          </legend>
+          <div className="flex gap-2">
+            <Input
               type="number"
-              step="0.01"
+              inputMode="numeric"
               min="0"
-              value={distanceKm}
-              onChange={(e) => setDistanceKm(e.target.value)}
-              placeholder="0.00"
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+              placeholder={t("common.min")}
+              aria-label={t("common.min")}
               required
-              className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <Input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              max="59"
+              value={durationSec}
+              onChange={(e) => setDurationSec(e.target.value)}
+              placeholder={t("common.s")}
+              aria-label={t("common.s")}
             />
           </div>
+        </fieldset>
 
-          {/* Duration */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.duration")}</label>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min="0"
-                  value={durationMin}
-                  onChange={(e) => setDurationMin(e.target.value)}
-                  placeholder={t("common.min")}
-                  required
-                  className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={durationSec}
-                  onChange={(e) => setDurationSec(e.target.value)}
-                  placeholder="sec"
-                  className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field id="activity-elevation" label={t("manualActivity.elevation")}>
+            <Input
+              id="activity-elevation"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              value={elevationM}
+              onChange={(e) => setElevationM(e.target.value)}
+              placeholder={t("manualActivity.optional")}
+            />
+          </Field>
+          <Field id="activity-hr" label={t("manualActivity.avgHr")}>
+            <Input
+              id="activity-hr"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              value={avgHr}
+              onChange={(e) => setAvgHr(e.target.value)}
+              placeholder={t("manualActivity.optional")}
+            />
+          </Field>
+        </div>
 
-          {/* Optional fields */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.elevation")}</label>
-              <input
-                type="number"
-                min="0"
-                value={elevationM}
-                onChange={(e) => setElevationM(e.target.value)}
-                placeholder={t("manualActivity.optional")}
-                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">{t("manualActivity.avgHr")}</label>
-              <input
-                type="number"
-                min="0"
-                value={avgHr}
-                onChange={(e) => setAvgHr(e.target.value)}
-                placeholder={t("manualActivity.optional")}
-                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving || !name.trim() || !distanceKm || !durationMin}
-            className="flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-50"
-          >
-            {saving ? t("manualActivity.saving") : t("manualActivity.save")}
-          </button>
-        </form>
-      </div>
-    </div>
+        <Button type="submit" block className="mt-1" loading={saving} disabled={!canSave}>
+          {saving ? t("manualActivity.saving") : t("manualActivity.save")}
+        </Button>
+      </form>
+    </BottomSheet>
   )
 }

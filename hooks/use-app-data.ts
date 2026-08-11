@@ -5,29 +5,10 @@ import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
 // import { toast } from "sonner" // Temporarily disabled
 import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
+import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
+import { logError } from "@/lib/log"
 
 const supabase = createClient()
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapActivityRow(a: any): Activity {
-  return {
-    id: a.id,
-    user_id: a.user_id,
-    strava_id: a.strava_id,
-    type: a.type,
-    name: a.name,
-    date: a.date,
-    distance_km: Number(a.distance_km),
-    duration_seconds: a.duration_seconds,
-    pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-    elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-    avg_heart_rate: a.avg_heart_rate,
-    avg_cadence: a.avg_cadence ?? null,
-    calories: a.calories,
-    map_polyline: a.map_polyline,
-    created_at: a.created_at,
-  }
-}
 
 export interface InitialData {
   activities: Activity[]
@@ -102,10 +83,7 @@ export function useAppData(initialData?: InitialData | null) {
 
       const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, syncApiRes] =
         await Promise.all([
-          supabase
-            .from("activities")
-            .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
-            .order("date", { ascending: false }),
+          fetchAllActivities(supabase),
           supabase
             .from("goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
@@ -121,9 +99,7 @@ export function useAppData(initialData?: InitialData | null) {
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
 
-      if (activitiesRes.data) {
-        setActivities(activitiesRes.data.map(mapActivityRow))
-      }
+      setActivities(activitiesRes)
 
       if (goalsRes.data) {
         setGoals(
@@ -250,7 +226,7 @@ export function useAppData(initialData?: InitialData | null) {
       .eq("id", goalId)
 
     if (error) {
-      console.error("Failed to toggle goal active state:", error)
+      logError("Failed to toggle goal active state", error)
       setGoals((prev) =>
         prev.map((g) => (g.id === goalId ? { ...g, is_active: !newActive } : g))
       )
@@ -277,7 +253,7 @@ export function useAppData(initialData?: InitialData | null) {
           })
           .eq("id", saved.id)
         if (error) {
-          console.error("Failed to update goal:", error)
+          logError("Failed to update goal", error)
           setGoals((prev) => prev.map((g) => (g.id === saved.id ? exists : g)))
           // toast.error("Failed to save goal")
           return false
@@ -287,7 +263,7 @@ export function useAppData(initialData?: InitialData | null) {
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
         if (!userId) {
-          console.error("No authenticated user — cannot save goal")
+          logError("No authenticated user — cannot save goal")
           return false
         }
 
@@ -309,7 +285,7 @@ export function useAppData(initialData?: InitialData | null) {
           .single()
 
         if (error) {
-          console.error("Failed to create goal:", error)
+          logError("Failed to create goal", error)
           // toast.error("Failed to create goal")
           return false
         }
@@ -346,7 +322,7 @@ export function useAppData(initialData?: InitialData | null) {
 
     const { error } = await supabase.from("goals").delete().eq("id", goalId)
     if (error) {
-      console.error("Failed to delete goal:", error)
+      logError("Failed to delete goal", error)
       setGoals(snapshot)
       // toast.error("Failed to delete goal")
     } else {
@@ -370,7 +346,7 @@ export function useAppData(initialData?: InitialData | null) {
       .eq("id", goalId)
 
     if (error) {
-      console.error("Failed to toggle goal star:", error)
+      logError("Failed to toggle goal star", error)
       setGoals((prev) =>
         prev.map((g) => (g.id === goalId ? { ...g, is_starred: !newStarred } : g))
       )
@@ -398,7 +374,7 @@ export function useAppData(initialData?: InitialData | null) {
       )
     )
     const failed = results.filter((r) => r.error)
-    if (failed.length > 0) console.error("reorderGoals: failed to persist order", failed.map((r) => r.error))
+    if (failed.length > 0) logError("reorderGoals: failed to persist order", failed.map((r) => r.error))
   }, [])
 
   // ----- Weekly Goal CRUD -----
@@ -424,7 +400,7 @@ export function useAppData(initialData?: InitialData | null) {
           })
           .eq("id", saved.id)
         if (error) {
-          console.error("Failed to update weekly goal:", error)
+          logError("Failed to update weekly goal", error)
           setWeeklyGoals((prev) =>
             prev.map((g) => (g.id === saved.id ? exists : g))
           )
@@ -436,7 +412,7 @@ export function useAppData(initialData?: InitialData | null) {
         const { data: authData } = await supabase.auth.getUser()
         const userId = authData.user?.id
         if (!userId) {
-          console.error("No authenticated user found — cannot save weekly goal")
+          logError("No authenticated user found — cannot save weekly goal")
           return false
         }
 
@@ -457,7 +433,7 @@ export function useAppData(initialData?: InitialData | null) {
           .single()
 
         if (error) {
-          console.error("Failed to create weekly goal:", error)
+          logError("Failed to create weekly goal", error)
           // toast.error("Failed to create weekly goal")
           return false
         }
@@ -492,7 +468,7 @@ export function useAppData(initialData?: InitialData | null) {
 
     const { error } = await supabase.from("weekly_goals").delete().eq("id", goalId)
     if (error) {
-      console.error("Failed to delete weekly goal:", error)
+      logError("Failed to delete weekly goal", error)
       setWeeklyGoals(snapshot)
       // toast.error("Failed to delete weekly goal")
     } else {
@@ -519,7 +495,7 @@ export function useAppData(initialData?: InitialData | null) {
       )
     )
     const failed = results.filter((r) => r.error)
-    if (failed.length > 0) console.error("reorderWeeklyGoals: failed to persist order", failed.map((r) => r.error))
+    if (failed.length > 0) logError("reorderWeeklyGoals: failed to persist order", failed.map((r) => r.error))
   }, [])
 
   // ----- Add manual activity -----
@@ -535,22 +511,22 @@ export function useAppData(initialData?: InitialData | null) {
     // so we fail fast with a clear log rather than relying on the insert
     // error text.
     if (!(activity.distance_km > 0 && activity.distance_km <= 500)) {
-      console.error("Rejected activity: distance_km out of range", activity.distance_km)
+      logError("Rejected activity: distance_km out of range", activity.distance_km)
       return false
     }
     if (!(activity.duration_seconds > 0)) {
-      console.error("Rejected activity: duration_seconds must be positive", activity.duration_seconds)
+      logError("Rejected activity: duration_seconds must be positive", activity.duration_seconds)
       return false
     }
     if (
       activity.avg_heart_rate != null &&
       (activity.avg_heart_rate < 30 || activity.avg_heart_rate > 230)
     ) {
-      console.error("Rejected activity: avg_heart_rate out of range", activity.avg_heart_rate)
+      logError("Rejected activity: avg_heart_rate out of range", activity.avg_heart_rate)
       return false
     }
     if (activity.elevation_gain_m != null && activity.elevation_gain_m < 0) {
-      console.error("Rejected activity: elevation_gain_m negative", activity.elevation_gain_m)
+      logError("Rejected activity: elevation_gain_m negative", activity.elevation_gain_m)
       return false
     }
 
@@ -574,7 +550,7 @@ export function useAppData(initialData?: InitialData | null) {
       .single()
 
     if (error) {
-      console.error("Failed to add activity:", error)
+      logError("Failed to add activity", error)
       // toast.error("Failed to add activity")
       return false
     }
@@ -594,7 +570,7 @@ export function useAppData(initialData?: InitialData | null) {
 
     const { error } = await supabase.from("activities").delete().eq("id", activityId)
     if (error) {
-      console.error("Failed to delete activity:", error)
+      logError("Failed to delete activity", error)
       setActivities(snapshot)
       // toast.error("Failed to delete activity")
       return false
@@ -642,16 +618,9 @@ export function useAppData(initialData?: InitialData | null) {
       })
       // toast.success("Activities synced from Strava")
 
-      const { data: freshActivities } = await supabase
-        .from("activities")
-        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
-        .order("date", { ascending: false })
-
-      if (freshActivities) {
-        setActivities(freshActivities.map(mapActivityRow))
-      }
+      setActivities(await fetchAllActivities(supabase))
     } catch (err) {
-      console.error("Sync fetch error:", err)
+      logError("Sync fetch error", err)
       setSyncStatus((prev) => ({
         ...prev,
         state: "error",

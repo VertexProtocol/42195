@@ -1,12 +1,34 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
-import { ChevronRight, Inbox, RefreshCw, Link, Plus, Search, X, Filter, Check, AlertCircle, FlaskConical } from "lucide-react"
+import {
+  ChevronRight,
+  RefreshCw,
+  Plus,
+  Search,
+  X,
+  Check,
+  TriangleAlert,
+  FlaskConical,
+  Route,
+} from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
-import { ActivityTypeBadge } from "@/components/activity-type-badge"
 import type { Activity, SyncStatus } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { PoweredByStrava } from "@/components/strava-brand"
+import { AppCard, CardRow } from "@/components/ui/app-card"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Button } from "@/components/ui/button"
+import { Pill } from "@/components/ui/pill"
+
+/**
+ * Activities — a log, read as a list.
+ *
+ * Every run is one row on one surface. The old layout gave each run its own
+ * floating card, which spent a whole card's worth of elevation on "here is
+ * another Tuesday" and made a long history read as noise. Rows on a single
+ * card scan; a stack of cards does not.
+ */
 
 interface ActivitiesScreenProps {
   activities: Activity[]
@@ -17,28 +39,40 @@ interface ActivitiesScreenProps {
   onAddActivity: () => void
 }
 
-export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSelectActivity, onSync, onAddActivity }: ActivitiesScreenProps) {
+const PULL_THRESHOLD = 80
+
+export function ActivitiesScreen({
+  activities,
+  stravaConnected,
+  syncStatus,
+  onSelectActivity,
+  onSync,
+  onAddActivity,
+}: ActivitiesScreenProps) {
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [syncSuccess, setSyncSuccess] = useState(false)
   const [testRunActivityIds, setTestRunActivityIds] = useState<Set<string>>(new Set())
 
-  // Fetch which activities are tagged as test runs
   useEffect(() => {
     let cancelled = false
     fetch("/api/test-runs")
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!cancelled && data?.test_runs) {
-          setTestRunActivityIds(new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)))
+          setTestRunActivityIds(
+            new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)),
+          )
         }
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // Detect sync completion for brief success feedback
+  // Brief confirmation when a sync lands, so the button reports its own result.
   const prevSyncStateRef = useRef(syncStatus.state)
   useEffect(() => {
     const prev = prevSyncStateRef.current
@@ -52,28 +86,26 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
 
   const isSyncing = syncStatus.state === "syncing"
 
-  // Pull-to-refresh for mobile
-  const containerRef = useRef<HTMLDivElement>(null)
+  // ---- Pull to refresh -----------------------------------------------------
+  // The page scrolls on the document, so the gesture arms off window scroll
+  // position rather than a container's scrollTop.
   const touchStartY = useRef(0)
-  const [pullDistance, setPullDistance] = useState(0)
   const isPulling = useRef(false)
-  const PULL_THRESHOLD = 80
+  const [pullDistance, setPullDistance] = useState(0)
 
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only enable pull-to-refresh when scrolled to top
-    const el = containerRef.current
-    if (!el || el.scrollTop > 0 || isSyncing) return
-    touchStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }, [isSyncing])
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (window.scrollY > 0 || isSyncing || !stravaConnected) return
+      touchStartY.current = e.touches[0].clientY
+      isPulling.current = true
+    },
+    [isSyncing, stravaConnected],
+  )
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isPulling.current) return
     const dy = e.touches[0].clientY - touchStartY.current
-    if (dy > 0) {
-      // Diminishing returns past threshold
-      setPullDistance(Math.min(dy * 0.5, PULL_THRESHOLD * 1.5))
-    }
+    if (dy > 0) setPullDistance(Math.min(dy * 0.5, PULL_THRESHOLD * 1.5))
   }, [])
 
   const onTouchEnd = useCallback(() => {
@@ -86,28 +118,20 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
     setPullDistance(0)
   }, [pullDistance, stravaConnected, isSyncing, onSync])
 
-  // Derive filter options from the actual activities — only show types that exist
+  // Only offer filters for types that actually exist, most frequent first.
   const activityTypes = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const a of activities) {
-      counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
-    }
-    // Sort by frequency (most common first)
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([type]) => type)
+    for (const a of activities) counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([type]) => type)
   }, [activities])
-  const [showFilters, setShowFilters] = useState(false)
 
   const filteredActivities = useMemo(() => {
     return activities.filter((activity) => {
-      // Test run filter
       if (selectedType === "__test_run__") {
         if (!testRunActivityIds.has(activity.id)) return false
       } else if (selectedType !== "all" && activity.type !== selectedType) {
         return false
       }
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase()
         return (
@@ -123,250 +147,243 @@ export function ActivitiesScreen({ activities, stravaConnected, syncStatus, onSe
 
   return (
     <div
-      ref={containerRef}
-      className="flex flex-col gap-5 px-5 pb-6 pt-4"
+      className="flex flex-col gap-5 px-4 pb-8 pt-1"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Pull-to-refresh indicator */}
       {pullDistance > 0 && stravaConnected && (
         <div
-          className="flex items-center justify-center overflow-hidden transition-opacity"
+          className="flex items-center justify-center overflow-hidden"
           style={{ height: pullDistance, opacity: Math.min(pullDistance / PULL_THRESHOLD, 1) }}
+          aria-hidden
         >
           <RefreshCw
-            size={20}
-            className={`text-muted-foreground transition-transform ${pullDistance >= PULL_THRESHOLD ? "text-primary" : ""}`}
+            size={18}
+            className={pullDistance >= PULL_THRESHOLD ? "text-primary" : "text-muted-foreground"}
             style={{ transform: `rotate(${pullDistance * 3}deg)` }}
           />
         </div>
       )}
-      <header className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("activities.title")}</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {activities.length} {activities.length === 1 ? t("activities.activity") : t("activities.activities")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {stravaConnected && (
-            <button
-              onClick={() => { setSyncSuccess(false); onSync() }}
-              disabled={isSyncing}
-              className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                syncSuccess
-                  ? "bg-success/10 text-success"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-              aria-label="Sync with Strava"
-            >
-              {isSyncing ? (
-                <RefreshCw size={13} className="animate-spin" />
-              ) : syncSuccess ? (
-                <Check size={13} />
-              ) : (
-                <RefreshCw size={13} />
-              )}
-              <span>
-                {isSyncing ? t("profile.syncing") : syncSuccess ? t("profile.synced") : t("activities.syncStrava")}
-              </span>
-            </button>
-          )}
-          <button
-            onClick={onAddActivity}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground active:opacity-80 transition-opacity"
-            aria-label="Add manual activity"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-      </header>
 
-      {/* Sync error feedback */}
+      {/* Actions sit above the list rather than inside the app bar: syncing is
+          a decision about this screen's contents. */}
+      <div className="flex items-center gap-2">
+        {stravaConnected && (
+          <Button
+            variant={syncSuccess ? "ghost" : "secondary"}
+            size="sm"
+            className={`flex-1 ${syncSuccess ? "text-success" : ""}`}
+            onClick={() => {
+              setSyncSuccess(false)
+              onSync()
+            }}
+            loading={isSyncing}
+            disabled={isSyncing}
+          >
+            {!isSyncing && (syncSuccess ? <Check size={14} /> : <RefreshCw size={14} />)}
+            {isSyncing
+              ? t("profile.syncing")
+              : syncSuccess
+                ? t("profile.synced")
+                : t("activities.syncStrava")}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          className={stravaConnected ? "" : "flex-1"}
+          onClick={onAddActivity}
+        >
+          <Plus size={16} />
+          {t("activities.addActivity")}
+        </Button>
+      </div>
+
       {syncStatus.state === "error" && syncStatus.error_message && (
-        <div className="flex items-start gap-2 rounded-xl bg-destructive/5 px-3 py-2.5 ring-1 ring-destructive/20">
-          <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
-          <p className="text-xs text-destructive">{syncStatus.error_message}</p>
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2.5"
+        >
+          <TriangleAlert size={15} className="mt-px shrink-0 text-destructive" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-label font-medium text-destructive">{t("sync.failed")}</p>
+            <p className="mt-0.5 text-micro text-destructive/90">{syncStatus.error_message}</p>
+          </div>
         </div>
       )}
 
-      {/* Search and Filter */}
       {activities.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {/* Search bar */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder={t("activities.search")}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl bg-secondary py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground active:text-foreground"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
-                showFilters || selectedType !== "all"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-              aria-label="Toggle filters"
-            >
-              <Filter size={16} />
-            </button>
+        <div className="flex flex-col gap-2.5">
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <input
+              type="search"
+              placeholder={t("activities.search")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("activities.search")}
+              className="h-11 w-full rounded-md bg-surface-sunken pl-9 pr-10 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                aria-label={t("activities.clearFilters")}
+                className="press absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
 
-          {/* Filter chips */}
-          {showFilters && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedType("all")}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedType === "all"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-muted-foreground"
-                }`}
-              >
-                {t("activities.allTypes")}
-              </button>
-              {testRunActivityIds.size > 0 && (
-                <button
-                  onClick={() => setSelectedType("__test_run__")}
-                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selectedType === "__test_run__"
-                      ? "bg-violet-500 text-white"
-                      : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
-                  }`}
-                >
-                  <FlaskConical size={10} />
-                  {t("testRun.badge")}
-                </button>
-              )}
-              {activityTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selectedType === type
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Type filters are always visible: hiding them behind a toggle made
+              the current filter invisible from the list itself. */}
+          <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
+            <FilterChip
+              active={selectedType === "all"}
+              onClick={() => setSelectedType("all")}
+              label={t("activities.allTypes")}
+            />
+            {testRunActivityIds.size > 0 && (
+              <FilterChip
+                active={selectedType === "__test_run__"}
+                onClick={() => setSelectedType("__test_run__")}
+                label={t("testRun.badge")}
+                icon={<FlaskConical size={12} />}
+              />
+            )}
+            {activityTypes.map((type) => (
+              <FilterChip
+                key={type}
+                active={selectedType === type}
+                onClick={() => setSelectedType(type)}
+                label={type}
+              />
+            ))}
+          </div>
 
-          {/* Results count when filtering */}
           {hasActiveFilters && (
-            <p className="text-xs text-muted-foreground">
-              {t("activities.showing")} {filteredActivities.length} {t("activities.of")} {activities.length}
+            <p className="text-micro text-muted-foreground" role="status">
+              {t("activities.showing")} {filteredActivities.length} {t("activities.of")}{" "}
+              {activities.length}
             </p>
           )}
         </div>
       )}
 
       {activities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
-            <Inbox size={28} className="text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-muted-foreground">{t("activities.noActivities")}</p>
-          {stravaConnected ? (
-            <>
-              <p className="text-xs text-muted-foreground">{t("activities.syncDesc")}</p>
-              <button
-                onClick={() => { setSyncSuccess(false); onSync() }}
-                disabled={isSyncing}
-                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity disabled:opacity-60"
+        <EmptyState
+          icon={<Route size={18} />}
+          title={t("activities.noActivities")}
+          body={stravaConnected ? t("activities.syncDesc") : t("activities.connectDesc")}
+          action={
+            stravaConnected ? (
+              <Button
+                onClick={() => {
+                  setSyncSuccess(false)
+                  onSync()
+                }}
+                loading={isSyncing}
               >
-                <RefreshCw size={15} className={isSyncing ? "animate-spin" : ""} />
+                {!isSyncing && <RefreshCw size={16} />}
                 {isSyncing ? t("profile.syncing") : t("activities.syncStrava")}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">{t("activities.connectDesc")}</p>
-              <a
-                href="/api/auth/strava"
-                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
-              >
-                <Link size={15} />
-                {t("activities.connectStrava")}
-              </a>
-            </>
-          )}
-        </div>
-      ) : filteredActivities.length === 0 && hasActiveFilters ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-12">
-          <p className="text-sm text-muted-foreground">{t("activities.noResults")}</p>
-          <button
-            onClick={() => { setSearchQuery(""); setSelectedType("all"); }}
-            className="text-sm font-medium text-primary"
-          >
-            {t("activities.clearFilters")}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {filteredActivities.map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => onSelectActivity(activity)}
-              className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border text-left active:scale-[0.98] transition-transform"
+              </Button>
+            ) : (
+              <Button asChild>
+                <a href="/api/auth/strava">{t("activities.connectStrava")}</a>
+              </Button>
+            )
+          }
+        />
+      ) : filteredActivities.length === 0 ? (
+        <EmptyState
+          icon={<Search size={18} />}
+          title={t("activities.noResults")}
+          body={t("activities.noResultsBody")}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("")
+                setSelectedType("all")
+              }}
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <ActivityTypeBadge type={activity.type} />
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateShort(activity.date)}
-                  </span>
-                  {testRunActivityIds.has(activity.id) && (
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
-                      <FlaskConical size={9} />
-                      {t("testRun.badge")}
+              {t("activities.clearFilters")}
+            </Button>
+          }
+        />
+      ) : (
+        <AppCard variant="rows">
+          {filteredActivities.map((activity) => (
+            <CardRow key={activity.id} className="p-0">
+              <button
+                onClick={() => onSelectActivity(activity)}
+                className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-label font-semibold text-card-foreground">
+                      {activity.name}
+                    </p>
+                    {testRunActivityIds.has(activity.id) && (
+                      <Pill tone="data" icon={<FlaskConical size={10} />}>
+                        {t("testRun.badge")}
+                      </Pill>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-micro text-muted-foreground">
+                    {formatDateShort(activity.date)} · {activity.type}
+                  </p>
+                  <p className="measure mt-1.5 text-micro text-muted-foreground">
+                    <span className="text-label font-semibold text-foreground">
+                      {formatDistance(activity.distance_km)}
                     </span>
-                  )}
-                </div>
-                <h3 className="mt-1.5 truncate text-sm font-semibold text-card-foreground">
-                  {activity.name}
-                </h3>
-                <div className="mt-2 flex items-center gap-4">
-                  <span className="text-sm font-medium text-foreground">
-                    {formatDistance(activity.distance_km)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
+                    {"  "}
                     {formatDuration(activity.duration_seconds)}
-                  </span>
-                  {activity.pace_min_per_km !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatPace(activity.pace_min_per_km)}
-                    </span>
-                  )}
+                    {activity.pace_min_per_km !== null && (
+                      <> · {formatPace(activity.pace_min_per_km)}</>
+                    )}
+                  </p>
                 </div>
-              </div>
-              <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
-            </button>
+                <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            </CardRow>
           ))}
-        </div>
+        </AppCard>
       )}
 
-      {/* Strava attribution — required by brand guidelines */}
-      {stravaConnected && activities.length > 0 && (
-        <PoweredByStrava className="mt-4" />
-      )}
+      {stravaConnected && activities.length > 0 && <PoweredByStrava className="pt-1" />}
     </div>
+  )
+}
+
+function FilterChip({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  icon?: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-micro font-semibold ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

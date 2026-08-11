@@ -131,20 +131,20 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
       {/* Header + tab switcher */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
             <Calculator size={16} className="text-primary" />
           </div>
-          <h3 className="text-sm font-semibold text-card-foreground">
+          <h3 className="text-label font-semibold text-card-foreground">
             {t("paceCalc.title")}
           </h3>
         </div>
         <div className="flex rounded-full bg-secondary p-0.5">
           <button
             onClick={() => setMode("convert")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+            className={`press inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-micro font-semibold ${
               mode === "convert"
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Gauge size={11} />
@@ -152,10 +152,10 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
           </button>
           <button
             onClick={() => setMode("target")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+            className={`press inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-micro font-semibold ${
               mode === "target"
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Target size={11} />
@@ -168,7 +168,7 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
         <div className="space-y-3">
           {/* min/km row */}
           <div className="flex items-center justify-between gap-3">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-label font-medium text-foreground">
               {t("paceCalc.minPerKm")}
             </label>
             <div className="flex items-center gap-1">
@@ -182,9 +182,9 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setPaceMin(clampInt(e.target.value, 30))
                 }}
                 placeholder="0"
-                className="h-10 w-12 rounded-xl border-0 bg-secondary px-2 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-14 rounded-md bg-surface-sunken px-2 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="text-sm text-muted-foreground">:</span>
+              <span className="text-label text-muted-foreground">:</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -195,15 +195,15 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setPaceSec(clampInt(e.target.value, 59))
                 }}
                 placeholder="00"
-                className="h-10 w-12 rounded-xl border-0 bg-secondary px-2 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-14 rounded-md bg-surface-sunken px-2 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="ml-1 text-xs text-muted-foreground">/km</span>
+              <span className="ml-1 text-micro text-muted-foreground">/km</span>
             </div>
           </div>
 
           {/* km/h row */}
           <div className="flex items-center justify-between gap-3">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-label font-medium text-foreground">
               {t("paceCalc.kmh")}
             </label>
             <div className="flex items-center gap-1">
@@ -217,23 +217,23 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setKmh(e.target.value.replace(/[^\d.,]/g, ""))
                 }}
                 placeholder="0.0"
-                className="h-10 w-20 rounded-xl border-0 bg-secondary px-2 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-20 rounded-md bg-surface-sunken px-2 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="ml-1 text-xs text-muted-foreground">km/t</span>
+              <span className="ml-1 text-micro text-muted-foreground">km/t</span>
             </div>
           </div>
 
-          <p className="text-[11px] text-muted-foreground">{t("paceCalc.convertHint")}</p>
+          <p className="text-micro text-muted-foreground">{t("paceCalc.convertHint")}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {/* Goal source selector */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <label className="text-label font-medium text-foreground">
               {t("paceCalc.source")}
             </label>
             <Select value={selectedGoalId} onValueChange={applyGoal}>
-              <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-secondary text-sm">
+              <SelectTrigger className="h-11 w-full rounded-md border-0 bg-surface-sunken text-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -250,7 +250,7 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
 
           {/* Distance */}
           <div className="flex items-center justify-between gap-3">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-label font-medium text-foreground">
               {t("paceCalc.distance")}
             </label>
             <div className="flex items-center gap-1">
@@ -263,15 +263,15 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setDistanceKm(e.target.value.replace(/[^\d.,]/g, ""))
                 }}
                 placeholder="0"
-                className="h-10 w-20 rounded-xl border-0 bg-secondary px-2 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-20 rounded-md bg-surface-sunken px-2 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="ml-1 text-xs text-muted-foreground">km</span>
+              <span className="ml-1 text-micro text-muted-foreground">km</span>
             </div>
           </div>
 
           {/* Target time */}
           <div className="flex items-center justify-between gap-3">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-label font-medium text-foreground">
               {t("paceCalc.targetTime")}
             </label>
             <div className="flex items-center gap-1">
@@ -285,9 +285,9 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setHours(clampInt(e.target.value, 99))
                 }}
                 placeholder="0"
-                className="h-10 w-10 rounded-xl border-0 bg-secondary px-1 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-12 rounded-md bg-surface-sunken px-1 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="text-sm text-muted-foreground">:</span>
+              <span className="text-label text-muted-foreground">:</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -298,9 +298,9 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setMins(clampInt(e.target.value, 59))
                 }}
                 placeholder="00"
-                className="h-10 w-10 rounded-xl border-0 bg-secondary px-1 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-12 rounded-md bg-surface-sunken px-1 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
-              <span className="text-sm text-muted-foreground">:</span>
+              <span className="text-label text-muted-foreground">:</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -311,41 +311,41 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
                   setSecs(clampInt(e.target.value, 59))
                 }}
                 placeholder="00"
-                className="h-10 w-10 rounded-xl border-0 bg-secondary px-1 text-center text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="measure h-11 w-12 rounded-md bg-surface-sunken px-1 text-center text-base text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               />
             </div>
           </div>
 
           {/* Result */}
           {targetResult ? (
-            <div className="rounded-xl bg-secondary/60 p-3 space-y-2">
+            <div className="rounded-md bg-surface-sunken p-3.5 space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-micro text-muted-foreground">
                   {t("paceCalc.requiredPace")}
                 </span>
-                <span className="text-lg font-bold font-mono text-foreground">
+                <span className="text-lead font-bold measure text-foreground">
                   {formatPace(targetResult.paceMinPerKm)}
                 </span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-micro text-muted-foreground">
                   {t("paceCalc.avgSpeed")}
                 </span>
-                <span className="text-sm font-semibold font-mono text-muted-foreground">
+                <span className="text-label font-semibold measure text-muted-foreground">
                   {targetResult.speedKmh.toFixed(1)} km/t
                 </span>
               </div>
 
               {splits.length > 0 && (
                 <div className="border-t border-border pt-2 mt-2">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                  <p className="mb-1.5 text-micro text-muted-foreground">
                     {t("paceCalc.splits")}
                   </p>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                     {splits.map((s) => (
                       <div key={s.key} className="flex items-baseline justify-between">
-                        <span className="text-xs text-muted-foreground">{s.label}</span>
-                        <span className="text-xs font-mono font-semibold text-foreground">
+                        <span className="text-micro text-muted-foreground">{s.label}</span>
+                        <span className="text-micro measure font-semibold text-foreground">
                           {formatTargetTime(s.seconds)}
                         </span>
                       </div>
@@ -355,7 +355,7 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
               )}
             </div>
           ) : (
-            <p className="text-[11px] text-muted-foreground">{t("paceCalc.targetHint")}</p>
+            <p className="text-micro text-muted-foreground">{t("paceCalc.targetHint")}</p>
           )}
         </div>
       )}

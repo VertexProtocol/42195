@@ -15,7 +15,8 @@ export interface Activity {
   avg_heart_rate: number | null
   avg_cadence: number | null
   calories: number | null
-  map_polyline: string | null
+  /** Encoded route. Absent from list queries; loaded by the detail screen. */
+  map_polyline?: string | null
   created_at: string
 }
 

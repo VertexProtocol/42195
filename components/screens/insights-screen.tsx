@@ -3,25 +3,21 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import {
   Trophy,
-  Timer,
-  TrendingUp,
-  Footprints,
-  Clock,
-  Bot,
   Send,
-  User,
   Loader2,
   Trash2,
   ChevronRight,
   Sparkles,
-  FlaskConical
+  FlaskConical,
+  ArrowLeft,
+  LineChart,
 } from "lucide-react"
 import {
   formatTargetTime,
   formatPace,
   formatDateShort,
   formatDistance,
-  isRunActivity
+  isRunActivity,
 } from "@/lib/format"
 import { detectPersonalRecords, predictRaceTimes } from "@/lib/training-utils"
 import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
@@ -29,9 +25,23 @@ import { useI18n } from "@/lib/i18n"
 import type { Activity, Goal, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
-import { AppCard } from '@/components/ui/app-card'
+import { AppCard, CardRow } from "@/components/ui/app-card"
+import { Section, SectionHeader } from "@/components/ui/section"
+import { Stat, StatGroup } from "@/components/ui/stat"
+import { Pill } from "@/components/ui/pill"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Button } from "@/components/ui/button"
 import { PaceCalculatorCard } from "@/components/pace-calculator-card"
 import { TrainingCalendarCard } from "@/components/training-calendar-card"
+
+/**
+ * Insights — what the log adds up to.
+ *
+ * Records and predictions are the answer to "am I getting faster"; the coach
+ * is the answer to "what should I do about it". The coach is a full-height
+ * conversation rather than a card, because a chat inside a scrolling report is
+ * two scroll contexts fighting each other.
+ */
 
 interface Message {
   role: "user" | "assistant"
@@ -45,12 +55,12 @@ interface InsightsScreenProps {
 }
 
 type InsightsTab = "overview" | "coach"
+type StatsPeriod = "30d" | "year" | "last_year" | "all"
 
 export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
-  // AI Coach state — persisted to localStorage so chat survives tab switches
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -58,7 +68,6 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load messages from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem("coach-messages")
@@ -66,7 +75,6 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     } catch {}
   }, [])
 
-  // Persist messages to localStorage on every change
   useEffect(() => {
     try {
       localStorage.setItem("coach-messages", JSON.stringify(messages))
@@ -76,22 +84,23 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const [testRuns, setTestRuns] = useState<TestRun[]>([])
   const [testRunsLoading, setTestRunsLoading] = useState(true)
 
-  // Scope insights to running activities only — rides, swims, walks etc.
-  // are tracked but not relevant to the running stats / calendar / predictions.
+  // Rides, swims and walks are tracked but say nothing about running form, so
+  // every figure on this screen is scoped to runs.
   const runActivities = useMemo(
     () => activities.filter((a) => isRunActivity(a.type)),
     [activities],
   )
 
   const personalRecords = useMemo(() => detectPersonalRecords(runActivities), [runActivities])
-  // Apply prediction adjustment from test run validation feedback
   const predictionAdjustment = useMemo(() => {
     if (testRuns.length === 0) return 0
     return computePredictionAdjustment(testRuns).exponentAdjustment
   }, [testRuns])
-  const racePredictions = useMemo(() => predictRaceTimes(runActivities, predictionAdjustment), [runActivities, predictionAdjustment])
+  const racePredictions = useMemo(
+    () => predictRaceTimes(runActivities, predictionAdjustment),
+    [runActivities, predictionAdjustment],
+  )
 
-  type StatsPeriod = "30d" | "year" | "last_year" | "all"
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>("30d")
 
   const filteredActivities = useMemo(() => {
@@ -99,29 +108,34 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     if (statsPeriod === "30d") {
       const cutoff = new Date()
       cutoff.setDate(now.getDate() - 30)
-      return runActivities.filter(a => new Date(a.date) >= cutoff)
+      return runActivities.filter((a) => new Date(a.date) >= cutoff)
     }
     if (statsPeriod === "year") {
-      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear())
+      return runActivities.filter((a) => new Date(a.date).getFullYear() === now.getFullYear())
     }
     if (statsPeriod === "last_year") {
-      return runActivities.filter(a => new Date(a.date).getFullYear() === now.getFullYear() - 1)
+      return runActivities.filter((a) => new Date(a.date).getFullYear() === now.getFullYear() - 1)
     }
     return runActivities
   }, [runActivities, statsPeriod])
 
-  const totalKm = useMemo(() => filteredActivities.reduce((sum, a) => sum + Number(a.distance_km), 0), [filteredActivities])
-  const longestRunKm = useMemo(() => filteredActivities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0), [filteredActivities])
+  const totalKm = useMemo(
+    () => filteredActivities.reduce((sum, a) => sum + Number(a.distance_km), 0),
+    [filteredActivities],
+  )
+  const longestRunKm = useMemo(
+    () => filteredActivities.reduce((max, a) => Math.max(max, Number(a.distance_km)), 0),
+    [filteredActivities],
+  )
   const recentRunCount = filteredActivities.length
 
-  const STATS_PERIODS: { key: StatsPeriod; label: string }[] = [
-    { key: "30d", label: "30d" },
-    { key: "year", label: "This yr" },
-    { key: "last_year", label: "Last yr" },
-    { key: "all", label: "All" },
+  const STATS_PERIODS: { key: StatsPeriod; labelKey: Parameters<typeof t>[0] }[] = [
+    { key: "30d", labelKey: "stats.period30d" },
+    { key: "year", labelKey: "stats.periodYear" },
+    { key: "last_year", labelKey: "stats.periodLastYear" },
+    { key: "all", labelKey: "stats.periodAll" },
   ]
 
-  // Fetch test runs for benchmarks section
   useEffect(() => {
     let cancelled = false
     async function fetchTestRuns() {
@@ -131,16 +145,17 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
         const data = await res.json()
         if (!cancelled) setTestRuns(data.test_runs ?? [])
       } catch {
-        // silently ignore
+        // Benchmarks are supplementary — a failure here leaves the section empty.
       } finally {
         if (!cancelled) setTestRunsLoading(false)
       }
     }
     fetchTestRuns()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current && activeTab === "coach") {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -159,10 +174,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     setThinkingDetail(null)
 
     try {
-      const apiMessages = newMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }))
+      const apiMessages = newMessages.map((m) => ({ role: m.role, content: m.content }))
 
       const res = await fetch("/api/ai/coach", {
         method: "POST",
@@ -197,15 +209,11 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
           if (!line.startsWith("data: ")) continue
           try {
             const event = JSON.parse(line.slice(6))
-
             if (event.status === "thinking") {
               setThinkingDetail(event.detail ?? t("coach.thinking"))
             } else if (event.status === "done") {
               setThinkingDetail(null)
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: event.text },
-              ])
+              setMessages((prev) => [...prev, { role: "assistant", content: event.text }])
             } else if (event.status === "error") {
               setThinkingDetail(null)
               setMessages((prev) => [
@@ -217,10 +225,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
         }
       }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: t("coach.networkError") },
-      ])
+      setMessages((prev) => [...prev, { role: "assistant", content: t("coach.networkError") }])
     } finally {
       setIsLoading(false)
       setThinkingDetail(null)
@@ -237,7 +242,9 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const handleClear = () => {
     setMessages([])
     setInput("")
-    try { localStorage.removeItem("coach-messages") } catch {}
+    try {
+      localStorage.removeItem("coach-messages")
+    } catch {}
   }
 
   const suggestions = [
@@ -247,48 +254,45 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
     t("coach.suggestion4"),
   ]
 
+  // ── Coach ────────────────────────────────────────────────────────────────
   if (activeTab === "coach") {
     return (
-      <div className="flex flex-col" style={{ height: "calc(100dvh - 5rem)" }}>
-        {/* Header */}
-        <header className="flex items-center justify-between px-5 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-secondary text-muted-foreground active:bg-accent"
-            >
-              <ChevronRight size={16} className="rotate-180" />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">{t("coach.title")}</h1>
-              <p className="text-xs text-muted-foreground">{t("coach.subtitle")}</p>
-            </div>
+      <div className="flex flex-col" style={{ height: "calc(100dvh - 5.5rem)" }}>
+        <header className="flex items-center gap-2 px-4 pb-2 pt-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setActiveTab("overview")}
+            aria-label={t("common.back")}
+          >
+            <ArrowLeft size={18} />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-lead font-semibold text-foreground">{t("coach.title")}</h2>
+            <p className="truncate text-micro text-muted-foreground">{t("coach.subtitle")}</p>
           </div>
           {messages.length > 0 && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleClear}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              aria-label="Clear chat"
+              aria-label={t("coach.clear")}
             >
-              <Trash2 size={18} />
-            </button>
+              <Trash2 size={17} />
+            </Button>
           )}
         </header>
 
-        {/* Messages area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center text-center space-y-5 py-10">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                <Bot size={28} className="text-primary" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">{t("coach.empty")}</p>
-                <p className="text-xs text-muted-foreground max-w-[280px]">
+            <div className="flex flex-col gap-4 py-6">
+              <div>
+                <p className="text-body font-semibold text-foreground">{t("coach.empty")}</p>
+                <p className="mt-1 max-w-[46ch] text-label leading-relaxed text-muted-foreground">
                   {t("coach.emptyDesc")}
                 </p>
               </div>
-              <div className="flex flex-col gap-2 w-full max-w-[300px]">
+              <div className="flex flex-col gap-2">
                 {suggestions.map((suggestion) => (
                   <button
                     key={suggestion}
@@ -296,7 +300,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
                       setInput(suggestion)
                       inputRef.current?.focus()
                     }}
-                    className="w-full text-left text-xs px-4 py-2.5 rounded-2xl bg-card shadow-sm ring-1 ring-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                    className="press w-full rounded-md bg-surface-sunken px-3.5 py-3 text-left text-label text-secondary-foreground hover:bg-accent"
                   >
                     {suggestion}
                   </button>
@@ -308,46 +312,31 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              {msg.role === "assistant" && (
-                <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
-                  <Bot size={12} className="text-primary" />
-                </div>
-              )}
               <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                className={`max-w-[86%] whitespace-pre-wrap px-3.5 py-2.5 text-label leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-br-md"
-                    : "bg-card shadow-sm ring-1 ring-border text-card-foreground rounded-bl-md"
+                    ? "rounded-[0.875rem] rounded-br-sm bg-primary text-primary-foreground"
+                    : "surface rounded-bl-sm"
                 }`}
               >
                 {msg.content}
               </div>
-              {msg.role === "user" && (
-                <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
-                  <User size={12} className="text-muted-foreground" />
-                </div>
-              )}
             </div>
           ))}
 
-          {/* Thinking indicator */}
           {isLoading && (
-            <div className="flex gap-2 items-start">
-              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <Bot size={12} className="text-primary" />
-              </div>
-              <div className="bg-card shadow-sm ring-1 ring-border rounded-2xl rounded-bl-md px-3.5 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
+            <div className="flex justify-start" role="status" aria-live="polite">
+              <div className="surface flex items-center gap-2 rounded-bl-sm px-3.5 py-2.5 text-label text-muted-foreground">
+                <Loader2 size={14} className="animate-spin" aria-hidden />
                 {thinkingDetail ?? t("coach.thinking")}
               </div>
             </div>
           )}
         </div>
 
-        {/* Input */}
-        <div className="border-t border-border px-5 py-3">
+        <div className="border-t border-border px-4 py-3">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -355,302 +344,273 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t("coach.placeholder")}
+              aria-label={t("coach.placeholder")}
               rows={1}
-              className="flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-24"
               disabled={isLoading}
+              className="max-h-28 flex-1 resize-none rounded-md bg-surface-sunken px-3.5 py-2.5 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
             />
-            <button
+            <Button
+              size="icon"
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 active:opacity-80 transition-opacity"
+              aria-label={t("coach.send")}
             >
-              <Send size={16} />
-            </button>
+              <Send size={17} />
+            </Button>
           </div>
         </div>
       </div>
     )
   }
 
+  // ── Overview ─────────────────────────────────────────────────────────────
+  const hasAnyInsight = personalRecords.length > 0 || racePredictions.predictions.length > 0
+
   return (
-    <div className="flex flex-col gap-5 px-5 pb-6 pt-4">
-      {/* Header */}
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">{t("insights.title")}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">{t("insights.subtitle")}</p>
-      </header>
-
-      {/* Training Stats */}
-      {activities.length > 0 && (
-        <AppCard>
-          {/* Period switcher — compact, right-aligned */}
-          <div className="mb-3 flex justify-center gap-0.5">
-            {STATS_PERIODS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setStatsPeriod(key)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
-                  statsPeriod === key
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Stats — 3 subtle cards with accent icons */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
-              <TrendingUp size={14} className="text-primary" />
-              <span className="text-xl font-bold font-mono text-foreground leading-none">
-                {totalKm.toFixed(0)}
-              </span>
-              <span className="text-[10px] text-muted-foreground">km</span>
-            </div>
-            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
-              <Footprints size={14} className="text-primary" />
-              <span className="text-xl font-bold font-mono text-foreground leading-none">
-                {longestRunKm.toFixed(1)}
-              </span>
-              <span className="text-[10px] text-muted-foreground">{t("stats.longest")}</span>
-            </div>
-            <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 px-2 py-3">
-              <Clock size={14} className="text-primary" />
-              <span className="text-xl font-bold font-mono text-foreground leading-none">
-                {recentRunCount}
-              </span>
-              <span className="text-[10px] text-muted-foreground">{t("stats.runs")}</span>
-            </div>
-          </div>
-        </AppCard>
-      )}
-
-      {/* AI Coach Card */}
+    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+      {/* The coach is the primary action on this screen, so it leads. */}
       <button
         onClick={() => setActiveTab("coach")}
-        className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 p-5 shadow-sm ring-1 ring-primary/20 text-left active:scale-[0.98] transition-transform"
+        className="press surface flex w-full items-center gap-3 p-4 text-left"
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-          <Sparkles size={24} className="text-primary" />
+        <Sparkles size={20} className="shrink-0 text-primary" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-body font-semibold text-card-foreground">{t("insights.askCoach")}</p>
+          <p className="mt-0.5 text-micro text-muted-foreground">{t("insights.coachDesc")}</p>
         </div>
-        <div className="flex-1">
-          <h2 className="text-base font-semibold text-foreground">{t("insights.askCoach")}</h2>
-          <p className="text-xs text-muted-foreground">{t("insights.coachDesc")}</p>
-        </div>
-        <ChevronRight size={18} className="text-muted-foreground" />
+        <ChevronRight size={17} className="shrink-0 text-muted-foreground" aria-hidden />
       </button>
 
-      {/* Personal Records */}
+      {activities.length > 0 && (
+        <Section>
+          <SectionHeader
+            title={t("stats.section")}
+            action={
+              <div className="flex gap-0.5" role="group" aria-label={t("stats.section")}>
+                {STATS_PERIODS.map(({ key, labelKey }) => (
+                  <button
+                    key={key}
+                    onClick={() => setStatsPeriod(key)}
+                    aria-pressed={statsPeriod === key}
+                    className={`press rounded-full px-2 py-1 text-micro font-semibold ${
+                      statsPeriod === key
+                        ? "bg-primary/12 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <AppCard>
+            <StatGroup>
+              <Stat label={t("stats.distance")} value={totalKm.toFixed(0)} unit="km" />
+              <Stat label={t("stats.longestLabel")} value={longestRunKm.toFixed(1)} unit="km" />
+              <Stat label={t("stats.runsLabel")} value={recentRunCount} />
+            </StatGroup>
+          </AppCard>
+        </Section>
+      )}
+
       {personalRecords.length > 0 && (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("insights.personalRecords")}
-          </h3>
-          <div className="flex flex-col gap-2">
+        <Section>
+          <SectionHeader title={t("insights.personalRecords")} />
+          <AppCard variant="rows">
             {personalRecords.map((pr) => (
-              <div
-                key={pr.distance_label}
-                className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/10">
-                  <Trophy size={16} className="text-success" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-card-foreground">{pr.distance_label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateShort(pr.date)} · {formatPace(pr.pace_min_per_km)} {t("insights.pace")}
+              <CardRow key={pr.distance_label} className="flex items-center gap-3">
+                <Trophy size={16} className="shrink-0 text-success" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-label font-semibold text-card-foreground">
+                    {pr.distance_label}
+                  </p>
+                  <p className="mt-0.5 text-micro text-muted-foreground">
+                    {formatDateShort(pr.date)} ·{" "}
+                    <span className="measure">{formatPace(pr.pace_min_per_km)}</span>{" "}
+                    {t("insights.pace")}
                   </p>
                 </div>
-                <span className="text-base font-bold font-mono text-foreground">
+                <span className="measure shrink-0 text-lead font-semibold text-foreground">
                   {formatTargetTime(pr.time_seconds)}
                 </span>
-              </div>
+              </CardRow>
             ))}
-          </div>
-        </section>
+          </AppCard>
+        </Section>
       )}
 
-      {/* Race Time Predictions */}
       {racePredictions.predictions.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-center gap-1.5">
-            <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t("insights.racePredictions")}
-            </h3>
-            <InfoTooltip content="Estimated finish times for common race distances, based on your recent best run." />
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-2 gap-2">
-              {racePredictions.predictions.map((pred) => (
-                <div
-                  key={pred.distance_label}
-                  className="rounded-2xl bg-card px-4 py-3.5 shadow-sm ring-1 ring-border"
-                >
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Timer size={13} className="text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{pred.distance_label}</span>
-                  </div>
-                  <p className="text-base font-bold font-mono text-foreground leading-none mb-0.5">
-                    {formatTargetTime(pred.predicted_seconds)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground font-mono">
-                    {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}/km
-                  </p>
-                </div>
-              ))}
-            </div>
-            {racePredictions.referenceActivity && (
-              <p className="text-[10px] text-muted-foreground px-1">
-                {t("insights.basedOn")} {formatDistance(racePredictions.referenceActivity.distance_km)} {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
-              </p>
-            )}
-          </div>
-        </section>
+        <Section>
+          <SectionHeader
+            title={t("insights.racePredictions")}
+            action={<InfoTooltip content={t("insights.predictionsHelp")} />}
+          />
+          <AppCard variant="rows">
+            {racePredictions.predictions.map((pred) => (
+              <CardRow key={pred.distance_label} className="flex items-baseline gap-3">
+                <span className="min-w-0 flex-1 truncate text-label font-medium text-card-foreground">
+                  {pred.distance_label}
+                </span>
+                <span className="measure text-micro text-muted-foreground">
+                  {formatPace(pred.predicted_seconds / 60 / pred.distance_km)}
+                </span>
+                <span className="measure shrink-0 text-lead font-semibold text-foreground">
+                  {formatTargetTime(pred.predicted_seconds)}
+                </span>
+              </CardRow>
+            ))}
+          </AppCard>
+          {racePredictions.referenceActivity && (
+            <p className="text-micro text-muted-foreground">
+              {t("insights.basedOn")}{" "}
+              {formatDistance(racePredictions.referenceActivity.distance_km)}{" "}
+              {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
+            </p>
+          )}
+        </Section>
       )}
 
-      {/* Pace Calculator */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("paceCalc.section")}
-        </h3>
+      <Section>
+        <SectionHeader title={t("paceCalc.section")} />
         <PaceCalculatorCard goals={goals} />
-      </section>
+      </Section>
 
-      {/* Test Run Benchmarks */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("testRun.benchmarks")}
-        </h3>
+      <Section>
+        <SectionHeader title={t("testRun.benchmarks")} />
         {testRunsLoading ? (
-          <AppCard padding="lg" className="flex items-center justify-center">
-            <Loader2 size={18} className="animate-spin text-muted-foreground" />
-          </AppCard>
+          <div className="h-24 animate-pulse rounded-lg bg-surface-sunken" aria-hidden />
         ) : testRuns.length === 0 ? (
-          <AppCard padding="lg">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
-                <FlaskConical size={20} className="text-violet-500" />
-              </div>
-              <p className="text-xs text-muted-foreground flex-1">{t("testRun.noBenchmarks")}</p>
-            </div>
-          </AppCard>
+          <EmptyState
+            icon={<FlaskConical size={18} />}
+            title={t("testRun.noBenchmarksTitle")}
+            body={t("testRun.noBenchmarks")}
+          />
         ) : (
-          <div className="flex flex-col gap-2">
-            {/* Latest metrics summary */}
+          <div className="flex flex-col gap-3">
             {(() => {
               const latest = testRuns[0]
               const dm = latest.derived_metrics
               const prev = testRuns.length >= 2 ? testRuns[1] : null
-              const vo2delta = dm.estimated_vo2max != null && prev?.derived_metrics.estimated_vo2max != null
-                ? dm.estimated_vo2max - prev.derived_metrics.estimated_vo2max
-                : null
-              const trend = vo2delta != null
-                ? vo2delta > 0.5 ? "improving" : vo2delta < -0.5 ? "declining" : "stable"
-                : "stable"
+              const vo2delta =
+                dm.estimated_vo2max != null && prev?.derived_metrics.estimated_vo2max != null
+                  ? dm.estimated_vo2max - prev.derived_metrics.estimated_vo2max
+                  : null
+              const trend =
+                vo2delta != null
+                  ? vo2delta > 0.5
+                    ? "improving"
+                    : vo2delta < -0.5
+                      ? "declining"
+                      : "stable"
+                  : "stable"
               return (
-                <AppCard className="space-y-2">
+                <AppCard>
                   <div className="flex items-center gap-2">
-                    <FlaskConical size={14} className="text-violet-500" />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {TEST_RUN_TYPES.find(tt => tt.value === latest.test_type)?.label ?? latest.test_type}
+                    <span className="min-w-0 flex-1 truncate text-micro text-muted-foreground">
+                      {TEST_RUN_TYPES.find((tt) => tt.value === latest.test_type)?.label ??
+                        latest.test_type}
                       {" · "}
                       {formatDateShort(latest.created_at)}
                     </span>
                     {testRuns.length >= 2 && (
-                      <span className={`ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-                        trend === "improving" ? "bg-success/10 text-success" :
-                        trend === "declining" ? "bg-destructive/10 text-destructive" :
-                        "bg-muted text-muted-foreground"
-                      }`}>
-                        {t(trend === "improving" ? "testRun.improving" : trend === "declining" ? "testRun.declining" : "testRun.stable")}
-                      </span>
+                      <Pill
+                        tone={
+                          trend === "improving"
+                            ? "positive"
+                            : trend === "declining"
+                              ? "negative"
+                              : "neutral"
+                        }
+                      >
+                        {t(
+                          trend === "improving"
+                            ? "testRun.improving"
+                            : trend === "declining"
+                              ? "testRun.declining"
+                              : "testRun.stable",
+                        )}
+                      </Pill>
                     )}
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {dm.estimated_vo2max != null && (
-                      <div className="text-center">
-                        <p className="text-sm font-bold text-card-foreground tabular-nums">
-                          {dm.estimated_vo2max.toFixed(1)}
-                          {vo2delta != null && (
-                            <span className={`ml-1 text-[10px] font-medium ${vo2delta > 0 ? "text-success" : vo2delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                              {vo2delta > 0 ? "+" : ""}{vo2delta.toFixed(1)}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.vo2max")}</p>
-                      </div>
-                    )}
-                    {dm.threshold_pace != null && (
-                      <div className="text-center">
-                        <p className="whitespace-nowrap text-sm font-bold text-card-foreground tabular-nums">{formatPace(dm.threshold_pace)}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdPace")}</p>
-                      </div>
-                    )}
-                    {dm.threshold_hr != null && (
-                      <div className="text-center">
-                        <p className="text-sm font-bold text-card-foreground tabular-nums">{dm.threshold_hr}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{t("testRun.thresholdHr")}</p>
-                      </div>
-                    )}
+                  <div className="mt-3.5">
+                    <StatGroup>
+                      {dm.estimated_vo2max != null ? (
+                        <Stat
+                          label={t("testRun.vo2max")}
+                          value={dm.estimated_vo2max.toFixed(1)}
+                          unit={
+                            vo2delta != null
+                              ? `${vo2delta > 0 ? "+" : ""}${vo2delta.toFixed(1)}`
+                              : undefined
+                          }
+                          tone={
+                            vo2delta == null
+                              ? "default"
+                              : vo2delta > 0
+                                ? "positive"
+                                : vo2delta < 0
+                                  ? "negative"
+                                  : "default"
+                          }
+                        />
+                      ) : null}
+                      {dm.threshold_pace != null ? (
+                        <Stat
+                          label={t("testRun.thresholdPace")}
+                          value={formatPace(dm.threshold_pace)}
+                        />
+                      ) : null}
+                      {dm.threshold_hr != null ? (
+                        <Stat label={t("testRun.thresholdHr")} value={dm.threshold_hr} unit="bpm" />
+                      ) : null}
+                    </StatGroup>
                   </div>
                 </AppCard>
               )
             })()}
-            {/* Historical list */}
+
             {testRuns.length > 1 && (
-              <AppCard variant="flush">
-                {testRuns.slice(1, 6).map((tr, i) => (
-                  <div
-                    key={tr.id}
-                    className={`flex items-center justify-between px-4 py-2.5 ${
-                      i < Math.min(testRuns.length - 2, 4) ? "border-b border-border" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FlaskConical size={12} className="text-violet-400" />
-                      <span className="text-xs text-card-foreground">
-                        {TEST_RUN_TYPES.find(tt => tt.value === tr.test_type)?.label ?? tr.test_type}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{formatDateShort(tr.created_at)}</span>
-                    </div>
+              <AppCard variant="rows">
+                {testRuns.slice(1, 6).map((tr) => (
+                  <CardRow key={tr.id} className="flex items-center gap-3 py-2.5">
+                    <FlaskConical size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-label text-card-foreground">
+                      {TEST_RUN_TYPES.find((tt) => tt.value === tr.test_type)?.label ??
+                        tr.test_type}
+                    </span>
+                    <span className="shrink-0 text-micro text-muted-foreground">
+                      {formatDateShort(tr.created_at)}
+                    </span>
                     {tr.derived_metrics.estimated_vo2max != null && (
-                      <span className="text-xs font-semibold font-mono text-foreground">
+                      <span className="measure shrink-0 text-label font-semibold text-foreground">
                         {tr.derived_metrics.estimated_vo2max.toFixed(1)}
                       </span>
                     )}
-                  </div>
+                  </CardRow>
                 ))}
               </AppCard>
             )}
           </div>
         )}
-      </section>
+      </Section>
 
-      {/* Training Calendar */}
-      <section>
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t("calendar.section")}
-        </h3>
+      <Section>
+        <SectionHeader title={t("calendar.section")} />
         <TrainingCalendarCard
           activities={runActivities}
           goals={goals}
           testRuns={testRuns}
           onViewGoal={onViewGoal}
         />
-      </section>
+      </Section>
 
-      {/* Empty state if no data */}
-      {personalRecords.length === 0 && racePredictions.predictions.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary">
-            <Trophy size={24} className="text-muted-foreground" />
-          </div>
-          <p className="text-sm text-muted-foreground max-w-[260px]">
-            {t("insights.emptyState")}
-          </p>
-        </div>
+      {!hasAnyInsight && (
+        <EmptyState
+          icon={<LineChart size={18} />}
+          title={t("insights.emptyTitle")}
+          body={t("insights.emptyState")}
+        />
       )}
     </div>
   )

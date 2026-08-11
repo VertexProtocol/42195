@@ -1,63 +1,107 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
+
+/**
+ * ProgressRing — the app's one authored motion moment.
+ *
+ * On first paint the arc draws from zero to its value, the way a lap fills in.
+ * It happens once per mount, on the small number of rings that carry the
+ * screen's headline state, and it is skipped entirely under reduced motion —
+ * where the ring simply arrives at its value.
+ *
+ * The centre is a slot rather than a fixed label, so callers compose what sits
+ * inside it without a second absolutely-positioned layer of their own.
+ */
+
 interface ProgressRingProps {
   percentage: number
   size?: number
   strokeWidth?: number
-  label?: string
-  sublabel?: string
+  /** Semantic colour of the arc. */
+  tone?: "action" | "done" | "caution" | "quiet"
+  /** What this ring measures — used as its accessible name. */
+  label: string
+  children?: React.ReactNode
+}
+
+const toneVar: Record<NonNullable<ProgressRingProps["tone"]>, string> = {
+  action: "var(--primary)",
+  done: "var(--success)",
+  caution: "var(--warning)",
+  quiet: "var(--muted-foreground)",
 }
 
 export function ProgressRing({
   percentage,
-  size = 120,
-  strokeWidth = 8,
+  size = 64,
+  strokeWidth = 5,
+  tone = "action",
   label,
-  sublabel,
+  children,
 }: ProgressRingProps) {
+  const target = Math.max(0, Math.min(100, percentage))
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
-  const offset = circumference - (percentage / 100) * circumference
+
+  const [drawn, setDrawn] = useState(0)
+  const hasDrawn = useRef(false)
+
+  useEffect(() => {
+    if (hasDrawn.current) {
+      setDrawn(target)
+      return
+    }
+    hasDrawn.current = true
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduced) {
+      setDrawn(target)
+      return
+    }
+    const id = requestAnimationFrame(() => setDrawn(target))
+    return () => cancelAnimationFrame(id)
+  }, [target])
+
+  const offset = circumference - (drawn / 100) * circumference
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <svg
-        width={size}
-        height={size}
-        className="-rotate-90"
-        aria-label={`Progress: ${percentage}%`}
-        role="img"
-      >
+    <div
+      className="relative shrink-0"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label={`${label}: ${Math.round(target)}%`}
+    >
+      <svg width={size} height={size} className="-rotate-90" aria-hidden focusable="false">
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
+          stroke="var(--surface-sunken)"
           strokeWidth={strokeWidth}
-          className="text-secondary"
         />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
+          stroke={toneVar[tone]}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="text-primary transition-all duration-700 ease-out"
+          style={{
+            transition: "stroke-dashoffset 700ms var(--ease-out)",
+          }}
         />
       </svg>
-      <div className="absolute flex flex-col items-center justify-center" style={{ width: size, height: size }}>
-        {label && (
-          <span className="text-lg font-semibold text-foreground">{label}</span>
-        )}
-        {sublabel && (
-          <span className="text-xs text-muted-foreground">{sublabel}</span>
-        )}
-      </div>
+      {children && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

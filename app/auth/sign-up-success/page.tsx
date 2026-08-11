@@ -1,27 +1,27 @@
 import Link from "next/link"
+import { AuthShell } from "@/components/auth-shell"
+import { Button } from "@/components/ui/button"
 
 export default function SignUpSuccessPage() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6 text-center">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
-          <p className="text-sm text-muted-foreground">
-            We sent a confirmation link to your email address. Click the link to activate your
-            account and get started.
-          </p>
-        </div>
-
-        <p className="text-center text-sm text-muted-foreground">
+    <AuthShell
+      title="Check your email"
+      lede="We sent a confirmation link to your address. Open it to activate your account, then sign in."
+      footer={
+        <>
           Already confirmed?{" "}
           <Link
             href="/auth/login"
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             Sign in
           </Link>
-        </p>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <Button asChild block variant="secondary">
+        <Link href="/auth/login">Back to sign in</Link>
+      </Button>
+    </AuthShell>
   )
 }
