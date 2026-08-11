@@ -723,6 +723,13 @@ export async function POST(req: NextRequest) {
         while (iterations < maxIterations) {
           iterations++
 
+          // This breakpoint works, but with less headroom than it looks: the
+          // cacheable prefix renders as tools -> system, so the 8 tool schemas
+          // count toward it. Measured at 4594 tokens against Haiku 4.5's 4096
+          // minimum — the system prompt alone is ~3100 and would not cache.
+          // Trimming either the tool descriptions or this prompt by ~10% drops
+          // the whole prefix under the minimum, silently.
+          // See scripts/smoke/smoke.mjs tokens.
           const systemBlocks: Anthropic.TextBlockParam[] = [
             {
               type: "text" as const,

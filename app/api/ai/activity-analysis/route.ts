@@ -123,11 +123,14 @@ Recent context (last 2 weeks): ${recentActivities?.length ?? 0} runs${recentAvgP
       // insight whether generated now or on a re-render.
       temperature: 0,
       max_tokens: 300,
+      // No cache_control: measured at 117 tokens, against Haiku 4.5's
+      // 4096-token minimum cacheable prefix. Below the minimum the API caches
+      // nothing and says nothing.
+      // See scripts/smoke/smoke.mjs tokens.
       system: [
         {
           type: "text" as const,
           text: ANALYSIS_SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" as const },
         },
       ],
       messages: [{ role: "user", content: prompt }],

@@ -3,9 +3,15 @@
  *
  * Nothing recorded token usage before this. That left two questions
  * unanswerable: what an AI feature costs, and whether the `cache_control`
- * breakpoints on the system prompts do anything at all. Four routes set one
- * without anyone having checked — and a prompt below the minimum cacheable
- * size silently caches nothing, with no error and no warning.
+ * breakpoints on the system prompts do anything at all — a prompt below the
+ * minimum cacheable size silently caches nothing, with no error and no warning.
+ *
+ * Both questions have since been answered by measurement: all six routes were
+ * counted with `messages.count_tokens` and exercised against the real API, and
+ * the three whose prefixes could never reach their model's minimum
+ * (plan-check, weekly-review, activity-analysis) had their breakpoints removed.
+ * The three that remain — training-plan, race-strategy, coach — were each
+ * observed reading from cache. `scripts/smoke/smoke.mjs` re-runs that check.
  *
  * A cache breakpoint that is working shows `cacheRead` climbing on repeat calls
  * within the TTL. `cacheRead` stuck at 0 across repeated requests means the

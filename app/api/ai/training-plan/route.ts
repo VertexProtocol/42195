@@ -836,6 +836,10 @@ export async function POST(req: NextRequest) {
               schema: PLAN_DRAFT_JSON_SCHEMA,
             },
           },
+          // Measured at 1528 tokens (system prompt plus the output schema, which
+          // shares the cacheable prefix) against Opus 5's 512-token minimum, and
+          // confirmed against the API: repeat generations report a 1530-token
+          // cache read. See scripts/smoke/smoke.mjs tokens.
           system: [
             {
               type: "text" as const,
