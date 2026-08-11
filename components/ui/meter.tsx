@@ -82,6 +82,23 @@ export function Meter({
           transition: 'transform var(--dur-view) var(--ease-out)',
         }}
       />
+      {/* Edges drawn ON TOP of the fill. The shaded band alone disappears
+          underneath it exactly when it matters most: a value past the band
+          covers the whole thing, leaving no way to see what it was past. */}
+      {zone && (
+        <>
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-px bg-foreground/30"
+            style={{ left: `${zoneFrom}%` }}
+          />
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-px bg-foreground/30"
+            style={{ left: `${zoneFrom + zoneWidth}%` }}
+          />
+        </>
+      )}
     </div>
   )
 }

@@ -356,16 +356,20 @@ export function TrainingLoadIndicator({
           zone={{ from: BAND_FROM_PCT, to: BAND_TO_PCT }}
         />
         {/* Absolute rather than space-between: the middle label names the band
-            drawn on the track above it, so it has to sit over the band. */}
-        <div className="relative mt-1.5 h-4 text-micro text-muted-foreground" aria-hidden>
-          <span className="absolute left-0">{t("loadIndicator.scaleLow")}</span>
+            drawn on the track above it, so it has to sit over the band. The
+            first span is an in-flow spacer that gives the row the height of one
+            line of its own type — absolute children contribute nothing, and a
+            fixed height here would be a second copy of the line-height token. */}
+        <div className="relative mt-1.5 text-micro text-muted-foreground" aria-hidden>
+          <span className="invisible">&nbsp;</span>
+          <span className="absolute left-0 top-0">{t("loadIndicator.scaleLow")}</span>
           <span
-            className="absolute -translate-x-1/2 whitespace-nowrap"
+            className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
             style={{ left: `${BAND_CENTER_PCT}%` }}
           >
             {t("loadIndicator.scaleOptimal")}
           </span>
-          <span className="absolute right-0">{t("loadIndicator.scaleHigh")}</span>
+          <span className="absolute right-0 top-0">{t("loadIndicator.scaleHigh")}</span>
         </div>
         {adviceKey && (
           <p className="mt-2 text-micro leading-relaxed text-muted-foreground">{t(adviceKey)}</p>
