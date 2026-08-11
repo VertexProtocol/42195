@@ -26,8 +26,15 @@ import {
   isRunActivity,
 } from "@/lib/format"
 import { LOAD_INDICATOR_MIN_RUNS } from "@/lib/training-constants"
-import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
+import type {
+  Goal,
+  WeeklySummary,
+  Activity,
+  SyncStatus,
+  WeeklyGoal,
+  WeeklyGoalMetric,
+} from "@/lib/types"
+import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
@@ -50,6 +57,57 @@ import type { PlanBadge } from "@/lib/plan-badges"
  * week so far, then what was run last. Everything below the first screenful is
  * reference; everything above it is decision.
  */
+
+/** Weekly-goal metrics that the "This week" stat row already reports. */
+const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "sessions"]
+
+const WEEKLY_LABELS: Record<WeeklyGoalMetric, TranslationKey> = {
+  distance_km: "goals.weeklyDistance",
+  sessions: "goals.trainingSessions",
+  duration_minutes: "goals.activeMinutes",
+  elevation_m: "goals.elevationGain",
+}
+
+/**
+ * A weekly target, set under the number that is already tracking it.
+ *
+ * Deliberately quiet: a weekly goal is something the runner set once and lets
+ * tick along, so it earns a hairline and a target — not a headline. The value
+ * it is measured against is the stat above, which is why nothing here repeats
+ * the current figure.
+ */
+function WeeklyTarget({
+  goal,
+  current,
+  t,
+}: {
+  goal: WeeklyGoal | undefined
+  current: number
+  t: (key: TranslationKey, params?: TranslationParams) => string
+}) {
+  if (!goal) return null
+  const isComplete = current >= goal.target
+  const label = t(WEEKLY_LABELS[goal.metric])
+  const target = formatWeeklyMetric(goal.target, goal.metric)
+  return (
+    <>
+      <Meter
+        size="sm"
+        value={progressPercentage(current, goal.target)}
+        tone={isComplete ? "done" : "action"}
+        label={label}
+        valueText={`${formatWeeklyMetric(current, goal.metric)} / ${target}`}
+      />
+      <p
+        className={`measure mt-1 truncate text-micro ${
+          isComplete ? "text-success" : "text-muted-foreground"
+        }`}
+      >
+        {t("home.ofTarget", { target })}
+      </p>
+    </>
+  )
+}
 
 interface HomeScreenProps {
   /**
@@ -172,12 +230,33 @@ export function HomeScreen({
     setRailIndex(nearest)
   }, [])
 
-  const WEEKLY_LABELS: Record<string, TranslationKey> = {
-    distance_km: "goals.weeklyDistance",
-    sessions: "goals.trainingSessions",
-    duration_minutes: "goals.activeMinutes",
-    elevation_m: "goals.elevationGain",
-  }
+  // Each measurement appears once. The card used to print Distance, Duration
+  // and Runs as stats and then the same three again as weekly targets, so
+  // every number on it was stated twice — once bare, once with a target.
+  //
+  // A target now annotates the stat it belongs to, unless it measures
+  // something narrower: a sessions goal with a minimum length counts only
+  // qualifying sessions, and elevation has no stat at all.
+  const { statGoals, standaloneGoals } = useMemo(() => {
+    const byMetric: Partial<Record<WeeklyGoalMetric, WeeklyGoal>> = {}
+    const standalone: WeeklyGoal[] = []
+    for (const wg of currentWeekGoals) {
+      const isQualified =
+        wg.metric === "sessions" &&
+        Boolean(wg.session_min_duration_minutes || wg.session_min_distance_km)
+      const fitsAStat = STAT_METRICS.includes(wg.metric) && !isQualified
+      // Only the first goal per metric can annotate its stat; a second one for
+      // the same measurement still deserves to be visible.
+      if (fitsAStat && !byMetric[wg.metric]) byMetric[wg.metric] = wg
+      else standalone.push(wg)
+    }
+    return { statGoals: byMetric, standaloneGoals: standalone.slice(0, 3) }
+  }, [currentWeekGoals])
+
+  // Read from the same summary the stat above shows, so an annotation can
+  // never disagree with the number it sits under.
+  const weeklyDistanceKm = weeklySummary.total_distance_km
+  const weeklyMinutes = weeklySummary.total_time_seconds / 60
 
   return (
     <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
@@ -350,24 +429,42 @@ export function HomeScreen({
 
       {/* ── The week so far ───────────────────────────────────────────── */}
       <Section>
-        <SectionHeader title={t("home.thisWeek")} />
+        <SectionHeader
+          title={t("home.thisWeek")}
+          action={
+            currentWeekGoals.length > 0 ? (
+              <SectionAction onClick={onViewGoals}>{t("home.weeklyTargets")}</SectionAction>
+            ) : undefined
+          }
+        />
         <AppCard>
           <StatGroup>
             <Stat
               label={t("stats.distance")}
               value={weeklySummary.total_distance_km.toFixed(1)}
               unit="km"
-            />
+            >
+              <WeeklyTarget goal={statGoals.distance_km} current={weeklyDistanceKm} t={t} />
+            </Stat>
             <Stat
               label={t("activityDetail.duration")}
               value={formatDuration(weeklySummary.total_time_seconds)}
-            />
-            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count} />
+            >
+              <WeeklyTarget goal={statGoals.duration_minutes} current={weeklyMinutes} t={t} />
+            </Stat>
+            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count}>
+              <WeeklyTarget goal={statGoals.sessions} current={weeklySummary.run_count} t={t} />
+            </Stat>
           </StatGroup>
 
-          {currentWeekGoals.length > 0 && (
+          {/* Targets that measure something the row above does not: elevation,
+              which has no stat, and session goals with a minimum length, whose
+              qualifying count is narrower than the plain run count. Merging
+              either into a column would put two different numbers on one
+              measurement. */}
+          {standaloneGoals.length > 0 && (
             <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
-              {currentWeekGoals.slice(0, 3).map((wg) => {
+              {standaloneGoals.map((wg) => {
                 const current = computeWeeklyProgress(
                   activities,
                   wg.metric,
@@ -377,7 +474,7 @@ export function HomeScreen({
                 )
                 const progress = progressPercentage(current, wg.target)
                 const isComplete = current >= wg.target
-                const label = t(WEEKLY_LABELS[wg.metric]) || wg.label
+                const label = wg.label || t(WEEKLY_LABELS[wg.metric])
                 const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(
                   wg.target,
                   wg.metric,

@@ -15,6 +15,14 @@ interface StatProps extends React.ComponentProps<'div'> {
   /** Unit or qualifier, set small and quiet beside the value. */
   unit?: string
   tone?: 'default' | 'positive' | 'caution' | 'negative'
+  /**
+   * Optional context under the label — a target, a bar, a delta.
+   *
+   * A slot rather than a `target` prop, so a Stat never has to know what kind
+   * of context it is carrying. Whatever goes here is secondary by construction:
+   * the value above it is still the only thing at display weight.
+   */
+  children?: React.ReactNode
 }
 
 const toneMap = {
@@ -30,6 +38,7 @@ export function Stat({
   unit,
   tone = 'default',
   className,
+  children,
   ...props
 }: StatProps) {
   return (
@@ -43,6 +52,7 @@ export function Stat({
         )}
       </p>
       <p className="mt-1.5 truncate text-micro text-muted-foreground">{label}</p>
+      {children && <div className="mt-2">{children}</div>}
     </div>
   )
 }

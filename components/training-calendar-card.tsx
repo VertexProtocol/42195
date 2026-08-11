@@ -12,12 +12,15 @@ interface TrainingCalendarCardProps {
   goals: Goal[]
   testRuns?: TestRun[]
   onViewGoal?: (goal: Goal) => void
+  onSelectActivity?: (activity: Activity) => void
 }
 
 interface DayStats {
   km: number
   count: number
   seconds: number
+  /** The runs behind the totals, so a tapped day can open one of them. */
+  activities: Activity[]
 }
 
 interface DayCell {
@@ -56,7 +59,13 @@ const intensityClass = (km: number, maxKm: number): string => {
   return "bg-primary/15"
 }
 
-export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewGoal }: TrainingCalendarCardProps) {
+export function TrainingCalendarCard({
+  activities,
+  goals,
+  testRuns = [],
+  onViewGoal,
+  onSelectActivity,
+}: TrainingCalendarCardProps) {
   const { t, locale } = useI18n()
   const today = useMemo(() => {
     const d = new Date()
@@ -67,16 +76,17 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
     year: today.getFullYear(),
     month: today.getMonth(),
   })
-  const [selectedGoalDay, setSelectedGoalDay] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   const byDay = useMemo(() => {
     const map = new Map<string, DayStats>()
     for (const a of activities) {
       const key = localDateKey(new Date(a.date))
-      const cur = map.get(key) ?? { km: 0, count: 0, seconds: 0 }
+      const cur = map.get(key) ?? { km: 0, count: 0, seconds: 0, activities: [] }
       cur.km += Number(a.distance_km)
       cur.count += 1
       cur.seconds += a.duration_seconds
+      cur.activities.push(a)
       map.set(key, cur)
     }
     return map
@@ -179,13 +189,18 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
 
   // Clear selection when navigating months
   useEffect(() => {
-    setSelectedGoalDay(null)
+    setSelectedDay(null)
   }, [year, month])
 
   const selectedGoals = useMemo(() => {
-    if (!selectedGoalDay) return []
-    return goalsByDay.get(selectedGoalDay) ?? []
-  }, [selectedGoalDay, goalsByDay])
+    if (!selectedDay) return []
+    return goalsByDay.get(selectedDay) ?? []
+  }, [selectedDay, goalsByDay])
+
+  const selectedActivities = useMemo(() => {
+    if (!selectedDay) return []
+    return byDay.get(selectedDay)?.activities ?? []
+  }, [selectedDay, byDay])
 
   const goalDateFmt = useMemo(
     () =>
@@ -264,7 +279,7 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
           const flagClass = hasGoal
             ? "fill-warning text-warning dark:fill-teal-400 dark:text-teal-400"
             : "fill-chart-5 text-chart-5"
-          const isSelected = hasGoal && selectedGoalDay === d.key
+          const isSelected = selectedDay === d.key
           const cellContent = (
             <>
               <span
@@ -299,13 +314,23 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
           } ${!d.inMonth ? "opacity-40" : ""} ${
             todayCell ? "ring-2 ring-primary" : ""
           } ${isSelected ? "ring-2 ring-warning dark:ring-teal-400" : ""}`
-          if (hasGoal) {
+          // A day with anything on it opens. One run and nothing else goes
+          // straight there, since that is the only thing the tap could have
+          // meant; a day carrying several runs, or a run and a race date,
+          // expands below instead of picking one of them on the runner's
+          // behalf.
+          const dayActivities = d.stats?.activities ?? []
+          const opensDirectly = !hasGoal && dayActivities.length === 1 && Boolean(onSelectActivity)
+          if (hasGoal || dayActivities.length > 0) {
             return (
               <button
                 key={d.key}
                 type="button"
+                aria-expanded={opensDirectly ? undefined : isSelected}
                 onClick={() =>
-                  setSelectedGoalDay((prev) => (prev === d.key ? null : d.key))
+                  opensDirectly
+                    ? onSelectActivity!(dayActivities[0])
+                    : setSelectedDay((prev) => (prev === d.key ? null : d.key))
                 }
                 className={`${cellClass} active:scale-95 transition-transform`}
               >
@@ -322,8 +347,8 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
       </div>
 
 
-      {/* Selected goal info */}
-      {selectedGoals.length > 0 && (
+      {/* What is on the selected day: its race dates, then its runs. */}
+      {(selectedGoals.length > 0 || selectedActivities.length > 0) && (
         <div className="space-y-1 border-t border-border pt-2.5">
           {selectedGoals.map((g) => {
             const row = (
@@ -364,6 +389,22 @@ export function TrainingCalendarCard({ activities, goals, testRuns = [], onViewG
               </div>
             )
           })}
+
+          {onSelectActivity &&
+            selectedActivities.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onSelectActivity?.(a)}
+                className="flex w-full items-center gap-2 text-micro rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-muted/50 active:scale-[0.99] transition-all"
+              >
+                <span className="measure shrink-0 font-semibold text-foreground">
+                  {Number(a.distance_km).toFixed(1)} km
+                </span>
+                <span className="flex-1 truncate text-left text-card-foreground">{a.name}</span>
+                <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+              </button>
+            ))}
         </div>
       )}
 
