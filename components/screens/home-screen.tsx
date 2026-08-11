@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, lazy, Suspense, useEffect, useState } from "react"
+import { useMemo, lazy, Suspense, useEffect, useState, useRef, useCallback } from "react"
 import { ChevronRight, Star } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
@@ -170,6 +170,30 @@ export function HomeScreen({
     [starredGoals, activities],
   )
 
+  // Pinned goals ride a snap rail once there is more than one of them: stacked
+  // full-height cards pushed training load and the week below the fold, and the
+  // runner pins a second goal to compare it with the first, not to scroll past
+  // it. One goal keeps the plain card — a carousel of one is a lie.
+  const isGoalRail = starredGoals.length > 1
+  const railRef = useRef<HTMLDivElement>(null)
+  const [railIndex, setRailIndex] = useState(0)
+
+  const handleRailScroll = useCallback(() => {
+    const rail = railRef.current
+    if (!rail) return
+    const left = rail.getBoundingClientRect().left
+    let nearest = 0
+    let best = Infinity
+    Array.from(rail.children).forEach((child, i) => {
+      const distance = Math.abs(child.getBoundingClientRect().left - left)
+      if (distance < best) {
+        best = distance
+        nearest = i
+      }
+    })
+    setRailIndex(nearest)
+  }, [])
+
   const WEEKLY_LABELS: Record<string, TranslationKey> = {
     distance_km: "goals.weeklyDistance",
     sessions: "goals.trainingSessions",
@@ -192,15 +216,28 @@ export function HomeScreen({
               ) : undefined
             }
           />
-          <div className="flex flex-col gap-3">
+          <div
+            ref={railRef}
+            onScroll={isGoalRail ? handleRailScroll : undefined}
+            role={isGoalRail ? "group" : undefined}
+            aria-label={isGoalRail ? t("home.activeGoals") : undefined}
+            className={
+              isGoalRail
+                ? "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1"
+                : "flex flex-col gap-3"
+            }
+          >
             {starredGoals.map((goal, i) => {
               const m = goalMetrics[i]
               const badge = planBadges[goal.id]
               return (
-                <button
+                <div
                   key={goal.id}
+                  className={isGoalRail ? "w-[86%] shrink-0 snap-start" : undefined}
+                >
+                <button
                   onClick={() => onViewGoal(goal)}
-                  className="press surface w-full p-4 text-left"
+                  className="press surface h-full w-full p-4 text-left"
                 >
                   <div className="flex items-start gap-4">
                     <div className="min-w-0 flex-1">
@@ -268,9 +305,27 @@ export function HomeScreen({
                     </div>
                   </div>
                 </button>
+                </div>
               )
             })}
           </div>
+
+          {isGoalRail && (
+            // Position, not navigation: the cards peek past the edge, and the
+            // count is already in the section header. Tapping a dot would be a
+            // second way to do what the swipe already does.
+            <div className="flex justify-center gap-1.5 pt-1" aria-hidden>
+              {starredGoals.map((goal, i) => (
+                <span
+                  key={goal.id}
+                  className={`size-1.5 rounded-full ${
+                    i === railIndex ? "bg-primary" : "bg-border"
+                  }`}
+                  style={{ transition: "background-color var(--dur-state) var(--ease-out)" }}
+                />
+              ))}
+            </div>
+          )}
         </Section>
       ) : (
         <EmptyState

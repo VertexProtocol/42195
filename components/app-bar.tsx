@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react"
 import { ArrowLeft, CheckCircle2, TriangleAlert, User } from "lucide-react"
-import { TrackLoader } from "@/components/ui/track-loader"
+import { TrackLoader } from "@/components/ui/track-mark"
 import { useI18n } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 

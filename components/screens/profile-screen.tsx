@@ -24,7 +24,7 @@ import {
   User,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
-import { TrackLoader } from "@/components/ui/track-loader"
+import { TrackLoader } from "@/components/ui/track-mark"
 import { createClient } from "@/lib/supabase/client"
 import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"

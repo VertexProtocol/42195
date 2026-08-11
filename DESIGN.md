@@ -145,6 +145,7 @@ hand-rolls a button, an input or a card.
 | `ProgressRing` | the app's single authored motion moment |
 | `AppBar` / `TabBar` | the persistent chrome |
 | `AuthShell` / `AuthError` / `Field` | the signed-out frame |
+| `TrackMark` / `TrackLoader` | the app's mark, still and running |
 
 Every interactive component ships default, hover, focus-visible, active,
 disabled and (where it can wait) loading. Loading states are skeletons in the
@@ -163,6 +164,9 @@ shape of the content, not a spinner in the middle of empty space.
   whatever it sits in. It marks a wait *inside* something the runner pressed —
   a button, the sync indicator, the coach's reply. A screen that is still
   loading shows the shape of what is coming, never this.
+  The one exception is the hand-off after signing in, where there is no shape
+  to show yet because nothing has been fetched: there `TrackMark running`
+  carries the wait, the mark itself rather than a monochrome stand-in.
 - Nothing animates `width`, `height`, `padding` or `margin`.
 - `prefers-reduced-motion` collapses durations and removes the press travel
   while keeping colour and state transitions legible. The loader settles on its
