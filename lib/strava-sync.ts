@@ -5,6 +5,7 @@ import {
   StravaRateLimitError,
   StravaUnauthorizedError,
 } from "@/lib/strava"
+import { refreshSharedGoalPositions } from "@/lib/shared-goal-sync"
 
 // ---------------------------------------------------------------------------
 // Strava type definitions
@@ -293,6 +294,11 @@ export async function recalculateGoals(userId: string) {
     console.error("[recalcGoals] Weekly goal recalculation failed:", err)
     errors.push(`weekly goals: ${err instanceof Error ? err.message : String(err)}`)
   }
+
+  // Shared goals: the runner's own position in every group they belong to.
+  // It has to be written here, by the account that owns the activities, since
+  // no other member is allowed to read them. Swallows its own failures.
+  await refreshSharedGoalPositions(userId)
 
   if (errors.length > 0) {
     console.warn(`[recalcGoals] Completed with ${errors.length} error(s):`, errors)
