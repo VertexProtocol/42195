@@ -303,3 +303,30 @@ export const LONG_RUN_MIN_LEAD_KM = 2
  * is strictly the longest session (since the share exceeds 1/n).
  */
 export const LONG_RUN_FRACTION_MARGIN = 0.05
+
+// ── Fitness Analysis Window ──────────────────────────────────────────────────
+
+/**
+ * Weeks of history used to derive the runner's current form: the rolling weekly
+ * average that seeds a plan, and the trend line reported to the coach.
+ *
+ * Fixed rather than taken from `regenerate_every_weeks`. That preference is
+ * presented as "how often you want a new plan — you'll see a reminder", but it
+ * also used to set this window, so choosing 8 weeks instead of 2 silently
+ * changed the training baseline, the trend and therefore the plan. Four weeks
+ * matches every other rolling window in the engine (ACWR_CHRONIC_WEEKS,
+ * COMEBACK_PREPAUSE_WINDOW_WEEKS, the frequency check).
+ */
+export const FITNESS_ANALYSIS_WEEKS = 4
+
+// ── Injury Notes ─────────────────────────────────────────────────────────────
+
+/**
+ * An unresolved injury note older than this is worth asking about. It keeps
+ * tightening the comeback cap and keeps reaching the coach as a current
+ * restriction, and people rarely go back to mark one resolved.
+ *
+ * The note is not expired automatically — whether an injury still matters is
+ * the runner's call, not the code's. This only decides when to ask.
+ */
+export const INJURY_NOTE_STALE_WEEKS = 8

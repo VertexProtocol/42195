@@ -11,6 +11,7 @@
  */
 
 import type { RacePrediction } from "@/lib/training-utils"
+import type { TrainingPlan } from "@/lib/types"
 
 export interface PaceGuide {
   easyPace: number | null      // min/km — conversational aerobic effort
@@ -172,4 +173,21 @@ export function assignSessionPace(
   const adjusted = pace * paceModifier
   const spread = ZONE_SPREAD_SECS[zone] / 60 / 2
   return `${fmtPace(adjusted - spread)}–${fmtPace(adjusted + spread)} /km`
+}
+
+
+/**
+ * True when a stored plan has at least one session without a pace.
+ *
+ * Paces are assigned when a plan is generated and are part of it from then on,
+ * the same as weekly volume and session distances. Reading a plan should not
+ * recompute them — a runner who opened their plan on Monday should not find
+ * different targets on Wednesday without having regenerated anything.
+ *
+ * What this exists for is the plans written before paces were assigned at all.
+ * When it returns false the caller can skip building a pace guide entirely.
+ */
+export function planNeedsPaces(plan: Pick<TrainingPlan, "weeks"> | null | undefined): boolean {
+  if (!plan?.weeks) return false
+  return plan.weeks.some((week) => week.sessions.some((session) => !session.suggestedPace))
 }

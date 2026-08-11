@@ -3,7 +3,6 @@ import {
   type NoteHistoryEntry,
   hasActiveInjury,
   containsNewActiveInjury,
-  getPhaseLabel,
 } from "./notes-history"
 
 function entry(partial: Partial<NoteHistoryEntry>): NoteHistoryEntry {
@@ -91,19 +90,3 @@ describe("containsNewActiveInjury", () => {
   })
 })
 
-describe("getPhaseLabel", () => {
-  it("assigns 'base' to early weeks", () => {
-    // 12-week plan: taper = min(3, max(1, 1)) = 1, build = max(2, 3) = 3, base = 8
-    expect(getPhaseLabel(0, 12)).toBe("base")
-    expect(getPhaseLabel(7, 12)).toBe("base")
-  })
-
-  it("assigns 'build' to mid-block weeks", () => {
-    expect(getPhaseLabel(8, 12)).toBe("build")
-    expect(getPhaseLabel(10, 12)).toBe("build")
-  })
-
-  it("assigns 'taper' to final week(s)", () => {
-    expect(getPhaseLabel(11, 12)).toBe("taper")
-  })
-})

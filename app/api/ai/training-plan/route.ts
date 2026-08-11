@@ -24,15 +24,17 @@ import {
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { predictRaceTimes } from "@/lib/training-utils"
-import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
+import { buildPaceGuide, assignSessionPace, planNeedsPaces } from "@/lib/pace-guide"
 import {
   PACE_PROGRESSION_RATES,
   PACE_PROGRESSION_MAX_WEEKS,
   RUN_TYPES,
   PLAN_REGENERATE_COOLDOWN_MS,
   RECOVERY_WEEK_THRESHOLD,
+  FITNESS_ANALYSIS_WEEKS,
 } from "@/lib/training-constants"
-import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
+import { type NoteHistoryEntry, formatNotesHistoryForPrompt, hasActiveInjury } from "@/lib/notes-history"
+import { racePhase, daysUntil } from "@/lib/training-phase"
 import { assessComeback, type ComebackRecommendation } from "@/lib/training-comeback"
 
 /**
@@ -276,7 +278,7 @@ function buildPrompt(
     : ""
 
   const blockWeeks = weekTargets.length
-  const recentWindow = prefs.regenerate_every_weeks ?? 4
+  const recentWindow = FITNESS_ANALYSIS_WEEKS
 
   const weekTargetLines = weekTargets
     .map((km, i) => {
@@ -304,11 +306,7 @@ function buildPrompt(
     else trendLine = `stable — ${arrow} (${pct > 0 ? "+" : ""}${pct}%)`
   }
 
-  // Determine training phase based on time to race
-  const phase = daysUntilRace > 84 ? "base-building"
-    : daysUntilRace > 42 ? "build"
-    : daysUntilRace > 21 ? "peak"
-    : "taper"
+  const phase = racePhase(daysUntilRace)
 
   const taperNote = phase === "taper"
     ? "\n\nThe runner is in the taper. The volumes below already reflect that — keep the sessions short and sharp, and write the notes around rest and race-day readiness."
@@ -496,9 +494,9 @@ export async function POST(req: NextRequest) {
   // every 2 weeks the plan should react to the last 2 weeks; every 8 weeks means
   // a broader view. Empty weeks (no runs) are included by always dividing by the
   // full window size, not just the count of active weeks.
-  const recentWindow = prefs.regenerate_every_weeks ?? 4
   const recentAvgWeeklyKm =
-    weeklySummaries.slice(0, recentWindow).reduce((s, w) => s + w.totalKm, 0) / recentWindow
+    weeklySummaries.slice(0, FITNESS_ANALYSIS_WEEKS).reduce((s, w) => s + w.totalKm, 0) /
+    FITNESS_ANALYSIS_WEEKS
 
   // Also find the peak 4-week rolling average across the full 12-week history.
   // This prevents a recent taper or recovery plan from creating a feedback loop
@@ -515,9 +513,7 @@ export async function POST(req: NextRequest) {
   const longestRecentRun =
     weeklySummaries.reduce((max, w) => Math.max(max, w.longestKm), 0)
 
-  const daysUntilRace = Math.ceil(
-    (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
+  const daysUntilRace = daysUntil(goal.target_date)
 
   // Reject plans for past target dates. A target_date in the past collapses
   // maxWeeksUntilRace to 0 downstream, producing a degenerate empty plan and
@@ -955,6 +951,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // Paces are settled here along with everything else, so the confidence
+        // tier travels with the plan rather than being re-derived on every read.
+        safePlan.paceSource = paceGuide.source
+
         // Signals worth surfacing, none of which change the plan's volume — that
         // was already settled before the prompt.
         const safetyNotes = [
@@ -1234,11 +1234,20 @@ export async function GET(req: NextRequest) {
 
   if (!planRow) return NextResponse.json({ plan: null })
 
-  // One pace guide per request. It used to be built twice — once to enrich the
-  // sessions and once more, immediately after, purely to read its `source` tier.
+  // Paces belong to the plan, and the plan is settled when it is generated —
+  // same rule as weekly volume and session distances. Recomputing them on every
+  // read meant the plan a runner looked at on Monday could show different
+  // targets on Wednesday without them having regenerated anything.
+  //
+  // So this only fills in what is missing, which is plans generated before
+  // paces were assigned at all. When every session already has one, no pace
+  // guide is built and the whole block is skipped.
+  const storedPlan = planRow.plan as TrainingPlan | null
+  const needsPaces = planNeedsPaces(storedPlan)
+
   const runActs = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
   const paceGuide = (() => {
-    if (!goal?.target_distance_km) return null
+    if (!needsPaces || !goal?.target_distance_km) return null
     const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
     const recentEasyPace = actsWithPace.length > 0
       ? actsWithPace
@@ -1251,10 +1260,8 @@ export async function GET(req: NextRequest) {
     return buildPaceGuide(predictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
   })()
 
-  // Enrich cached plan sessions with suggestedPace if goal + activity data available
   let enrichedPlan = planRow.plan
-  if (enrichedPlan && paceGuide) {
-    // Re-evaluate fatigue and athlete level against current activity data
+  if (storedPlan && paceGuide) {
     const fatigue = detectFatigue(runActs as unknown as SafetyActivity[])
     const athleteLevel = classifyAthleteLevel(runActs as unknown as SafetyActivity[])
     const hardFatigueModifier =
@@ -1263,11 +1270,11 @@ export async function GET(req: NextRequest) {
       fatigue.signal === "pace_declining" ? 1.08 :
       1.0
 
-    const plan = enrichedPlan as TrainingPlan
     enrichedPlan = {
-      ...plan,
-      weeks: plan.weeks.map((week, weekIdx) => {
-        const prevWeek = plan.weeks[weekIdx - 1] ?? null
+      ...storedPlan,
+      paceSource: storedPlan.paceSource ?? paceGuide.source,
+      weeks: storedPlan.weeks.map((week, weekIdx) => {
+        const prevWeek = storedPlan.weeks[weekIdx - 1] ?? null
         const isRecovery =
           prevWeek != null && week.targetKm < prevWeek.targetKm * RECOVERY_WEEK_THRESHOLD
 
@@ -1278,6 +1285,9 @@ export async function GET(req: NextRequest) {
         return {
           ...week,
           sessions: week.sessions.map((session) => {
+            // A session that already has a pace keeps it.
+            if (session.suggestedPace) return session
+
             const zone = session.type.toLowerCase()
             const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
             const modifier = isRecovery
@@ -1313,177 +1323,6 @@ export async function GET(req: NextRequest) {
     previous_plans: planRow.previous_plans ?? [],
     mid_block_checkpoint: planRow.mid_block_checkpoint ?? null,
     checkpoint_due: checkpointDue,
-    pace_source: paceGuide?.source ?? "none",
-  })
-}
-
-const PreferencesSchema = z.object({
-  goalId: z.string().uuid(),
-  sessions_per_week: z.number().int().min(1).max(14),
-  focus: z.enum(["volume", "workouts", "balanced"]),
-  notes: z.string().max(500).nullable().optional(),
-  injury_notes: z.string().max(500).nullable().optional(),
-  // Capped at 10: MAX_WEEKLY_INCREASE allows 8-12% depending on athlete level,
-  // so a higher request was always clipped back — and the runner was told their
-  // week had been "reduced for safety" for using a control we offered them.
-  weekly_increase_pct: z.number().int().min(0).max(10).default(10),
-  block_weeks: z.number().int().min(1).max(20).default(4),
-  regenerate_every_weeks: z.number().int().min(1).max(12).default(4),
-})
-
-// PUT — save/update preferences for a goal
-export async function PUT(req: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  let rawBody: unknown
-  try {
-    rawBody = await req.json()
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
-  }
-
-  const parsed = PreferencesSchema.safeParse(rawBody)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 })
-  }
-
-  const { goalId, sessions_per_week, focus, notes, injury_notes, weekly_increase_pct, block_weeks, regenerate_every_weeks } = parsed.data
-
-  // Fetch current prefs + active plan to compare notes and capture block context
-  const [{ data: currentPrefs }, { data: activePlan }] = await Promise.all([
-    supabase
-      .from("goal_preferences")
-      .select("notes, injury_notes, notes_history")
-      .eq("goal_id", goalId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("ai_training_plans")
-      .select("plan, block_start_date, generated_at")
-      .eq("goal_id", goalId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ])
-
-  // Build block context snapshot for any notes that changed
-  const now = new Date().toISOString()
-  const existingHistory: NoteHistoryEntry[] = (currentPrefs as any)?.notes_history ?? []
-  const newEntries: NoteHistoryEntry[] = []
-
-  const plan = activePlan?.plan as { weeks?: Array<{ targetKm?: number }> } | null
-  const blockStartDate = activePlan?.block_start_date ?? null
-  let blockWeekIndex: number | null = null
-  let blockTotalWeeks: number | null = null
-  let weeklyKmTarget: number | null = null
-
-  if (plan?.weeks && blockStartDate) {
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000
-    blockWeekIndex = Math.floor((Date.now() - new Date(blockStartDate).getTime()) / msPerWeek)
-    blockTotalWeeks = plan.weeks.length
-    if (blockWeekIndex >= 0 && blockWeekIndex < blockTotalWeeks) {
-      weeklyKmTarget = plan.weeks[blockWeekIndex]?.targetKm ?? null
-    } else {
-      blockWeekIndex = null // outside the block
-    }
-  }
-
-  const blockContext = {
-    block_start_date: blockStartDate,
-    block_week: blockWeekIndex !== null ? blockWeekIndex + 1 : null,
-    block_total_weeks: blockTotalWeeks,
-    training_phase:
-      blockWeekIndex !== null && blockTotalWeeks !== null
-        ? getPhaseLabel(blockWeekIndex, blockTotalWeeks)
-        : null,
-    weekly_km_target: weeklyKmTarget,
-    sessions_per_week,
-  }
-
-  const prevNotes = currentPrefs?.notes ?? null
-  const prevInjuryNotes = (currentPrefs as any)?.injury_notes ?? null
-
-  // An injury was already active before this save. Used twice below: editing an
-  // existing note supersedes it rather than stacking a duplicate, and only a
-  // genuinely new injury is worth interrupting the user to regenerate for.
-  const hadActiveInjury = hasActiveInjury(existingHistory)
-
-  if ((notes || null) !== prevNotes && notes) {
-    newEntries.push({ content: notes, type: "coach", added_at: now, resolved_at: null, ...blockContext })
-  }
-
-  // Editing the injury text replaces the active entry instead of appending a
-  // second one. Without this, fixing a typo leaves two contradictory "active"
-  // injuries in the history, and both get sent to the coach as current.
-  let supersededHistory = existingHistory
-  if ((injury_notes || null) !== prevInjuryNotes && injury_notes) {
-    supersededHistory = existingHistory.map((e) =>
-      e.type === "injury" && !e.resolved_at ? { ...e, resolved_at: now } : e,
-    )
-    newEntries.push({ content: injury_notes, type: "injury", added_at: now, resolved_at: null, ...blockContext })
-  }
-
-  const updatedHistory = newEntries.length > 0 ? [...supersededHistory, ...newEntries] : existingHistory
-
-  const { error } = await supabase.from("goal_preferences").upsert(
-    {
-      goal_id: goalId,
-      user_id: user.id,
-      sessions_per_week,
-      focus,
-      notes: notes || null,
-      weekly_increase_pct: weekly_increase_pct ?? 10,
-      block_weeks: block_weeks ?? 4,
-      regenerate_every_weeks: regenerate_every_weeks ?? 4,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "goal_id" }
-  )
-
-  // injury_notes and notes_history live in columns added by later migrations — update separately
-  // so a missing column doesn't break the whole preferences save.
-  if (!error) {
-    await supabase
-      .from("goal_preferences")
-      .update({ injury_notes: injury_notes || null, notes_history: updatedHistory })
-      .eq("goal_id", goalId)
-      .eq("user_id", user.id)
-      .then(({ error: injErr }) => {
-        if (injErr) console.warn("Could not persist injury_notes/notes_history (migration may not be applied):", injErr.message)
-      })
-  }
-
-  if (error) {
-    console.error("Failed to save goal preferences:", error)
-    return NextResponse.json({ error: error.message ?? "Failed to save preferences" }, { status: 500 })
-  }
-
-  // Signal the client to regenerate the plan immediately when a new active
-  // injury was just logged. Resolving an existing injury or adding a coach
-  // note does NOT auto-regenerate — the user can trigger that manually.
-  //
-  // Two gates, both of which used to be missing:
-  //   - `!hadActiveInjury`: editing the wording of an injury the coach already
-  //     knows about is not new information. Regenerating on a typo fix is noise.
-  //   - cooldown: POST refuses to regenerate within PLAN_REGENERATE_COOLDOWN_MS,
-  //     so telling the client to regenerate inside that window only produces a
-  //     429 the user reads as "saving my injury failed".
-  const lastGeneratedAt = activePlan?.generated_at
-    ? new Date(activePlan.generated_at).getTime()
-    : null
-  const inCooldown =
-    lastGeneratedAt !== null && Date.now() - lastGeneratedAt < PLAN_REGENERATE_COOLDOWN_MS
-
-  const newActiveInjury =
-    containsNewActiveInjury(newEntries) && !hadActiveInjury && !inCooldown
-
-  return NextResponse.json({
-    ok: true,
-    shouldRegenerate: newActiveInjury,
-    regenerateReason: newActiveInjury ? "new_active_injury" : null,
+    pace_source: storedPlan?.paceSource ?? paceGuide?.source ?? "none",
   })
 }
