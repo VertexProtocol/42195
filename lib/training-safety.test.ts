@@ -9,7 +9,6 @@ import {
   checkFrequencyProgression,
   checkLongRunProtection,
   checkProlongedFatigue,
-  validateAndAdjustPlan,
 } from "./training-safety"
 import type { SafetyActivity } from "./training-safety"
 import type { TrainingPlan, TrainingWeek } from "./types"
@@ -479,66 +478,5 @@ describe("checkProlongedFatigue", () => {
     const result = checkProlongedFatigue(training)
     // With adequate rest, should not detect prolonged fatigue
     expect(result.detected).toBe(false)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// validateAndAdjustPlan — integration
-// ---------------------------------------------------------------------------
-
-describe("validateAndAdjustPlan", () => {
-  beforeEach(() => vi.setSystemTime(new Date("2026-03-11T10:00:00Z")))
-  afterEach(() => vi.useRealTimers())
-
-  it("passes a clean plan with no adjustments needed", () => {
-    const activities = chronicActivities(8, 4, 10) // steady 40 km/wk
-    const plan = makePlan([40, 42, 44, 40])
-    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
-    expect(result.passed).toBe(true)
-    expect(result.safetyNotes).toHaveLength(0)
-  })
-
-  it("reduces week 1 when ACWR is unsafe", () => {
-    // Large acute spike with minimal chronic base
-    const base = [makeActivity({ date: daysAgo(25), distance_km: 5 })]
-    const spike = acuteActivities(7, 10) // 70 km this week
-    const activities = [...spike, ...base]
-    const plan = makePlan([70, 72, 74, 70])
-    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
-    expect(result.acwrSafety.risk).toBe("unsafe")
-    expect(result.adjustedPlan.weeks[0].targetKm).toBeLessThan(plan.weeks[0].targetKm)
-    expect(result.passed).toBe(false)
-  })
-
-  it("clamps weekly progression violations", () => {
-    const activities = chronicActivities(8, 4, 10) // 40 km/wk steady
-    // Plan jumps too aggressively
-    const plan = makePlan([40, 60, 70, 75])
-    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
-    expect(result.weeklyLoadViolations.length).toBeGreaterThan(0)
-    expect(result.passed).toBe(false)
-    // Adjusted plan should not have same jumps
-    expect(result.adjustedPlan.weeks[1].targetKm).toBeLessThan(60)
-  })
-
-  it("pushes a moderate ACWR message to safetyNotes", () => {
-    // Slightly elevated ACWR (ratio > 1.0 but < 1.3)
-    const base = chronicActivities(6, 3, 8)    // ~24 km/wk chronic
-    const spike = acuteActivities(3, 9)         // 27 km this week → ratio slightly > 1
-    const activities = [...spike, ...base]
-    const plan = makePlan([30, 32, 34, 30])
-    const result = validateAndAdjustPlan(plan, activities, makePrefs(3))
-    if (result.acwrSafety.risk === "moderate") {
-      // The moderate ACWR message must appear in safetyNotes (not silent)
-      expect(result.safetyNotes.some((n) => n.includes("ACWR"))).toBe(true)
-    }
-  })
-
-  it("includes frequency warning in safetyNotes when jump is too aggressive", () => {
-    const activities = chronicActivities(4, 3, 10) // 3 sessions/wk
-    const plan = makePlan([40, 42, 44, 40])
-    const result = validateAndAdjustPlan(plan, activities, makePrefs(7)) // Massive jump from 3
-    expect(result.frequencyWarning).not.toBeNull()
-    expect(result.safetyNotes.some((n) => n.includes("Frequency"))).toBe(true)
   })
 })

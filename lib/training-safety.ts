@@ -44,31 +44,10 @@ import type { SafetyActivity, AthleteLevel } from "@/lib/training-safety-client"
 import { MAX_WEEKLY_INCREASE, classifyAthleteLevel } from "@/lib/training-safety-client"
 import { logWarn } from "@/lib/log"
 
-/**
- * Parses a session distance string into its low/high numeric km values.
- * For ranges like "8-10 km" returns { low: 8, high: 10 }.
- * For single values like "10 km" returns { low: 10, high: 10 }.
- * Returns null if the string cannot be parsed.
- */
-export function parseSessionDistanceParts(
-  distance: string,
-): { low: number; high: number } | null {
-  const rangeMatch = distance.match(/([\d.]+)\s*[-–]\s*([\d.]+)\s*km/i)
-  if (rangeMatch) return { low: parseFloat(rangeMatch[1]), high: parseFloat(rangeMatch[2]) }
-  const singleMatch = distance.match(/([\d.]+)\s*km/i)
-  if (singleMatch) { const v = parseFloat(singleMatch[1]); return { low: v, high: v } }
-  return null
-}
-
-/**
- * Extracts km from a session distance string.
- * Handles ranges like "8-10 km" (returns max), single values like "10 km",
- * and "10.5km" (no space).
- */
-export function parseSessionDistanceKm(distance: string): number {
-  const parts = parseSessionDistanceParts(distance)
-  return parts ? parts.high : 0
-}
+// Distance parsing lives in training-sessions.ts, alongside the allocation that
+// produces those strings. Re-exported here so existing importers keep working.
+export { parseSessionDistanceParts, parseSessionDistanceKm } from "@/lib/training-sessions"
+import { parseSessionDistanceKm } from "@/lib/training-sessions"
 
 // ── Weekly load progression check ─────────────────────────────────────────────
 
@@ -194,21 +173,6 @@ export function checkCumulativeProgression(
   }
 
   return violations
-}
-
-/**
- * Prepends a short safety-adjustment prefix to a week's coachNote so the
- * displayed text stays consistent with the mutated targetKm. Claude's
- * original note is preserved — we only annotate, never replace.
- */
-function annotateSafetyAdjustment(
-  coachNote: string | null | undefined,
-  adjustmentLine: string,
-): string {
-  if (!coachNote || coachNote.trim().length === 0) return adjustmentLine
-  // Don't double-prefix if the note already carries a safety annotation.
-  if (coachNote.startsWith("Safety:")) return coachNote
-  return `${adjustmentLine} ${coachNote}`
 }
 
 /**
@@ -654,163 +618,14 @@ export interface SafetyValidationResult {
 }
 
 /**
- * Full safety validation pipeline:
+ * The checks above are now verification, not mutation.
  *
- * 1. Classify athlete level
- * 2. Check ACWR — apply week-1 multiplier if needed
- *    + Detect prolonged fatigue — apply deload multiplier if needed
- * 2b. Check weekly progression caps — clamp violations
- * 2c. Check cumulative progression caps (3-week rolling window) — clamp violations
- * 3. Check long run protection — clamp violations
- * 4. Detect fatigue signals — attach notes
- * 5. Check frequency progression
- *
- * Returns the validated (and potentially adjusted) plan plus a summary of issues.
+ * Weekly volume is decided before the plan is generated, in
+ * lib/training-volume.ts, and session distances are allocated afterwards in
+ * lib/training-sessions.ts. A validate-and-rewrite pass used to run between the
+ * two and quietly disagreed with both: it capped the long run at 35% of the
+ * week, and the correction pass that followed scaled every session back up to
+ * the weekly target and handed the long run the remainder, undoing the cap
+ * entirely. It also prefixed "Safety: reduced to X km" onto the coach note,
+ * exposing internal machinery to explain a gap that no longer exists.
  */
-export function validateAndAdjustPlan(
-  plan: TrainingPlan,
-  activities: SafetyActivity[],
-  prefs: GoalPreferences,
-): SafetyValidationResult {
-  const safetyNotes: string[] = []
-  const athleteLevel = classifyAthleteLevel(activities)
-  const acwrSafety = evaluateAcwrSafety(activities)
-  const fatigue = detectFatigue(activities)
-  const prolongedFatigue = checkProlongedFatigue(activities)
-  const frequencyWarning = checkFrequencyProgression(activities, prefs.sessions_per_week)
-
-  // Deep-clone plan weeks for mutation
-  const adjustedWeeks: TrainingWeek[] = plan.weeks.map((w) => ({
-    ...w,
-    sessions: w.sessions.map((s) => ({ ...s })),
-  }))
-
-  // Step 1: Apply ACWR + prolonged fatigue deload across first 3 weeks (graduated)
-  // Week 1 gets full adjustment, week 2 gets 50%, week 3 gets 25%
-  const combinedMultiplier = Math.min(
-    acwrSafety.weekOneMultiplier,
-    prolongedFatigue.deloadMultiplier,
-  )
-  if (combinedMultiplier < 1.0 && adjustedWeeks.length > 0) {
-    const graduationFactors = [1.0, 0.5, 0.25] // how much of the reduction to apply
-    for (let i = 0; i < Math.min(graduationFactors.length, adjustedWeeks.length); i++) {
-      const reduction = 1 - combinedMultiplier // e.g. 0.25 for a 25% cut
-      const weekMultiplier = 1 - (reduction * graduationFactors[i])
-      const original = adjustedWeeks[i].targetKm
-      adjustedWeeks[i].targetKm = Math.round(original * weekMultiplier)
-    }
-    if (acwrSafety.message) safetyNotes.push(acwrSafety.message)
-    if (prolongedFatigue.message) safetyNotes.push(prolongedFatigue.message)
-  }
-
-  // Step 2: Clamp weekly progression to level-appropriate cap
-  const targets = adjustedWeeks.map((w) => w.targetKm)
-  const weeklyViolations = checkWeeklyLoadProgression(targets, athleteLevel)
-  for (const v of weeklyViolations) {
-    const idx = v.weekNumber - 1
-    if (idx >= 0 && idx < adjustedWeeks.length) {
-      adjustedWeeks[idx].targetKm = v.adjustedKm
-      const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (${athleteLevel} cap: +${Math.round(MAX_WEEKLY_INCREASE[athleteLevel] * 100)}%/week)`
-      safetyNotes.push(note)
-      logWarn("safety", `${note}`)
-      // Keep Claude's original coachNote but prefix the adjustment so the
-      // shown text stays consistent with the (now-reduced) targetKm.
-      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
-        adjustedWeeks[idx].coachNote,
-        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, weekly cap).`,
-      )
-    }
-  }
-
-  // Step 2b: Clamp cumulative progression over 3-week windows
-  // Pass the runner's last 3 actual weekly km as prior context so the
-  // cap catches a plan week 1 that jumps past a high pre-plan load.
-  const updatedTargets = adjustedWeeks.map((w) => w.targetKm)
-  const priorWeeklyVolumes = computeRecentWeeklyVolumes(activities, 3)
-  const cumulativeViolations = checkCumulativeProgression(updatedTargets, athleteLevel, priorWeeklyVolumes)
-  for (const v of cumulativeViolations) {
-    const idx = v.weekNumber - 1
-    if (idx >= 0 && idx < adjustedWeeks.length) {
-      adjustedWeeks[idx].targetKm = v.adjustedKm
-      const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (cumulative ${v.cumulativePct}% over 3 weeks exceeds ${v.maxAllowedPct}% cap for ${athleteLevel})`
-      safetyNotes.push(note)
-      logWarn("safety", `${note}`)
-      adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
-        adjustedWeeks[idx].coachNote,
-        `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, 3-wk cumulative cap).`,
-      )
-    }
-  }
-
-  // Step 3: Long run protection — re-check after target adjustments
-  const adjustedPlanForLongRun: TrainingPlan = { ...plan, weeks: adjustedWeeks }
-  const longRunViolations = checkLongRunProtection(adjustedPlanForLongRun)
-  for (const v of longRunViolations) {
-    const week = adjustedWeeks.find((w) => w.weekNumber === v.weekNumber)
-    if (!week) continue
-
-    // Find and clamp the longest session
-    let maxKm = 0
-    let maxIdx = -1
-    week.sessions.forEach((s, i) => {
-      const km = parseSessionDistanceKm(s.distance)
-      if (km > maxKm) { maxKm = km; maxIdx = i }
-    })
-    if (maxIdx >= 0) {
-      week.sessions[maxIdx].distance = `${v.adjustedKm} km`
-      const note = `Week ${v.weekNumber}: long run capped at ${v.adjustedKm} km (${Math.round(LONG_RUN_MAX_FRACTION * 100)}% of ${week.targetKm} km week)`
-      safetyNotes.push(note)
-    }
-  }
-
-  // Step 4: Fatigue notes
-  if (fatigue.description) {
-    safetyNotes.push(fatigue.description)
-  }
-
-  // Step 5: Frequency warning
-  if (frequencyWarning) {
-    safetyNotes.push(
-      `Frequency increase too aggressive: ${frequencyWarning.currentAvgSessions} sessions/week recently → requested ${frequencyWarning.requestedSessions}. Recommended max: ${frequencyWarning.maxSafeSessions}.`
-    )
-  }
-
-  // Step 6: Taper validation — warn when taper-labelled weeks aren't actually tapering
-  const taperViolations = checkTaperProgression({ ...plan, weeks: adjustedWeeks })
-  for (const v of taperViolations) {
-    // Apply a 30% volume reduction to incorrectly-loaded taper weeks
-    const week = adjustedWeeks.find((w) => w.weekNumber === v.weekNumber)
-    if (week) {
-      const corrected = Math.round(v.peakKm * 0.65) // 65% of peak = meaningful taper
-      if (corrected < week.targetKm) {
-        week.targetKm = corrected
-        safetyNotes.push(v.message + ` Reduced to ${corrected} km (65% of peak).`)
-        logWarn("safety", `${v.message} Corrected to ${corrected} km.`)
-      }
-    }
-  }
-
-  const passed =
-    weeklyViolations.length === 0 &&
-    cumulativeViolations.length === 0 &&
-    longRunViolations.length === 0 &&
-    taperViolations.length === 0 &&
-    !frequencyWarning &&
-    acwrSafety.weekOneMultiplier === 1.0 &&
-    !prolongedFatigue.detected &&
-    fatigue.signal === "none"
-
-  return {
-    passed,
-    athleteLevel,
-    weeklyLoadViolations: weeklyViolations,
-    longRunViolations,
-    taperViolations,
-    frequencyWarning,
-    acwrSafety,
-    fatigue,
-    prolongedFatigue,
-    adjustedPlan: { ...plan, weeks: adjustedWeeks },
-    safetyNotes,
-  }
-}

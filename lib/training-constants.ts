@@ -252,3 +252,54 @@ export const ATHLETE_ADVANCED_SESSIONS_PER_WEEK = 4
 export const ATHLETE_INTERMEDIATE_KM_PER_WEEK = 20
 /** Minimum avg sessions/week for intermediate classification */
 export const ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK = 2
+
+// ── Activity Types ───────────────────────────────────────────────────────────
+
+/**
+ * Activity types that count as running. Every volume, load, adherence and
+ * fitness calculation filters on this set — cycling and hiking inflate
+ * chronic load and weekly km, which makes running plans wrong in both
+ * directions. Shared between server and client so the two can't diverge.
+ */
+export const RUN_TYPES: ReadonlySet<string> = new Set([
+  "Run",
+  "Trail Run",
+  "Virtual Run",
+  "Treadmill",
+  "Race",
+])
+
+// ── Plan Regeneration ────────────────────────────────────────────────────────
+
+/**
+ * Minimum time between plan generations for one goal. Prevents plan churn and
+ * runaway AI cost. Users who want to tweak should use the "Adjust" note.
+ */
+export const PLAN_REGENERATE_COOLDOWN_MS = 10 * 60 * 1000
+
+// ── Session Distance Allocation ──────────────────────────────────────────────
+
+/** All prescribed session distances are multiples of this (km) */
+export const SESSION_DISTANCE_STEP_KM = 0.5
+/** Minimum useful session length — below this the aerobic stimulus is marginal */
+export const MIN_SESSION_KM = 5
+/** Relaxed minimum for weeks that cannot support MIN_SESSION_KM across every session */
+export const MIN_SESSION_KM_LOW_VOLUME = 4
+/** Weekly volume below which the relaxed session minimum applies */
+export const LOW_VOLUME_WEEK_KM = 15
+/**
+ * How far the long run should lead the next-longest session (km). Best-effort:
+ * the long-run share cap always wins, so very small weeks may fall short.
+ */
+export const LONG_RUN_MIN_LEAD_KM = 2
+/**
+ * Headroom added to the 1/n floor when deriving the long-run share cap.
+ *
+ * LONG_RUN_MAX_FRACTION (0.35) is unreachable at low session counts — with two
+ * sessions the smallest possible share for the longest one is 50%, and with
+ * three it is 33.3%. Applied literally, the cap flags every 2-session week and
+ * cannot be satisfied at all. The effective cap is therefore
+ * max(LONG_RUN_MAX_FRACTION, 1/n + margin), which also guarantees the long run
+ * is strictly the longest session (since the share exceeds 1/n).
+ */
+export const LONG_RUN_FRACTION_MARGIN = 0.05

@@ -19,7 +19,14 @@ export interface NoteHistoryEntry {
   sessions_per_week: number | null
 }
 
-/** Mirror of the phase logic in the plan generator. */
+/**
+ * Labels a week's position within its block as base/build/taper, for the
+ * context snapshot attached to a note.
+ *
+ * Not the same thing as the plan generator's phase, which is derived from days
+ * until the race — "build" here means "week 3 of a 4-week block", not "the build
+ * phase of this training cycle". The two share a vocabulary and nothing else.
+ */
 export function getPhaseLabel(weekIndex: number, totalWeeks: number): string {
   const taperWeeks = Math.min(3, Math.max(1, Math.floor(totalWeeks * 0.15)))
   const buildWeeks = Math.max(2, Math.floor(totalWeeks * 0.25))
