@@ -4,6 +4,11 @@ Thanks for using 42195! If you need help or have questions, here's how to get su
 
 ## Frequently Asked Questions
 
+### How do I get an account?
+42195 is invite only. The Strava app it runs on has a fixed number of athlete
+places, so accounts are created for invited email addresses only. If sign-up
+tells you the address is not invited, ask for an invite for that exact address.
+
 ### How do I connect my Strava account?
 Go to the **Profile** tab and tap **Connect with Strava**. You'll be redirected to Strava to authorize the app.
 

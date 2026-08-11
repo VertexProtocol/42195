@@ -4,6 +4,13 @@ import { createServiceClient } from "@/lib/supabase/service"
 import { syncUserActivities } from "@/lib/strava-sync"
 import { StravaAuthError } from "@/lib/strava"
 
+// A history sync is chunked (see syncUserActivities), but one chunk still needs
+// room for up to eight Strava reads plus the upserts.
+export const maxDuration = 60
+
+/** States a partial run leaves behind, from which the next call resumes. */
+const RESUMABLE_STATES = new Set(["partial", "rate_limited"])
+
 export async function POST(request: NextRequest) {
   const fullSync = request.nextUrl.searchParams.get("full") === "1"
 
@@ -24,11 +31,31 @@ export async function POST(request: NextRequest) {
   // 2. Rate limit & concurrency checks
   const { data: prevSync } = await service
     .from("sync_status")
-    .select("last_sync_at, state, updated_at")
+    .select("last_sync_at, state, updated_at, cursor_before, resume_at")
     .eq("user_id", userId)
     .maybeSingle()
 
-  if (prevSync?.last_sync_at) {
+  // Continuing an unfinished sync is not a new sync: it skips the throttle and
+  // picks up where the previous chunk stopped.
+  const isContinuation = !!prevSync && RESUMABLE_STATES.has(prevSync.state)
+  const resumeCursor = isContinuation ? (prevSync.cursor_before as number | null) : null
+
+  if (isContinuation && prevSync.resume_at) {
+    const resumeAt = new Date(prevSync.resume_at as string)
+    if (resumeAt > new Date()) {
+      return NextResponse.json(
+        {
+          error: "Strava's rate limit for this app is spent. Syncing resumes automatically.",
+          code: "STRAVA_RATE_LIMITED",
+          resume_at: resumeAt.toISOString(),
+          done: false,
+        },
+        { status: 429 },
+      )
+    }
+  }
+
+  if (!isContinuation && prevSync?.last_sync_at) {
     const lastSync = new Date(prevSync.last_sync_at).getTime()
     if (Date.now() - lastSync < 30_000) {
       return NextResponse.json(
@@ -55,14 +82,19 @@ export async function POST(request: NextRequest) {
   )
 
   try {
-    const result = await syncUserActivities(userId, fullSync)
+    const result = await syncUserActivities(userId, { fullSync, resumeCursor })
 
-    // Mark sync as success
+    // A run that stopped early must not move last_sync_at — the next
+    // incremental sync would then skip everything it has not fetched yet.
+    const state = result.done ? "success" : result.resumeAt ? "rate_limited" : "partial"
+
     await service.from("sync_status").upsert(
       {
         user_id: userId,
-        state: "success",
-        last_sync_at: new Date().toISOString(),
+        state,
+        ...(result.done ? { last_sync_at: new Date().toISOString() } : {}),
+        cursor_before: result.resumeCursor,
+        resume_at: result.resumeAt,
         error_message: null,
         updated_at: new Date().toISOString(),
       },

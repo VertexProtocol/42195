@@ -10,6 +10,12 @@ import { logError } from "@/lib/log"
 
 const supabase = createClient()
 
+// The server pulls Strava history in chunks so no single request runs long
+// enough to be killed by the platform timeout. Each response says whether it
+// finished; if it did not, the client asks for the next chunk. This is the
+// safety stop — 25 × 800 activities is far beyond any real history.
+const MAX_SYNC_CHUNKS = 25
+
 export interface InitialData {
   activities: Activity[]
   goals: Goal[]
@@ -584,41 +590,81 @@ export function useAppData(initialData?: InitialData | null) {
   const doSync = useCallback(async (full = false) => {
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
 
-    try {
-      const url = full ? "/api/sync-strava?full=1" : "/api/sync-strava"
-      const res = await fetch(url, { method: "POST" })
-      const data = await res.json()
+    const url = full ? "/api/sync-strava?full=1" : "/api/sync-strava"
 
-      if (!res.ok) {
-        if (
-          data.code === "STRAVA_NOT_CONNECTED" ||
-          data.code === "STRAVA_DISCONNECTED"
-        ) {
+    try {
+      for (let chunk = 0; chunk < MAX_SYNC_CHUNKS; chunk++) {
+        const res = await fetch(url, { method: "POST" })
+        const data = await res.json()
+
+        if (!res.ok) {
+          if (
+            data.code === "STRAVA_NOT_CONNECTED" ||
+            data.code === "STRAVA_DISCONNECTED"
+          ) {
+            setSyncStatus((prev) => ({
+              ...prev,
+              state: "error",
+              error_message: "Strava account disconnected. Reconnecting…",
+            }))
+            window.location.href = "/api/auth/strava"
+            return
+          }
+          if (data.code === "STRAVA_RATE_LIMITED") {
+            setSyncStatus((prev) => ({
+              ...prev,
+              state: "rate_limited",
+              error_message:
+                "Strava is rate limiting the app. The rest of your history arrives shortly — sync again in a few minutes.",
+            }))
+            setActivities(await fetchAllActivities(supabase))
+            return
+          }
           setSyncStatus((prev) => ({
             ...prev,
             state: "error",
-            error_message: "Strava account disconnected. Reconnecting…",
+            error_message: data.error ?? "Sync failed",
           }))
-          window.location.href = "/api/auth/strava"
+          // toast.error(data.error ?? "Sync failed")
           return
         }
-        setSyncStatus((prev) => ({
-          ...prev,
-          state: "error",
-          error_message: data.error ?? "Sync failed",
-        }))
-        // toast.error(data.error ?? "Sync failed")
+
+        // The run stopped on Strava's rate limit. What it managed to pull is
+        // already saved; the rest needs the next 15-minute window.
+        if (data.resumeAt) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            state: "rate_limited",
+            error_message:
+              "Strava is rate limiting the app. The rest of your history arrives shortly — sync again in a few minutes.",
+          }))
+          setActivities(await fetchAllActivities(supabase))
+          return
+        }
+
+        if (data.done === false) {
+          // More history to go. Show what has landed so far, then continue.
+          setActivities(await fetchAllActivities(supabase))
+          continue
+        }
+
+        setSyncStatus({
+          state: "success",
+          last_sync_at: new Date().toISOString(),
+          error_message: null,
+        })
+        // toast.success("Activities synced from Strava")
+
+        setActivities(await fetchAllActivities(supabase))
         return
       }
 
-      setSyncStatus({
-        state: "success",
-        last_sync_at: new Date().toISOString(),
-        error_message: null,
-      })
-      // toast.success("Activities synced from Strava")
-
-      setActivities(await fetchAllActivities(supabase))
+      // Ran out of chunks without finishing — treat as unfinished, not failed.
+      setSyncStatus((prev) => ({
+        ...prev,
+        state: "partial",
+        error_message: "Still catching up on your history. Sync again to continue.",
+      }))
     } catch (err) {
       logError("Sync fetch error", err)
       setSyncStatus((prev) => ({

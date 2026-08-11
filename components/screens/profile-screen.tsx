@@ -182,7 +182,9 @@ export function ProfileScreen({
     }
   }, [syncStatus.state])
 
-  const isSyncing = syncStatus.state === "syncing"
+  // A partial sync is still in flight from the runner's point of view — the
+  // client is fetching the next chunk of history.
+  const isSyncing = syncStatus.state === "syncing" || syncStatus.state === "partial"
 
   function handleConnect() {
     setConnecting(true)
@@ -337,6 +339,12 @@ export function ProfileScreen({
 
                 {syncStatus.state === "error" && syncStatus.error_message && (
                   <p role="alert" className="mt-2 text-micro text-destructive">
+                    {syncStatus.error_message}
+                  </p>
+                )}
+
+                {syncStatus.state === "rate_limited" && syncStatus.error_message && (
+                  <p role="status" className="mt-2 text-micro text-muted-foreground">
                     {syncStatus.error_message}
                   </p>
                 )}

@@ -70,7 +70,11 @@ export interface WeeklySummary {
 
 export interface SyncStatus {
   last_sync_at: string | null
-  state: "success" | "error" | "syncing" | "never"
+  /**
+   * "partial"      — history left to fetch; syncing again continues it.
+   * "rate_limited" — stopped on Strava's app-wide limit, resumes after it resets.
+   */
+  state: "success" | "error" | "syncing" | "never" | "partial" | "rate_limited"
   error_message: string | null
 }
 

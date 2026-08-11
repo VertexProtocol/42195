@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code")
   const errorParam = searchParams.get("error")
   const stateParam = searchParams.get("state")
+  const grantedScope = searchParams.get("scope") ?? ""
 
   // User explicitly denied access on Strava's side
   if (errorParam) {
@@ -51,6 +52,13 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return errorRedirect("No authorization code received from Strava.")
+  }
+
+  // Strava lets the athlete untick individual permissions on the consent
+  // screen. Without activity:read_all there is nothing to sync, so say that
+  // now rather than failing on the first sync.
+  if (!grantedScope.split(",").includes("activity:read_all")) {
+    return errorRedirect("strava_missing_scope")
   }
 
   // Verify the user is still authenticated with Supabase
@@ -96,6 +104,22 @@ export async function GET(request: NextRequest) {
 
   // Store tokens using the service client — never accessible from the browser
   const service = createServiceClient()
+
+  // One athlete, one account. Two accounts sharing an athlete_id would make the
+  // webhook's athlete_id lookup ambiguous and silently drop every delivery for
+  // both of them, so refuse the second link.
+  const { data: existingLink } = await service
+    .from("strava_tokens")
+    .select("user_id")
+    .eq("athlete_id", tokens.athlete.id)
+    .neq("user_id", user.id)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingLink) {
+    return errorRedirect("strava_already_linked")
+  }
+
   const { error: upsertError } = await service.from("strava_tokens").upsert(
     {
       user_id: user.id,
@@ -103,12 +127,18 @@ export async function GET(request: NextRequest) {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: new Date(tokens.expires_at * 1000).toISOString(),
+      scope: grantedScope,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
   )
 
   if (upsertError) {
+    // 23505 = unique violation on athlete_id: another account claimed this
+    // athlete between the check above and the write.
+    if (upsertError.code === "23505") {
+      return errorRedirect("strava_already_linked")
+    }
     console.error("Failed to save Strava tokens:", upsertError)
     return errorRedirect("Failed to save Strava connection.")
   }

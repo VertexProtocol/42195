@@ -186,26 +186,44 @@ async function refreshStravaToken(userId: string, refreshToken: string): Promise
 
 /**
  * Error thrown when Strava returns HTTP 429 (rate limited).
+ *
+ * `resetAt` is when the next 15-minute window opens, so callers can tell the
+ * user when to come back instead of guessing.
  */
 export class StravaRateLimitError extends Error {
-  constructor(message: string) {
+  readonly resetAt: Date
+
+  constructor(message: string, resetAt: Date) {
     super(message)
     this.name = "StravaRateLimitError"
+    this.resetAt = resetAt
   }
 }
 
 /**
- * Fetch wrapper that logs Strava rate-limit headers and handles 429 responses.
- * Use this for all Strava API calls inside `withStravaRetry` callbacks.
+ * Start of the next natural 15-minute window. Strava resets an application's
+ * short-term limit at :00, :15, :30 and :45 past the hour.
+ */
+export function nextRateLimitWindow(now: Date = new Date()): Date {
+  const next = new Date(now)
+  next.setSeconds(0, 0)
+  next.setMinutes(Math.floor(now.getMinutes() / 15) * 15 + 15)
+  return next
+}
+
+/**
+ * Fetch wrapper that logs Strava rate-limit headers and turns 429 responses
+ * into a StravaRateLimitError. Use this for all Strava API calls inside
+ * `withStravaRetry` callbacks.
  *
- * On 429: waits until the next 15-minute window, then retries (up to `maxRetries`).
+ * The rate limit is per application, shared by every athlete using it, so a
+ * request that waits for the window to reopen holds a serverless function open
+ * for up to 15 minutes and dies on the platform timeout anyway. Callers stop,
+ * persist what they have, and resume after `resetAt` instead.
+ *
  * Logs a warning when usage exceeds 80% of the limit.
  */
-export async function stravaApiFetch(
-  url: string,
-  token: string,
-  maxRetries = 2,
-): Promise<Response> {
+export async function stravaApiFetch(url: string, token: string): Promise<Response> {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -226,21 +244,14 @@ export async function stravaApiFetch(
   }
 
   if (res.status === 429) {
-    if (maxRetries <= 0) {
-      throw new StravaRateLimitError("Strava rate limit exceeded. Please try again later.")
-    }
-    // Wait until next 15-minute window
-    const now = new Date()
-    const minuteSlot = Math.ceil(now.getMinutes() / 15) * 15
-    const nextWindow = new Date(now)
-    nextWindow.setMinutes(minuteSlot, 0, 0)
-    if (nextWindow <= now) nextWindow.setMinutes(nextWindow.getMinutes() + 15)
-    const delayMs = Math.min(nextWindow.getTime() - now.getTime() + 1000, 15 * 60 * 1000)
-
-    console.warn(`[Strava Rate Limit] 429 received. Waiting ${Math.ceil(delayMs / 1000)}s until next window.`)
-    await new Promise((resolve) => setTimeout(resolve, delayMs))
-
-    return stravaApiFetch(url, token, maxRetries - 1)
+    const resetAt = nextRateLimitWindow()
+    console.warn(
+      `[Strava Rate Limit] 429 received. Window reopens at ${resetAt.toISOString()}.`,
+    )
+    throw new StravaRateLimitError(
+      "Strava's rate limit for this app is spent. Syncing continues automatically once it resets.",
+      resetAt,
+    )
   }
 
   return res

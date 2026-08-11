@@ -608,3 +608,34 @@ $$;
 -- ============================================================
 alter table goal_preferences
   add column if not exists notes_history jsonb not null default '[]'::jsonb;
+
+
+-- ============================================================
+-- 023_multi_user_hardening.sql
+-- (strava_tokens.athlete_id unique index lives in 023 only — that table is
+--  managed separately, see the EXCLUDED note at the top of this file.)
+-- ============================================================
+
+-- Invite allowlist. Sign-up is refused unless the address has a row here.
+-- Service-role only: no policies, so the invited addresses are not readable
+-- from the browser.
+create table if not exists public.allowed_signups (
+  email      text        primary key check (email = lower(email)),
+  note       text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  claimed_by uuid        references auth.users(id) on delete set null
+);
+
+alter table public.allowed_signups enable row level security;
+
+-- Resumable sync: a long history is pulled in chunks, so a run records where
+-- to continue from and when the rate limit window reopens.
+alter table public.sync_status
+  add column if not exists cursor_before bigint,
+  add column if not exists resume_at     timestamptz;
+
+alter table public.sync_status drop constraint if exists sync_status_state_check;
+alter table public.sync_status
+  add constraint sync_status_state_check
+  check (state in ('success', 'error', 'syncing', 'never', 'partial', 'rate_limited'));
