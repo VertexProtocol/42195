@@ -1,4 +1,4 @@
-const CACHE_NAME = "42195-v4"
+const CACHE_NAME = "42195-v5"
 const STATIC_ASSETS = ["/icon.svg", "/manifest.json"]
 
 // Install: cache only non-HTML static assets

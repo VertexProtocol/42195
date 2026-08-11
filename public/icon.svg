@@ -1,26 +1,29 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="42195">
+  <title>42195</title>
   <style>
-    @media (prefers-color-scheme: light) {
-      .background { fill: black; }
-      .foreground { fill: white; }
-    }
+    .ground-lift { stop-color: #e9e2db }
+    .ground { stop-color: #ded6ce }
+    .lane { stroke: #261b16 }
+    .lead { stroke: #b03105 }
     @media (prefers-color-scheme: dark) {
-      .background { fill: white; }
-      .foreground { fill: black; }
+      .ground-lift { stop-color: #241b16 }
+      .ground { stop-color: #17110e }
+      .lane { stroke: #f0ece7 }
+      .lead { stroke: #ef8052 }
     }
   </style>
-  <g clip-path="url(#clip0_7960_43945)">
-    <rect class="background" width="180" height="180" rx="37" />
-    <g style="transform: scale(95%); transform-origin: center">
-      <path class="foreground"
-        d="M101.141 53H136.632C151.023 53 162.689 64.6662 162.689 79.0573V112.904H148.112V79.0573C148.112 78.7105 148.098 78.3662 148.072 78.0251L112.581 112.898C112.701 112.902 112.821 112.904 112.941 112.904H148.112V126.672H112.941C98.5504 126.672 86.5638 114.891 86.5638 100.5V66.7434H101.141V100.5C101.141 101.15 101.191 101.792 101.289 102.422L137.56 66.7816C137.255 66.7563 136.945 66.7434 136.632 66.7434H101.141V53Z" />
-      <path class="foreground"
-        d="M65.2926 124.136L14 66.7372H34.6355L64.7495 100.436V66.7372H80.1365V118.47C80.1365 126.278 70.4953 129.958 65.2926 124.136Z" />
-    </g>
-  </g>
   <defs>
-    <clipPath id="clip0_7960_43945">
-      <rect width="180" height="180" fill="white" />
-    </clipPath>
+    <radialGradient id="ground" cx="30%" cy="20%" r="95%">
+      <stop offset="0" class="ground-lift"/>
+      <stop offset="1" class="ground"/>
+    </radialGradient>
   </defs>
+  <rect width="512" height="512" fill="url(#ground)"/>
+  <g transform="translate(256 256)">
+    <rect x="-176" y="-106" width="352" height="212" rx="106"
+          fill="none" class="lane" stroke-width="50"/>
+    <rect x="-176" y="-106" width="352" height="212" rx="106"
+          fill="none" class="lead" stroke-width="50" stroke-linecap="round"
+          pathLength="100" stroke-dasharray="25 75" stroke-dashoffset="-5"/>
+  </g>
 </svg>
