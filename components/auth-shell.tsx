@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { TrackMark } from "@/components/ui/track-mark"
 import { cn } from "@/lib/utils"
 
 /**
@@ -27,9 +28,14 @@ export function AuthShell({
   return (
     <div id={id} className="flex min-h-dvh flex-col justify-center bg-background px-5 py-10">
       <main className="mx-auto w-full max-w-sm">
-        <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
-          42195
-        </p>
+        {/* The mark and the wordmark as one line: signed out is the only place
+            the app has to say which app it is. */}
+        <div className="flex items-center gap-2">
+          <TrackMark size={17} className="text-muted-foreground" />
+          <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
+            42195
+          </p>
+        </div>
         <h1 className="mt-5 text-screen font-semibold text-foreground">{title}</h1>
         {lede && (
           <p className="mt-2 max-w-[46ch] text-body leading-relaxed text-muted-foreground">

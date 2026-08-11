@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   LineChart,
 } from "lucide-react"
-import { TrackLoader } from "@/components/ui/track-loader"
+import { TrackLoader } from "@/components/ui/track-mark"
 import {
   formatTargetTime,
   formatPace,

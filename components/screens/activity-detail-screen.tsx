@@ -12,7 +12,7 @@ import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { createClient } from "@/lib/supabase/client"
 import { AppCard } from '@/components/ui/app-card'
-import { TrackLoader } from '@/components/ui/track-loader'
+import { TrackLoader } from '@/components/ui/track-mark'
 import { AppBar } from '@/components/app-bar'
 import { Stat, StatGroup } from '@/components/ui/stat'
 import { Pill } from '@/components/ui/pill'
