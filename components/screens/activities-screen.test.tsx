@@ -56,9 +56,17 @@ function rowCount(): number {
   return screen.queryAllByRole("button", { name: /Session \d+/ }).length
 }
 
-function pageSizeChip(size: number): HTMLElement {
-  const group = screen.getByRole("group", { name: /per page/i })
-  return within(group).getByRole("button", { name: String(size) })
+/** The page-size control: one pill over a native select. */
+function pageSizeSelect(): HTMLSelectElement {
+  return screen.getByRole("combobox", { name: /per page/i }) as HTMLSelectElement
+}
+
+function choosePageSize(size: number) {
+  fireEvent.change(pageSizeSelect(), { target: { value: String(size) } })
+}
+
+function noPageSizeControl(): boolean {
+  return screen.queryByRole("combobox", { name: /per page/i }) === null
 }
 
 beforeEach(() => {
@@ -79,13 +87,13 @@ describe("ActivitiesScreen — page size", () => {
 
   it("shows fewer rows when a smaller step is chosen", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(10))
+    choosePageSize(10)
     expect(rowCount()).toBe(10)
   })
 
   it("shows more rows when a larger step is chosen", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(50))
+    choosePageSize(50)
     expect(rowCount()).toBe(50)
   })
 
@@ -96,21 +104,25 @@ describe("ActivitiesScreen — page size", () => {
     fireEvent.click(screen.getByRole("button", { name: /show more/i }))
     expect(rowCount()).toBe(50)
 
-    fireEvent.click(pageSizeChip(10))
+    choosePageSize(10)
     expect(rowCount()).toBe(10)
   })
 
-  it("marks the active step and only that one", () => {
+  it("reports the step it is on", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(10))
-    expect(pageSizeChip(10).getAttribute("aria-pressed")).toBe("true")
-    expect(pageSizeChip(25).getAttribute("aria-pressed")).toBe("false")
-    expect(pageSizeChip(50).getAttribute("aria-pressed")).toBe("false")
+    choosePageSize(10)
+    expect(pageSizeSelect().value).toBe("10")
+    // Every step stays reachable in one tap.
+    expect(within(pageSizeSelect()).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "10",
+      "25",
+      "50",
+    ])
   })
 
   it("counts what is rendered, not what was requested", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(10))
+    choosePageSize(10)
     expect(screen.getByText(/^10 of 60$/)).toBeTruthy()
   })
 })
@@ -118,7 +130,7 @@ describe("ActivitiesScreen — page size", () => {
 describe("ActivitiesScreen — remembering the choice", () => {
   it("stores the chosen step", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(50))
+    choosePageSize(50)
     expect(localStorage.getItem("activities.pageSize")).toBe("50")
   })
 
@@ -126,7 +138,7 @@ describe("ActivitiesScreen — remembering the choice", () => {
     localStorage.setItem("activities.pageSize", "10")
     renderScreen(makeActivities(60))
     expect(rowCount()).toBe(10)
-    expect(pageSizeChip(10).getAttribute("aria-pressed")).toBe("true")
+    expect(pageSizeSelect().value).toBe("10")
   })
 
   it("falls back to the default when the stored value is not one of the options", () => {
@@ -149,26 +161,26 @@ describe("ActivitiesScreen — paging against filters", () => {
 
   it("keeps the chosen step across a filter change", () => {
     renderScreen(makeActivities(60))
-    fireEvent.click(pageSizeChip(10))
+    choosePageSize(10)
     fireEvent.click(screen.getByRole("button", { name: "Run" }))
     expect(rowCount()).toBe(10)
-    expect(pageSizeChip(10).getAttribute("aria-pressed")).toBe("true")
+    expect(pageSizeSelect().value).toBe("10")
   })
 })
 
 describe("ActivitiesScreen — when there is nothing to choose", () => {
   it("hides the control when the smallest step already shows everything", () => {
     renderScreen(makeActivities(8))
-    expect(screen.queryByRole("group", { name: /per page/i })).toBeNull()
+    expect(noPageSizeControl()).toBe(true)
     expect(rowCount()).toBe(8)
   })
 
   it("keeps the control once the whole list fits, so the choice is reversible", () => {
     renderScreen(makeActivities(40))
-    fireEvent.click(pageSizeChip(50))
+    choosePageSize(50)
     expect(rowCount()).toBe(40)
     expect(screen.queryByRole("button", { name: /show more/i })).toBeNull()
     // Still there — otherwise there would be no way back to a smaller step.
-    expect(pageSizeChip(10)).toBeTruthy()
+    expect(noPageSizeControl()).toBe(false)
   })
 })

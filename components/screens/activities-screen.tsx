@@ -10,6 +10,7 @@ import {
 } from "react"
 import {
   ChevronRight,
+  ChevronDown,
   RefreshCw,
   Plus,
   Search,
@@ -229,7 +230,6 @@ export function ActivitiesScreen({
 
   // Nothing to choose when even the smallest step shows the whole result set.
   const canChoosePageSize = filteredActivities.length > PAGE_SIZE_OPTIONS[0]
-  const pageSizeLabelId = "activities-page-size-label"
 
   return (
     <div
@@ -469,22 +469,37 @@ export function ActivitiesScreen({
                   the answer to "this is too many" / "not enough", which is a
                   thought the runner has at the bottom of the list. It stays put
                   once the whole list fits, or there would be no way back. */}
+              {/* One pill, not a row of three. Three chips gave a utility
+                  setting the same weight as the type filters above the list,
+                  and the two options the runner is not on were permanent
+                  furniture. A native select also means the phone renders its
+                  own picker rather than a popover pretending to be one. */}
               {canChoosePageSize && (
-                <div className="flex items-center gap-1.5">
-                  <span id={pageSizeLabelId} className="text-micro text-muted-foreground">
-                    {t("activities.perPage")}
+                <label className="flex items-center gap-2 text-micro text-muted-foreground">
+                  {t("activities.perPage")}
+                  <span className="press relative inline-flex items-center rounded-full bg-surface-sunken pl-3 pr-7 text-label font-semibold text-secondary-foreground">
+                    {pageSize}
+                    <ChevronDown
+                      size={13}
+                      className="pointer-events-none absolute right-2.5 text-muted-foreground"
+                      aria-hidden
+                    />
+                    {/* The real control, laid over the pill: the native select
+                        keeps the keyboard and the platform picker, the span
+                        keeps the shape. */}
+                    <select
+                      value={pageSize}
+                      onChange={(e) => handlePageSizeChange(Number(e.target.value) as PageSize)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
                   </span>
-                  <div className="flex items-center gap-1.5" role="group" aria-labelledby={pageSizeLabelId}>
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <FilterChip
-                        key={size}
-                        active={size === pageSize}
-                        onClick={() => handlePageSizeChange(size)}
-                        label={String(size)}
-                      />
-                    ))}
-                  </div>
-                </div>
+                </label>
               )}
             </div>
           )}

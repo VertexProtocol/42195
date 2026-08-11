@@ -277,14 +277,14 @@ export function TrainingCalendarCard({
           const todayCell = isToday(d.date)
           const showFlag = hasGoal || hasTestRun
           const flagClass = hasGoal
-            ? "fill-warning text-warning dark:fill-teal-400 dark:text-teal-400"
+            ? "fill-warning text-warning"
             : "fill-chart-5 text-chart-5"
           const isSelected = selectedDay === d.key
           const cellContent = (
             <>
               <span
                 className={`text-micro leading-none pt-0.5 ${
-                  hasData
+                  hasData || todayCell
                     ? "text-foreground font-semibold"
                     : "text-muted-foreground"
                 }`}
@@ -310,10 +310,10 @@ export function TrainingCalendarCard({
             </>
           )
           const cellClass = `aspect-square rounded-lg flex flex-col items-center p-1 ${
-            hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/40"
+            hasData ? intensityClass(d.stats!.km, maxKm) : "bg-secondary/20"
           } ${!d.inMonth ? "opacity-40" : ""} ${
-            todayCell ? "ring-2 ring-primary" : ""
-          } ${isSelected ? "ring-2 ring-warning dark:ring-teal-400" : ""}`
+            todayCell ? "ring-2 ring-foreground/35" : ""
+          } ${isSelected ? "ring-2 ring-warning" : ""}`
           // A day with anything on it opens. One run and nothing else goes
           // straight there, since that is the only thing the tap could have
           // meant; a day carrying several runs, or a run and a race date,
@@ -355,7 +355,7 @@ export function TrainingCalendarCard({
               <>
                 <Flag
                   size={11}
-                  className="fill-warning text-warning dark:fill-teal-400 dark:text-teal-400 shrink-0"
+                  className="fill-warning text-warning shrink-0"
                 />
                 <span className="measure text-muted-foreground shrink-0">
                   {goalDateFmt.format(new Date(g.target_date))}
