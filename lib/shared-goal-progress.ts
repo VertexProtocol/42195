@@ -27,49 +27,26 @@
  * database.
  */
 
-import type { Activity, PaceSource, TrainingPlan } from "@/lib/types"
-import { predictRaceTimes } from "@/lib/training-utils"
-import { RIEGEL_EXPONENT } from "@/lib/training-constants"
+import type { Activity, TrainingPlan } from "@/lib/types"
+import { fitnessIndexSeconds, type FitnessIndex } from "@/lib/shared-goal-fitness"
 import { getCurrentBlockWeekIndex, getWeekActualKm } from "@/lib/training-checkpoint"
 
-/** A prediction over the goal's own distance, with where it came from. */
-export interface GoalPrediction {
-  seconds: number | null
-  source: PaceSource
-}
-
 /**
- * Riegel prediction over an arbitrary race distance.
+ * The estimate both ends of the fraction are built from.
  *
- * `predictRaceTimes` answers for four fixed distances, and a goal can be any
- * distance at all. Rather than run a second, subtly different projection, this
- * takes the closest of those four and scales it — the same interpolation
- * `lib/pace-guide.ts` uses for goal pace, so the number under the lane and the
- * number on the plan agree.
+ * Not `predictRaceTimes`. That function takes the best effort in a hard 90-day
+ * window, which is right for a race prediction and wrong for a number two
+ * people compare every day: measured against a real history it moved 26
+ * minutes in a single day when a good run aged out of the window. The form
+ * index decays instead of expiring, and the same measurement puts its worst
+ * single-day move at 6. See `lib/shared-goal-fitness.ts`.
  */
-export function predictGoalSeconds(
-  activities: Activity[],
+export function goalFitness(
+  activities: Array<Pick<Activity, "date" | "distance_km" | "duration_seconds" | "elevation_gain_m">>,
   goalDistanceKm: number,
   asOf: number = Date.now(),
-): GoalPrediction {
-  if (!(goalDistanceKm > 0)) return { seconds: null, source: "none" }
-
-  const { predictions } = predictRaceTimes(activities, undefined, asOf)
-  if (predictions.length === 0) return { seconds: null, source: "none" }
-
-  const closest = predictions.reduce((best, p) =>
-    Math.abs(p.distance_km - goalDistanceKm) < Math.abs(best.distance_km - goalDistanceKm) ? p : best,
-  )
-
-  if (Math.abs(closest.distance_km - goalDistanceKm) < 0.5) {
-    return { seconds: closest.predicted_seconds, source: "prediction" }
-  }
-
-  const ratio = goalDistanceKm / closest.distance_km
-  return {
-    seconds: Math.round(closest.predicted_seconds * ratio ** RIEGEL_EXPONENT),
-    source: "prediction",
-  }
+): FitnessIndex {
+  return fitnessIndexSeconds(activities, goalDistanceKm, asOf)
 }
 
 export type SharedGoalPositionState =

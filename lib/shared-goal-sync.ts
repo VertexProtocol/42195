@@ -15,8 +15,8 @@
  */
 
 import { createServiceClient } from "@/lib/supabase/service"
-import type { Activity, PaceSource, TrainingPlan } from "@/lib/types"
-import { predictGoalSeconds, sharedGoalPosition, blockAdherence } from "@/lib/shared-goal-progress"
+import type { Activity, TrainingPlan } from "@/lib/types"
+import { goalFitness, sharedGoalPosition, blockAdherence } from "@/lib/shared-goal-progress"
 
 /** Activity columns the position needs — enough for Riegel and for week sums. */
 const ACTIVITY_COLUMNS = "date, distance_km, duration_seconds, elevation_gain_m"
@@ -57,14 +57,16 @@ export function computeBaseline(
   activities: ProgressActivity[],
   goalDistanceKm: number,
   joinedAt: Date | string = new Date(),
-): { baseline_seconds: number | null; baseline_source: PaceSource } {
+): { baseline_seconds: number | null; baseline_source: string } {
   const asOf = new Date(joinedAt).getTime()
-  const { seconds, source } = predictGoalSeconds(
+  const index = goalFitness(
     activities.map(asActivity),
     goalDistanceKm,
     Number.isFinite(asOf) ? asOf : Date.now(),
   )
-  return { baseline_seconds: seconds, baseline_source: source }
+  // The reason is stored alongside the number so a starting point that was
+  // refused can be told apart from one that was never attempted.
+  return { baseline_seconds: index.seconds, baseline_source: index.reason }
 }
 
 /**
@@ -126,7 +128,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
         const shared = (Array.isArray(embed) ? embed[0] : embed) as { distance_km: number } | null
         const distanceKm = Number(shared?.distance_km ?? goal.target_distance_km)
 
-        const { seconds: currentSeconds } = predictGoalSeconds(asActivities, distanceKm)
+        const { seconds: currentSeconds } = goalFitness(asActivities, distanceKm)
         const position = sharedGoalPosition(
           member.baseline_seconds,
           currentSeconds,

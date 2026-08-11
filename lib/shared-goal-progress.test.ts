@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import {
-  predictGoalSeconds,
+  goalFitness,
   sharedGoalPosition,
   blockAdherence,
 } from "./shared-goal-progress"
@@ -128,63 +128,105 @@ describe("sharedGoalPosition", () => {
 })
 
 // ---------------------------------------------------------------------------
-// predictGoalSeconds — Riegel over the goal's own distance
+// goalFitness — the form index both ends of the fraction are built from
 // ---------------------------------------------------------------------------
 
-describe("predictGoalSeconds", () => {
-  it("uses a standard distance directly when the goal is one", () => {
-    const acts = [run(10, 10, 50 * 60)]
-    const marathon = predictGoalSeconds(acts, 42.195)
-    expect(marathon.source).toBe("prediction")
-    // Riegel from 10 km in 50:00 lands a marathon a bit over 3:50.
-    expect(marathon.seconds).toBeGreaterThan(3.5 * 3600)
-    expect(marathon.seconds).toBeLessThan(4.5 * 3600)
+/** A month of steady running ending `endingDaysAgo` before the clock. */
+function block(endingDaysAgo: number, weeks: number, tenKSeconds: number): Activity[] {
+  const out: Activity[] = []
+  for (let w = 0; w < weeks; w++) {
+    for (const [day, km] of [[0, 8], [3, 10], [5, 6]] as const) {
+      const daysAgo = endingDaysAgo + (weeks - 1 - w) * 7 + (6 - day)
+      out.push(run(daysAgo, km, km * (tenKSeconds / 10) * 1.15))
+    }
+  }
+  return out
+}
+
+describe("goalFitness", () => {
+  it("projects to the goal's own distance", () => {
+    const acts = block(2, 6, 50 * 60)
+    const ten = goalFitness(acts, 10).seconds!
+    const fifteen = goalFitness(acts, 15).seconds!
+    const half = goalFitness(acts, 21.0975).seconds!
+
+    // A longer race takes longer, and 15 km sits between the two around it.
+    expect(fifteen).toBeGreaterThan(ten)
+    expect(fifteen).toBeLessThan(half)
   })
 
-  it("scales to a distance that is not one of the four", () => {
-    const acts = [run(10, 10, 50 * 60)]
-    const fifteen = predictGoalSeconds(acts, 15)
-    const ten = predictGoalSeconds(acts, 10)
-    const half = predictGoalSeconds(acts, 21.0975)
-
-    expect(fifteen.seconds).not.toBeNull()
-    // 15 km sits between the 10 km and the half, and so must its prediction.
-    expect(fifteen.seconds!).toBeGreaterThan(ten.seconds!)
-    expect(fifteen.seconds!).toBeLessThan(half.seconds!)
+  it("refuses to invent a starting point from thin evidence", () => {
+    // The runner who just connected Strava. predictRaceTimes would happily
+    // return a number here; a starting point from one jog is worse than none.
+    expect(goalFitness([run(3, 6, 6 * 6.4 * 60)], 21.0975)).toMatchObject({
+      seconds: null,
+      reason: "thin_evidence",
+    })
+    expect(goalFitness([], 21.0975)).toMatchObject({ seconds: null, reason: "no_runs" })
+    expect(goalFitness(block(2, 6, 50 * 60), 0)).toMatchObject({ seconds: null })
   })
 
-  it("reports no source when there is nothing to predict from", () => {
-    expect(predictGoalSeconds([], 42.195)).toEqual({ seconds: null, source: "none" })
-    // Everything older than the 90-day lookback window.
-    expect(predictGoalSeconds([run(200, 10, 50 * 60)], 42.195).seconds).toBeNull()
-    // A goal with no distance.
-    expect(predictGoalSeconds([run(10, 10, 50 * 60)], 0).seconds).toBeNull()
+  it("goes quiet when the training stops rather than holding a stale number", () => {
+    // Six weeks of running, then five months of nothing. Eighteen runs is
+    // plenty of evidence by weight — but none of it is current, and a frozen
+    // form shown beside people training now reads as fact.
+    const stale = block(150, 6, 50 * 60)
+    expect(goalFitness(stale, 21.0975)).toMatchObject({ reason: "stale", seconds: null })
+  })
+
+  it("does not fall off a cliff when a good run ages out", () => {
+    // The failure that ruled out predictRaceTimes for this job: one
+    // exceptional effort holds the number for exactly 90 days and then it
+    // snaps back overnight. Here the same effort must fade instead.
+    const base = block(2, 20, 50 * 60)
+    const withRace = [...base, run(88, 10, 43 * 60)]
+
+    const before = goalFitness(withRace, 21.0975, Date.now() - 3 * 86400000).seconds!
+    const after = goalFitness(withRace, 21.0975, Date.now() + 3 * 86400000).seconds!
+
+    // Six days spanning the old 90-day boundary must not move it more than a
+    // couple of minutes on a half marathon.
+    expect(Math.abs(after - before)).toBeLessThan(120)
+  })
+
+  it("is not owned by a single outlier", () => {
+    const base = block(2, 12, 50 * 60)
+    const withFluke = [...base, run(10, 10, 43 * 60)]
+
+    const plain = goalFitness(base, 21.0975).seconds!
+    const fluked = goalFitness(withFluke, 21.0975).seconds!
+
+    // The fluke counts — it is evidence — but it does not become the answer.
+    expect(fluked).toBeLessThan(plain)
+    expect(fluked).toBeGreaterThan(plain * 0.9)
+  })
+
+  it("still registers a genuine improvement", () => {
+    const slow = block(2, 12, 52 * 60)
+    const fast = block(2, 12, 46 * 60)
+    expect(goalFitness(fast, 21.0975).seconds!).toBeLessThan(goalFitness(slow, 21.0975).seconds!)
   })
 
   it("reads the past as it stood then, not as it looks now", () => {
-    // A slow run in April, a fast one in June — a runner getting fitter.
-    // Asked as of May the fast run has not happened yet, so the baseline is
-    // the slow one. That is the whole basis for locking a starting point:
-    // recomputing it today would quietly hand the runner their own progress.
-    const acts: Activity[] = [
-      { ...run(0, 10, 60 * 60), id: "slow", date: "2026-04-10T12:00:00Z" },
-      { ...run(0, 10, 45 * 60), id: "fast", date: "2026-06-10T12:00:00Z" },
-    ]
-
-    const asOfMay = predictGoalSeconds(acts, 42.195, new Date("2026-05-01T12:00:00Z").getTime())
-    const today = predictGoalSeconds(acts, 42.195)
-
-    expect(asOfMay.seconds).not.toBeNull()
-    expect(today.seconds).not.toBeNull()
-    expect(asOfMay.seconds!).toBeGreaterThan(today.seconds!)
+    // A slow spring, a fast summer. Asked as of the spring, the summer has not
+    // happened — which is the whole basis for locking a starting point.
+    const acts = [...block(200, 8, 56 * 60), ...block(5, 8, 46 * 60)]
+    const then = goalFitness(acts, 21.0975, Date.now() - 190 * 86400000).seconds!
+    const now = goalFitness(acts, 21.0975).seconds!
+    expect(then).toBeGreaterThan(now)
   })
 
   it("ignores activities dated after the moment being asked about", () => {
-    const future = { ...run(-30, 10, 30 * 60), id: "future" }
-    const past = run(10, 10, 60 * 60)
-    const withFuture = predictGoalSeconds([past, future], 42.195)
-    const withoutFuture = predictGoalSeconds([past], 42.195)
-    expect(withFuture.seconds).toBe(withoutFuture.seconds)
+    const past = block(2, 8, 50 * 60)
+    const withFuture = [...past, run(-30, 10, 30 * 60)]
+    expect(goalFitness(withFuture, 21.0975).seconds).toBe(goalFitness(past, 21.0975).seconds)
+  })
+
+  it("ignores entries too fast to be a run", () => {
+    // A paused watch or a GPS error, logged as 10 km in twelve minutes.
+    const past = block(2, 8, 50 * 60)
+    const withGlitch = [...past, run(4, 10, 12 * 60)]
+    expect(goalFitness(withGlitch, 21.0975).seconds).toBe(goalFitness(past, 21.0975).seconds)
   })
 })
 
