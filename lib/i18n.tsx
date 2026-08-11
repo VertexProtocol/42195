@@ -158,6 +158,7 @@ const translations = {
     "activities.showing": "Showing",
     "activities.of": "of",
     "activities.showMore": "Show more",
+    "activities.perPage": "Per page",
     "activities.noResults": "No activities match your search",
     "activities.clearFilters": "Clear filters",
     // Activity detail
@@ -781,6 +782,7 @@ const translations = {
     "activities.showing": "Viser",
     "activities.of": "av",
     "activities.showMore": "Vis flere",
+    "activities.perPage": "Per side",
     "activities.noResults": "Ingen aktiviteter matcher soket ditt",
     "activities.clearFilters": "Fjern filter",
     // Activity detail
