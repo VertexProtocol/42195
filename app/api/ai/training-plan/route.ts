@@ -10,11 +10,14 @@ import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
-import { PACE_PROGRESSION_RATES, PACE_PROGRESSION_MAX_WEEKS } from "@/lib/training-constants"
+import {
+  PACE_PROGRESSION_RATES,
+  PACE_PROGRESSION_MAX_WEEKS,
+  RUN_TYPES,
+  PLAN_REGENERATE_COOLDOWN_MS,
+} from "@/lib/training-constants"
 import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
 import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
-
-const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
 
 const TrainingPlanSchema = z.object({
   summary: z.string(),
@@ -471,9 +474,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const rateLimit = await checkAiRateLimit(user.id)
-  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit)
-
   let goalId: string
   let adjustNote: string | null = null
 
@@ -502,10 +502,9 @@ export async function POST(req: NextRequest) {
 
   if (existingPlan?.generated_at) {
     const lastGen = new Date(existingPlan.generated_at).getTime()
-    const COOLDOWN_MS = 10 * 60 * 1000 // 10 minutes
     const elapsed = Date.now() - lastGen
-    if (elapsed < COOLDOWN_MS) {
-      const waitSecs = Math.ceil((COOLDOWN_MS - elapsed) / 1000)
+    if (elapsed < PLAN_REGENERATE_COOLDOWN_MS) {
+      const waitSecs = Math.ceil((PLAN_REGENERATE_COOLDOWN_MS - elapsed) / 1000)
       const waitMins = Math.ceil(waitSecs / 60)
       return NextResponse.json(
         { error: `Please wait ${waitMins} minute${waitMins !== 1 ? "s" : ""} before regenerating` },
@@ -603,6 +602,12 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
+
+  // Rate limit last: every check above can reject the request without calling
+  // Claude, and a rejected request must not consume one of the user's hourly
+  // AI calls. Spending the quota on a cooldown 429 was the old behaviour.
+  const rateLimit = await checkAiRateLimit(user.id)
+  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit)
 
   // Compute ACWR and safety metrics from running activities only — cycling/hiking inflate
   // chronic load and cause the plan generator to produce overly conservative running plans.
@@ -709,7 +714,9 @@ export async function POST(req: NextRequest) {
     const blockStart = existingPlan.block_start_date
       ? new Date(existingPlan.block_start_date)
       : null
-    const acts12 = activities ?? []
+    // Running only — counting a bike ride toward a running block reports
+    // adherence the runner never earned, and the prompt acts on that number.
+    const acts12 = runActs
 
     const weekLines = prevPlan.weeks.map((w: TrainingWeek, i: number) => {
       let actualStr = ""
@@ -1169,7 +1176,16 @@ export async function POST(req: NextRequest) {
         // Migrate session completions from old plan to new plan by matching on week + session type.
         // This preserves "completed" / "skipped" marks when regenerating with an adjust note,
         // rather than wiping all progress on every regen.
-        const oldCompletions = Array.isArray(currentPlan?.session_completions)
+        //
+        // Only valid when the new block covers the SAME calendar weeks as the old one.
+        // When block_start_date advances (the normal case — the next block starts after the
+        // current one ends), new W1 is a different calendar week than old W1, so carrying a
+        // "completed" mark across would mark a session in the future as already done.
+        const sameBlockWindow =
+          currentPlan?.block_start_date != null &&
+          currentPlan.block_start_date === blockStartDate
+
+        const oldCompletions = sameBlockWindow && Array.isArray(currentPlan?.session_completions)
           ? (currentPlan.session_completions as Array<{ session_key: string; status: string }>)
           : []
         const oldPlan = currentPlan?.plan as TrainingPlan | undefined
@@ -1455,7 +1471,7 @@ export async function PUT(req: NextRequest) {
       .maybeSingle(),
     supabase
       .from("ai_training_plans")
-      .select("plan, block_start_date")
+      .select("plan, block_start_date, generated_at")
       .eq("goal_id", goalId)
       .eq("user_id", user.id)
       .maybeSingle(),
@@ -1498,14 +1514,27 @@ export async function PUT(req: NextRequest) {
   const prevNotes = currentPrefs?.notes ?? null
   const prevInjuryNotes = (currentPrefs as any)?.injury_notes ?? null
 
+  // An injury was already active before this save. Used twice below: editing an
+  // existing note supersedes it rather than stacking a duplicate, and only a
+  // genuinely new injury is worth interrupting the user to regenerate for.
+  const hadActiveInjury = hasActiveInjury(existingHistory)
+
   if ((notes || null) !== prevNotes && notes) {
     newEntries.push({ content: notes, type: "coach", added_at: now, resolved_at: null, ...blockContext })
   }
+
+  // Editing the injury text replaces the active entry instead of appending a
+  // second one. Without this, fixing a typo leaves two contradictory "active"
+  // injuries in the history, and both get sent to the coach as current.
+  let supersededHistory = existingHistory
   if ((injury_notes || null) !== prevInjuryNotes && injury_notes) {
+    supersededHistory = existingHistory.map((e) =>
+      e.type === "injury" && !e.resolved_at ? { ...e, resolved_at: now } : e,
+    )
     newEntries.push({ content: injury_notes, type: "injury", added_at: now, resolved_at: null, ...blockContext })
   }
 
-  const updatedHistory = newEntries.length > 0 ? [...existingHistory, ...newEntries] : existingHistory
+  const updatedHistory = newEntries.length > 0 ? [...supersededHistory, ...newEntries] : existingHistory
 
   const { error } = await supabase.from("goal_preferences").upsert(
     {
@@ -1555,7 +1584,21 @@ export async function PUT(req: NextRequest) {
   // Signal the client to regenerate the plan immediately when a new active
   // injury was just logged. Resolving an existing injury or adding a coach
   // note does NOT auto-regenerate — the user can trigger that manually.
-  const newActiveInjury = containsNewActiveInjury(newEntries)
+  //
+  // Two gates, both of which used to be missing:
+  //   - `!hadActiveInjury`: editing the wording of an injury the coach already
+  //     knows about is not new information. Regenerating on a typo fix is noise.
+  //   - cooldown: POST refuses to regenerate within PLAN_REGENERATE_COOLDOWN_MS,
+  //     so telling the client to regenerate inside that window only produces a
+  //     429 the user reads as "saving my injury failed".
+  const lastGeneratedAt = activePlan?.generated_at
+    ? new Date(activePlan.generated_at).getTime()
+    : null
+  const inCooldown =
+    lastGeneratedAt !== null && Date.now() - lastGeneratedAt < PLAN_REGENERATE_COOLDOWN_MS
+
+  const newActiveInjury =
+    containsNewActiveInjury(newEntries) && !hadActiveInjury && !inCooldown
 
   return NextResponse.json({
     ok: true,

@@ -38,6 +38,7 @@ import type {
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
+import { RUN_TYPES } from "@/lib/training-constants"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { Button } from '@/components/ui/button'
@@ -1247,6 +1248,14 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     return { weeks: aiPlan.plan.weeks.length, totalKm, completedSessions, totalSessions }
   }, [aiPlan, isBlockExpired, sessionStatuses])
 
+  // Running only — the plan prescribes running volume, so a long bike ride must
+  // not read as "you already did this week's km". Mirrors the server, which
+  // filters the same way for weekly summaries, ACWR and adherence.
+  const runActivities = useMemo(
+    () => activities.filter((a) => RUN_TYPES.has(a.type)),
+    [activities],
+  )
+
   // Pre-compute actual km per plan week for skip-load detection
   const weeklyActualKm = useMemo(() => {
     if (!aiPlan) return []
@@ -1256,11 +1265,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       weekStart.setDate(weekStart.getDate() + i * 7)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekEnd.getDate() + 7)
-      return activities
+      return runActivities
         .filter((a) => { const d = new Date(a.date); return d >= weekStart && d < weekEnd })
         .reduce((sum, a) => sum + a.distance_km, 0)
     })
-  }, [aiPlan, activities])
+  }, [aiPlan, runActivities])
 
   // Detect unsafe volume spike from skipped sessions
   const skipWarning: SkipLoadWarning | null = useMemo(() => {
@@ -1272,9 +1281,9 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
     if (nextIdx >= aiPlan.plan.weeks.length) return null
     const nextPlannedKm = aiPlan.plan.weeks[nextIdx].targetKm
     const prevPlannedKm = nextIdx > 0 ? aiPlan.plan.weeks[nextIdx - 1].targetKm : undefined
-    const level = classifyAthleteLevel(activities as Parameters<typeof classifyAthleteLevel>[0])
+    const level = classifyAthleteLevel(runActivities as Parameters<typeof classifyAthleteLevel>[0])
     return checkSkipLoadSpike(prevWeekActual, nextPlannedKm, level, prevPlannedKm)
-  }, [aiPlan, currentWeekIndex, weeklyActualKm, activities, isBlockExpired])
+  }, [aiPlan, currentWeekIndex, weeklyActualKm, runActivities, isBlockExpired])
 
   return (
     <>

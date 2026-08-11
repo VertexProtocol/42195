@@ -252,3 +252,27 @@ export const ATHLETE_ADVANCED_SESSIONS_PER_WEEK = 4
 export const ATHLETE_INTERMEDIATE_KM_PER_WEEK = 20
 /** Minimum avg sessions/week for intermediate classification */
 export const ATHLETE_INTERMEDIATE_SESSIONS_PER_WEEK = 2
+
+// ── Activity Types ───────────────────────────────────────────────────────────
+
+/**
+ * Activity types that count as running. Every volume, load, adherence and
+ * fitness calculation filters on this set — cycling and hiking inflate
+ * chronic load and weekly km, which makes running plans wrong in both
+ * directions. Shared between server and client so the two can't diverge.
+ */
+export const RUN_TYPES: ReadonlySet<string> = new Set([
+  "Run",
+  "Trail Run",
+  "Virtual Run",
+  "Treadmill",
+  "Race",
+])
+
+// ── Plan Regeneration ────────────────────────────────────────────────────────
+
+/**
+ * Minimum time between plan generations for one goal. Prevents plan churn and
+ * runaway AI cost. Users who want to tweak should use the "Adjust" note.
+ */
+export const PLAN_REGENERATE_COOLDOWN_MS = 10 * 60 * 1000
