@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { ArrowLeft, CheckCircle2, RefreshCw, TriangleAlert, User } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
@@ -129,13 +128,20 @@ export function AppBar({
             className="press -mr-1 flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-surface-sunken"
           >
             {user?.avatar_url ? (
-              <Image
+              // A plain <img>, not next/image: the avatar host is whatever
+              // identity provider the account used, so it cannot be added to
+              // images.remotePatterns, and routing arbitrary user-supplied URLs
+              // through the image optimiser would make it an open proxy.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={user.avatar_url}
                 alt=""
                 width={32}
                 height={32}
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
                 className="size-8 rounded-full object-cover"
-                crossOrigin="anonymous"
               />
             ) : (
               <span className="flex size-8 items-center justify-center rounded-full bg-surface-sunken text-muted-foreground">

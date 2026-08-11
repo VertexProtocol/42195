@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n"
 import type { Activity, StreamPoint, Lap, TestRun, TestRunType, DerivedMetrics, PredictionValidation } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
+import { createClient } from "@/lib/supabase/client"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { Stat, StatGroup } from '@/components/ui/stat'
@@ -152,6 +153,29 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   const [testRunLoading, setTestRunLoading] = useState<TestRunType | "remove" | false>(false)
   const [showTestRunPicker, setShowTestRunPicker] = useState(false)
   const [testRunExpanded, setTestRunExpanded] = useState(false)
+  // The route is kilobytes per activity, so the list queries leave it out and
+  // this screen fetches the one it needs when it opens.
+  const [polyline, setPolyline] = useState<string | null>(activity.map_polyline ?? null)
+
+  useEffect(() => {
+    if (activity.map_polyline) {
+      setPolyline(activity.map_polyline)
+      return
+    }
+    let cancelled = false
+    setPolyline(null)
+    createClient()
+      .from("activities")
+      .select("map_polyline")
+      .eq("id", activity.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setPolyline((data?.map_polyline as string | null) ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activity.id, activity.map_polyline])
 
   // Load cached analysis on mount
   useEffect(() => {
@@ -640,9 +664,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       </section>
 
       {/* Route Map */}
-      {activity.map_polyline && (
+      {polyline && (
         <section>
-          <RouteMap polyline={activity.map_polyline} />
+          <RouteMap polyline={polyline} />
         </section>
       )}
 

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import type { GoalCategory, SyncStatus } from "@/lib/types"
+import { fetchAllActivities } from "@/lib/activities-query"
 
 export default async function Page() {
   const supabase = await createClient()
@@ -22,11 +23,7 @@ export default async function Page() {
 
   const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
-      supabase
-        .from("activities")
-        .select("id, user_id, strava_id, type, name, date, distance_km, duration_seconds, pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, map_polyline, created_at")
-        .order("date", { ascending: false })
-        .limit(200),
+      fetchAllActivities(supabase),
       supabase
         .from("goals")
         .select("*")
@@ -41,23 +38,7 @@ export default async function Page() {
     ])
 
   const initialData = {
-    activities: (activitiesRes.data ?? []).map((a) => ({
-      id: a.id,
-      user_id: a.user_id,
-      strava_id: a.strava_id,
-      type: a.type,
-      name: a.name,
-      date: a.date,
-      distance_km: Number(a.distance_km),
-      duration_seconds: a.duration_seconds,
-      pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
-      elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
-      avg_heart_rate: a.avg_heart_rate,
-      avg_cadence: (a as any).avg_cadence ?? null,
-      calories: a.calories,
-      map_polyline: a.map_polyline,
-      created_at: a.created_at,
-    })),
+    activities: activitiesRes,
     goals: (goalsRes.data ?? []).map((g) => ({
       id: g.id,
       goal_category: (g.goal_category ?? "performance") as GoalCategory,

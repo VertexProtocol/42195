@@ -42,6 +42,7 @@ export {
 } from "@/lib/training-safety-client"
 import type { SafetyActivity, AthleteLevel } from "@/lib/training-safety-client"
 import { MAX_WEEKLY_INCREASE, classifyAthleteLevel } from "@/lib/training-safety-client"
+import { logWarn } from "@/lib/log"
 
 /**
  * Parses a session distance string into its low/high numeric km values.
@@ -474,8 +475,8 @@ export function checkLongRunProtection(plan: TrainingPlan): LongRunViolation[] {
         maxAllowedKm: maxAllowed,
         adjustedKm: maxAllowed,
       })
-      console.warn(
-        `[safety] Week ${week.weekNumber}: long run ${longestSessionKm} km exceeds ${Math.round(LONG_RUN_MAX_FRACTION * 100)}% of ${week.targetKm} km weekly total (max ${maxAllowed} km). Session: "${longestSessionType}"`
+      logWarn("safety", 
+        `Week ${week.weekNumber}: long run ${longestSessionKm} km exceeds ${Math.round(LONG_RUN_MAX_FRACTION * 100)}% of ${week.targetKm} km weekly total (max ${maxAllowed} km). Session: "${longestSessionType}"`
       )
     }
   }
@@ -690,7 +691,7 @@ export function validateAndAdjustPlan(
       adjustedWeeks[idx].targetKm = v.adjustedKm
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (${athleteLevel} cap: +${Math.round(MAX_WEEKLY_INCREASE[athleteLevel] * 100)}%/week)`
       safetyNotes.push(note)
-      console.warn(`[safety] ${note}`)
+      logWarn("safety", `${note}`)
       // Keep Claude's original coachNote but prefix the adjustment so the
       // shown text stays consistent with the (now-reduced) targetKm.
       adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
@@ -712,7 +713,7 @@ export function validateAndAdjustPlan(
       adjustedWeeks[idx].targetKm = v.adjustedKm
       const note = `Week ${v.weekNumber}: volume reduced from ${v.targetKm} to ${v.adjustedKm} km (cumulative ${v.cumulativePct}% over 3 weeks exceeds ${v.maxAllowedPct}% cap for ${athleteLevel})`
       safetyNotes.push(note)
-      console.warn(`[safety] ${note}`)
+      logWarn("safety", `${note}`)
       adjustedWeeks[idx].coachNote = annotateSafetyAdjustment(
         adjustedWeeks[idx].coachNote,
         `Safety: reduced to ${v.adjustedKm} km (was ${v.targetKm}, 3-wk cumulative cap).`,
@@ -763,7 +764,7 @@ export function validateAndAdjustPlan(
       if (corrected < week.targetKm) {
         week.targetKm = corrected
         safetyNotes.push(v.message + ` Reduced to ${corrected} km (65% of peak).`)
-        console.warn(`[safety] ${v.message} Corrected to ${corrected} km.`)
+        logWarn("safety", `${v.message} Corrected to ${corrected} km.`)
       }
     }
   }

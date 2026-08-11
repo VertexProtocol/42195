@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react"
-import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
   RefreshCw,
@@ -215,13 +214,18 @@ export function ProfileScreen({
       {/* ── Identity ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3.5">
         {user.avatar_url ? (
-          <Image
+          // See the note in app-bar.tsx: the avatar host is provider-supplied,
+          // so this deliberately bypasses next/image.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={user.avatar_url}
             alt=""
             width={56}
             height={56}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
             className="size-14 shrink-0 rounded-full object-cover"
-            crossOrigin="anonymous"
           />
         ) : (
           <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-muted-foreground">
