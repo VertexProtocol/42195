@@ -53,6 +53,12 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
+  /**
+   * A plan was generated, regenerated, or had a checkpoint applied. Today's
+   * goal badges are derived from plans, and it no longer re-queries them on
+   * every visit, so it needs telling.
+   */
+  onPlanChange?: () => void
 }
 
 // ---- Collapsible Section ----
@@ -895,7 +901,7 @@ function TrainingTimelineView({
 }
 
 // ---- Main screen ----
-export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalDetailScreenProps) {
+export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanChange }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
     goal_id: goal.id,
@@ -917,6 +923,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Until the lookup answers, "no plan" is unknown rather than false. The
+  // empty state it used to render carries a live Generate button, so a goal
+  // that already had a plan briefly offered to build a second one — an
+  // expensive, streamed model call.
+  const [planResolved, setPlanResolved] = useState(false)
   const [checkpoint, setCheckpoint] = useState<MidBlockCheckpoint | null>(null)
   const [pendingCheckpoint, setPendingCheckpoint] = useState<MidBlockCheckpoint | null>(null)
   const [showCheckpointReview, setShowCheckpointReview] = useState(false)
@@ -969,7 +980,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         if (p.preferences) setPrefs(p.preferences)
       }
     }
-    load()
+    setPlanResolved(false)
+    load().finally(() => setPlanResolved(true))
   }, [goal.id])
 
   // Manual overrides persisted to database (with localStorage fallback)
@@ -1085,12 +1097,13 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       }
       setPendingCheckpoint(null)
       setShowCheckpointReview(false)
+      if (result?.adjustmentApplied) onPlanChange?.()
     } catch {
       // silently ignore
     } finally {
       setIsApplyingCheckpoint(false)
     }
-  }, [goal.id])
+  }, [goal.id, onPlanChange])
 
   const handleGenerate = useCallback(
     async (note?: string) => {
@@ -1179,6 +1192,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                   : prev?.previous_plans ?? [],
               }))
               setAdjustNote("")
+              onPlanChange?.()
             } else if (event.status === "error") {
               setError(event.error ?? "Failed to generate plan")
             }
@@ -1191,7 +1205,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         setGenerateStatus(null)
       }
     },
-    [goal.id]
+    [goal.id, onPlanChange]
   )
 
   // Derived values
@@ -1429,7 +1443,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         )}
 
         {/* No plan yet */}
-        {!aiPlan && !isGenerating && (
+        {!planResolved && !isGenerating && (
+          <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText="Loading your plan…" />
+        )}
+
+        {planResolved && !aiPlan && !isGenerating && (
           <div className="flex flex-col items-center gap-4 surface px-6 py-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
               <Sparkles size={24} className="text-primary" />

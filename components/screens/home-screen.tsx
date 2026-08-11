@@ -4,7 +4,6 @@ import {
   useMemo,
   lazy,
   Suspense,
-  useEffect,
   useState,
   useRef,
   useCallback,
@@ -36,12 +35,12 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
 
 const TrainingLoadIndicator = lazy(() =>
   import("@/components/training-load-indicator").then((m) => ({ default: m.TrainingLoadIndicator })),
 )
 import type { Warning, WarningType } from "@/lib/training-warnings"
+import type { PlanBadge } from "@/lib/plan-badges"
 
 /**
  * Today.
@@ -64,6 +63,13 @@ interface HomeScreenProps {
   activities: Activity[]
   weeklySummary: WeeklySummary
   recentActivities: Activity[]
+  /**
+   * Both derived during the page render and owned by the app shell. This
+   * screen unmounts on every tab change, so fetching them here made the
+   * warning cards and goal badges arrive a round-trip late on each return.
+   */
+  warnings: Warning[]
+  planBadges: Record<string, PlanBadge>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
   onViewActivities: () => void
@@ -80,17 +86,14 @@ export function HomeScreen({
   activities,
   weeklySummary,
   recentActivities,
+  warnings,
+  planBadges,
   onViewActivities,
   onViewGoal,
   onViewGoals,
   onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
-
-  const [planBadges, setPlanBadges] = useState<
-    Record<string, { checkpoint: boolean; blockCompleted: boolean }>
-  >({})
-  const [warnings, setWarnings] = useState<Warning[]>([])
 
   // The load engine only ever looks at runs, so the gate counts runs. Counting
   // activities of any type meant seven bike rides both fetched warnings that
@@ -100,23 +103,6 @@ export function HomeScreen({
     [activities],
   )
   const hasLoadHistory = runCount >= LOAD_INDICATOR_MIN_RUNS
-
-  // Proactive training warnings need history before the engine can say
-  // anything useful, so we do not ask for them on a near-empty account.
-  useEffect(() => {
-    if (!hasLoadHistory) return
-    let cancelled = false
-    fetch("/api/warnings")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.warnings) return
-        setWarnings(data.warnings as Warning[])
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [hasLoadHistory])
 
   const handleDismissWarning = async (type: WarningType) => {
     try {
@@ -130,41 +116,6 @@ export function HomeScreen({
       // applies once the POST has actually landed.
     }
   }
-
-  useEffect(() => {
-    if (starredGoals.length === 0) return
-    const supabase = createClient()
-    supabase
-      .from("ai_training_plans")
-      .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-      .in(
-        "goal_id",
-        starredGoals.map((g) => g.id),
-      )
-      .then(({ data }) => {
-        if (!data) return
-        const now = new Date()
-        const badges: Record<string, { checkpoint: boolean; blockCompleted: boolean }> = {}
-        for (const row of data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const weeks = (row.plan as any)?.weeks
-          // Snap to Monday (same as goal-detail-screen) so blockEnd lands on a
-          // week boundary.
-          const blockStart = new Date(row.block_start_date)
-          blockStart.setHours(0, 0, 0, 0)
-          const dow = blockStart.getDay()
-          blockStart.setDate(blockStart.getDate() + (dow === 0 ? -6 : 1 - dow))
-          const blockEnd = new Date(blockStart)
-          blockEnd.setDate(blockEnd.getDate() + (Array.isArray(weeks) ? weeks.length : 0) * 7)
-          badges[row.goal_id] = {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            checkpoint: !!(row.mid_block_checkpoint as any)?.adjustmentApplied,
-            blockCompleted: Array.isArray(weeks) && weeks.length > 0 && now > blockEnd,
-          }
-        }
-        setPlanBadges(badges)
-      })
-  }, [starredGoals])
 
   const currentMondayStr = useMemo(() => {
     const now = new Date()
