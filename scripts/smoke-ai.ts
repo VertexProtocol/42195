@@ -18,11 +18,23 @@
  * makes. Only the user turn is synthesised — minimal but realistic.
  */
 
+import { existsSync } from "fs"
+import { join } from "path"
 import Anthropic from "@anthropic-ai/sdk"
 import { templateLiteral, valueLiteral } from "./route-literals"
 
+// Next loads .env.local for the routes; do the same here so the key can live in
+// a gitignored file rather than an exported shell variable.
+for (const file of [".env.local", ".env"]) {
+  const path = join(__dirname, "..", file)
+  if (existsSync(path)) process.loadEnvFile(path)
+}
+
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY is not set — nothing here can run without it.")
+  console.error(
+    "ANTHROPIC_API_KEY is not set — nothing here can run without it.\n" +
+      "Export it, or put it in .env.local (gitignored) as ANTHROPIC_API_KEY=sk-ant-...",
+  )
   process.exit(1)
 }
 
