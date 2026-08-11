@@ -19,8 +19,7 @@ import {
   type WarningActivity,
   type WarningState,
 } from "@/lib/training-warnings"
-
-const RUN_TYPES = new Set(["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"])
+import { RUN_TYPES, TRAINING_LOAD_BUFFER_DAYS } from "@/lib/training-constants"
 
 export async function GET() {
   const supabase = await createClient()
@@ -32,10 +31,13 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // 10 weeks of activity history is plenty for ACWR (7/28-day windows) and
-  // trailing-fatigue week counting (caps at 12 weeks in the helper anyway).
+  // The binding constraint is the ATL/CTL model behind prolonged fatigue, not
+  // ACWR's 28-day window. computeTrainingLoad warms its EWMAs up from zero over
+  // TRAINING_LOAD_BUFFER_DAYS; fetching the 70 days this used to request fed it
+  // ~50 days of forced zeros, which held CTL down, pushed TSB (CTL − ATL)
+  // negative and surfaced prolonged-fatigue warnings at runners who were fine.
   const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - 70)
+  cutoff.setDate(cutoff.getDate() - TRAINING_LOAD_BUFFER_DAYS)
 
   const [{ data: profileRow }, { data: activitiesRaw }] = await Promise.all([
     supabase
@@ -49,7 +51,10 @@ export async function GET() {
       .eq("user_id", user.id)
       .gte("date", cutoff.toISOString())
       .order("date", { ascending: false })
-      .limit(300),
+      // Ordered newest-first, so the limit truncates the OLDEST rows — exactly
+      // the warmup the load model needs. Sized to hold a high-frequency runner's
+      // full window rather than to cap the response.
+      .limit(600),
   ])
 
   const state = ((profileRow?.warning_state as WarningState | null) ?? {}) as WarningState

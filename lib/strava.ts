@@ -201,6 +201,49 @@ export class StravaRateLimitError extends Error {
 }
 
 /**
+ * Error thrown when Strava has deactivated the API application itself.
+ *
+ * Strava answers every data request with HTTP 403 and a body of
+ * `{"errors":[{"resource":"Application","field":"Status","code":"Inactive"}]}`
+ * once an app's API access is switched off in the developer settings.
+ *
+ * This is deliberately separate from StravaAuthError: the athlete's tokens are
+ * perfectly valid — OAuth and token refresh keep working, which is exactly what
+ * makes the failure so confusing. Reconnecting the account cannot fix it, so
+ * callers must not bounce the user back through the OAuth flow. The app's
+ * status has to be restored at https://www.strava.com/settings/api.
+ */
+export class StravaAppInactiveError extends Error {
+  readonly code = "STRAVA_APP_INACTIVE" as const
+
+  constructor() {
+    super(
+      "Strava has deactivated this app's API access, so it cannot read activities. " +
+        "Reconnecting your account will not help — the app's status has to be restored " +
+        "in the Strava API settings (strava.com/settings/api).",
+    )
+    this.name = "StravaAppInactiveError"
+  }
+}
+
+/**
+ * True when a 403 body is Strava reporting that the *application* is inactive,
+ * rather than a permission problem with this particular athlete or activity.
+ */
+function isApplicationInactive(body: string): boolean {
+  try {
+    const parsed = JSON.parse(body) as {
+      errors?: Array<{ resource?: string; field?: string; code?: string }>
+    }
+    return (parsed.errors ?? []).some(
+      (e) => e.resource === "Application" && e.code === "Inactive",
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * Start of the next natural 15-minute window. Strava resets an application's
  * short-term limit at :00, :15, :30 and :45 past the hour.
  */
@@ -252,6 +295,26 @@ export async function stravaApiFetch(url: string, token: string): Promise<Respon
       "Strava's rate limit for this app is spent. Syncing continues automatically once it resets.",
       resetAt,
     )
+  }
+
+  // A 403 is worth inspecting: when the app itself has been deactivated, every
+  // endpoint returns it, and no amount of reconnecting or retrying will help.
+  if (res.status === 403) {
+    const body = await res.text()
+    if (isApplicationInactive(body)) {
+      console.error(
+        "[Strava] API application is marked Inactive — every request will 403 until " +
+          "its status is restored at strava.com/settings/api.",
+      )
+      throw new StravaAppInactiveError()
+    }
+    // Reading the body consumed the stream, so hand callers an equivalent
+    // response they can still read for their own error logging.
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    })
   }
 
   return res

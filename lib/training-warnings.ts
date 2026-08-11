@@ -25,6 +25,7 @@ import { detectFatigue } from "@/lib/training-safety"
 import { computeACWR, computeTrainingLoad, effortAdjustedKm } from "@/lib/training-utils"
 import {
   ACWR_HIGH_THRESHOLD,
+  ACWR_UNSAFE_THRESHOLD,
   PROLONGED_FATIGUE_CONSECUTIVE_WEEKS,
   PROLONGED_FATIGUE_TSB_THRESHOLD,
   ACWR_CHRONIC_DAYS,
@@ -39,14 +40,42 @@ export type WarningType =
 
 export type WarningSeverity = "info" | "warn" | "critical"
 
+/**
+ * Every translation key this engine can emit.
+ *
+ * The warning text used to be English string literals built here on the
+ * server, which then rendered inside the Norwegian load card. The engine now
+ * emits keys plus their interpolation values and leaves wording to the client
+ * dictionary.
+ *
+ * Typing the keys as a union rather than `string` is what keeps the two sides
+ * honest: the fields below are assignable to TranslationKey only while every
+ * member of this union exists in the dictionary, so deleting a translation
+ * breaks the build instead of shipping a raw key to a runner.
+ */
+export type WarningTextKey =
+  | "warning.elevated_acwr.title"
+  | "warning.elevated_acwr.message"
+  | "warning.elevated_acwr.messageCritical"
+  | "warning.prolonged_fatigue.title"
+  | "warning.prolonged_fatigue.message"
+  | "warning.hr_drift.title"
+  | "warning.hr_drift.message"
+  | "warning.pace_drift.title"
+  | "warning.pace_drift.message"
+
 export interface Warning {
   type: WarningType
   severity: WarningSeverity
-  title: string
-  message: string
+  titleKey: WarningTextKey
+  messageKey: WarningTextKey
+  /**
+   * Values interpolated into the message, keyed by placeholder name. Numbers
+   * are pre-formatted here (an ACWR is always 2 decimals) so that presentation
+   * of a training number does not drift between the card and the coach.
+   */
+  params?: Record<string, string | number>
   triggeredAt: string
-  /** Optional structured payload for UI to render specifics (bpm, ratio, etc.) */
-  data?: Record<string, number | string | boolean>
 }
 
 export interface WarningEntry {
@@ -96,12 +125,12 @@ function canSurface(
 function toWarning(
   type: WarningType,
   severity: WarningSeverity,
-  title: string,
-  message: string,
+  titleKey: WarningTextKey,
+  messageKey: WarningTextKey,
   triggeredAt: string,
-  data?: Warning["data"],
+  params?: Warning["params"],
 ): Warning {
-  return { type, severity, title, message, triggeredAt, data }
+  return { type, severity, titleKey, messageKey, triggeredAt, params }
 }
 
 export function evaluateWarnings(
@@ -121,17 +150,18 @@ export function evaluateWarnings(
     ctx.acwrOneWeekAgo > ACWR_HIGH_THRESHOLD &&
     canSurface(state, "elevated_acwr", referenceDate, cooldownDays)
   ) {
-    const severity: WarningSeverity = ctx.acwr > 1.5 ? "critical" : "warn"
+    const severity: WarningSeverity =
+      ctx.acwr > ACWR_UNSAFE_THRESHOLD ? "critical" : "warn"
     newWarnings.push(
       toWarning(
         "elevated_acwr",
         severity,
-        "Training load is climbing fast",
+        "warning.elevated_acwr.title",
         severity === "critical"
-          ? `Your acute load is ${ctx.acwr.toFixed(2)}× your chronic baseline — injury risk is high. Consider an easy week.`
-          : `Your load has been elevated (${ctx.acwr.toFixed(2)}×) for the second week in a row. Consider pulling back.`,
+          ? "warning.elevated_acwr.messageCritical"
+          : "warning.elevated_acwr.message",
         now,
-        { acwr: ctx.acwr, previous: ctx.acwrOneWeekAgo },
+        { acwr: ctx.acwr.toFixed(2), previous: ctx.acwrOneWeekAgo.toFixed(2) },
       ),
     )
     nextState.elevated_acwr = { lastSurfacedAt: now }
@@ -146,8 +176,8 @@ export function evaluateWarnings(
       toWarning(
         "prolonged_fatigue",
         "critical",
-        "You've been running fatigued for a while",
-        `Training stress balance has stayed low for ${ctx.tsbBelowThresholdWeeks} straight weeks. A recovery week would help your body absorb the work.`,
+        "warning.prolonged_fatigue.title",
+        "warning.prolonged_fatigue.message",
         now,
         { weeks: ctx.tsbBelowThresholdWeeks },
       ),
@@ -164,10 +194,9 @@ export function evaluateWarnings(
       toWarning(
         "hr_drift",
         ctx.fatigueSignal === "both" ? "critical" : "warn",
-        "Heart rate is trending up",
-        "Your average heart rate has crept higher on recent runs compared to your baseline. That's a common fatigue signal — consider an easier week.",
+        "warning.hr_drift.title",
+        "warning.hr_drift.message",
         now,
-        { fatigueSignal: ctx.fatigueSignal },
       ),
     )
     nextState.hr_drift = { lastSurfacedAt: now }
@@ -182,10 +211,9 @@ export function evaluateWarnings(
       toWarning(
         "pace_drift",
         ctx.fatigueSignal === "both" ? "critical" : "warn",
-        "Easy pace is slipping",
-        "Your grade-adjusted pace has drifted slower recently at similar effort. Consider an easy week or extra rest.",
+        "warning.pace_drift.title",
+        "warning.pace_drift.message",
         now,
-        { fatigueSignal: ctx.fatigueSignal },
       ),
     )
     nextState.pace_drift = { lastSurfacedAt: now }

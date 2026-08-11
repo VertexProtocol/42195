@@ -24,7 +24,9 @@ import {
   computeWeeklyProgress,
   formatWeeklyMetric,
   progressPercentage,
+  isRunActivity,
 } from "@/lib/format"
+import { LOAD_INDICATOR_MIN_RUNS } from "@/lib/training-constants"
 import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { AppCard, CardRow } from "@/components/ui/app-card"
@@ -90,10 +92,19 @@ export function HomeScreen({
   >({})
   const [warnings, setWarnings] = useState<Warning[]>([])
 
+  // The load engine only ever looks at runs, so the gate counts runs. Counting
+  // activities of any type meant seven bike rides both fetched warnings that
+  // could not exist and mounted a load card that rendered nothing.
+  const runCount = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)).length,
+    [activities],
+  )
+  const hasLoadHistory = runCount >= LOAD_INDICATOR_MIN_RUNS
+
   // Proactive training warnings need history before the engine can say
   // anything useful, so we do not ask for them on a near-empty account.
   useEffect(() => {
-    if (activities.length < 7) return
+    if (!hasLoadHistory) return
     let cancelled = false
     fetch("/api/warnings")
       .then((r) => (r.ok ? r.json() : null))
@@ -105,7 +116,7 @@ export function HomeScreen({
     return () => {
       cancelled = true
     }
-  }, [activities.length])
+  }, [hasLoadHistory])
 
   const handleDismissWarning = async (type: WarningType) => {
     try {
@@ -256,19 +267,43 @@ export function HomeScreen({
                 >
                 <button
                   onClick={() => onViewGoal(goal)}
-                  className="press surface h-full w-full p-4 text-left"
+                  // `flex flex-col` is load-bearing: a button taller than its
+                  // content centres that content vertically, which on the rail
+                  // floated the shorter card's text between two bands of white
+                  // while its neighbour filled the card edge to edge.
+                  className="press surface flex h-full w-full flex-col p-4 text-left"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-primary">
-                        <Star size={12} fill="currentColor" aria-hidden />
-                        <span className="text-micro font-semibold">{t("home.activeGoal")}</span>
-                      </div>
+                  {/* Status line, full card width. The plan badges used to sit
+                      at the foot of the card, where an extra row on one goal
+                      pushed every line below it out of step with the card
+                      beside it — up here they cost no height at all. */}
+                  <div className="flex items-center gap-1.5 text-primary">
+                    <Star size={12} fill="currentColor" aria-hidden />
+                    <span className="truncate text-micro font-semibold">
+                      {t("home.activeGoal")}
+                    </span>
+                    {(badge?.checkpoint || badge?.blockCompleted) && (
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        {badge?.checkpoint && (
+                          <Pill tone="action" className="px-1.5 py-0">
+                            {t("plan.checkpointBadge")}
+                          </Pill>
+                        )}
+                        {badge?.blockCompleted && (
+                          <Pill tone="positive" className="px-1.5 py-0">
+                            {t("plan.blockDoneBadge")}
+                          </Pill>
+                        )}
+                      </span>
+                    )}
+                  </div>
 
+                  <div className="mt-2 flex flex-1 gap-4">
+                    <div className="flex min-w-0 flex-1 flex-col">
                       {/* The countdown leads. It is the one number the runner
                           opens this screen to check, so it is the only thing on
                           it set at display size. */}
-                      <p className="mt-2 flex items-baseline gap-1.5">
+                      <p className="flex items-baseline gap-1.5">
                         <span className="measure text-display font-semibold leading-none text-card-foreground">
                           {m.days}
                         </span>
@@ -281,7 +316,11 @@ export function HomeScreen({
                         {goal.name}
                       </h3>
 
-                      <p className="mt-1.5 text-label text-muted-foreground">
+                      {/* The totals sit on the floor of the card rather than
+                          under the name, so a two-line name on one card cannot
+                          knock the line out of step with the card beside it.
+                          `mt-auto` is inert on a card that stands alone. */}
+                      <p className="mt-auto line-clamp-2 pt-1.5 text-label text-muted-foreground">
                         <span className="measure font-semibold text-foreground">
                           {formatDistance(m.logged)}
                         </span>{" "}
@@ -296,17 +335,6 @@ export function HomeScreen({
                           </>
                         ) : null}
                       </p>
-
-                      {(badge?.checkpoint || badge?.blockCompleted) && (
-                        <div className="mt-2.5 flex flex-wrap gap-1.5">
-                          {badge?.checkpoint && (
-                            <Pill tone="action">{t("plan.checkpointBadge")}</Pill>
-                          )}
-                          {badge?.blockCompleted && (
-                            <Pill tone="positive">{t("plan.blockDoneBadge")}</Pill>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex shrink-0 flex-col items-center gap-1.5">
@@ -359,7 +387,7 @@ export function HomeScreen({
       )}
 
       {/* ── Is the body handling it ───────────────────────────────────── */}
-      {activities.length >= 7 && (
+      {hasLoadHistory && (
         <Suspense fallback={null}>
           <TrainingLoadIndicator
             activities={activities}

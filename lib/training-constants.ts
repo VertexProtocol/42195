@@ -18,6 +18,13 @@ export const ACWR_CHRONIC_WEEKS = ACWR_CHRONIC_DAYS / 7 // 4
 export const ACWR_HIGH_THRESHOLD = 1.3
 /** ACWR above this threshold signals unsafe load (forced reduction) */
 export const ACWR_UNSAFE_THRESHOLD = 1.5
+/**
+ * ACWR below this threshold means the runner is training well under their own
+ * baseline — the detraining end of the sweet spot, not a safe "low" reading.
+ * Together with ACWR_HIGH_THRESHOLD this defines the 0.8–1.3 optimal band that
+ * the load indicator draws on its scale.
+ */
+export const ACWR_LOW_THRESHOLD = 0.8
 
 // ── Training Load EWMA (ATL / CTL / TSB) ────────────────────────────────────
 
@@ -74,6 +81,19 @@ export const FATIGUE_PACE_DECLINE_FACTOR = 1.05
  * produces stale signals that the runner can't act on.
  */
 export const FATIGUE_FRESHNESS_DAYS = 10
+/**
+ * Like-for-like guard on the fatigue comparison. Recent runs and baseline runs
+ * are compared as whole samples, so a block of hard sessions against a block of
+ * easy ones reads as "HR up" (and an easy week against a hard one as "pace
+ * down") when nothing is wrong.
+ *
+ * A signal is therefore only accepted when the OTHER variable did not move in
+ * the direction that would explain it: HR may only count as elevated if the
+ * recent runs were not meaningfully faster, and pace may only count as
+ * declining if the effort was not meaningfully lower. This tolerance is how
+ * much drift counts as "meaningful" (2%).
+ */
+export const FATIGUE_INTENSITY_MATCH_TOLERANCE = 0.02
 
 // ── Prolonged Fatigue / Forced Deload ────────────────────────────────────────
 
@@ -268,6 +288,13 @@ export const PROLONGED_FATIGUE_MIN_POINTS = 42 // 6 * 7
 
 /** Rolling window (weeks) used to classify athlete level */
 export const ATHLETE_CLASSIFICATION_WEEKS = 12
+/**
+ * Runs needed inside the classification window before a level means anything.
+ * Below this the classifier returns "beginner" as a fallback, which is not the
+ * same claim — callers that display the level must say "not enough history"
+ * instead of asserting the fallback (see hasAthleteLevelEvidence).
+ */
+export const ATHLETE_MIN_CLASSIFIABLE_RUNS = 4
 /** Minimum avg km/week for advanced classification */
 export const ATHLETE_ADVANCED_KM_PER_WEEK = 50
 /** Minimum avg sessions/week for advanced classification */
@@ -342,6 +369,25 @@ export const LONG_RUN_FRACTION_MARGIN = 0.05
  * COMEBACK_PREPAUSE_WINDOW_WEEKS, the frequency check).
  */
 export const FITNESS_ANALYSIS_WEEKS = 4
+
+// ── Training Load Indicator (UI) ─────────────────────────────────────────────
+
+/**
+ * Minimum RUN activities before the training load card is worth rendering at
+ * all. Below this there is nothing to compute — not even a "building baseline"
+ * message, because the runner has not started.
+ *
+ * Shared with the Today screen so its gate and the card's own gate cannot
+ * drift apart: the screen used to require 7 activities of ANY type while the
+ * card required 4 runs, so seven bike rides mounted a card that rendered
+ * nothing.
+ */
+export const LOAD_INDICATOR_MIN_RUNS = 4
+
+/** How far back the card looks when calling fitness rising, steady or easing */
+export const FITNESS_TREND_LOOKBACK_DAYS = 14
+/** CTL must move by more than this over the lookback to count as a direction */
+export const FITNESS_TREND_MIN_DELTA = 0.3
 
 // ── Injury Notes ─────────────────────────────────────────────────────────────
 

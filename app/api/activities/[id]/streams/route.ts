@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service"
 import {
   withStravaRetry,
   stravaApiFetch,
+  StravaAppInactiveError,
   StravaAuthError,
   StravaRateLimitError,
   StravaUnauthorizedError,
@@ -107,6 +108,9 @@ export async function GET(
         { error: err.message, code: "STRAVA_RATE_LIMITED", resume_at: err.resetAt.toISOString() },
         { status: 429 },
       )
+    }
+    if (err instanceof StravaAppInactiveError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 503 })
     }
     return NextResponse.json({ error: "Strava streams fetch failed" }, { status: 502 })
   }

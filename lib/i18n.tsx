@@ -70,6 +70,38 @@ const translations = {
     "loadIndicator.levelHelp":
       "Your training level, based on average weekly kilometres over the last 12 weeks.",
     "loadIndicator.dismiss": "Dismiss",
+    "loadIndicator.ratio": "{ratio}× baseline",
+    "loadIndicator.ratioHelp":
+      "Your last 7 days of running compared with your 4-week average. Around 1× means you are training at your usual level.",
+    "loadIndicator.baselineEmptyBody":
+      "You have not run in the last four weeks, so there is no baseline to measure today against. This card starts working again after a few runs.",
+    "loadIndicator.lastRun": "Last run",
+    "loadIndicator.unknown": "Not enough data",
+    "loadIndicator.fatigueSustained": "Sustained ({weeks} wks)",
+    "loadIndicator.advice_detraining":
+      "You are running well under your own baseline. A steady week back at your usual volume is the way back.",
+    "loadIndicator.advice_moderate":
+      "Slightly above your baseline. Keep this week manageable to stay in the band.",
+    "loadIndicator.advice_high":
+      "Load is elevated. Ease off the intensity this week and prioritise sleep.",
+    "loadIndicator.advice_unsafe":
+      "Well above your baseline. Take a rest day or an easy run — leave the hard sessions until this comes down.",
+    "loadIndicator.advice_prolongedFatigue":
+      "Your form has been low for several weeks running. A recovery week helps your body absorb the work you have already done.",
+    "warning.elevated_acwr.title": "Training load is climbing fast",
+    "warning.elevated_acwr.message":
+      "Your load has been elevated ({acwr}×) for the second week in a row. Consider pulling back.",
+    "warning.elevated_acwr.messageCritical":
+      "Your recent load is {acwr}× your baseline — injury risk is high. Consider an easy week.",
+    "warning.prolonged_fatigue.title": "You've been running fatigued for a while",
+    "warning.prolonged_fatigue.message":
+      "Training stress balance has stayed low for {weeks} straight weeks. A recovery week would help your body absorb the work.",
+    "warning.hr_drift.title": "Heart rate is trending up",
+    "warning.hr_drift.message":
+      "Your average heart rate has crept higher on recent runs compared with your baseline. That's a common fatigue signal — consider an easier week.",
+    "warning.pace_drift.title": "Easy pace is slipping",
+    "warning.pace_drift.message":
+      "Your grade-adjusted pace has drifted slower recently at similar effort. Consider an easy week or extra rest.",
     "manualActivity.activityType": "Activity type",
     "manualActivity.namePlaceholder": "Morning long run",
     "manualActivity.date": "Date",
@@ -564,6 +596,7 @@ const translations = {
     "loadIndicator.high": "High Load",
     "loadIndicator.overtraining": "Overtraining Risk",
     "loadIndicator.insufficientData": "Building Baseline",
+    "loadIndicator.detraining": "Under Baseline",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Fatigue",
     "loadIndicator.level": "Level",
@@ -657,6 +690,38 @@ const translations = {
     "loadIndicator.levelHelp":
       "Treningsnivået ditt, basert på snitt-kilometer per uke de siste 12 ukene.",
     "loadIndicator.dismiss": "Lukk",
+    "loadIndicator.ratio": "{ratio}× grunnlaget",
+    "loadIndicator.ratioHelp":
+      "De siste 7 dagene med løping sammenlignet med snittet ditt de siste 4 ukene. Rundt 1× betyr at du trener som du pleier.",
+    "loadIndicator.baselineEmptyBody":
+      "Du har ikke løpt de siste fire ukene, så vi har ingenting å måle dagen i dag mot. Kortet våkner igjen etter noen turer.",
+    "loadIndicator.lastRun": "Siste løpetur",
+    "loadIndicator.unknown": "For lite data",
+    "loadIndicator.fatigueSustained": "Vedvarende ({weeks} uker)",
+    "loadIndicator.advice_detraining":
+      "Du løper godt under ditt eget grunnlag. Veien tilbake er en jevn uke på det volumet du pleier å ligge på.",
+    "loadIndicator.advice_moderate":
+      "Litt over grunnlaget ditt. Hold uka overkommelig, så blir du liggende i sonen.",
+    "loadIndicator.advice_high":
+      "Belastningen er forhøyet. Ta ned intensiteten denne uka og prioriter søvn.",
+    "loadIndicator.advice_unsafe":
+      "Godt over grunnlaget ditt. Ta en hviledag eller en rolig tur — la de harde øktene vente til dette har roet seg.",
+    "loadIndicator.advice_prolongedFatigue":
+      "Formen har ligget lavt flere uker på rad. En rolig uke gjør at kroppen får tatt opp jobben du allerede har lagt ned.",
+    "warning.elevated_acwr.title": "Belastningen stiger raskt",
+    "warning.elevated_acwr.message":
+      "Belastningen har vært forhøyet ({acwr}×) andre uka på rad. Vurder å ta ned litt.",
+    "warning.elevated_acwr.messageCritical":
+      "Den siste belastningen din er {acwr}× grunnlaget — skaderisikoen er høy. Vurder en rolig uke.",
+    "warning.prolonged_fatigue.title": "Du har løpt sliten en stund",
+    "warning.prolonged_fatigue.message":
+      "Formbalansen har ligget lavt {weeks} uker på rad. En restitusjonsuke vil hjelpe kroppen med å ta opp jobben.",
+    "warning.hr_drift.title": "Pulsen trender oppover",
+    "warning.hr_drift.message":
+      "Snittpulsen har krøpet oppover på de siste turene sammenlignet med grunnlaget ditt. Det er et vanlig tretthetssignal — vurder en roligere uke.",
+    "warning.pace_drift.title": "Den rolige farten siger",
+    "warning.pace_drift.message":
+      "Den stigningsjusterte farten din har blitt tregere den siste tida ved samme innsats. Vurder en rolig uke eller ekstra hvile.",
     "manualActivity.activityType": "Aktivitetstype",
     "manualActivity.namePlaceholder": "Langtur om morgenen",
     "manualActivity.date": "Dato",
@@ -1153,6 +1218,7 @@ const translations = {
     "loadIndicator.high": "H\u00f8y belastning",
     "loadIndicator.overtraining": "Overtreningsrisiko",
     "loadIndicator.insufficientData": "Bygger grunnlag",
+    "loadIndicator.detraining": "Under grunnlaget",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Tretthet",
     "loadIndicator.level": "Niv\u00e5",
@@ -1186,7 +1252,14 @@ const translations = {
 
 export type TranslationKey = keyof typeof translations.en
 
-/** Values substituted into `{placeholder}` slots in a translation string. */
+/**
+ * Values substituted into a translation's `{name}` placeholders.
+ *
+ * Kept deliberately small: this is for numbers the caller has already
+ * formatted (a distance, a week count, an ACWR), not for composing sentences
+ * out of fragments — word order differs between the locales here, so anything
+ * bigger than a value belongs in the phrase itself.
+ */
 export type TranslationParams = Record<string, string | number>
 
 /**

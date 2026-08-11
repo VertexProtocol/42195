@@ -605,6 +605,17 @@ export function useAppData(initialData?: InitialData | null) {
         const data = await res.json()
 
         if (!res.ok) {
+          // Strava switched the app's API access off. The athlete's tokens are
+          // fine, so sending them through OAuth again would just loop them back
+          // to the same 403 — show what is actually wrong instead.
+          if (data.code === "STRAVA_APP_INACTIVE") {
+            setSyncStatus((prev) => ({
+              ...prev,
+              state: "error",
+              error_message: data.error ?? "Strava has deactivated this app's API access.",
+            }))
+            return
+          }
           if (
             data.code === "STRAVA_NOT_CONNECTED" ||
             data.code === "STRAVA_DISCONNECTED"
