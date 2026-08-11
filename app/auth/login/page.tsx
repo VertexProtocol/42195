@@ -81,8 +81,11 @@ export default function LoginPage() {
             42195
           </p>
         </div>
+        {/* What is happening, not what is being fetched: an account created
+            five seconds ago has no training to load, and the first thing the
+            app would ever have told that runner would have been wrong. */}
         <p className="text-body text-muted-foreground" role="status">
-          {t("auth.loadingData")}
+          {t("auth.signingIn")}
         </p>
       </div>
     )
