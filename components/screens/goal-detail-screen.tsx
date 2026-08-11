@@ -45,6 +45,7 @@ import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 import { parseSessionDistanceKm } from "@/lib/training-sessions"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
+import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui/pill'
 
@@ -53,6 +54,8 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
+  /** Opens the shared-goal screen for the group this goal belongs to. */
+  onOpenGroup?: (groupId: string) => void
   /**
    * A plan was generated, regenerated, or had a checkpoint applied. Today's
    * goal badges are derived from plans, and it no longer re-queries them on
@@ -901,7 +904,7 @@ function TrainingTimelineView({
 }
 
 // ---- Main screen ----
-export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanChange }: GoalDetailScreenProps) {
+export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanChange, onOpenGroup }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
     goal_id: goal.id,
@@ -1340,6 +1343,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
             </span>
           )}
         </div>
+
+      {onOpenGroup && (
+        <SharedGoalEntry goalId={goal.id} hidden={past} onOpen={onOpenGroup} />
+      )}
 
       {/* Progress bar + Training Timeline (merged) */}
       <AppCard variant="rows">

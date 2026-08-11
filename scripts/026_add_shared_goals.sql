@@ -68,21 +68,29 @@ alter table public.shared_goal_members enable row level security;
 
 
 -- INVITES -------------------------------------------------
--- The token is the invitation. It is looked up by the service role during
--- accept, so there is no select policy for members here: an invite list is
--- a list of email addresses, and the group does not need to read it.
+-- The invitation is a link, not an address. This app sends no mail of its own
+-- — only Supabase's auth mails — so an invite the owner has to hand over
+-- themselves is the honest shape. It also removes the question of what to do
+-- with an address that has no account: nothing is looked up, so nothing can
+-- leak whether someone is registered.
+--
+-- One use each. A link that can be forwarded is a link that will be, and a
+-- token that dies on first use bounds how far a forwarded one travels. The
+-- owner can always make another.
 create table if not exists public.shared_goal_invites (
   id             uuid        primary key default gen_random_uuid(),
   shared_goal_id uuid        not null references public.shared_goals(id) on delete cascade,
-  email          text        not null check (email = lower(email)),
   token          text        not null unique,
+  -- Optional note for the owner: who this link was meant for.
+  label          text,
   invited_by     uuid        references auth.users(id) on delete set null,
   created_at     timestamptz not null default now(),
-  accepted_at    timestamptz
+  accepted_at    timestamptz,
+  accepted_by    uuid        references auth.users(id) on delete set null
 );
 
-create unique index if not exists idx_shared_goal_invites_pending
-  on public.shared_goal_invites(shared_goal_id, email)
+create index if not exists idx_shared_goal_invites_goal
+  on public.shared_goal_invites(shared_goal_id)
   where accepted_at is null;
 
 alter table public.shared_goal_invites enable row level security;
