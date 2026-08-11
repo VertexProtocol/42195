@@ -5,34 +5,54 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 import type { Activity, GoalPreferences, TrainingPlan, TrainingWeek } from "@/lib/types"
-import { validateAndAdjustPlan, parseSessionDistanceKm, detectFatigue, classifyAthleteLevel, type SafetyActivity } from "@/lib/training-safety"
+import {
+  detectFatigue,
+  classifyAthleteLevel,
+  evaluateAcwrSafety,
+  checkProlongedFatigue,
+  checkFrequencyProgression,
+  computeRecentWeeklyVolumes,
+  type SafetyActivity,
+} from "@/lib/training-safety"
+import { computeWeeklyTargets } from "@/lib/training-volume"
+import { allocateSessionDistances, formatSessionDistance } from "@/lib/training-sessions"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
-import { effortAdjustedKm, predictRaceTimes } from "@/lib/training-utils"
+import { predictRaceTimes } from "@/lib/training-utils"
 import { buildPaceGuide, assignSessionPace } from "@/lib/pace-guide"
 import {
   PACE_PROGRESSION_RATES,
   PACE_PROGRESSION_MAX_WEEKS,
   RUN_TYPES,
   PLAN_REGENERATE_COOLDOWN_MS,
+  RECOVERY_WEEK_THRESHOLD,
 } from "@/lib/training-constants"
 import { type NoteHistoryEntry, getPhaseLabel, formatNotesHistoryForPrompt, hasActiveInjury, containsNewActiveInjury } from "@/lib/notes-history"
-import { assessComeback, applyComebackCap, type ComebackRecommendation } from "@/lib/training-comeback"
+import { assessComeback, type ComebackRecommendation } from "@/lib/training-comeback"
 
-const TrainingPlanSchema = z.object({
+/**
+ * What Claude returns. Deliberately carries no numbers: weekly volume and
+ * session distances are computed in lib/training-volume.ts and
+ * lib/training-sessions.ts, before and after the model call respectively.
+ *
+ * Everything the model used to emit as a number was overwritten downstream
+ * anyway — by the safety engine, the comeback cap and a final correction pass —
+ * so asking for it bought nothing but thinking tokens and an internally
+ * inconsistent plan, where the summary described volumes the runner never got.
+ * What the model is genuinely good at, and what it still owns, is the shape of
+ * a week: which session types, at what effort, and why.
+ */
+const PlanDraftSchema = z.object({
   summary: z.string(),
   weeks: z.array(
     z.object({
       weekNumber: z.number(),
       theme: z.string(),
-      targetKm: z.number(),
       sessions: z.array(
         z.object({
           type: z.string(),
-          distance: z.string(),
           effort: z.string(),
           purpose: z.string(),
-          suggestedPace: z.string().optional(),
         }),
       ),
       coachNote: z.string().nullable(),
@@ -41,6 +61,52 @@ const TrainingPlanSchema = z.object({
   keyPrinciples: z.array(z.string()),
   watchOut: z.string().nullable(),
 })
+
+type PlanDraft = z.infer<typeof PlanDraftSchema>
+
+/** JSON Schema mirror of PlanDraftSchema for the structured-outputs request. */
+const PLAN_DRAFT_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "weeks", "keyPrinciples", "watchOut"],
+  properties: {
+    summary: { type: "string", description: "2-3 sentences on this block and its purpose, personalised to the runner" },
+    weeks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["weekNumber", "theme", "sessions", "coachNote"],
+        properties: {
+          weekNumber: { type: "integer" },
+          theme: { type: "string", description: "Short phrase describing this week's focus" },
+          sessions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["type", "effort", "purpose"],
+              properties: {
+                type: { type: "string", description: "Session name, e.g. Long run, Base run, Tempo run" },
+                effort: { type: "string", description: "How it should feel, in the runner's language" },
+                purpose: { type: "string", description: "What this session is for" },
+              },
+            },
+          },
+          coachNote: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Optional tip or warning for this week, or null",
+          },
+        },
+      },
+    },
+    keyPrinciples: { type: "array", items: { type: "string" } },
+    watchOut: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+      description: "One thing to watch out for given this runner's history, or null",
+    },
+  },
+} as const
 
 interface WeeklySummary {
   weekLabel: string
@@ -113,184 +179,43 @@ function formatPace(minPerKm: number | null): string {
   return `${min}:${String(sec).padStart(2, "0")} min/km`
 }
 
-function calcMinWeeklyKm(sessionsPerWeek: number, longestRecentRun: number): number {
-  // Long run minimum: 8 km if the runner has ever run ≥ 6 km, otherwise gently above their longest
-  const longRunMin = longestRecentRun >= 6 ? 8 : Math.max(longestRecentRun + 1, 5)
-  // Other sessions: 5 km each
-  return longRunMin + Math.max(0, sessionsPerWeek - 1) * 5
-}
-
-function calcWeekTargets(
-  avgWeeklyKm: number,
-  pct: number,
-  blockWeeks: number,
-  sessionsPerWeek: number,
-  longestRecentRun: number,
-  acwr?: { ratio: number; risk: string },
-): number[] {
-  let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15 // Conservative default for beginners (was 20)
-  // If ACWR indicates injury risk, reduce the starting baseline
-  if (acwr?.risk === "high") {
-    base = base * 0.8 // 20% reduction for high risk
-  } else if (acwr?.risk === "moderate") {
-    base = base * 0.9 // 10% reduction for moderate risk
-  }
-  // Enforce a minimum weekly volume so that session length rules can be satisfied.
-  // Without this, a 10 km week with 2 sessions can't support a ≥ 8 km long run + ≥ 5 km base run.
-  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
-  const multiplier = 1 + pct / 100
-  // Safety cap: no week should exceed 150% of baseline to prevent injury
-  const maxWeeklyKm = Math.max(avgWeeklyKm > 0 ? avgWeeklyKm : 15, base) * 1.5
-  const targets: number[] = []
-  // Week 1 starts at the runner's current baseline
-  let current = base
-  targets.push(Math.round(current))
-  // Progressive overload for weeks 2 through blockWeeks-1
-  for (let i = 1; i < blockWeeks - 1; i++) {
-    current = Math.min(current * multiplier, maxWeeklyKm)
-    targets.push(Math.round(current))
-  }
-  // Last week is always recovery at 80% of peak — use floor so it rounds down,
-  // never up (12.58 → 12, not 13)
-  targets.push(Math.floor(current * 0.8))
-  return targets
-}
-
 /**
- * Build full-cycle periodised volume targets with base/build/peak/taper phases.
- * Recovery weeks (70% volume) are inserted every 3rd week.
+ * Cacheable system prompt — identical for all users, so it stays cheap to reuse
+ * across requests.
+ *
+ * Scope note: this used to also specify session distances, minimum lengths, the
+ * long-run share of the week and session ordering. All of that is now computed
+ * in code (lib/training-volume.ts, lib/training-sessions.ts), so restating it
+ * here would only be a rule the model can't affect. What remains is the part
+ * that genuinely shapes the plan: which session types to reach for, and how to
+ * balance intensity across a week.
  */
-function calcFullCycleTargets(
-  avgWeeklyKm: number,
-  totalWeeks: number,
-  sessionsPerWeek: number,
-  longestRecentRun: number,
-  acwr?: { ratio: number; risk: string },
-): number[] {
-  let base = avgWeeklyKm > 0 ? avgWeeklyKm : 15
-  if (acwr?.risk === "high") base *= 0.8
-  else if (acwr?.risk === "moderate") base *= 0.9
-  base = Math.max(base, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
-
-  const targets: number[] = []
-  // Phase boundaries (approximate):
-  // 60% base-building, 25% build/peak, 15% taper (last 2-3 weeks)
-  const taperWeeks = Math.min(3, Math.max(1, Math.floor(totalWeeks * 0.15)))
-  const buildWeeks = Math.max(2, Math.floor(totalWeeks * 0.25))
-  const baseWeeks = totalWeeks - buildWeeks - taperWeeks
-
-  // Base phase: gradual increase ~5-8% per week, recovery after every 2 hard weeks
-  let current = base
-  let hardWeeksSinceRecovery = 0
-  for (let i = 0; i < baseWeeks; i++) {
-    if (hardWeeksSinceRecovery >= 2 && i > 0) {
-      targets.push(Math.round(current * 0.7)) // Recovery week
-      hardWeeksSinceRecovery = 0
-    } else {
-      targets.push(Math.round(current))
-      current = Math.min(current * 1.07, base * 2.0) // Cap at 2x baseline
-      hardWeeksSinceRecovery++
-    }
-  }
-
-  // Build phase: higher intensity weeks with steeper progression
-  for (let i = 0; i < buildWeeks; i++) {
-    if (hardWeeksSinceRecovery >= 2 && i > 0) {
-      targets.push(Math.round(current * 0.7))
-      hardWeeksSinceRecovery = 0
-    } else {
-      targets.push(Math.round(current))
-      current = Math.min(current * 1.05, base * 2.2)
-      hardWeeksSinceRecovery++
-    }
-  }
-
-  // Taper: reduce volume progressively from peak down to 60%
-  const peakKm = current
-  for (let i = 0; i < taperWeeks; i++) {
-    const taperPct = 1 - ((i + 1) / taperWeeks) * 0.4 // 100% → 60% of peak
-    targets.push(Math.round(peakKm * taperPct))
-  }
-
-  // Ensure we have exactly totalWeeks entries
-  while (targets.length < totalWeeks) targets.push(Math.round(peakKm * 0.6))
-  if (targets.length > totalWeeks) targets.length = totalWeeks
-
-  return targets
-}
-
-
-/**
- * Cacheable system prompt — identical for all users.
- * Marked with cache_control so Anthropic can reuse it across requests.
- */
-const COACHING_SYSTEM_PROMPT = `You are an expert running coach creating personalised training blocks for runners preparing for races.
+const COACHING_SYSTEM_PROMPT = `You are an expert running coach designing training blocks for runners preparing for races.
 
 ## Session Types
-Use the right session name — it communicates purpose, not just effort. Choose from:
-- **Long run** — the week's longest run. Only use when session is genuinely longest of the week AND ≥ 8 km. Easy/Z2 pace.
-- **Base run** — medium-length easy run (5–10 km). The workhorse of aerobic training. Prefer this over "Easy run" for most sessions.
-- **Recovery run** — short, very easy (4–6 km). Use the day after a hard session or long run. Slower than base pace.
-- **Progression run** — starts easy, finishes last 20–30% at tempo effort. Good mid-block variety.
-- **Tempo run** — sustained threshold effort, 20–40 min. Max 2/week; rarely in base-building phases.
-- **Intervals** — structured speed work with rest (e.g. 6 × 800 m). Only in build/peak phases.
+The session name communicates purpose, not just effort. Choose from:
+- **Long run** — the week's longest run, at easy/Z2 pace. Every week should have exactly one.
+- **Base run** — medium-length easy run. The workhorse of aerobic training, and the right default for most sessions.
+- **Recovery run** — short and very easy. Fits the day after a hard session or a long run.
+- **Progression run** — starts easy, finishes the last 20-30% at tempo effort. Good mid-block variety.
+- **Tempo run** — sustained threshold effort. At most 2 a week, and rarely during base-building.
+- **Intervals** — structured speed work with rest, e.g. 6 x 800 m. Build and peak phases.
 - **Hill repeats** — short steep uphill efforts with easy jog recovery. Builds strength and form.
-- **Fartlek** — unstructured speedplay mixed into an easy run. Introduces variety without rigid structure.
-- **Race pace run** — sustained goal race pace. Only in peak/sharpening phases, 2–3 weeks before race.
-Vary session types across the block — never use only "Long run" and "Easy run" throughout an entire training plan.
+- **Fartlek** — unstructured speedplay inside an easy run. Variety without rigid structure.
+- **Race pace run** — sustained goal race pace. Peak and sharpening phases, 2-3 weeks out.
 
-## Session Distribution Rules
-- The longest session of the week (must be ≥ 8 km) → "Long run". Target ~40% of weekly total.
-- Medium easy sessions (5–10 km) → "Base run" (preferred) or "Easy run"
-- Short sessions after hard days → "Recovery run"
-- Long run MUST be at least 2 km longer than any other session in the same week
-- Minimum session length: 5 km for base/easy runs, 8 km for long run
-- EXCEPTION: Weekly volume < 15 km → sessions may be 4 km minimum, but prefer fewer longer sessions (2 × 6 km > 3 × 4 km)
-- Examples: 20 km / 3 sessions → Long run 8 km · Base run 6 km · Base run 6 km
-- Examples: 30 km / 3 sessions → Long run 12 km · Base run 9 km · Base run 9 km
-- ORDERING: Long run FIRST, then quality sessions (tempo/intervals), then base/recovery runs last
+Vary the session types across the block. A plan that alternates only between "Long run" and "Easy run" for six weeks is not a training plan.
 
 ## Aerobic Base Principle
-Fewer, longer easy runs are significantly more effective than many short ones for building aerobic fitness.
-- A run under 5 km (~30 min) provides very limited aerobic stimulus — avoid unless weekly volume cannot support longer sessions
-- If weekly target forces sessions below 5 km, reduce session count instead: 2 × 7 km beats 3 × 4 km
-- For base-building phases, prioritise 60–90 min efforts (8–12 km at easy pace) as the weekly long run
+Fewer, longer easy runs build aerobic fitness more effectively than many short ones. In base-building phases, the weekly long run should be a 60-90 minute effort.
 
 ## Intensity Balance
-- At most 2 quality sessions (tempo, intervals, race pace) per week — the rest should be easy effort
-- Never schedule descriptions that imply hard efforts on back-to-back days
-- Follow the 80/20 rule: ~80% of weekly volume at easy/conversational effort, ~20% at moderate-to-hard effort
+Roughly 80% of weekly volume belongs at easy, conversational effort and 20% at moderate-to-hard. That means at most two quality sessions (tempo, intervals, race pace) in a week, and no two hard efforts described as back-to-back days.
 
-## Safety Guidelines
-- Never increase weekly volume by more than 10-15% compared to the previous week
-- Always include a recovery week (70-80% of peak volume) at the end of each training block
-- If injury risk (ACWR) is moderate or high, reduce suggested volume by 10-20%
-- If the runner has very low recent mileage (<10 km/week), start conservatively
-- Taper phase: reduce volume 30-50% compared to peak, prioritise rest and race-day readiness
+## Your Output
+Weekly volume and session distances are already fixed and will be given to you — you do not choose them and should not restate them as numbers. Your job is the shape and the coaching: which session types make up each week, how each should feel, what it is for, and what this runner in particular should know.
 
-## Output Format
-Respond with ONLY a valid JSON object — no explanation text before or after. Use this exact structure:
-{
-  "summary": "2-3 sentence overview of this training block and its purpose, personalised to the runner",
-  "weeks": [
-    {
-      "weekNumber": 1,
-      "theme": "short phrase describing this week's focus",
-      "targetKm": 40,
-      "sessions": [
-        {
-          "type": "Long run",
-          "distance": "18 km",
-          "effort": "Easy — conversational pace, you should be able to hold a full conversation",
-          "purpose": "Build endurance base"
-        }
-      ],
-      "coachNote": "Optional specific tip or warning for this week, or null"
-    }
-  ],
-  "keyPrinciples": ["3-4 short training principles specific to this runner and block"],
-  "watchOut": "One specific thing to watch out for based on this runner's history, or null"
-}`
+The "effort" field is how the session should feel, in the runner's language. The "purpose" field is what it is for. Write the summary and coach notes to match the volumes you are given.`
 
 function buildPrompt(
   goal: {
@@ -306,6 +231,7 @@ function buildPrompt(
   currentAvgWeeklyKm: number,
   daysUntilRace: number,
   adjustNote: string | null,
+  weekTargets: number[],
   acwr?: { ratio: number; risk: string },
   recentEasyPace?: number | null,
   recentBestPace?: number | null,
@@ -334,37 +260,26 @@ function buildPrompt(
     ? `\n## Adjustment Request\nThe runner wants to adjust the plan with this note:\n"${adjustNote}"\nPlease take this into account when generating the new plan.\n`
     : ""
 
-  // Determine block weeks based on plan mode
-  const maxWeeksUntilRace = Math.max(1, Math.floor(daysUntilRace / 7))
-  const isFullCycle = (prefs.plan_mode ?? "block") === "full_cycle"
-  const blockWeeks = isFullCycle
-    ? Math.min(maxWeeksUntilRace, 20) // Full cycle: plan to race day, max 20 weeks
-    : Math.min(prefs.block_weeks ?? 4, maxWeeksUntilRace)
-  const increasePct = prefs.weekly_increase_pct ?? 10
+  const blockWeeks = weekTargets.length
   const recentWindow = prefs.regenerate_every_weeks ?? 4
 
-  // For full-cycle, build periodised volume targets with mesocycles
-  let weekTargets: number[]
-  if (isFullCycle && blockWeeks > 6) {
-    weekTargets = calcFullCycleTargets(currentAvgWeeklyKm, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
-  } else {
-    weekTargets = calcWeekTargets(currentAvgWeeklyKm, increasePct, blockWeeks, prefs.sessions_per_week, longestRecentRun, acwr)
-  }
   const weekTargetLines = weekTargets
     .map((km, i) => {
-      const label = isFullCycle ? ` (${getPhaseLabel(i, blockWeeks)})` : ""
-      if (i === blockWeeks - 1) return `- Week ${i + 1}: ${km} km (race week — taper)${label}`
-      return `- Week ${i + 1}: ${km} km${label}`
+      if (i === blockWeeks - 1 && blockWeeks > 1) return `- Week ${i + 1}: ${km} km (recovery week)`
+      return `- Week ${i + 1}: ${km} km`
     })
     .join("\n")
 
-  // Compute volume trend: compare recent window vs the equal-length prior window
+  // Compute volume trend: compare recent window vs the equal-length prior window.
+  // Divide by the weeks we actually have, not the nominal window — dividing 2
+  // weeks of history by a 4-week window halved the prior average and reported a
+  // stable runner as "+150% upward".
   const priorWeeks = weeklySummaries.slice(recentWindow, recentWindow * 2)
   let trendLine: string
   if (priorWeeks.length === 0) {
     trendLine = "not enough history yet (first training period)"
   } else {
-    const priorAvg = priorWeeks.reduce((s, w) => s + w.totalKm, 0) / recentWindow
+    const priorAvg = priorWeeks.reduce((s, w) => s + w.totalKm, 0) / priorWeeks.length
     const pct = priorAvg > 0 ? Math.round(((currentAvgWeeklyKm - priorAvg) / priorAvg) * 100) : 0
     const arrow = `${priorAvg.toFixed(1)} → ${currentAvgWeeklyKm.toFixed(1)} km/week`
     if (pct > 10) trendLine = `upward — ${arrow} (+${pct}%)`
@@ -379,7 +294,7 @@ function buildPrompt(
     : "taper"
 
   const taperNote = phase === "taper"
-    ? "\n\nIMPORTANT: The runner is in taper phase. Reduce volume by 30-50% compared to peak. Prioritize rest, short quality sessions, and race-day readiness. Do NOT increase volume."
+    ? "\n\nThe runner is in the taper. The volumes below already reflect that — keep the sessions short and sharp, and write the notes around rest and race-day readiness."
     : ""
 
   const previousPlanSection = previousPlanSummary
@@ -440,11 +355,9 @@ ${adjustSection}${blockPositionSection}${previousPlanSection}${hrSection}${testR
       ? " (tightened further because an injury is still active)"
       : ""
   return `
-## Comeback Constraint (HARD CAP — do not exceed)
-The runner is returning after a ${comeback.pauseDays}-day pause — classified as ${catText}.
-Week 1 of this plan MUST NOT exceed ${comeback.weekOneKm} km total${limitingFactorNote}.
-Keep every Week 1 session easy or moderate effort only — no tempo, intervals, or race-pace work.
-Ramp volume gradually in subsequent weeks (+10-15% per week is a safe ceiling).
+## Returning After a Pause
+The runner is coming back from a ${comeback.pauseDays}-day pause — classified as ${catText}${limitingFactorNote}. Week 1's volume below is already capped for that.
+Keep every Week 1 session easy or moderate — no tempo, intervals or race-pace work that week.
 `
 })()}
 ## Recent Training History (most recent first)
@@ -455,12 +368,11 @@ ${weekSummaryText}
 - Volume trend vs prior ${recentWindow} weeks: ${trendLine}
 - Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
 
-## Suggested Weekly Volume Targets
-${isFullCycle ? `This is a FULL-CYCLE plan from now to race day with periodised phases (base → build → taper). Recovery weeks at ~70% volume are included every 3rd week.` : `These are calculated from the runner's ${recentWindow}-week rolling average using ${increasePct}% progressive overload.`} Use them as a starting point, but apply your coaching judgment — if the trend or history clearly warrants it, you may adjust individual weeks by up to ±15%. Explain any adjustments in that week's coachNote.
+## Weekly Volume (fixed)
+These are the volumes for this block. They already account for the runner's rolling average, injury-risk load, any recent pause, and the progression limits for their level, so treat them as settled — write the summary and coach notes to match them rather than proposing different numbers.
 ${weekTargetLines}
 
-IMPORTANT: Do not specify which day of the week to run. Sessions should be described as "do these runs this week, on days that suit you."
-The "weeks" array must have exactly ${blockWeeks} entries.`
+Do not assign sessions to particular days of the week; the runner fits them in where they can. Give exactly ${blockWeeks} ${blockWeeks === 1 ? "week" : "weeks"}, with ${prefs.sessions_per_week} sessions in each.`
 }
 
 
@@ -613,21 +525,19 @@ export async function POST(req: NextRequest) {
   // chronic load and cause the plan generator to produce overly conservative running plans.
   const acts = activities ?? []
   const runActs = acts.filter((a) => RUN_TYPES.has(a.type))
-  const now = Date.now()
-  const day7 = now - 7 * 24 * 60 * 60 * 1000
-  const day28 = now - 28 * 24 * 60 * 60 * 1000
-  const acuteLoad = runActs
-    .filter((a) => new Date(a.date).getTime() >= day7)
-    .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
-  const chronicTotal = runActs
-    .filter((a) => new Date(a.date).getTime() >= day28)
-    .reduce((s, a) => s + effortAdjustedKm(Number(a.distance_km), a.elevation_gain_m), 0)
-  const chronicLoad = chronicTotal / 4
-  const acwrRatio = chronicLoad > 0 ? acuteLoad / chronicLoad : 0
-  const acwrRisk = acwrRatio > 1.5 ? "high" : acwrRatio > 1.3 ? "moderate" : "low"
+  // One ACWR implementation. This route used to compute its own with different
+  // thresholds (>1.5 high, >1.3 moderate) than the safety engine it fed into,
+  // so a runner at 1.15 was described to the coach as "low" while the engine
+  // treated them as moderate and cut week one by 5%.
+  const safetyActs = runActs as unknown as SafetyActivity[]
+  const acwrSafety = evaluateAcwrSafety(safetyActs)
+  const athleteLevel = classifyAthleteLevel(safetyActs)
+  const prolongedFatigue = checkProlongedFatigue(safetyActs)
+  const fatigue = detectFatigue(safetyActs)
+  const frequencyWarning = checkFrequencyProgression(safetyActs, prefs.sessions_per_week)
 
   // Comeback volume cap: when the runner has paused >= 7 days, compute a
-  // deterministic week-one volume ceiling that Claude must respect.
+  // deterministic week-one volume ceiling.
   const comeback = assessComeback(
     runActs.map((a) => ({ date: a.date, distance_km: Number(a.distance_km) })),
     hasActiveInjury(prefs.notes_history),
@@ -827,6 +737,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Weekly volume is settled here, before the prompt — so the plan Claude
+  // describes is the plan the runner gets. Previously the targets were a
+  // suggestion that three later passes revised, leaving summary and coach notes
+  // talking about volumes that no longer existed.
+  const maxWeeksUntilRace = Math.max(1, Math.floor(daysUntilRace / 7))
+  const blockWeeks = Math.min(prefs.block_weeks ?? 4, maxWeeksUntilRace)
+
+  const { targets: weekTargets, notes: volumeNotes } = computeWeeklyTargets({
+    avgWeeklyKm: currentAvgWeeklyKm,
+    blockWeeks,
+    sessionsPerWeek: prefs.sessions_per_week,
+    longestRecentRun,
+    increasePct: prefs.weekly_increase_pct ?? 10,
+    athleteLevel,
+    acwr: acwrSafety,
+    prolongedFatigue,
+    comeback,
+    priorWeeklyVolumes: computeRecentWeeklyVolumes(safetyActs, 3),
+  })
+
+  if (volumeNotes.length > 0) {
+    console.log(`[plan-volume] goal ${goalId} (${athleteLevel}):`, volumeNotes)
+  }
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -835,7 +769,8 @@ export async function POST(req: NextRequest) {
     currentAvgWeeklyKm,
     daysUntilRace,
     adjustNote,
-    { ratio: acwrRatio, risk: acwrRisk },
+    weekTargets,
+    { ratio: acwrSafety.ratio, risk: acwrSafety.risk },
     recentEasyPace,
     recentBestPace,
     previousPlanSummary,
@@ -857,19 +792,21 @@ export async function POST(req: NextRequest) {
       try {
         send({ status: "thinking" })
 
-        // Scale thinking budget with plan length: longer blocks benefit from more planning
-        // tokens. Capped at 8000 so cost stays predictable.
-        const blockWeeksCount = (() => {
-          const maxWeeks = Math.max(1, Math.floor(daysUntilRace / 7))
-          const isFullCycle = (prefs.plan_mode ?? "block") === "full_cycle"
-          return isFullCycle ? Math.min(maxWeeks, 20) : Math.min(prefs.block_weeks ?? 4, maxWeeks)
-        })()
-        const thinkingBudget = Math.min(8000, Math.max(2000, blockWeeksCount * 1000))
-
         const stream = anthropic.messages.stream({
-          model: "claude-sonnet-4-6",
-          max_tokens: 10000,
-          thinking: { type: "enabled", budget_tokens: thinkingBudget },
+          model: "claude-opus-5",
+          // Thinking counts against max_tokens. The old pairing — a budget of up
+          // to 8000 inside a 10000 ceiling — left ~2000 tokens for the plan
+          // itself, which truncated longer blocks and surfaced as a JSON parse
+          // failure rather than as the token limit it was.
+          max_tokens: 32000,
+          thinking: { type: "adaptive" },
+          output_config: {
+            effort: "high",
+            format: {
+              type: "json_schema" as const,
+              schema: PLAN_DRAFT_JSON_SCHEMA,
+            },
+          },
           system: [
             {
               type: "text" as const,
@@ -890,75 +827,70 @@ export async function POST(req: NextRequest) {
 
         const message = await stream.finalMessage()
 
-        // Extract text block
+        // Cost and cache visibility. cache_read_input_tokens staying at 0 across
+        // repeated requests means the system prompt is not actually caching.
+        console.log("[plan-generation] usage:", {
+          goalId,
+          input: message.usage.input_tokens,
+          output: message.usage.output_tokens,
+          cacheRead: message.usage.cache_read_input_tokens,
+          cacheWrite: message.usage.cache_creation_input_tokens,
+        })
+
+        if (message.stop_reason === "max_tokens") {
+          throw new Error("Response hit the output token limit before the plan was complete")
+        }
+
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block in Claude response")
 
-        const rawClaudeText = (textBlock as { type: "text"; text: string }).text
-        const jsonMatch = rawClaudeText.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
-          console.error("[plan-generation] No JSON in Claude response. Raw preview:", rawClaudeText.slice(0, 500))
-          throw new Error("No JSON found in Claude response")
-        }
-
-        let rawJson: unknown
-        try {
-          rawJson = JSON.parse(jsonMatch[0])
-        } catch (parseErr) {
-          console.error(
-            "[plan-generation] Claude returned invalid JSON:",
-            parseErr,
-            "Raw preview:",
-            rawClaudeText.slice(0, 500),
-          )
-          throw new Error("Claude response was not valid JSON")
-        }
-
-        const parsed = TrainingPlanSchema.safeParse(rawJson)
+        // Structured outputs guarantees the response matches the schema, so this
+        // is a type guard rather than the parse-and-hope it replaced (regex for a
+        // JSON-looking substring, then JSON.parse, then validation, each with its
+        // own failure path).
+        const parsed = PlanDraftSchema.safeParse(
+          JSON.parse((textBlock as { type: "text"; text: string }).text),
+        )
         if (!parsed.success) {
-          console.error(
-            "[plan-generation] Plan failed schema validation:",
-            parsed.error.message,
-            "Raw preview:",
-            rawClaudeText.slice(0, 1000),
-          )
+          console.error("[plan-generation] Draft failed schema validation:", parsed.error.message)
           throw new Error(`Invalid plan structure: ${parsed.error.message}`)
         }
-        const plan = parsed.data
+        const draft: PlanDraft = parsed.data
 
-        // Post-generation structural validation logging
-        for (const week of plan.weeks) {
-          if (week.sessions.length !== prefs.sessions_per_week) {
-            console.warn(
-              `[plan-validation] Week ${week.weekNumber}: ${week.sessions.length} sessions, expected ${prefs.sessions_per_week}`
-            )
-          }
-          const sessionKmTotal = week.sessions.reduce((sum: number, s: { distance: string }) => {
-            return sum + parseSessionDistanceKm(s.distance)
-          }, 0)
-          if (sessionKmTotal > 0 && Math.abs(sessionKmTotal - week.targetKm) > week.targetKm * 0.2) {
-            console.warn(
-              `[plan-validation] Week ${week.weekNumber}: session total ${sessionKmTotal.toFixed(1)} km vs target ${week.targetKm} km (>20% deviation)`
-            )
-          }
+        if (draft.weeks.length !== weekTargets.length) {
+          console.warn(
+            `[plan-validation] Claude returned ${draft.weeks.length} weeks, expected ${weekTargets.length}`,
+          )
         }
 
-        // Safety engine: validate and adjust for load progression, ACWR, long runs, fatigue.
-        // Pass running activities only so cross-training doesn't skew ACWR and fatigue detection.
-        const safetyResult = validateAndAdjustPlan(plan, runActs as unknown as SafetyActivity[], prefs)
-        let safePlan = safetyResult.adjustedPlan
-
-        // Comeback cap: deterministic enforcement on Week 1 if the runner is
-        // returning after a 7+ day pause. The prompt already tells Claude the
-        // ceiling, but we belt-and-suspenders it here in case the model overshoots.
-        if (comeback.needsRamp) {
-          const { plan: cappedPlan, capped, previousTargetKm } = applyComebackCap(safePlan, comeback)
-          if (capped) {
-            console.log(
-              `[plan-generation] Comeback cap applied: Week 1 ${previousTargetKm} km → ${comeback.weekOneKm} km (${comeback.category}, pause ${comeback.pauseDays}d)`,
+        // Assemble the plan: Claude's weekly shape, the volume computed before
+        // the prompt, and distances allocated to fit. Weeks beyond the computed
+        // targets are dropped rather than given an invented volume.
+        const safePlan: TrainingPlan = {
+          ...draft,
+          weeks: draft.weeks.slice(0, weekTargets.length).map((week, wi) => {
+            const targetKm = weekTargets[wi]
+            const { distances, belowMinimum } = allocateSessionDistances(
+              targetKm,
+              week.sessions.map((s) => s.type),
             )
-          }
-          safePlan = cappedPlan
+            if (belowMinimum) {
+              console.warn(
+                `[plan-validation] Week ${wi + 1}: ${week.sessions.length} sessions in a ${targetKm} km week ` +
+                `falls below the minimum useful session length`,
+              )
+            }
+            return {
+              weekNumber: wi + 1,
+              theme: week.theme,
+              targetKm: distances.reduce((sum, d) => sum + d, 0),
+              coachNote: week.coachNote,
+              sessions: week.sessions.map((session, si) => ({
+                ...session,
+                distance: formatSessionDistance(distances[si] ?? 0),
+              })),
+            }
+          }),
         }
 
         // Pace guide: deterministic pace targets per session based on test runs + race predictions
@@ -966,8 +898,8 @@ export async function POST(req: NextRequest) {
         const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
         const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
 
-        // Fatigue modifier: when safety system detects fatigue, pull back hard-session paces
-        const fatigueSignal = safetyResult.fatigue.signal
+        // Fatigue modifier: when the safety signals detect fatigue, pull back hard-session paces
+        const fatigueSignal = fatigue.signal
         const hardFatigueModifier =
           fatigueSignal === "both"         ? 1.12 :  // HR + pace both declining → 12% slower
           fatigueSignal === "hr_elevated"  ? 1.05 :  // HR elevated only → 5% slower
@@ -977,13 +909,11 @@ export async function POST(req: NextRequest) {
         for (const week of safePlan.weeks) {
           // Recovery weeks: all zones run 10% slower to reinforce the lower-stimulus purpose
           const prevWeek = safePlan.weeks[safePlan.weeks.indexOf(week) - 1] ?? null
-          const isRecovery =
-            /recovery|deload/i.test(week.theme ?? "") ||
-            (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
+          const isRecovery = prevWeek != null && week.targetKm < prevWeek.targetKm * RECOVERY_WEEK_THRESHOLD
 
           // Intra-block progression for quality sessions: rate scaled by athlete level,
           // capped at 6 weeks so tempo targets stay safely below 10K race pace.
-          const progressionRate = PACE_PROGRESSION_RATES[safetyResult.athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
+          const progressionRate = PACE_PROGRESSION_RATES[athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
           const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
           const progressionModifier = 1.0 - weekIndex * progressionRate
 
@@ -1000,68 +930,18 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        if (!safetyResult.passed) {
-          console.warn(
-            `[safety] Plan adjusted for goal ${goalId} (level: ${safetyResult.athleteLevel}):`,
-            safetyResult.safetyNotes,
-          )
-        }
-
-        // Final correction: run AFTER safety engine + pace assignment so targetKm is settled.
-        // 0. Enforce recovery week volume cap (AI may ignore the suggested 80% target).
-        // 1. Round all sessions DOWN to nearest 0.5 km; long run absorbs the rest.
-        // 2. Ensure the "Long run" label is on the longest session (swap if mismatched).
-        // 3. Update targetKm to match the rounded session total so the UI is consistent.
-        for (let wi = 0; wi < safePlan.weeks.length; wi++) {
-          const week = safePlan.weeks[wi]
-          const floor5 = (km: number) => Math.floor(km * 2) / 2  // round DOWN to nearest 0.5 km
-
-          // Step 0: cap recovery week targetKm at 80% of previous week's final targetKm.
-          // The AI often ignores our suggested 80% and outputs the same km as W1.
-          const isRecovery = wi > 0 && (
-            /recovery|deload|rest/i.test(week.theme ?? "") ||
-            week.targetKm >= safePlan.weeks[wi - 1].targetKm  // last week should always taper
-          )
-          if (isRecovery && wi === safePlan.weeks.length - 1) {
-            const prevTargetKm = safePlan.weeks[wi - 1].targetKm
-            const cap = Math.floor(prevTargetKm * 0.8)
-            if (week.targetKm > cap) week.targetKm = cap
-          }
-
-          // Scale sessions to targetKm if they deviate significantly
-          const rawDistances = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
-          const rawTotal = rawDistances.reduce((a: number, b: number) => a + b, 0)
-          if (rawTotal > 0 && Math.abs(rawTotal - week.targetKm) > week.targetKm * 0.05) {
-            const scale = week.targetKm / rawTotal
-            week.sessions.forEach((s: { distance: string }, i: number) => {
-              s.distance = `${Math.round(rawDistances[i] * scale * 10) / 10} km`
-            })
-          }
-
-          // Swap label so "Long run" is on the longest session
-          const longRunIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
-          if (longRunIdx !== -1) {
-            const d = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
-            const maxIdx = d.indexOf(Math.max(...d))
-            if (maxIdx !== longRunIdx) {
-              const tmp = week.sessions[longRunIdx].type
-              week.sessions[longRunIdx].type = week.sessions[maxIdx].type
-              week.sessions[maxIdx].type = tmp
-            }
-          }
-
-          // Round all sessions DOWN to 0.5 km; long run absorbs remainder
-          const longIdx = week.sessions.findIndex((s: { type: string }) => /long/i.test(s.type))
-          const scaled = week.sessions.map((s: { distance: string }) => parseSessionDistanceKm(s.distance))
-          const otherTotal = scaled.reduce((sum: number, km: number, i: number) => i === longIdx ? sum : sum + floor5(km), 0)
-          week.sessions.forEach((s: { distance: string }, i: number) => {
-            s.distance = i === longIdx
-              ? `${floor5(week.targetKm - otherTotal)} km`
-              : `${floor5(scaled[i])} km`
-          })
-
-          // Update targetKm to match rounded session total
-          week.targetKm = week.sessions.reduce((sum: number, s: { distance: string }) => sum + parseSessionDistanceKm(s.distance), 0)
+        // Signals worth surfacing, none of which change the plan's volume — that
+        // was already settled before the prompt.
+        const safetyNotes = [
+          ...volumeNotes,
+          ...(fatigue.description ? [fatigue.description] : []),
+          ...(frequencyWarning
+            ? [`Frequency increase is aggressive: ${frequencyWarning.currentAvgSessions} sessions/week recently, ` +
+               `${frequencyWarning.requestedSessions} requested. Recommended max: ${frequencyWarning.maxSafeSessions}.`]
+            : []),
+        ]
+        if (safetyNotes.length > 0) {
+          console.warn(`[safety] goal ${goalId} (level: ${athleteLevel}):`, safetyNotes)
         }
 
         // Cache in DB (upsert — one active plan per goal)
@@ -1259,9 +1139,9 @@ export async function POST(req: NextRequest) {
           block_start_date: blockStartDate,
           generated_at: generatedAt,
           pace_source: paceGuide.source,
-          safety: safetyResult.passed ? null : {
-            athleteLevel: safetyResult.athleteLevel,
-            notes: safetyResult.safetyNotes,
+          safety: safetyNotes.length === 0 ? null : {
+            athleteLevel,
+            notes: safetyNotes,
           },
         })
       } catch (err) {
@@ -1329,11 +1209,11 @@ export async function GET(req: NextRequest) {
 
   if (!planRow) return NextResponse.json({ plan: null })
 
-  // Enrich cached plan sessions with suggestedPace if goal + activity data available
-  let enrichedPlan = planRow.plan
-  if (enrichedPlan && goal?.target_distance_km) {
-    const acts = activities ?? []
-    const runActs = acts.filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
+  // One pace guide per request. It used to be built twice — once to enrich the
+  // sessions and once more, immediately after, purely to read its `source` tier.
+  const runActs = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
+  const paceGuide = (() => {
+    if (!goal?.target_distance_km) return null
     const actsWithPace = runActs.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
     const recentEasyPace = actsWithPace.length > 0
       ? actsWithPace
@@ -1342,10 +1222,13 @@ export async function GET(req: NextRequest) {
           .slice(0, Math.ceil(actsWithPace.length * 0.5))
           .reduce((s, p, _, arr) => s + p / arr.length, 0)
       : null
+    const { predictions } = predictRaceTimes(runActs as unknown as Activity[])
+    return buildPaceGuide(predictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
+  })()
 
-    const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
-    const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
-
+  // Enrich cached plan sessions with suggestedPace if goal + activity data available
+  let enrichedPlan = planRow.plan
+  if (enrichedPlan && paceGuide) {
     // Re-evaluate fatigue and athlete level against current activity data
     const fatigue = detectFatigue(runActs as unknown as SafetyActivity[])
     const athleteLevel = classifyAthleteLevel(runActs as unknown as SafetyActivity[])
@@ -1361,8 +1244,7 @@ export async function GET(req: NextRequest) {
       weeks: plan.weeks.map((week, weekIdx) => {
         const prevWeek = plan.weeks[weekIdx - 1] ?? null
         const isRecovery =
-          /recovery|deload/i.test(week.theme ?? "") ||
-          (prevWeek != null && week.targetKm < prevWeek.targetKm * 0.85)
+          prevWeek != null && week.targetKm < prevWeek.targetKm * RECOVERY_WEEK_THRESHOLD
 
         const progressionRate = PACE_PROGRESSION_RATES[athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
         const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
@@ -1399,22 +1281,6 @@ export async function GET(req: NextRequest) {
         )
       : false
 
-  // Build pace guide for the enriched plan so we can return the source tier
-  const paceGuideForResponse = (() => {
-    if (!enrichedPlan || !goal?.target_distance_km) return null
-    const runActs2 = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
-    const actsWithPace2 = runActs2.filter((a) => a.pace_min_per_km && Number(a.pace_min_per_km) > 0)
-    const easyPace2 = actsWithPace2.length > 0
-      ? actsWithPace2
-          .map((a) => Number(a.pace_min_per_km))
-          .sort((a, b) => b - a)
-          .slice(0, Math.ceil(actsWithPace2.length * 0.5))
-          .reduce((s, p, _, arr) => s + p / arr.length, 0)
-      : null
-    const { predictions: preds } = predictRaceTimes(runActs2 as unknown as Activity[])
-    return buildPaceGuide(preds, testRuns ?? [], goal.target_distance_km, easyPace2)
-  })()
-
   return NextResponse.json({
     plan: enrichedPlan,
     block_start_date: planRow.block_start_date,
@@ -1422,7 +1288,7 @@ export async function GET(req: NextRequest) {
     previous_plans: planRow.previous_plans ?? [],
     mid_block_checkpoint: planRow.mid_block_checkpoint ?? null,
     checkpoint_due: checkpointDue,
-    pace_source: paceGuideForResponse?.source ?? "none",
+    pace_source: paceGuide?.source ?? "none",
   })
 }
 
