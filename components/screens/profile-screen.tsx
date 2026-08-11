@@ -302,7 +302,7 @@ export function ProfileScreen({
   }
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── Identity ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3.5">
         {user.avatar_url ? (
@@ -628,6 +628,16 @@ export function ProfileScreen({
               </dl>
             )}
           </div>
+
+          {/* Seeded from the profile's cached analysis, so this only shows on
+              a first run or after a sync clears the cache — but without it the
+              card's whole body arrives from nothing. */}
+          {!hrAnalysis && hrLoading && (
+            <div className="mt-4 flex flex-col gap-3.5" aria-hidden>
+              <div className="h-6 w-40 animate-pulse rounded-full bg-surface-sunken" />
+              <div className="h-12 animate-pulse rounded-md bg-surface-sunken" />
+            </div>
+          )}
 
           {hrAnalysis && (
             <div className="mt-4 flex flex-col gap-3.5">

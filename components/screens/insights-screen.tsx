@@ -258,7 +258,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   if (activeTab === "coach") {
     return (
       <div className="flex flex-col" style={{ height: "calc(100dvh - 5.5rem)" }}>
-        <header className="flex items-center gap-2 px-4 pb-2 pt-1">
+        <header className="flex items-center gap-2 px-4 pb-2 screen-body">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -367,7 +367,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const hasAnyInsight = personalRecords.length > 0 || racePredictions.predictions.length > 0
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* The coach is the primary action on this screen, so it leads. */}
       <button
         onClick={() => setActiveTab("coach")}
