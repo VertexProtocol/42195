@@ -245,7 +245,8 @@ const translations = {
     "plan.buildingBase": "Building base",
     "plan.emptyState": "Add a race or event to start tracking your training",
     "plan.active": "Active",
-    "plan.completed": "Completed",
+    "plan.achieved": "Achieved",
+    "plan.ended": "Ended",
     "plan.timeElapsed": "time elapsed",
     "plan.bestRun": "Best",
     // Insights screen
@@ -932,7 +933,8 @@ const translations = {
     "plan.buildingBase": "Grunntrening",
     "plan.emptyState": "Legg til et løp for å begynne å spore treningen din",
     "plan.active": "Aktiv",
-    "plan.completed": "Fullført",
+    "plan.achieved": "Oppnådd",
+    "plan.ended": "Avsluttet",
     "plan.timeElapsed": "tid brukt",
     "plan.bestRun": "Beste",
     // Insights
