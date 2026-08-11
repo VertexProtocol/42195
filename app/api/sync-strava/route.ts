@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { syncUserActivities } from "@/lib/strava-sync"
-import { StravaAuthError } from "@/lib/strava"
+import { StravaAppInactiveError, StravaAuthError } from "@/lib/strava"
 
 // A history sync is chunked (see syncUserActivities), but one chunk still needs
 // room for up to eight Strava reads plus the upserts.
@@ -129,6 +129,12 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" },
     )
 
+    // The app's own API access is off. Nothing the athlete does — reconnecting
+    // included — changes that, so it gets its own code rather than looking like
+    // a broken connection.
+    if (err instanceof StravaAppInactiveError) {
+      return NextResponse.json({ error: message, code: err.code }, { status: 503 })
+    }
     if (err instanceof StravaAuthError) {
       return NextResponse.json({ error: message, code: err.code }, { status: 403 })
     }
