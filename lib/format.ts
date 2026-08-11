@@ -73,6 +73,16 @@ export function daysUntil(dateStr: string): number {
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
 }
 
+/**
+ * Whole days since a date that has passed. The mirror of daysUntil, which
+ * floors at zero and so reports a race last spring and one tomorrow with the
+ * same "0 days left".
+ */
+export function daysSince(dateStr: string): number {
+  const diffMs = Date.now() - new Date(dateStr).getTime()
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
+}
+
 export function progressPercentage(current: number, target: number): number {
   if (target <= 0) return 0
   return Math.min(100, Math.round((current / target) * 100))

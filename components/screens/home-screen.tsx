@@ -18,6 +18,8 @@ import {
   formatDateShort,
   daysUntil,
   timeElapsedPercentage,
+  isDatePast,
+  daysSince,
   formatTargetTime,
   computeDistanceInRange,
   computeWeeklyProgress,
@@ -185,10 +187,19 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
+  // A race that has been run is not competing for attention with one that is
+  // 32 days out, so it sorts behind it. Pinned still means pinned — the card
+  // stays reachable, it just stops leading a screen whose whole job is "what
+  // is next".
+  const orderedGoals = useMemo(() => {
+    const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
+    return [...starredGoals].sort((a, b) => past(a) - past(b))
+  }, [starredGoals])
+
   // Precomputed outside JSX so we never run O(goals × activities) per render.
   const goalMetrics = useMemo(
     () =>
-      starredGoals.map((goal) => {
+      orderedGoals.map((goal) => {
         const logged = computeDistanceInRange(
           activities,
           goal.start_date,
@@ -196,14 +207,18 @@ export function HomeScreen({
           goal.created_at,
         )
         const effectiveStart = goal.start_date ?? goal.created_at
+        const past = isDatePast(goal.target_date)
         return {
           id: goal.id,
           logged,
+          past,
           timeProgress: timeElapsedPercentage(effectiveStart, goal.target_date),
-          days: daysUntil(goal.target_date),
+          // daysUntil floors at zero, so a race last spring and one tomorrow
+          // both read "0 days left". Past cards count the other way instead.
+          days: past ? daysSince(goal.target_date) : daysUntil(goal.target_date),
         }
       }),
-    [starredGoals, activities],
+    [orderedGoals, activities],
   )
 
   // Pinned goals ride a snap rail once there is more than one of them: stacked
@@ -287,7 +302,7 @@ export function HomeScreen({
                 : "flex flex-col gap-3"
             }
           >
-            {starredGoals.map((goal, i) => {
+            {orderedGoals.map((goal, i) => {
               const m = goalMetrics[i]
               const badge = planBadges[goal.id]
               return (
@@ -307,10 +322,14 @@ export function HomeScreen({
                       at the foot of the card, where an extra row on one goal
                       pushed every line below it out of step with the card
                       beside it — up here they cost no height at all. */}
-                  <div className="flex items-center gap-1.5 text-primary">
+                  <div
+                    className={`flex items-center gap-1.5 ${
+                      m.past ? "text-muted-foreground" : "text-primary"
+                    }`}
+                  >
                     <Star size={12} fill="currentColor" aria-hidden />
                     <span className="truncate text-micro font-semibold">
-                      {t("home.activeGoal")}
+                      {m.past ? t("home.finishedGoal") : t("home.activeGoal")}
                     </span>
                     {(badge?.checkpoint || badge?.blockCompleted) && (
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -338,7 +357,7 @@ export function HomeScreen({
                           {m.days}
                         </span>
                         <span className="text-label text-muted-foreground">
-                          {t("home.daysLeft")}
+                          {m.past ? t("home.daysAgo") : t("home.daysLeft")}
                         </span>
                       </p>
 
@@ -392,7 +411,7 @@ export function HomeScreen({
             // count is already in the section header. Tapping a dot would be a
             // second way to do what the swipe already does.
             <div className="flex justify-center gap-1.5 pt-1" aria-hidden>
-              {starredGoals.map((goal, i) => (
+              {orderedGoals.map((goal, i) => (
                 <span
                   key={goal.id}
                   className={`size-1.5 rounded-full ${
