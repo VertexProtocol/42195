@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { bestRelevantRun, longestRun } from "./format"
+import { bestRelevantRun, longestRun, timeAgoParts } from "./format"
 import type { Activity } from "./types"
 
 const REF = new Date("2026-04-19T12:00:00Z")
@@ -89,5 +89,35 @@ describe("longestRun", () => {
     const long = activity(3, 18, 100)
     const r = longestRun([short, long], null, null)
     expect(r?.id).toBe(long.id)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// timeAgoParts
+// ---------------------------------------------------------------------------
+
+describe("timeAgoParts", () => {
+  const minutesAgo = (n: number) => new Date(Date.now() - n * 60 * 1000).toISOString()
+
+  it("reports whole minutes under an hour", () => {
+    expect(timeAgoParts(minutesAgo(54))).toEqual({ value: 54, unit: "m" })
+  })
+
+  it("switches to hours at the hour mark", () => {
+    expect(timeAgoParts(minutesAgo(60))).toEqual({ value: 1, unit: "h" })
+    expect(timeAgoParts(minutesAgo(59))).toEqual({ value: 59, unit: "m" })
+  })
+
+  it("switches to days at the day mark", () => {
+    expect(timeAgoParts(minutesAgo(24 * 60))).toEqual({ value: 1, unit: "d" })
+    expect(timeAgoParts(minutesAgo(23 * 60))).toEqual({ value: 23, unit: "h" })
+  })
+
+  it("returns parts rather than a phrase, so the locale picks the wording", () => {
+    // The regression this guards: a hardcoded "54m ago" rendered inside a
+    // Norwegian sentence as "Synkronisert 54m ago".
+    const parts = timeAgoParts(minutesAgo(5))
+    expect(typeof parts.value).toBe("number")
+    expect(["m", "h", "d"]).toContain(parts.unit)
   })
 })

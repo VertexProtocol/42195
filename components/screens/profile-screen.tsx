@@ -27,8 +27,8 @@ import {
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { TrackLoader } from "@/components/ui/track-mark"
 import { createClient } from "@/lib/supabase/client"
-import { formatTimeAgo } from "@/lib/format"
-import { useI18n, type Locale } from "@/lib/i18n"
+import { timeAgoParts } from "@/lib/format"
+import { useI18n, type Locale, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 import type { HrAnalysisResult } from "@/lib/hr-analysis-engine"
 import { AppCard, CardRow } from "@/components/ui/app-card"
@@ -60,6 +60,21 @@ function usableCache(cached: HrAnalysisResult | null | undefined): HrAnalysisRes
   if (!Array.isArray(cached.explanations)) return null
   if (cached.explanations.some((e) => typeof e?.code !== "string")) return null
   return cached
+}
+
+const TIME_AGO_KEY = {
+  m: "time.minutesAgo",
+  h: "time.hoursAgo",
+  d: "time.daysAgo",
+} as const satisfies Record<string, TranslationKey>
+
+/** "54m ago" / "for 54 min siden" — the unit picks the phrase, not the wording. */
+function timeAgo(
+  t: (key: TranslationKey, params?: TranslationParams) => string,
+  dateStr: string,
+): string {
+  const { value, unit } = timeAgoParts(dateStr)
+  return t(TIME_AGO_KEY[unit], { n: value })
 }
 
 interface ProfileScreenProps {
@@ -379,6 +394,12 @@ export function ProfileScreen({
       <Section>
         <SectionHeader title={t("profile.connectedServices")} />
         <AppCard variant="rows">
+          {/* One row for the whole connection: what it is, when it last ran,
+              and the only action anyone reaches for. It used to be four —
+              "Strava connected", "Last synced", a full-width Sync button and a
+              re-sync row — which is three separate ways of saying the same
+              thing is working, stacked above a button the app rarely needs
+              (webhooks sync on their own, and Activities pulls to refresh). */}
           <CardRow className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
               {stravaConnected ? (
@@ -386,72 +407,75 @@ export function ProfileScreen({
               ) : (
                 <Link2Off size={16} className="shrink-0 text-muted-foreground" aria-hidden />
               )}
-              <span className="truncate text-label font-medium text-card-foreground">
-                {stravaConnected ? t("profile.stravaConnected") : t("profile.stravaNotConnected")}
-              </span>
+              <div className="min-w-0">
+                <p className="truncate text-label font-medium text-card-foreground">Strava</p>
+                {/* The status in words, not in the colour of the icon above it. */}
+                <p className="truncate text-micro text-muted-foreground">
+                  {!stravaConnected
+                    ? t("profile.stravaNotConnected")
+                    : syncStatus.last_sync_at
+                      ? t("profile.syncedAgo", { time: timeAgo(t, syncStatus.last_sync_at) })
+                      : t("profile.neverSynced")}
+                </p>
+              </div>
             </div>
             {stravaConnected && (
-              <Button variant="ghost" size="sm" onClick={handleConnect}>
-                <RotateCcw size={13} />
-                {t("profile.reconnect")}
+              <Button
+                variant={syncSuccess ? "outline" : "secondary"}
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setSyncSuccess(false)
+                  onSync()
+                }}
+                loading={isSyncing}
+              >
+                {!isSyncing && (syncSuccess ? <Check size={14} /> : <RefreshCw size={14} />)}
+                {isSyncing
+                  ? t("profile.syncing")
+                  : syncSuccess
+                    ? t("profile.synced")
+                    : t("profile.syncWithStrava")}
               </Button>
             )}
           </CardRow>
 
           {stravaConnected ? (
             <>
-              <CardRow className="flex items-center justify-between gap-3">
-                <span className="text-label text-card-foreground">{t("profile.lastSynced")}</span>
-                <span className="text-label text-muted-foreground">
-                  {syncStatus.last_sync_at
-                    ? formatTimeAgo(syncStatus.last_sync_at)
-                    : t("profile.neverSynced")}
-                </span>
-              </CardRow>
-
-              <CardRow>
-                <Button
-                  variant={syncSuccess ? "outline" : "secondary"}
-                  block
-                  onClick={() => {
-                    setSyncSuccess(false)
-                    onSync()
-                  }}
-                  loading={isSyncing}
-                >
-                  {!isSyncing && (syncSuccess ? <Check size={16} /> : <RefreshCw size={16} />)}
-                  {isSyncing
-                    ? t("profile.syncing")
-                    : syncSuccess
-                      ? t("profile.synced")
-                      : t("profile.syncWithStrava")}
-                </Button>
-
-                {syncStatus.state === "error" && syncStatus.error_message && (
-                  <p role="alert" className="mt-2 text-micro text-destructive">
-                    {syncStatus.error_message}
-                  </p>
+              {(syncStatus.state === "error" || syncStatus.state === "rate_limited") &&
+                syncStatus.error_message && (
+                  <CardRow>
+                    <p
+                      role={syncStatus.state === "error" ? "alert" : "status"}
+                      className={`text-micro leading-relaxed ${
+                        syncStatus.state === "error" ? "text-destructive" : "text-muted-foreground"
+                      }`}
+                    >
+                      {syncStatus.error_message}
+                    </p>
+                  </CardRow>
                 )}
 
-                {syncStatus.state === "rate_limited" && syncStatus.error_message && (
-                  <p role="status" className="mt-2 text-micro text-muted-foreground">
-                    {syncStatus.error_message}
-                  </p>
-                )}
-              </CardRow>
-
+              {/* Reconnect and re-sync are repairs, not routine. They share the
+                  one quiet row rather than each claiming a full-width one. */}
               <CardRow>
                 {!showResyncConfirm ? (
-                  <Button
-                    variant="ghost"
-                    block
-                    className="justify-start px-0 text-muted-foreground"
-                    disabled={isSyncing}
-                    onClick={() => setShowResyncConfirm(true)}
-                  >
-                    <TriangleAlert size={16} className="text-warning" />
-                    {t("profile.fullResync")}
-                  </Button>
+                  <div className="-mx-2 flex flex-wrap items-center">
+                    <Button variant="ghost" size="sm" onClick={handleConnect}>
+                      <RotateCcw size={13} />
+                      {t("profile.reconnect")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      disabled={isSyncing}
+                      onClick={() => setShowResyncConfirm(true)}
+                    >
+                      <TriangleAlert size={13} className="text-warning" />
+                      {t("profile.fullResync")}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="flex flex-col gap-2.5">
                     <p className="text-label leading-relaxed text-muted-foreground">
@@ -830,7 +854,7 @@ export function ProfileScreen({
 
                       <p className="text-micro text-muted-foreground">
                         {t("profile.hrAnalyzedAt", {
-                          when: formatTimeAgo(hrAnalysis.analyzedAt),
+                          when: timeAgo(t, hrAnalysis.analyzedAt),
                         })}
                       </p>
                     </div>
