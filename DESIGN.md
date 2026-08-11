@@ -142,7 +142,7 @@ hand-rolls a button, an input or a card.
 | `Button` | one shape, one press response, every state incl. `loading` |
 | `Input` | a sunken well, 16px text, accent caret |
 | `BottomSheet` | the one editing surface, on the dialog primitive |
-| `ProgressRing` | the app's single authored motion moment |
+| `ProgressLap` | the mark filled to a value; the single authored motion moment |
 | `AppBar` / `TabBar` | the persistent chrome |
 | `AuthShell` / `AuthError` / `Field` | the signed-out frame |
 | `TrackMark` / `TrackLoader` | the app's mark, still and running |
@@ -156,8 +156,8 @@ shape of the content, not a spinner in the middle of empty space.
 - `--dur-tap` 110ms, `--dur-state` 180ms, `--dur-view` 280ms.
 - `--ease-out: cubic-bezier(0.16, 1, 0.3, 1)`. No bounce, no elastic.
 - One press response for everything tappable: `.press` scales to 0.985.
-- **The authored moment** is `ProgressRing` drawing its arc from zero on first
-  mount — the lap filling in. It happens once per mount, only on the rings that
+- **The authored moment** is `ProgressLap` drawing its arc from zero on first
+  mount — the lap filling in. It happens once per mount, only on the meters that
   carry a screen's headline state.
 - **Waiting** is `TrackLoader`: the app icon's lead arc running its lane, one
   lap per `--dur-lap` (1500ms), drawn in `currentColor` so it takes the tone of
@@ -167,6 +167,12 @@ shape of the content, not a spinner in the middle of empty space.
   It runs **anticlockwise**, because a track is run with the inside kerb on
   your left, and the mark is a track. Every runner who uses this app knows
   which way round a lane goes.
+
+**One lane, three states.** The mark, the loader and the progress meter are the
+same drawing at the same proportions: `TrackMark` is it at rest, `TrackLoader`
+is it running, `ProgressLap` is it run as far as the value. All three go round
+the same way, from the same start line. A dial, a bar or a ring anywhere in the
+app would be a second vocabulary for something this one already says.
   The hand-off after signing in is the one screen-level wait, and it runs
   `TrackMark running`. It earns that by staying on the same document: a browser
   stops rendering a page it is replacing, so the same lap on the way out of a

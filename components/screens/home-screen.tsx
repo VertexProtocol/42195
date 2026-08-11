@@ -12,7 +12,7 @@ import {
 } from "react"
 import { ChevronRight, Star } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
-import { ProgressRing } from "@/components/progress-ring"
+import { ProgressLap } from "@/components/progress-lap"
 import {
   formatDistance,
   formatDuration,
@@ -310,16 +310,16 @@ export function HomeScreen({
                     </div>
 
                     <div className="flex shrink-0 flex-col items-center gap-1.5">
-                      <ProgressRing
+                      <ProgressLap
                         percentage={m.timeProgress}
-                        size={60}
+                        size={46}
                         strokeWidth={4}
                         label={`${goal.name} — ${t("home.elapsed")}`}
                       >
                         <span className="measure text-micro font-semibold leading-none text-foreground">
                           {m.timeProgress}%
                         </span>
-                      </ProgressRing>
+                      </ProgressLap>
                       <span className="text-micro text-muted-foreground">{t("home.elapsed")}</span>
                     </div>
                   </div>
