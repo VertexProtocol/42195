@@ -311,6 +311,57 @@
     box-shadow: var(--elevation-2), var(--elevation-edge);
   }
 
+  /* The two persistent bars.
+     ------------------------------------------------------------------------
+     Both stay opaque — a blurred bar over scrolling content fails contrast —
+     but neither draws a rule at rest. A hard hairline cuts the screen into
+     three boxes; instead the ground's own colour fades out over the content,
+     so the edge is a dissolve. Separation is earned, not permanent: the app
+     bar takes elevation only once something has actually scrolled beneath it,
+     on the same system cards use (a shadow in light, a lit edge in dark).     */
+  .chrome {
+    position: relative;
+    background-color: var(--background);
+    transition: box-shadow var(--dur-state) var(--ease-out);
+  }
+
+  .chrome::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    height: 1.25rem;
+    pointer-events: none;
+  }
+
+  /* Fading to a transparent version of the ground rather than to `transparent`
+     keeps the ramp in the same hue — plain `transparent` interpolates through
+     rgba(0,0,0,0) and greys the middle of the gradient. */
+  /* Shorter at the top: the app bar sits above a screen's own gutter, so a long
+     ramp there would wash the head of the first card for no gain. The bottom
+     ramp is where the work is — lists scroll under the tab bar constantly. */
+  .chrome-top::after {
+    top: 100%;
+    height: 1rem;
+    background-image: linear-gradient(
+      to bottom,
+      var(--background),
+      color-mix(in oklab, var(--background) 0%, transparent)
+    );
+  }
+
+  .chrome-bottom::after {
+    bottom: 100%;
+    background-image: linear-gradient(
+      to top,
+      var(--background),
+      color-mix(in oklab, var(--background) 0%, transparent)
+    );
+  }
+
+  .chrome-top[data-raised="true"] {
+    box-shadow: var(--elevation-1), var(--elevation-edge);
+  }
+
   /* Data glyphs: paces, splits, distances, clock times. Mono earns its place
      here because these are measurements read in columns, not decoration. */
   .measure {
