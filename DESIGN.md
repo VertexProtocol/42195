@@ -164,6 +164,9 @@ shape of the content, not a spinner in the middle of empty space.
   whatever it sits in. It marks a wait *inside* something the runner pressed —
   a button, the sync indicator, the coach's reply. A screen that is still
   loading shows the shape of what is coming, never this.
+  It runs **anticlockwise**, because a track is run with the inside kerb on
+  your left, and the mark is a track. Every runner who uses this app knows
+  which way round a lane goes.
   The hand-off after signing in is the one screen-level wait, and it runs
   `TrackMark running`. It earns that by staying on the same document: a browser
   stops rendering a page it is replacing, so the same lap on the way out of a
