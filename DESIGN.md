@@ -164,9 +164,11 @@ shape of the content, not a spinner in the middle of empty space.
   whatever it sits in. It marks a wait *inside* something the runner pressed —
   a button, the sync indicator, the coach's reply. A screen that is still
   loading shows the shape of what is coming, never this.
-  The one exception is the hand-off after signing in, where there is no shape
-  to show yet because nothing has been fetched: there `TrackMark running`
-  carries the wait, the mark itself rather than a monochrome stand-in.
+  It also belongs on a live document only. The hand-off after signing in is a
+  full page navigation, and a document being replaced stops being rendered, so
+  a lap started there freezes on its first frame and reads as a spinner that
+  has hung. That screen takes the still `TrackMark` and lets its one line of
+  text carry the wait.
 - Nothing animates `width`, `height`, `padding` or `margin`.
 - `prefers-reduced-motion` collapses durations and removes the press travel
   while keeping colour and state transitions legible. The loader settles on its
