@@ -10,8 +10,9 @@ import { GoalsScreen } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
-import { Onboarding } from "@/components/onboarding"
+import { GetStarted } from "@/components/get-started"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
+import { useGetStarted } from "@/hooks/use-get-started"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
@@ -99,8 +100,17 @@ export function AppShell({ initialData }: AppShellProps) {
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
   const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
 
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
-  const showOnboarding = !onboardingDismissed && !data.isLoading && data.goals.length === 0 && !data.stravaConnected
+  // First run is a checklist on Today, not a screen in front of it. What is
+  // already done is read from the account, so the list is right on a second
+  // device and after data is deleted.
+  const getStarted = useGetStarted({
+    ready: !data.isLoading && Boolean(data.user?.id),
+    dismissed: data.onboardingDismissed,
+    stravaConnected: data.stravaConnected,
+    activityCount: data.activities.length,
+    goalCount: data.goals.length,
+    weeklyGoalCount: data.weeklyGoals.length,
+  })
 
 // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -203,13 +213,20 @@ export function AppShell({ initialData }: AppShellProps) {
     window.location.href = "/api/auth/strava"
   }, [])
 
-  const handleDismissOnboarding = useCallback(() => {
-    setOnboardingDismissed(true)
-  }, [])
-
   const handleOpenProfile = useCallback(() => {
     navigate({ tab: "profile", activity: null, goal: null })
   }, [navigate])
+
+  // Profile → Get started. The checklist lives on Today, so asking for it from
+  // Profile means going there: reveal it, clear the stored dismissal, and land
+  // the runner on the screen it is on.
+  const { reveal: revealGetStarted } = getStarted
+  const { resumeOnboarding } = data
+  const handleResumeGetStarted = useCallback(() => {
+    revealGetStarted()
+    resumeOnboarding()
+    navigate({ tab: null, activity: null, goal: null })
+  }, [revealGetStarted, resumeOnboarding, navigate])
 
   // ----- Loading state -----
   // The chrome is already correct while the data arrives, so the shell renders
@@ -275,6 +292,21 @@ export function AppShell({ initialData }: AppShellProps) {
       <main className="relative pb-24">
         {activeTab === "home" && (
           <HomeScreen
+            guide={
+              getStarted.visible ? (
+                <GetStarted
+                  steps={getStarted.steps}
+                  progress={getStarted.progress}
+                  stravaConnected={data.stravaConnected}
+                  onConnectStrava={handleConnectStrava}
+                  onAddActivity={() => setIsManualActivityOpen(true)}
+                  onAddGoal={() => handleAddGoal("event_training")}
+                  onAddWeeklyGoal={handleAddWeeklyGoal}
+                  onViewInsights={() => handleTabChange("insights")}
+                  onDismiss={data.dismissOnboarding}
+                />
+              ) : null
+            }
             starredGoals={data.starredGoals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
@@ -364,6 +396,7 @@ export function AppShell({ initialData }: AppShellProps) {
               onFullSync={data.fullSync}
               onConnectStrava={data.connectStrava}
               onSignOut={data.signOut}
+              onOpenGetStarted={handleResumeGetStarted}
             />
           </Suspense>
         )}
@@ -399,16 +432,6 @@ export function AppShell({ initialData }: AppShellProps) {
 
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
-
-      {/* Onboarding Flow */}
-      {showOnboarding && (
-        <Onboarding
-          stravaConnected={data.stravaConnected}
-          onConnectStrava={handleConnectStrava}
-          onCreateGoal={() => handleAddGoal("performance")}
-          onDismiss={handleDismissOnboarding}
-        />
-      )}
     </div>
   )
 }

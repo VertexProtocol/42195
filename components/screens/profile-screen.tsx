@@ -22,6 +22,7 @@ import {
   Eye,
   EyeOff,
   User,
+  ListChecks,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 import { TrackLoader } from "@/components/ui/track-loader"
@@ -53,6 +54,8 @@ interface ProfileScreenProps {
   onFullSync: () => void
   onConnectStrava: () => Promise<{ ok: boolean; error?: string }>
   onSignOut: () => void
+  /** Reopen the "Get started" checklist and go to the screen it lives on. */
+  onOpenGetStarted: () => void
 }
 
 export function ProfileScreen({
@@ -62,6 +65,7 @@ export function ProfileScreen({
   onSync,
   onFullSync,
   onSignOut,
+  onOpenGetStarted,
 }: ProfileScreenProps) {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const { locale, setLocale, t } = useI18n()
@@ -682,6 +686,18 @@ export function ProfileScreen({
       <Section>
         <SectionHeader title={t("profile.account")} />
         <AppCard variant="rows">
+          {/* The checklist can be closed at any point, so it needs a way back
+              that does not depend on the account still being unfinished. */}
+          <CardRow className="p-0">
+            <button
+              onClick={onOpenGetStarted}
+              className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-left text-label font-medium text-card-foreground"
+            >
+              <ListChecks size={16} className="text-muted-foreground" aria-hidden />
+              {t("getStarted.title")}
+            </button>
+          </CardRow>
+
           {!showChangePassword ? (
             <CardRow className="p-0">
               <button

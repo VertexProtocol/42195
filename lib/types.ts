@@ -86,6 +86,8 @@ export interface UserProfile {
   locale?: string | null
   hr_analysis_cache?: import("@/lib/hr-analysis-engine").HrAnalysisResult | null
   warning_state?: import("@/lib/training-warnings").WarningState | null
+  /** When the runner closed the "Get started" checklist. Null while it is live. */
+  onboarding_dismissed_at?: string | null
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"

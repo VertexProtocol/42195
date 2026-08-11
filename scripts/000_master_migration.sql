@@ -639,3 +639,14 @@ alter table public.sync_status drop constraint if exists sync_status_state_check
 alter table public.sync_status
   add constraint sync_status_state_check
   check (state in ('success', 'error', 'syncing', 'never', 'partial', 'rate_limited'));
+
+
+-- ============================================================
+-- 024_add_onboarding_state.sql
+-- ============================================================
+
+-- Null means the "Get started" checklist is live for this account; a
+-- timestamp means the runner closed it. Clearing it back to null is how
+-- Profile reopens the checklist.
+alter table public.profiles
+  add column if not exists onboarding_dismissed_at timestamptz;

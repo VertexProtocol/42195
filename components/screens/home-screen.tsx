@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, lazy, Suspense, useEffect, useState } from "react"
+import { useMemo, lazy, Suspense, useEffect, useState, type ReactNode } from "react"
 import { ChevronRight, Star } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressRing } from "@/components/progress-ring"
@@ -42,6 +42,12 @@ import type { Warning, WarningType } from "@/lib/training-warnings"
  */
 
 interface HomeScreenProps {
+  /**
+   * The "Get started" checklist, when the account still has first-run work
+   * left. It leads the screen, and while it is up it also stands in for the
+   * no-goals empty state — both would otherwise ask for the same goal.
+   */
+  guide?: ReactNode
   starredGoals: Goal[]
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
@@ -57,6 +63,7 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({
+  guide,
   starredGoals,
   currentWeekGoals,
   activities,
@@ -179,6 +186,9 @@ export function HomeScreen({
 
   return (
     <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+      {/* ── First run, while there is still first-run work ────────────── */}
+      {guide}
+
       {/* ── The race, and how much runway is left ─────────────────────── */}
       {starredGoals.length > 0 ? (
         <Section>
@@ -272,7 +282,7 @@ export function HomeScreen({
             })}
           </div>
         </Section>
-      ) : (
+      ) : guide ? null : (
         <EmptyState
           title={t("home.noActiveGoals")}
           body={t("home.noActiveGoalsBody")}

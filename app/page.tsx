@@ -32,7 +32,7 @@ export default async function Page() {
         .from("weekly_goals")
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
         .order("display_order", { ascending: true }),
-      supabase.from("profiles").select("id, display_name, email, avatar_url, locale, hr_analysis_cache").eq("id", authUser.id).single(),
+      supabase.from("profiles").select("id, display_name, email, avatar_url, locale, hr_analysis_cache, onboarding_dismissed_at").eq("id", authUser.id).single(),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
@@ -76,6 +76,8 @@ export default async function Page() {
           // profile screen re-ran the HR analysis on every visit.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           hr_analysis_cache: (profileRes.data as any).hr_analysis_cache ?? null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onboarding_dismissed_at: (profileRes.data as any).onboarding_dismissed_at ?? null,
         }
       : {
           id: authUser.id,
@@ -83,6 +85,7 @@ export default async function Page() {
           email: authUser.email ?? "",
           avatar_url: null,
           locale: null,
+          onboarding_dismissed_at: null,
         },
     stravaConnected: !!stravaTokenRes.data,
     syncStatus: syncStatusRes.data
