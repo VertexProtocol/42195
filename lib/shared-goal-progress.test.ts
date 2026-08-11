@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import {
   goalFitness,
   sharedGoalPosition,
+  adherencePosition,
+  memberPosition,
   blockAdherence,
 } from "./shared-goal-progress"
 import type { Activity, TrainingPlan } from "./types"
@@ -270,5 +272,71 @@ describe("blockAdherence", () => {
     const a = blockAdherence(makePlan([40, 40, 40]), [], blockStart)
     expect(a.weeks).toBe(3)
     expect(a.targetKm).toBe(120)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// adherencePosition and memberPosition — the measure a group actually runs on
+// ---------------------------------------------------------------------------
+
+describe("adherencePosition", () => {
+  it("reads km done against km planned", () => {
+    expect(adherencePosition({ doneKm: 96, targetKm: 95, weeks: 2 })).toMatchObject({
+      pct: 101.1,
+      state: "measured",
+    })
+    expect(adherencePosition({ doneKm: 148, targetKm: 160, weeks: 4 }).pct).toBeCloseTo(92.5, 1)
+  })
+
+  it("puts a beginner and a veteran on the same scale", () => {
+    // 30 km/week against 90 km/week, both doing what they said they would.
+    const beginner = adherencePosition({ doneKm: 58, targetKm: 60, weeks: 2 })
+    const veteran = adherencePosition({ doneKm: 174, targetKm: 180, weeks: 2 })
+    expect(beginner.pct).toBeCloseTo(veteran.pct!, 1)
+  })
+
+  it("keeps a figure above 100 rather than flattening it", () => {
+    // Overreaching is a real thing that happened; the lane stops, the number
+    // does not, because someone needs to be able to see it.
+    const over = adherencePosition({ doneKm: 130, targetKm: 100, weeks: 3 })
+    expect(over.pct).toBe(130)
+    expect(over.lanePct).toBe(100)
+  })
+
+  it("says nothing before the block's first week is complete", () => {
+    expect(adherencePosition({ doneKm: 0, targetKm: 0, weeks: 0 })).toMatchObject({
+      pct: null,
+      state: "no_plan",
+    })
+    // A plan whose completed weeks all target zero km measures nothing.
+    expect(adherencePosition({ doneKm: 12, targetKm: 0, weeks: 1 }).state).toBe("no_plan")
+  })
+})
+
+describe("memberPosition", () => {
+  const adherence = { doneKm: 96, targetKm: 95, weeks: 2 }
+  const times = {
+    baselineSeconds: 4000,
+    currentSeconds: 3600,
+    targetSeconds: 3000,
+    adherence,
+  }
+
+  it("measures what the group chose, not what the data allows", () => {
+    // Identical input, two groups: the measure decides, and the two answers
+    // are nothing like each other — which is why it is fixed per goal.
+    expect(memberPosition("adherence", times).pct).toBeCloseTo(101.1, 1)
+    expect(memberPosition("progress", times).pct).toBe(40)
+  })
+
+  it("ignores the fitness numbers entirely for an adherence group", () => {
+    // No baseline, no current: an adherence group never needed them.
+    const p = memberPosition("adherence", { adherence })
+    expect(p.state).toBe("measured")
+    expect(p.pct).toBeCloseTo(101.1, 1)
+  })
+
+  it("reports proximity as unmeasured rather than quietly measuring progress", () => {
+    expect(memberPosition("proximity", times)).toMatchObject({ pct: null, lanePct: 0 })
   })
 })

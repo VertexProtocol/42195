@@ -15,10 +15,10 @@
  */
 
 import { createServiceClient } from "@/lib/supabase/service"
-import type { Activity, TrainingPlan } from "@/lib/types"
-import { goalFitness, sharedGoalPosition, blockAdherence } from "@/lib/shared-goal-progress"
+import type { Activity, SharedGoalMetric, TrainingPlan } from "@/lib/types"
+import { goalFitness, memberPosition, blockAdherence } from "@/lib/shared-goal-progress"
 
-/** Activity columns the position needs — enough for Riegel and for week sums. */
+/** Activity columns the position needs — enough for the index and for week sums. */
 const ACTIVITY_COLUMNS = "date, distance_km, duration_seconds, elevation_gain_m"
 
 type ProgressActivity = Pick<
@@ -26,7 +26,7 @@ type ProgressActivity = Pick<
   "date" | "distance_km" | "duration_seconds" | "elevation_gain_m"
 >
 
-/** Shapes a partial row into what predictRaceTimes reads. */
+/** Shapes a partial row into a full Activity for the form index. */
 function asActivity(row: ProgressActivity): Activity {
   return {
     id: "",
@@ -81,7 +81,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
   try {
     const { data: memberships, error: memberError } = await service
       .from("shared_goal_members")
-      .select("shared_goal_id, goal_id, baseline_seconds, shared_goals(distance_km)")
+      .select("shared_goal_id, goal_id, baseline_seconds, shared_goals(distance_km, metric)")
       .eq("user_id", userId)
 
     if (memberError) throw memberError
@@ -125,15 +125,11 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
         // when it cannot see the foreign key, so accept either rather than
         // silently measuring against the member's own distance instead.
         const embed = member.shared_goals as unknown
-        const shared = (Array.isArray(embed) ? embed[0] : embed) as { distance_km: number } | null
+        const shared = (Array.isArray(embed) ? embed[0] : embed) as
+          | { distance_km: number; metric: SharedGoalMetric }
+          | null
         const distanceKm = Number(shared?.distance_km ?? goal.target_distance_km)
-
-        const { seconds: currentSeconds } = goalFitness(asActivities, distanceKm)
-        const position = sharedGoalPosition(
-          member.baseline_seconds,
-          currentSeconds,
-          goal.target_time_seconds,
-        )
+        const metric: SharedGoalMetric = shared?.metric ?? "adherence"
 
         const planRow = plans.get(member.goal_id)
         const adherence = blockAdherence(
@@ -141,6 +137,18 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
           activities.map((a) => ({ date: a.date, distance_km: Number(a.distance_km) })),
           planRow?.block_start_date as string | undefined,
         )
+
+        // An adherence group needs no fitness estimate at all, so it does not
+        // pay for one. The index walks every activity the runner has.
+        const currentSeconds =
+          metric === "progress" ? goalFitness(asActivities, distanceKm).seconds : null
+
+        const position = memberPosition(metric, {
+          baselineSeconds: member.baseline_seconds,
+          currentSeconds,
+          targetSeconds: goal.target_time_seconds,
+          adherence,
+        })
 
         const { error } = await service
           .from("shared_goal_members")

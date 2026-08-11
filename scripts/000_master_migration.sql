@@ -667,10 +667,12 @@ create table if not exists public.shared_goals (
   name         text         not null,
   race_date    date         not null,
   distance_km  numeric(8,2) not null,
-  -- 'progress'  — share of your own gap closed since you joined
-  -- 'adherence' — km run against km planned
-  -- 'proximity' — how close your predicted time is to your target time
-  metric       text         not null default 'progress'
+  -- 'adherence' — km run against km planned. The measure groups run under.
+  -- 'progress'  — share of your own gap closed since you joined. Implemented
+  --               and tested, but not offered: measured against a real history
+  --               it needs denser logging than this app's users have.
+  -- 'proximity' — how close your predicted time is to your target time.
+  metric       text         not null default 'adherence'
                check (metric in ('progress', 'adherence', 'proximity')),
   created_at   timestamptz  not null default now(),
   updated_at   timestamptz  not null default now()

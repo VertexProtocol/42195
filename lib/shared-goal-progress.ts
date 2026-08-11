@@ -1,33 +1,39 @@
 /**
- * Shared goal progress — where a runner stands against their own starting
- * point, on a scale everyone in a group can be read on at once.
+ * Where a runner stands in a shared goal, on a scale everyone in the group can
+ * be read on at once.
  *
- * A group training for one race has one race date and nothing else in common:
- * the target times differ, and so does the form each runner brought with them.
- * Measuring absolute fitness would rank the group before the block began.
- * Measuring adherence would rank the most modest plan first. So the position
- * measures neither — it measures the share of your *own* gap you have closed:
+ * A group training for one race has the date in common and nothing else: the
+ * target times differ, and so does the form each runner brought with them. Two
+ * measures survive that, and this module implements both.
  *
- *     baseline   the predicted time over the race distance on the day you
- *                joined, locked then and never recomputed
- *     current    the predicted time over the race distance today
- *     target     the time you are aiming for
+ * ADHERENCE — km run against km planned, over the block's completed weeks.
+ * This is what groups run on. It needs no fitness estimate and no locked
+ * starting point, it is readable from the first completed week, and a
+ * beginner on 30 km a week and a veteran on 90 stand on it as equals. It
+ * measures showing up, and it can be gamed by planning less — every block, if
+ * a runner wants to.
+ *
+ * PROGRESS — the share of your own gap you have closed since joining:
  *
  *     position = (baseline − current) / (baseline − target)
  *
- * A beginner who has taken fifty minutes off a five-hour marathon is further
- * round the lane than a three-hour runner who has taken off two, and that is
- * the intended reading, not a rounding artefact.
+ * Better in principle: it rewards moving rather than complying, and its one
+ * exploit — joining while unfit — is locked shut the moment you join. It is
+ * implemented, tested, and not offered. Measured against a real 40-run
+ * history it needs denser logging than this app's runners do: the form
+ * estimate under it is usable on 78 % of days and still moves six minutes in
+ * one, which is most of a realistic goal gap. See `shared-goal-fitness.ts`.
  *
- * The baseline is locked because it is the one number a member could otherwise
- * game: rejoin after a bad week and every subsequent easy gain counts twice.
+ * A group's measure is fixed at creation and never edited, so one lane is
+ * always one scale. `memberPosition` is the single place that turns a member's
+ * data into a position, and it takes the measure as an argument.
  *
  * This module is pure. Reading and writing the rows lives in
  * `lib/shared-goal-sync.ts`, so the arithmetic can be tested without a
  * database.
  */
 
-import type { Activity, TrainingPlan } from "@/lib/types"
+import type { Activity, SharedGoalMetric, TrainingPlan } from "@/lib/types"
 import { fitnessIndexSeconds, type FitnessIndex } from "@/lib/shared-goal-fitness"
 import { getCurrentBlockWeekIndex, getWeekActualKm } from "@/lib/training-checkpoint"
 
@@ -58,6 +64,8 @@ export type SharedGoalPositionState =
   | "no_current"
   /** The baseline was already at or past the target when the runner joined. */
   | "already_met"
+  /** Adherence only: no plan, or the block's first week is not yet behind them. */
+  | "no_plan"
 
 export interface SharedGoalPosition {
   /**
@@ -150,5 +158,56 @@ export function blockAdherence(
     doneKm: Math.round(doneKm * 10) / 10,
     targetKm: Math.round(targetKm * 10) / 10,
     weeks: completed,
+  }
+}
+
+/**
+ * Where a runner stands when the group measures adherence.
+ *
+ * Km run against km planned, over the completed weeks of the block. Unlike the
+ * progress measure this needs no locked starting point and no fitness estimate
+ * at all — which is most of why it survives contact with real training logs.
+ *
+ * Above 100 is left as it is. Doing more than the plan asked is a real thing
+ * that happened, and rounding it down to a full lane would hide the runner who
+ * is quietly overreaching.
+ */
+export function adherencePosition(a: BlockAdherence): SharedGoalPosition {
+  if (a.weeks === 0 || a.targetKm <= 0) {
+    return { pct: null, lanePct: 0, state: "no_plan" }
+  }
+  const pct = Math.round((a.doneKm / a.targetKm) * 1000) / 10
+  return { pct, lanePct: Math.max(0, Math.min(100, pct)), state: "measured" }
+}
+
+/**
+ * The member's position under whichever measure their group runs on.
+ *
+ * The measure is a property of the shared goal, never of the member, so
+ * everyone on one lane is on one scale. Dispatching here rather than at the
+ * call site keeps that true by construction: there is one place that turns a
+ * member's data into a position, and it takes the group's measure as an
+ * argument it cannot ignore.
+ */
+export function memberPosition(
+  metric: SharedGoalMetric,
+  input: {
+    baselineSeconds?: number | null
+    currentSeconds?: number | null
+    targetSeconds?: number | null
+    adherence: BlockAdherence
+  },
+): SharedGoalPosition {
+  switch (metric) {
+    case "adherence":
+      return adherencePosition(input.adherence)
+    case "progress":
+    case "proximity":
+      // 'proximity' has no implementation and is not offered; falling through
+      // to progress would quietly measure something else, so it reports itself
+      // as unmeasured until it is built.
+      return metric === "progress"
+        ? sharedGoalPosition(input.baselineSeconds, input.currentSeconds, input.targetSeconds)
+        : { pct: null, lanePct: 0, state: "no_baseline" }
   }
 }
