@@ -179,6 +179,20 @@ underline offset, and `::marker`.
 The app bar is opaque, not translucent — a blurred bar over scrolling content
 fails contrast against whatever passes beneath it. Same for the tab bar.
 
+Neither bar draws a rule at rest. A permanent hairline top and bottom cuts a
+phone screen into three boxes, and on a screen that fits without scrolling it
+separates the chrome from nothing at all. Instead both bars carry a short scrim
+— the ground's own colour fading out over the content — so the edge is a
+dissolve rather than a line: 1rem below the app bar, 1.25rem above the tab bar.
+The ramp fades to a transparent version of the ground rather than to
+`transparent`, which would interpolate through rgba(0,0,0,0) and grey its
+middle.
+
+Separation is earned. The app bar takes elevation only while the page is
+actually scrolled beneath it (`data-raised`), on the same system cards use: a
+shadow in light, a lit edge in dark. The tab bar always has content passing
+under it, so its scrim is enough.
+
 Four tabs: Today · Activities · Plan · Insights. Profile lives in the app bar.
 The active tab is marked twice — an ember lane above the icon and a weight
 change — so the state does not depend on colour alone.
