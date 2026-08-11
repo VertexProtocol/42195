@@ -32,7 +32,6 @@ export async function GET(req: NextRequest) {
       weekly_increase_pct: data.weekly_increase_pct ?? 10,
       block_weeks: data.block_weeks ?? 4,
       regenerate_every_weeks: data.regenerate_every_weeks ?? 4,
-      plan_mode: data.plan_mode ?? "block",
     },
   })
 }

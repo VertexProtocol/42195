@@ -454,7 +454,6 @@ export async function POST(req: NextRequest) {
     weekly_increase_pct: prefsRow?.weekly_increase_pct ?? 10,
     block_weeks: prefsRow?.block_weeks ?? 4,
     regenerate_every_weeks: prefsRow?.regenerate_every_weeks ?? 4,
-    plan_mode: prefsRow?.plan_mode ?? "block",
   }
 
   // Fetch last 12 weeks of activities
@@ -1298,10 +1297,12 @@ const PreferencesSchema = z.object({
   focus: z.enum(["volume", "workouts", "balanced"]),
   notes: z.string().max(500).nullable().optional(),
   injury_notes: z.string().max(500).nullable().optional(),
-  weekly_increase_pct: z.number().min(0).max(25).default(10),
+  // Capped at 10: MAX_WEEKLY_INCREASE allows 8-12% depending on athlete level,
+  // so a higher request was always clipped back — and the runner was told their
+  // week had been "reduced for safety" for using a control we offered them.
+  weekly_increase_pct: z.number().int().min(0).max(10).default(10),
   block_weeks: z.number().int().min(1).max(20).default(4),
   regenerate_every_weeks: z.number().int().min(1).max(12).default(4),
-  plan_mode: z.enum(["block", "full_cycle"]).default("block"),
 })
 
 // PUT — save/update preferences for a goal
@@ -1325,7 +1326,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 })
   }
 
-  const { goalId, sessions_per_week, focus, notes, injury_notes, weekly_increase_pct, block_weeks, regenerate_every_weeks, plan_mode } = parsed.data
+  const { goalId, sessions_per_week, focus, notes, injury_notes, weekly_increase_pct, block_weeks, regenerate_every_weeks } = parsed.data
 
   // Fetch current prefs + active plan to compare notes and capture block context
   const [{ data: currentPrefs }, { data: activePlan }] = await Promise.all([
@@ -1433,18 +1434,6 @@ export async function PUT(req: NextRequest) {
   if (error) {
     console.error("Failed to save goal preferences:", error)
     return NextResponse.json({ error: error.message ?? "Failed to save preferences" }, { status: 500 })
-  }
-
-  // plan_mode lives in a column added by a later migration — update it separately
-  // so a missing column doesn't break the whole save.
-  const { error: modeError } = await supabase
-    .from("goal_preferences")
-    .update({ plan_mode: plan_mode ?? "block" })
-    .eq("goal_id", goalId)
-    .eq("user_id", user.id)
-
-  if (modeError) {
-    console.warn("Could not persist plan_mode (migration may not be applied):", modeError.message)
   }
 
   // Signal the client to regenerate the plan immediately when a new active

@@ -115,7 +115,6 @@ export interface Lap {
 // ---- AI Training Plan types ----
 
 export type TrainingFocus = "volume" | "workouts" | "balanced"
-export type PlanMode = "block" | "full_cycle"
 
 export interface GoalPreferences {
   goal_id: string
@@ -127,7 +126,6 @@ export interface GoalPreferences {
   weekly_increase_pct: number   // e.g. 10 = 10% volume increase per week
   block_weeks: number           // total weeks per training block (2/3/4/6)
   regenerate_every_weeks: number // how often user plans to regenerate (2/4/6/8)
-  plan_mode?: PlanMode          // "block" (default) or "full_cycle" for complete race prep
 }
 
 export interface TrainingSession {

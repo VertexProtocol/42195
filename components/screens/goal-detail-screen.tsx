@@ -39,6 +39,10 @@ import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
 import { RUN_TYPES } from "@/lib/training-constants"
+// Shared with the server so a session reads as the same distance on both sides.
+// The client used to take the midpoint of a range where the server took the
+// high end, so weekly totals in the app never matched the stored targetKm.
+import { parseSessionDistanceKm } from "@/lib/training-sessions"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { Button } from '@/components/ui/button'
@@ -118,7 +122,6 @@ function PreferencesForm({
   const [increasePct, setIncreasePct] = useState(initial.weekly_increase_pct ?? 10)
   const [blockWeeks, setBlockWeeks] = useState(initial.block_weeks ?? 4)
   const [regenEvery, setRegenEvery] = useState(initial.regenerate_every_weeks ?? 4)
-  const [planMode] = useState<"block" | "full_cycle">(initial.plan_mode ?? "block")
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [localHistory, setLocalHistory] = useState(initial.notes_history)
@@ -161,7 +164,6 @@ function PreferencesForm({
           weekly_increase_pct: increasePct,
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
-          plan_mode: planMode,
         }),
       })
       const body = await res.json().catch(() => ({}))
@@ -179,7 +181,6 @@ function PreferencesForm({
           weekly_increase_pct: increasePct,
           block_weeks: blockWeeks,
           regenerate_every_weeks: regenEvery,
-          plan_mode: planMode,
           notes_history: localHistory,
         },
         {
@@ -255,10 +256,10 @@ function PreferencesForm({
           Weekly volume increase
         </label>
         <p className="mb-2 text-micro text-muted-foreground/70">
-          How much to increase your weekly km each build week. 10% is the standard guideline for injury prevention.
+          How much to increase your weekly km each build week. 10% is the standard guideline for injury prevention — your training history sets the actual ceiling, which is lower for newer runners.
         </p>
         <div className="flex gap-2">
-          {[5, 8, 10, 15, 20].map((n) => (
+          {[5, 8, 10].map((n) => (
             <button
               key={n}
               onClick={() => setIncreasePct(n)}
@@ -464,16 +465,6 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 // ---- Session status type ----
 type SessionStatus = "planned" | "completed" | "skipped"
 
-/** Parse a distance string like "20 km" or "8–10 km" into km (uses midpoint for ranges) */
-function parseSessionKm(distance: string): number | null {
-  // Handle ranges like "8–10 km" or "8-10km"
-  const rangeMatch = distance.match(/([\d.]+)\s*[–\-]\s*([\d.]+)\s*km/i)
-  if (rangeMatch) return (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2
-  const singleMatch = distance.match(/([\d.]+)\s*km/i)
-  if (singleMatch) return parseFloat(singleMatch[1])
-  return null
-}
-
 /** Snap a date to the Monday of its ISO week (Mon=start of week) */
 function toMonday(date: Date): Date {
   const d = new Date(date)
@@ -502,8 +493,8 @@ function autoMatchSessions(
   if (weekActivities.length === 0) return matched
 
   // Parse each session's target distance
-  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionKm(s.distance) }))
-    .filter((s) => s.km !== null && s.km > 0) as { i: number; km: number }[]
+  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionDistanceKm(s.distance) }))
+    .filter((s) => s.km > 0)
 
   // Build all valid (session, activity) candidate pairs
   const candidates: { si: number; ai: number; delta: number }[] = []
