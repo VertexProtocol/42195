@@ -16,7 +16,6 @@ import {
   Shield,
   Trash2,
   Heart,
-  Loader2,
   ChevronDown,
   Pencil,
   KeyRound,
@@ -25,6 +24,7 @@ import {
   User,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
+import { TrackLoader } from "@/components/ui/track-loader"
 import { createClient } from "@/lib/supabase/client"
 import { formatTimeAgo } from "@/lib/format"
 import { useI18n, type Locale } from "@/lib/i18n"
@@ -423,7 +423,7 @@ export function ProfileScreen({
               </p>
             </div>
             {hrLoading ? (
-              <Loader2 size={16} className="mt-1 shrink-0 animate-spin text-muted-foreground" />
+              <TrackLoader size={14} className="mt-1 text-muted-foreground" />
             ) : (
               <Button variant="ghost" size="sm" onClick={fetchHrAnalysis}>
                 {hrAnalysis ? t("profile.hrReanalyze") : t("profile.hrAnalyze")}

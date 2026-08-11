@@ -1,9 +1,9 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { TrackLoader } from '@/components/ui/track-loader'
 
 /**
  * Button — one shape, one press response, every state.
@@ -91,7 +91,7 @@ function Button({
         children
       ) : (
         <>
-          {loading && <Loader2 className="animate-spin" aria-hidden />}
+          {loading && <TrackLoader size={14} />}
           {children}
         </>
       )}

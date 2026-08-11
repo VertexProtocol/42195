@@ -158,9 +158,15 @@ shape of the content, not a spinner in the middle of empty space.
 - **The authored moment** is `ProgressRing` drawing its arc from zero on first
   mount — the lap filling in. It happens once per mount, only on the rings that
   carry a screen's headline state.
+- **Waiting** is `TrackLoader`: the app icon's lead arc running its lane, one
+  lap per `--dur-lap` (1500ms), drawn in `currentColor` so it takes the tone of
+  whatever it sits in. It marks a wait *inside* something the runner pressed —
+  a button, the sync indicator, the coach's reply. A screen that is still
+  loading shows the shape of what is coming, never this.
 - Nothing animates `width`, `height`, `padding` or `margin`.
 - `prefers-reduced-motion` collapses durations and removes the press travel
-  while keeping colour and state transitions legible.
+  while keeping colour and state transitions legible. The loader settles on its
+  first frame, which is the mark exactly as the icon draws it.
 
 ## Browser surfaces
 

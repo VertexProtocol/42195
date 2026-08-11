@@ -12,6 +12,7 @@ import { TEST_RUN_TYPES } from "@/lib/types"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { createClient } from "@/lib/supabase/client"
 import { AppCard } from '@/components/ui/app-card'
+import { TrackLoader } from '@/components/ui/track-loader'
 import { AppBar } from '@/components/app-bar'
 import { Stat, StatGroup } from '@/components/ui/stat'
 import { Pill } from '@/components/ui/pill'
@@ -450,7 +451,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
           >
             {aiAnalysisLoading ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
+                <TrackLoader size={14} />
                 {t("analysis.analyzing")}
               </>
             ) : (

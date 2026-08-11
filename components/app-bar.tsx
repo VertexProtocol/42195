@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useSyncExternalStore } from "react"
-import { ArrowLeft, CheckCircle2, RefreshCw, TriangleAlert, User } from "lucide-react"
+import { ArrowLeft, CheckCircle2, TriangleAlert, User } from "lucide-react"
+import { TrackLoader } from "@/components/ui/track-loader"
 import { useI18n } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 
@@ -52,7 +53,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
 
   const map = {
     syncing: {
-      icon: <RefreshCw size={13} className="animate-spin" />,
+      icon: <TrackLoader size={12} />,
       text: t("profile.syncing"),
       cls: "text-primary",
     },
