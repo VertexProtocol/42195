@@ -321,6 +321,7 @@ export function AppShell({ initialData }: AppShellProps) {
             onViewGoals={() => handleTabChange("goals")}
             onViewInsights={() => handleTabChange("insights")}
             onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
+            onUnpinGoal={data.toggleStarGoal}
           />
         )}
 
@@ -373,6 +374,7 @@ export function AppShell({ initialData }: AppShellProps) {
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
               onPlanChange={data.refreshPlanBadges}
+              onToggleStar={data.toggleStarGoal}
             />
           </Suspense>
         )}
