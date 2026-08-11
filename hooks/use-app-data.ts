@@ -39,6 +39,11 @@ export function useAppData(initialData?: InitialData | null) {
   const [stravaConnected, setStravaConnected] = useState(initialData?.stravaConnected ?? false)
   const [isLoading, setIsLoading] = useState(!hasInitial)
 
+  // "Get started" checklist: dismissal belongs to the account, not the tab.
+  const [onboardingDismissed, setOnboardingDismissedState] = useState(
+    initialData?.user?.onboarding_dismissed_at != null
+  )
+
   // Refs to latest state — avoids stale closures in useCallback without
   // putting mutable arrays in dependency lists (which would recreate every callback on each change).
   const goalsRef = useRef(goals)
@@ -101,7 +106,7 @@ export function useAppData(initialData?: InitialData | null) {
             // [DND] include display_order; order by it so the array arrives pre-sorted
             .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
             .order("display_order", { ascending: true }),
-          supabase.from("profiles").select("id, display_name, email, avatar_url").eq("id", authUser.id).single(),
+          supabase.from("profiles").select("id, display_name, email, avatar_url, onboarding_dismissed_at").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
         ])
 
@@ -149,7 +154,9 @@ export function useAppData(initialData?: InitialData | null) {
           display_name: profileRes.data.display_name ?? authUser.email ?? "Runner",
           email: profileRes.data.email ?? authUser.email ?? "",
           avatar_url: profileRes.data.avatar_url ?? null,
+          onboarding_dismissed_at: profileRes.data.onboarding_dismissed_at ?? null,
         })
+        setOnboardingDismissedState(profileRes.data.onboarding_dismissed_at != null)
       } else {
         setUser({
           id: authUser.id,
@@ -688,6 +695,38 @@ export function useAppData(initialData?: InitialData | null) {
     return { ok: true }
   }, [])
 
+  // ----- "Get started" checklist -----
+  // The write is fire-and-forget on purpose: a failed update must not put the
+  // checklist back under the runner's thumb mid-tap. It is a hint about what
+  // to show, not training data, so the worst case is that it returns on the
+  // next load and has to be closed again.
+  const setOnboardingDismissed = useCallback(async (dismissed: boolean) => {
+    setOnboardingDismissedState(dismissed)
+
+    const { data: authData } = await supabase.auth.getUser()
+    const userId = authData.user?.id
+    if (!userId) return
+
+    const dismissedAt = dismissed ? new Date().toISOString() : null
+    setUser((prev) => (prev ? { ...prev, onboarding_dismissed_at: dismissedAt } : prev))
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ onboarding_dismissed_at: dismissedAt })
+      .eq("id", userId)
+
+    if (error) logError("Failed to save the get-started checklist state", error)
+  }, [])
+
+  const dismissOnboarding = useCallback(
+    () => setOnboardingDismissed(true),
+    [setOnboardingDismissed],
+  )
+  const resumeOnboarding = useCallback(
+    () => setOnboardingDismissed(false),
+    [setOnboardingDismissed],
+  )
+
   const handleSignOut = useCallback(() => {
     startTransition(async () => {
       await signOut()
@@ -703,6 +742,7 @@ export function useAppData(initialData?: InitialData | null) {
     syncStatus,
     stravaConnected,
     isLoading,
+    onboardingDismissed,
 
     // Derived
     activeGoals,
@@ -731,6 +771,10 @@ export function useAppData(initialData?: InitialData | null) {
     sync,
     fullSync,
     connectStrava,
+
+    // Get started
+    dismissOnboarding,
+    resumeOnboarding,
 
     // Auth
     signOut: handleSignOut,
