@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="42195">
+  <title>42195</title>
+  <defs>
+    <radialGradient id="ground-track-light" cx="30%" cy="20%" r="95%">
+      <stop offset="0" stop-color="#e9e2db"/>
+      <stop offset="1" stop-color="#ded6ce"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#ground-track-light)"/>
+  <g transform="translate(256 256)">
+    <rect x="-186" y="-116" width="372" height="232" rx="116" fill="none" stroke="#261b16" stroke-width="36"/>
+    <rect x="-186" y="-116" width="372" height="232" rx="116" fill="none" stroke="#b03105" stroke-width="36" stroke-linecap="round"
+          pathLength="100" stroke-dasharray="25 75" stroke-dashoffset="-5"/>
+  </g>
+</svg>
