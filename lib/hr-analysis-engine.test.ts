@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { analyzeHeartRateZones } from "./hr-analysis-engine"
 import type { Activity } from "./types"
-import { HR_ZONE_PCTS, RESTING_HR_OFFSET } from "./training-constants"
+import { HR_ZONE_PCTS, HR_PEAK_SPIKE_GAP } from "./training-constants"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,6 +27,7 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
     pace_min_per_km: 6,
     elevation_gain_m: null,
     avg_heart_rate: 150,
+    max_heart_rate: null,
     avg_cadence: null,
     calories: null,
     map_polyline: null,
@@ -42,17 +43,323 @@ function makeHrActivities(count: number, avgHr: number, overrides: Partial<Activ
   )
 }
 
+/** Build N activities carrying a recorded peak HR */
+function makePeakActivities(count: number, avgHr: number, peakHr: number): Activity[] {
+  return Array.from({ length: count }, (_, i) =>
+    makeActivity({ avg_heart_rate: avgHr, max_heart_rate: peakHr, date: daysAgo(i + 1) }),
+  )
+}
+
+/**
+ * A polarised training block from a runner whose max HR really is 180: mostly
+ * easy aerobic work with a handful of harder sessions, spread across zones.
+ * Nothing here should trip a misalignment check when 180 is configured.
+ */
+function healthyTrainingBlock(): Activity[] {
+  const sessions: [avg: number, peak: number, count: number][] = [
+    [118, 150, 6], // easy — squarely in Z2
+    [135, 160, 2], // steady — Z3
+    [150, 170, 2], // tempo — Z4
+    [168, 180, 2], // intervals — Z5, and the source of the true peak
+  ]
+  return sessions.flatMap(([avg, peak, count], group) =>
+    Array.from({ length: count }, (_, i) =>
+      makeActivity({
+        avg_heart_rate: avg,
+        max_heart_rate: peak,
+        date: daysAgo(group * 10 + i + 1),
+      }),
+    ),
+  )
+}
+
+const codes = (r: ReturnType<typeof analyzeHeartRateZones>) => r.explanations.map((e) => e.code)
+
 // ---------------------------------------------------------------------------
-// analyzeHeartRateZones — insufficient data
+// The regression this engine was rewritten for
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — no invented baseline", () => {
+  // Previously the engine substituted `observedMax × 1.2` for a missing
+  // configured max HR and compared it against its own `× 1.05–1.15`
+  // recommendation. The two could never agree, so every athlete above ~160 bpm
+  // was told their zones were "likely misconfigured" no matter what their data
+  // said. Nothing in the app ever stored that 1.2× figure.
+  it("never reports a misconfiguration when no max HR is configured", () => {
+    for (const peak of [150, 160, 170, 180, 190]) {
+      const result = analyzeHeartRateZones(makeHrActivities(20, peak))
+      expect(result.calibrationStatus).toBe("not_configured")
+      expect(result.configuredMaxHr).toBeNull()
+    }
+  })
+
+  it("shows a single zone set when nothing is configured", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(10, 175))
+    expect(result.currentZones).toEqual(result.recommendedZones)
+    expect(result.zonesMatch).toBe(true)
+    expect(codes(result)).toContain("not_configured")
+  })
+
+  it("can reach well_calibrated once a matching max HR is configured", () => {
+    // The old engine could not produce this verdict for any athlete at all.
+    const result = analyzeHeartRateZones(healthyTrainingBlock(), { configuredMaxHr: 180 })
+    expect(result.estimatedMaxHr).toBe(180)
+    expect(result.calibrationStatus).toBe("well_calibrated")
+    expect(result.zonesMatch).toBe(true)
+    expect(codes(result)).toContain("well_calibrated")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Max HR resolution
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — max HR from recorded peaks", () => {
+  it("takes max HR straight from recorded peaks, without a multiplier", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 150, 186))
+    expect(result.maxHrSource).toBe("recorded_peaks")
+    expect(result.observedMaxHr).toBe(186)
+    expect(result.estimatedMaxHr).toBe(186)
+    expect(result.peakSamples).toBe(8)
+  })
+
+  it("discards an isolated strap spike instead of adopting it as max HR", () => {
+    const normal = makePeakActivities(8, 150, 185)
+    const spike = makeActivity({ avg_heart_rate: 150, max_heart_rate: 228, date: daysAgo(40) })
+    const result = analyzeHeartRateZones([spike, ...normal])
+    expect(result.estimatedMaxHr).toBe(185)
+    expect(result.estimatedMaxHr).toBeLessThan(228)
+  })
+
+  it("keeps a high peak that the surrounding samples corroborate", () => {
+    // Several peaks near 196 — not an artifact, so it must not be discarded.
+    const result = analyzeHeartRateZones([
+      ...makePeakActivities(4, 165, 196),
+      ...makePeakActivities(5, 150, 180),
+    ])
+    expect(result.estimatedMaxHr).toBe(196)
+  })
+
+  it("keeps a single genuine max effort that stands above easy weeks", () => {
+    // One hard session peaking 15 bpm above the rest is a real effort, not a
+    // glitch — and it is the only sample that reaches anywhere near max HR.
+    // A filter judging peaks against the *typical* peak would discard exactly
+    // this one.
+    const result = analyzeHeartRateZones([
+      makeActivity({ avg_heart_rate: 172, max_heart_rate: 180 + HR_PEAK_SPIKE_GAP }),
+      ...makePeakActivities(8, 148, 180),
+    ])
+    expect(result.estimatedMaxHr).toBe(180 + HR_PEAK_SPIKE_GAP)
+  })
+
+  it("walks past several stacked artifacts down to credible data", () => {
+    const result = analyzeHeartRateZones([
+      makeActivity({ avg_heart_rate: 150, max_heart_rate: 229 }),
+      makeActivity({ avg_heart_rate: 150, max_heart_rate: 210 }),
+      ...makePeakActivities(6, 150, 184),
+    ])
+    expect(result.estimatedMaxHr).toBe(184)
+  })
+
+  it("keeps a lone race peak that the session's own average corroborates", () => {
+    // A hard race: peak 195, and an average of 180 across the whole effort.
+    // No other session comes near it, but you cannot average 180 bpm without
+    // having genuinely been up there — so this is not a strap artifact.
+    const result = analyzeHeartRateZones([
+      makeActivity({ avg_heart_rate: 180, max_heart_rate: 195, name: "Race" }),
+      ...makePeakActivities(20, 150, 170),
+    ])
+    expect(result.estimatedMaxHr).toBe(195)
+    expect(result.dataQuality.highestHrActivity?.name).toBe("Race")
+  })
+
+  it("still rejects a lone spike on an otherwise ordinary run", () => {
+    // Same 25 bpm gap as the race above, but the average says it was an easy
+    // hour — the peak has nothing behind it.
+    const result = analyzeHeartRateZones([
+      makeActivity({ avg_heart_rate: 132, max_heart_rate: 195, name: "Easy run" }),
+      ...makePeakActivities(20, 150, 170),
+    ])
+    expect(result.estimatedMaxHr).toBe(170)
+  })
+
+  it("reports which activity the peak came from", () => {
+    const result = analyzeHeartRateZones([
+      ...makePeakActivities(5, 150, 175),
+      makeActivity({ avg_heart_rate: 168, max_heart_rate: 182, name: "Hill reps" }),
+    ])
+    expect(result.dataQuality.highestHrActivity?.maxHr).toBe(182)
+    expect(result.dataQuality.highestHrActivity?.name).toBe("Hill reps")
+  })
+})
+
+describe("analyzeHeartRateZones — max HR estimated from averages", () => {
+  it("falls back to the average-based estimate when no peaks are recorded", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 182))
+    expect(result.maxHrSource).toBe("estimated_from_averages")
+    expect(result.estimatedMaxHr).toBe(Math.round(182 * 1.05))
+    expect(result.peakSamples).toBe(0)
+    // The uncertainty is surfaced rather than left implicit.
+    expect(codes(result)).toContain("max_hr_estimated_from_averages")
+  })
+
+  it("applies 1.10x for observed avg HR between 160 and 170", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 163))
+    expect(result.estimatedMaxHr).toBe(Math.round(163 * 1.10))
+  })
+
+  it("applies 1.15x for observed avg HR below 160", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 145))
+    expect(result.estimatedMaxHr).toBe(Math.round(145 * 1.15))
+  })
+
+  it("reports observedMaxHr as 0 when no peak was ever recorded", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 160))
+    expect(result.observedMaxHr).toBe(0)
+  })
+
+  it("needs at least 3 peaks before treating max HR as observed", () => {
+    const result = analyzeHeartRateZones([
+      ...makePeakActivities(2, 150, 190),
+      ...makeHrActivities(6, 150),
+    ])
+    expect(result.maxHrSource).toBe("estimated_from_averages")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Zone construction
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — zone boundaries", () => {
+  it("produces 5 ascending zones", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 160))
+    expect(result.currentZones).toHaveLength(5)
+    expect(result.recommendedZones).toHaveLength(5)
+    for (const zone of [...result.currentZones, ...result.recommendedZones]) {
+      expect(zone.min).toBeLessThan(zone.max)
+    }
+  })
+
+  it("Zone 1 min uses HR_ZONE_PCTS[0][0] fraction of max HR (not hard-coded 0)", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(8, 160), { configuredMaxHr: 180 })
+    const z1Min = result.currentZones[0].min
+    expect(z1Min).toBe(Math.round(180 * HR_ZONE_PCTS[0][0]))
+    expect(z1Min).toBeGreaterThan(0)
+  })
+
+  it("uses Karvonen for both zone sets when a resting HR is configured", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 150, 190), {
+      configuredMaxHr: 195,
+      restingHr: 48,
+    })
+    expect(result.zoneModel).toBe("karvonen")
+    expect(result.restingHr).toBe(48)
+
+    const expectedRec = Math.round(48 + (result.estimatedMaxHr - 48) * HR_ZONE_PCTS[0][0])
+    expect(result.recommendedZones[0].min).toBe(expectedRec)
+    // Current zones must use the same model, or the Diff column would be
+    // showing a model change dressed up as a max HR change.
+    const expectedCur = Math.round(48 + (195 - 48) * HR_ZONE_PCTS[0][0])
+    expect(result.currentZones[0].min).toBe(expectedCur)
+  })
+
+  it("uses percentage-of-max for both zone sets when no resting HR is set", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 150, 190), {
+      configuredMaxHr: 195,
+    })
+    expect(result.zoneModel).toBe("percent_max")
+    expect(result.restingHr).toBeNull()
+    expect(result.recommendedZones[0].min).toBe(Math.round(190 * HR_ZONE_PCTS[0][0]))
+    expect(result.currentZones[0].min).toBe(Math.round(195 * HR_ZONE_PCTS[0][0]))
+  })
+
+  it("never infers a resting HR from training data", () => {
+    // The old engine derived resting HR as "easy-run average − 45", which
+    // returned values around 104 bpm for ordinary runners and then silently
+    // reshaped every Karvonen boundary.
+    const easyLong = Array.from({ length: 5 }, (_, i) =>
+      makeActivity({
+        avg_heart_rate: 149,
+        duration_seconds: 45 * 60,
+        distance_km: 12,
+        date: daysAgo(i + 5),
+      }),
+    )
+    const result = analyzeHeartRateZones([...easyLong, ...makeHrActivities(6, 165)])
+    expect(result.restingHr).toBeNull()
+    expect(result.zoneModel).toBe("percent_max")
+  })
+
+  it("rejects an implausible configured resting HR rather than modelling with it", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 150, 190), { restingHr: 150 })
+    expect(result.restingHr).toBeNull()
+    expect(result.zoneModel).toBe("percent_max")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Calibration status
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — calibration status", () => {
+  it("flags a configured max HR that is far below the recorded peaks", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(10, 170, 190), {
+      configuredMaxHr: 155,
+    })
+    expect(result.calibrationStatus).toBe("likely_misconfigured")
+    expect(codes(result)).toContain("max_hr_higher_than_configured")
+  })
+
+  it("flags a configured max HR that is far above the recorded peaks", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(10, 150, 175), {
+      configuredMaxHr: 210,
+    })
+    expect(result.calibrationStatus).toBe("likely_misconfigured")
+    expect(codes(result)).toContain("max_hr_lower_than_configured")
+  })
+
+  it("reports only a slight difference for a small discrepancy", () => {
+    // Recorded peak 180 vs configured 170 → 5.6%, past the minor threshold
+    // but well short of the major one.
+    const result = analyzeHeartRateZones(healthyTrainingBlock(), { configuredMaxHr: 170 })
+    expect(result.calibrationStatus).toBe("slightly_misaligned")
+    expect(codes(result)).toContain("max_hr_slight_difference")
+  })
+
+  it("notices when every workout lands in one zone", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(12, 178, 190), {
+      configuredMaxHr: 190,
+    })
+    expect(codes(result)).toContain("activities_cluster_in_one_zone")
+  })
+
+  it("populates dataQuality fields correctly", () => {
+    const withHr = makeHrActivities(6, 155)
+    const withoutHr = Array.from({ length: 3 }, () => makeActivity({ avg_heart_rate: null }))
+    const result = analyzeHeartRateZones([...withHr, ...withoutHr])
+    expect(result.dataQuality.totalActivities).toBe(9)
+    expect(result.dataQuality.activitiesWithHr).toBe(6)
+  })
+
+  it("zonesMatch is false when the configured max HR is far from the peaks", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 160, 185), {
+      configuredMaxHr: 150,
+    })
+    expect(result.zonesMatch).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Insufficient data
 // ---------------------------------------------------------------------------
 
 describe("analyzeHeartRateZones — insufficient data", () => {
   it("returns insufficient_data when fewer than 5 activities have HR", () => {
-    const activities = makeHrActivities(3, 150)
-    const result = analyzeHeartRateZones(activities)
+    const result = analyzeHeartRateZones(makeHrActivities(3, 150))
     expect(result.calibrationStatus).toBe("insufficient_data")
-    expect(result.zonesMatch).toBe(true) // zones match because both use fallback
-    expect(result.explanations.length).toBeGreaterThan(0)
+    expect(result.zonesMatch).toBe(true)
+    expect(codes(result)).toEqual(["insufficient_data"])
   })
 
   it("returns insufficient_data for empty activities", () => {
@@ -61,222 +368,32 @@ describe("analyzeHeartRateZones — insufficient data", () => {
     expect(result.observedMaxHr).toBe(0)
   })
 
-  it("uses provided currentMaxHr as fallback when data is insufficient", () => {
-    const activities = makeHrActivities(2, 150)
-    const result = analyzeHeartRateZones(activities, 185)
+  it("uses the configured max HR as fallback when data is insufficient", () => {
+    const result = analyzeHeartRateZones(makeHrActivities(2, 150), { configuredMaxHr: 185 })
     expect(result.estimatedMaxHr).toBe(185)
     expect(result.currentZones[0].max).toBe(Math.round(185 * HR_ZONE_PCTS[0][1]))
   })
 
-  it("uses 190 bpm as fallback when no currentMaxHr and data is insufficient", () => {
-    const result = analyzeHeartRateZones([])
-    expect(result.estimatedMaxHr).toBe(190)
+  it("uses 190 bpm as fallback when nothing is configured", () => {
+    expect(analyzeHeartRateZones([]).estimatedMaxHr).toBe(190)
   })
 })
 
 // ---------------------------------------------------------------------------
-// analyzeHeartRateZones — max HR estimation
-// ---------------------------------------------------------------------------
-
-describe("analyzeHeartRateZones — max HR estimation", () => {
-  it("estimates max HR higher than observed max", () => {
-    const activities = makeHrActivities(8, 160)
-    const result = analyzeHeartRateZones(activities)
-    expect(result.estimatedMaxHr).toBeGreaterThan(result.observedMaxHr)
-  })
-
-  it("applies a smaller buffer for very high observed avg HR (>= 180)", () => {
-    const activities = makeHrActivities(8, 182)
-    const result = analyzeHeartRateZones(activities)
-    // Buffer should be 1.05x for >= 180
-    expect(result.estimatedMaxHr).toBe(Math.round(182 * 1.05))
-  })
-
-  it("applies 1.10x buffer for observed avg HR between 160 and 170", () => {
-    const activities = makeHrActivities(8, 163)
-    const result = analyzeHeartRateZones(activities)
-    expect(result.estimatedMaxHr).toBe(Math.round(163 * 1.10))
-  })
-
-  it("applies 1.15x buffer for observed avg HR below 160", () => {
-    const activities = makeHrActivities(8, 145)
-    const result = analyzeHeartRateZones(activities)
-    expect(result.estimatedMaxHr).toBe(Math.round(145 * 1.15))
-  })
-
-  it("uses the highest avg_heart_rate activity as the observed max", () => {
-    const activities = [
-      ...makeHrActivities(5, 150),
-      makeActivity({ avg_heart_rate: 175, date: daysAgo(10) }),
-      makeActivity({ avg_heart_rate: 165, date: daysAgo(11) }),
-    ]
-    const result = analyzeHeartRateZones(activities)
-    expect(result.observedMaxHr).toBe(175)
-    expect(result.dataQuality.highestHrActivity?.avgHr).toBe(175)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// analyzeHeartRateZones — zone construction consistency
-// ---------------------------------------------------------------------------
-
-describe("analyzeHeartRateZones — zone boundaries", () => {
-  it("produces 5 zones", () => {
-    const activities = makeHrActivities(8, 160)
-    const result = analyzeHeartRateZones(activities)
-    expect(result.currentZones).toHaveLength(5)
-    expect(result.recommendedZones).toHaveLength(5)
-  })
-
-  it("zone boundaries are ascending (min < max for each zone)", () => {
-    const activities = makeHrActivities(8, 160)
-    const result = analyzeHeartRateZones(activities)
-    for (const zone of result.currentZones) {
-      expect(zone.min).toBeLessThan(zone.max)
-    }
-    for (const zone of result.recommendedZones) {
-      expect(zone.min).toBeLessThan(zone.max)
-    }
-  })
-
-  it("Zone 1 min uses HR_ZONE_PCTS[0][0] fraction of max HR (not hard-coded 0)", () => {
-    const activities = makeHrActivities(8, 160)
-    const result = analyzeHeartRateZones(activities, 180)
-    // currentZones are built with simple % model from effectiveCurrentMaxHr = 180
-    const z1Min = result.currentZones[0].min
-    const expected = Math.round(180 * HR_ZONE_PCTS[0][0])
-    expect(z1Min).toBe(expected)
-    expect(z1Min).toBeGreaterThan(0) // not hard-coded 0
-  })
-
-  it("uses Karvonen model for recommended zones when resting HR is available", () => {
-    // Create activities that allow resting HR estimation:
-    //  - estimateRestingHr requires 3+ activities with duration >= 30min and distance >= 5km
-    //  - It returns avg_hr of bottom 3 minus RESTING_HR_OFFSET
-    // Give 3 easy long runs with low HR (120) so restingHr = 120 - RESTING_HR_OFFSET
-    const easyLong = Array.from({ length: 3 }, (_, i) =>
-      makeActivity({
-        avg_heart_rate: 120,
-        duration_seconds: 45 * 60,
-        distance_km: 8,
-        date: daysAgo(i + 5),
-      }),
-    )
-    const harder = makeHrActivities(6, 165)
-    const activities = [...easyLong, ...harder]
-    const result = analyzeHeartRateZones(activities)
-
-    if (result.estimatedRestingHr != null) {
-      const expectedRestingHr = Math.round(120 - RESTING_HR_OFFSET)
-      expect(result.estimatedRestingHr).toBe(expectedRestingHr)
-
-      // Karvonen zone 1 min = restingHr + reserve * 0.50
-      const reserve = result.estimatedMaxHr - result.estimatedRestingHr
-      const expectedZ1Min = Math.round(result.estimatedRestingHr + reserve * HR_ZONE_PCTS[0][0])
-      expect(result.recommendedZones[0].min).toBe(expectedZ1Min)
-    }
-  })
-
-  it("recommended zones use simple % model when resting HR is not available", () => {
-    // Activities are too short to compute resting HR (duration < 30min)
-    const activities = makeHrActivities(8, 160).map((a) => ({
-      ...a,
-      duration_seconds: 15 * 60, // too short for resting HR estimation
-      distance_km: 3,             // too short
-    }))
-    const result = analyzeHeartRateZones(activities)
-    expect(result.estimatedRestingHr).toBeNull()
-    // Simple % model: Z1 min = estimatedMax × 0.50
-    const expectedZ1Min = Math.round(result.estimatedMaxHr * HR_ZONE_PCTS[0][0])
-    expect(result.recommendedZones[0].min).toBe(expectedZ1Min)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// analyzeHeartRateZones — calibration status
-// ---------------------------------------------------------------------------
-
-describe("analyzeHeartRateZones — calibration status", () => {
-  it("returns well_calibrated or slightly_misaligned when currentMaxHr matches estimated max", () => {
-    // Use activities spread across different HR levels so zone-clustering check doesn't fire.
-    // Estimated max for 160 bpm observed = 160 * 1.10 = 176.
-    // Pass currentMaxHr = 176 to match → no max HR misalignment.
-    // The z2 easy-run check may still fire (all activities are slow-paced),
-    // which can push status to slightly_misaligned — both indicate good calibration.
-    const spread = [130, 140, 150, 155, 160, 145, 135, 150, 158, 142].map((hr, i) =>
-      makeActivity({ avg_heart_rate: hr, date: daysAgo(i + 1) }),
-    )
-    const result = analyzeHeartRateZones(spread, 176)
-    expect(["well_calibrated", "slightly_misaligned"]).toContain(result.calibrationStatus)
-    // Confirm no major misalignment — max HR diff should be zero
-    expect(result.estimatedMaxHr).toBe(176)
-  })
-
-  it("returns likely_misconfigured when currentMaxHr is much lower than estimated", () => {
-    // Observed avg = 180 (very high efforts); estimatedMax ≈ 189 (1.05x)
-    // currentMaxHr = 155 — 18% off → major misalignment
-    const activities = makeHrActivities(10, 180)
-    const result = analyzeHeartRateZones(activities, 155)
-    expect(result.calibrationStatus).toBe("likely_misconfigured")
-    expect(result.explanations.some((e) => e.includes("higher"))).toBe(true)
-  })
-
-  it("returns slightly_misaligned or likely_misconfigured for a moderate discrepancy", () => {
-    // Observed = 165, estimated = 165 * 1.10 = 181.5 ≈ 182
-    // Pass currentMaxHr = 172 → diff = 10 bpm → ~5.5% → minor misalignment
-    // (Zone clustering may push it to likely_misconfigured when all same HR)
-    const activities = makeHrActivities(10, 165)
-    const result = analyzeHeartRateZones(activities, 172)
-    expect(["well_calibrated", "slightly_misaligned", "likely_misconfigured"]).toContain(
-      result.calibrationStatus,
-    )
-  })
-
-  it("populates dataQuality fields correctly", () => {
-    const withHr = makeHrActivities(6, 155)
-    const withoutHr = Array.from({ length: 3 }, () =>
-      makeActivity({ avg_heart_rate: null }),
-    )
-    const result = analyzeHeartRateZones([...withHr, ...withoutHr])
-    expect(result.dataQuality.totalActivities).toBe(9)
-    expect(result.dataQuality.activitiesWithHr).toBe(6)
-  })
-
-  it("zonesMatch is true when currentMaxHr produces zones close to recommended", () => {
-    const activities = makeHrActivities(8, 160)
-    const estimatedMax = Math.round(160 * 1.10) // 176
-    const result = analyzeHeartRateZones(activities, estimatedMax)
-    // Zones are built from same estimated max (no resting HR) → should match
-    expect(result.zonesMatch).toBe(true)
-  })
-
-  it("zonesMatch is false when currentMaxHr is far from estimated", () => {
-    const activities = makeHrActivities(8, 180)
-    const result = analyzeHeartRateZones(activities, 150) // 20% off
-    expect(result.zonesMatch).toBe(false)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// analyzeHeartRateZones — threshold HR
+// Threshold HR
 // ---------------------------------------------------------------------------
 
 describe("analyzeHeartRateZones — threshold HR estimation", () => {
   it("returns null threshold HR when fewer than 3 sustained efforts exist", () => {
-    const activities = makeHrActivities(8, 155)
-    // Default activities are 3600s = 60 min and 10 km — that qualifies
-    // Let's make them too short:
     const short = makeHrActivities(8, 155).map((a) => ({
       ...a,
       duration_seconds: 15 * 60,
       distance_km: 2,
     }))
-    const result = analyzeHeartRateZones(short)
-    expect(result.estimatedThresholdHr).toBeNull()
+    expect(analyzeHeartRateZones(short).estimatedThresholdHr).toBeNull()
   })
 
   it("estimates threshold HR from the top 20% of sustained hard efforts", () => {
-    // 10 activities with varying HR; top 20% (2 activities) at 175 bpm
     const hard = Array.from({ length: 2 }, (_, i) =>
       makeActivity({ avg_heart_rate: 175, duration_seconds: 35 * 60, distance_km: 7, date: daysAgo(i + 1) }),
     )
@@ -284,16 +401,40 @@ describe("analyzeHeartRateZones — threshold HR estimation", () => {
       makeActivity({ avg_heart_rate: 150, duration_seconds: 35 * 60, distance_km: 7, date: daysAgo(i + 3) }),
     )
     const result = analyzeHeartRateZones([...hard, ...moderate])
-    if (result.estimatedThresholdHr != null) {
-      // Top 20% = at least 2 activities at ~175 bpm
-      expect(result.estimatedThresholdHr).toBeGreaterThanOrEqual(165)
-    }
+    expect(result.estimatedThresholdHr).toBeGreaterThanOrEqual(165)
   })
 
   it("includes analyzedAt timestamp", () => {
-    const activities = makeHrActivities(8, 155)
-    const result = analyzeHeartRateZones(activities)
+    const result = analyzeHeartRateZones(makeHrActivities(8, 155))
     expect(result.analyzedAt).toBeTruthy()
     expect(new Date(result.analyzedAt).getTime()).not.toBeNaN()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Explanations are translatable, not prose
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — explanations", () => {
+  it("emits codes with parameters rather than English sentences", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(10, 170, 190), {
+      configuredMaxHr: 155,
+    })
+    const misalignment = result.explanations.find(
+      (e) => e.code === "max_hr_higher_than_configured",
+    )
+    expect(misalignment?.params).toEqual({ recommended: 190, configured: 155, diff: 35 })
+    for (const exp of result.explanations) {
+      expect(typeof exp.code).toBe("string")
+    }
+  })
+
+  it("always states where the max HR figure came from", () => {
+    expect(codes(analyzeHeartRateZones(makePeakActivities(8, 150, 185)))).toContain(
+      "max_hr_from_recorded_peaks",
+    )
+    expect(codes(analyzeHeartRateZones(makeHrActivities(8, 150)))).toContain(
+      "max_hr_estimated_from_averages",
+    )
   })
 })

@@ -479,11 +479,19 @@ export async function POST(req: NextRequest) {
 
   const { data: activities } = await supabase
     .from("activities")
-    .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, elevation_gain_m")
+    .select("name, type, date, distance_km, duration_seconds, pace_min_per_km, avg_heart_rate, max_heart_rate, elevation_gain_m")
     .eq("user_id", user.id)
     .gte("date", twelveWeeksAgo.toISOString())
     .order("date", { ascending: false })
     .limit(500)
+
+  // The athlete's own HR settings, so the zones in the prompt are the same
+  // ones the Profile screen shows them.
+  const { data: hrProfile } = await supabase
+    .from("profiles")
+    .select("max_hr, resting_hr")
+    .eq("id", user.id)
+    .single()
 
   // Weekly summaries are computed from running activities only so that cycling/hiking weeks
   // don't inflate weekly km targets in the AI prompt.
@@ -581,7 +589,7 @@ export async function POST(req: NextRequest) {
     const recentHrs = actsWithHr.slice(0, 5).map((a) => Number(a.avg_heart_rate))
     const recentAvgHr = Math.round(recentHrs.reduce((s, h) => s + h, 0) / recentHrs.length)
     const hrTrend = recentAvgHr > avgHr + 5 ? "elevated (possible fatigue)" : recentAvgHr < avgHr - 5 ? "lower than average (good fitness)" : "stable"
-    hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}\n- Estimated max HR: ~${Math.round(maxHr * 1.1)} bpm (from activity data)`
+    hrSummary = `- Average heart rate across runs: ${avgHr} bpm\n- Highest average HR recorded: ${maxHr} bpm\n- Recent HR trend (last 5 runs): ${recentAvgHr} bpm avg — ${hrTrend}`
 
     // Add HR zone boundaries from the analysis engine if we have enough data.
     // Pass runActs (not all activities) so zones reflect running HR only.
@@ -594,15 +602,29 @@ export async function POST(req: NextRequest) {
           pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
           elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
           avg_heart_rate: a.avg_heart_rate ? Number(a.avg_heart_rate) : null,
+          max_heart_rate: a.max_heart_rate ? Number(a.max_heart_rate) : null,
           avg_cadence: null, calories: null, map_polyline: null,
         })),
-        Math.round(maxHr * 1.1),
+        { configuredMaxHr: hrProfile?.max_hr ?? null, restingHr: hrProfile?.resting_hr ?? null },
       )
       if (hrAnalysis.calibrationStatus !== "insufficient_data") {
+        // Prefer the athlete's own setting; otherwise say plainly that the
+        // figure is derived, and whether from recorded peaks or inferred from
+        // averages — the prompt used to assert a bare "~X bpm" for both.
+        const maxHrLine =
+          hrAnalysis.configuredMaxHr != null
+            ? `- Max HR: ${hrAnalysis.configuredMaxHr} bpm (set by the athlete)`
+            : hrAnalysis.maxHrSource === "recorded_peaks"
+              ? `- Max HR: ${hrAnalysis.estimatedMaxHr} bpm (highest peak recorded across ${hrAnalysis.peakSamples} runs)`
+              : `- Max HR: ~${hrAnalysis.estimatedMaxHr} bpm (rough estimate — no peak HR recorded, inferred from averages)`
         const zoneLines = hrAnalysis.recommendedZones
           .map((z) => `  Z${z.zone} ${z.label}: ${z.min}–${z.max} bpm`)
           .join("\n")
-        hrSummary += `\n- HR Zones (use these for prescribing effort levels):\n${zoneLines}`
+        const modelNote =
+          hrAnalysis.zoneModel === "karvonen"
+            ? ` (Karvonen / HR reserve, resting HR ${hrAnalysis.restingHr} bpm)`
+            : " (percentage of max HR)"
+        hrSummary += `\n${maxHrLine}\n- HR Zones${modelNote} — use these for prescribing effort levels:\n${zoneLines}`
       }
     }
   }

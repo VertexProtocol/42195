@@ -46,6 +46,21 @@ import { Pill } from "@/components/ui/pill"
  * modal is the lazy answer.
  */
 
+/**
+ * Caches written by the previous engine hold English sentences in
+ * `explanations` and no `maxHrSource`. Rendering one would print raw
+ * translation keys, so a stale-shaped cache is treated as no cache at all and
+ * the analysis is simply re-run. This keeps a code deploy safe regardless of
+ * whether the 025 migration (which clears the caches) has run yet.
+ */
+function usableCache(cached: HrAnalysisResult | null | undefined): HrAnalysisResult | null {
+  if (!cached) return null
+  if (typeof cached.maxHrSource !== "string") return null
+  if (!Array.isArray(cached.explanations)) return null
+  if (cached.explanations.some((e) => typeof e?.code !== "string")) return null
+  return cached
+}
+
 interface ProfileScreenProps {
   user: UserProfile
   syncStatus: SyncStatus
@@ -81,11 +96,23 @@ export function ProfileScreen({
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [hrAnalysis, setHrAnalysis] = useState<HrAnalysisResult | null>(
-    user.hr_analysis_cache ?? null,
+    usableCache(user.hr_analysis_cache),
   )
   const [hrLoading, setHrLoading] = useState(false)
   const [hrExpanded, setHrExpanded] = useState(false)
   const [hrError, setHrError] = useState<string | null>(null)
+
+  // The athlete's own max/resting HR. Null means "not set" — the card then
+  // reports its estimate rather than claiming the setup is wrong.
+  const [maxHr, setMaxHr] = useState<number | null>(user.max_hr ?? null)
+  const [restingHr, setRestingHr] = useState<number | null>(user.resting_hr ?? null)
+  const [editingHr, setEditingHr] = useState(false)
+  const [maxHrDraft, setMaxHrDraft] = useState(user.max_hr != null ? String(user.max_hr) : "")
+  const [restingHrDraft, setRestingHrDraft] = useState(
+    user.resting_hr != null ? String(user.resting_hr) : "",
+  )
+  const [hrSettingsError, setHrSettingsError] = useState<string | null>(null)
+  const [hrSettingsPending, startHrSettingsTransition] = useTransition()
 
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(user.display_name)
@@ -121,6 +148,64 @@ export function ProfileScreen({
   useEffect(() => {
     if (!hrAnalysis) fetchHrAnalysis()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openHrEditor() {
+    setMaxHrDraft(maxHr != null ? String(maxHr) : "")
+    setRestingHrDraft(restingHr != null ? String(restingHr) : "")
+    setHrSettingsError(null)
+    setEditingHr(true)
+  }
+
+  /**
+   * Saves the athlete's HR values and re-runs the analysis against them.
+   * Empty input clears the value back to "not set" rather than being rejected,
+   * so a wrong figure can always be taken back out.
+   */
+  function handleSaveHrSettings(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const parse = (raw: string): number | null => {
+      const trimmed = raw.trim()
+      return trimmed === "" ? null : Number(trimmed)
+    }
+    const nextMax = parse(maxHrDraft)
+    const nextResting = parse(restingHrDraft)
+
+    // Mirrors the DB check constraints, so a bad value is caught here rather
+    // than coming back as a Postgres error string.
+    if (nextMax != null && (!Number.isFinite(nextMax) || nextMax < 120 || nextMax > 230)) {
+      setHrSettingsError(t("profile.hrMaxHrRange"))
+      return
+    }
+    if (
+      nextResting != null &&
+      (!Number.isFinite(nextResting) || nextResting < 25 || nextResting > 110)
+    ) {
+      setHrSettingsError(t("profile.hrRestingHrRange"))
+      return
+    }
+
+    setHrSettingsError(null)
+    startHrSettingsTransition(async () => {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          max_hr: nextMax != null ? Math.round(nextMax) : null,
+          resting_hr: nextResting != null ? Math.round(nextResting) : null,
+        })
+        .eq("id", user.id)
+      if (error) {
+        setHrSettingsError(t("profile.hrSaveFailed"))
+        return
+      }
+      setMaxHr(nextMax != null ? Math.round(nextMax) : null)
+      setRestingHr(nextResting != null ? Math.round(nextResting) : null)
+      setEditingHr(false)
+      // The verdict is a function of these values, so it is stale the moment
+      // they change.
+      fetchHrAnalysis()
+    })
+  }
 
   function handleSaveName(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -441,6 +526,108 @@ export function ProfileScreen({
             </p>
           )}
 
+          {/* Your values — what the whole card is judged against. */}
+          <div className="mt-4 rounded-md bg-surface-sunken p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-micro font-semibold text-card-foreground">
+                  {t("profile.hrSettings")}
+                </p>
+                <p className="mt-0.5 max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
+                  {t("profile.hrSettingsDesc")}
+                </p>
+              </div>
+              {!editingHr && (
+                <Button variant="ghost" size="sm" onClick={openHrEditor}>
+                  {t("profile.hrEdit")}
+                </Button>
+              )}
+            </div>
+
+            {editingHr ? (
+              <form onSubmit={handleSaveHrSettings} className="mt-3 flex flex-col gap-2.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className="flex flex-col gap-1 text-micro text-muted-foreground">
+                    {t("profile.hrMaxHrLabel")}
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={120}
+                      max={230}
+                      value={maxHrDraft}
+                      onChange={(e) => setMaxHrDraft(e.target.value)}
+                      placeholder={t("profile.hrNotSet")}
+                      disabled={hrSettingsPending}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-micro text-muted-foreground">
+                    {t("profile.hrRestingHrLabel")}
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={25}
+                      max={110}
+                      value={restingHrDraft}
+                      onChange={(e) => setRestingHrDraft(e.target.value)}
+                      placeholder={t("profile.hrNotSet")}
+                      disabled={hrSettingsPending}
+                    />
+                  </label>
+                </div>
+
+                {/* One tap to adopt the figure the analysis already derived. */}
+                {hrAnalysis && hrAnalysis.calibrationStatus !== "insufficient_data" && (
+                  <button
+                    type="button"
+                    onClick={() => setMaxHrDraft(String(hrAnalysis.estimatedMaxHr))}
+                    className="press self-start text-micro text-muted-foreground underline underline-offset-2"
+                  >
+                    {t("profile.hrUseEstimate", { value: hrAnalysis.estimatedMaxHr })}
+                  </button>
+                )}
+
+                {hrSettingsError && (
+                  <p role="alert" className="text-micro text-destructive">
+                    {hrSettingsError}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Button type="submit" size="sm" disabled={hrSettingsPending}>
+                    {t("profile.hrSave")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingHr(false)
+                      setHrSettingsError(null)
+                    }}
+                    disabled={hrSettingsPending}
+                  >
+                    {t("profile.hrCancel")}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <dl className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1 text-micro">
+                <div className="flex items-baseline gap-1.5">
+                  <dt className="text-muted-foreground">{t("profile.hrMaxHrLabel")}</dt>
+                  <dd className="measure font-semibold text-card-foreground">
+                    {maxHr ?? t("profile.hrNotSet")}
+                  </dd>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <dt className="text-muted-foreground">{t("profile.hrRestingHrLabel")}</dt>
+                  <dd className="measure font-semibold text-card-foreground">
+                    {restingHr ?? t("profile.hrNotSet")}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
           {hrAnalysis && (
             <div className="mt-4 flex flex-col gap-3.5">
               <div className="flex flex-wrap items-center gap-2">
@@ -458,12 +645,18 @@ export function ProfileScreen({
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {t(`profile.hrStatus_${hrAnalysis.calibrationStatus}` as any)}
                 </Pill>
+                {/* Only meaningful when there are two zone sets to agree. */}
                 {hrAnalysis.zonesMatch &&
+                  hrAnalysis.configuredMaxHr != null &&
                   hrAnalysis.calibrationStatus !== "insufficient_data" && (
                     <span className="inline-flex items-center gap-1 text-micro text-success">
                       <Check size={12} aria-hidden /> {t("profile.hrZonesMatch")}
                     </span>
                   )}
+                <span className="text-micro text-muted-foreground">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {t(`profile.hrModel_${hrAnalysis.zoneModel}` as any)}
+                </span>
               </div>
 
               <dl className="grid grid-cols-3 gap-x-4">
@@ -472,7 +665,11 @@ export function ProfileScreen({
                     {hrAnalysis.estimatedMaxHr}
                   </dd>
                   <dt className="mt-1.5 text-micro text-muted-foreground">
-                    {t("profile.hrEstMaxHr")}
+                    {/* A recorded peak is a measurement; an inferred one is not,
+                        and the label says which. */}
+                    {hrAnalysis.maxHrSource === "recorded_peaks"
+                      ? t("profile.hrMaxHr")
+                      : t("profile.hrEstMaxHr")}
                   </dt>
                 </div>
                 {hrAnalysis.estimatedThresholdHr != null && (
@@ -502,7 +699,11 @@ export function ProfileScreen({
                     aria-expanded={hrExpanded}
                     className="press flex w-full items-center justify-between rounded-sm py-1 text-label font-medium text-card-foreground"
                   >
-                    <span>{t("profile.hrRecommendedZones")}</span>
+                    <span>
+                      {hrAnalysis.configuredMaxHr != null
+                        ? t("profile.hrRecommendedZones")
+                        : t("profile.hrYourZones")}
+                    </span>
                     <ChevronDown
                       size={15}
                       aria-hidden
@@ -516,22 +717,37 @@ export function ProfileScreen({
 
                   {hrExpanded && (
                     <div className="mt-2.5 flex flex-col gap-3">
+                      {/* With no configured max HR there is only one zone set,
+                          so a Current/Rec/Diff layout would compare a column
+                          against a copy of itself. */}
                       <table className="w-full text-micro">
-                        <caption className="sr-only">{t("profile.hrRecommendedZones")}</caption>
+                        <caption className="sr-only">
+                          {hrAnalysis.configuredMaxHr != null
+                            ? t("profile.hrRecommendedZones")
+                            : t("profile.hrYourZones")}
+                        </caption>
                         <thead>
                           <tr className="text-muted-foreground">
                             <th scope="col" className="pb-1.5 text-left font-medium">
                               {t("profile.hrZone")}
                             </th>
-                            <th scope="col" className="pb-1.5 text-right font-medium">
-                              {t("profile.hrCurrent")}
-                            </th>
-                            <th scope="col" className="pb-1.5 text-right font-medium">
-                              {t("profile.hrRecommended")}
-                            </th>
-                            <th scope="col" className="pb-1.5 text-right font-medium">
-                              {t("profile.hrDiff")}
-                            </th>
+                            {hrAnalysis.configuredMaxHr != null ? (
+                              <>
+                                <th scope="col" className="pb-1.5 text-right font-medium">
+                                  {t("profile.hrCurrent")}
+                                </th>
+                                <th scope="col" className="pb-1.5 text-right font-medium">
+                                  {t("profile.hrRecommended")}
+                                </th>
+                                <th scope="col" className="pb-1.5 text-right font-medium">
+                                  {t("profile.hrDiff")}
+                                </th>
+                              </>
+                            ) : (
+                              <th scope="col" className="pb-1.5 text-right font-medium">
+                                {t("profile.hrRange")}
+                              </th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
@@ -547,23 +763,31 @@ export function ProfileScreen({
                                 >
                                   Z{rec.zone} {rec.label}
                                 </th>
-                                <td className="measure py-2 text-right text-muted-foreground">
-                                  {cur.min}–{cur.max}
-                                </td>
-                                <td className="measure py-2 text-right text-card-foreground">
-                                  {rec.min}–{rec.max}
-                                </td>
-                                <td
-                                  className={`measure py-2 text-right ${
-                                    hasDiff
-                                      ? diff > 0
-                                        ? "text-destructive"
-                                        : "text-success"
-                                      : "text-muted-foreground"
-                                  }`}
-                                >
-                                  {hasDiff ? (diff > 0 ? `+${diff}` : `${diff}`) : "—"}
-                                </td>
+                                {hrAnalysis.configuredMaxHr != null ? (
+                                  <>
+                                    <td className="measure py-2 text-right text-muted-foreground">
+                                      {cur.min}–{cur.max}
+                                    </td>
+                                    <td className="measure py-2 text-right text-card-foreground">
+                                      {rec.min}–{rec.max}
+                                    </td>
+                                    <td
+                                      className={`measure py-2 text-right ${
+                                        hasDiff
+                                          ? diff > 0
+                                            ? "text-destructive"
+                                            : "text-success"
+                                          : "text-muted-foreground"
+                                      }`}
+                                    >
+                                      {hasDiff ? (diff > 0 ? `+${diff}` : `${diff}`) : "—"}
+                                    </td>
+                                  </>
+                                ) : (
+                                  <td className="measure py-2 text-right text-card-foreground">
+                                    {rec.min}–{rec.max}
+                                  </td>
+                                )}
                               </tr>
                             )
                           })}
@@ -574,16 +798,20 @@ export function ProfileScreen({
                         <ul className="flex flex-col gap-1.5">
                           {hrAnalysis.explanations.map((exp, i) => (
                             <li
-                              key={i}
+                              key={`${exp.code}-${i}`}
                               className="text-micro leading-relaxed text-muted-foreground"
                             >
-                              {exp}
+                              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                              {t(`profile.hrExp_${exp.code}` as any, exp.params)}
                             </li>
                           ))}
                         </ul>
                       )}
 
-                      {hrAnalysis.calibrationStatus !== "well_calibrated" &&
+                      {/* Only worth showing when there is a real disagreement
+                          with a value the athlete actually set. */}
+                      {hrAnalysis.configuredMaxHr != null &&
+                        hrAnalysis.calibrationStatus !== "well_calibrated" &&
                         !hrAnalysis.zonesMatch && (
                           <div className="rounded-md bg-surface-sunken p-3">
                             <p className="text-micro font-semibold text-card-foreground">
@@ -594,6 +822,12 @@ export function ProfileScreen({
                             </p>
                           </div>
                         )}
+
+                      <p className="text-micro text-muted-foreground">
+                        {t("profile.hrAnalyzedAt", {
+                          when: formatTimeAgo(hrAnalysis.analyzedAt),
+                        })}
+                      </p>
                     </div>
                   )}
                 </div>

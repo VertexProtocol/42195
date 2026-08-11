@@ -650,3 +650,62 @@ alter table public.sync_status
 -- Profile reopens the checklist.
 alter table public.profiles
   add column if not exists onboarding_dismissed_at timestamptz;
+
+
+-- ============================================================
+-- 025_add_hr_settings.sql
+-- ============================================================
+
+-- Strava returns max_heartrate on the activity list we already fetch; it was
+-- being discarded, forcing the calibration engine to guess max HR by
+-- multiplying the highest *average* HR. Store the real peak instead.
+alter table public.activities
+  add column if not exists max_heart_rate integer;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'activities_max_hr_reasonable'
+  ) then
+    alter table public.activities
+      add constraint activities_max_hr_reasonable
+      check (max_heart_rate is null or (max_heart_rate between 30 and 230));
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'activities_max_hr_gte_avg'
+  ) then
+    alter table public.activities
+      add constraint activities_max_hr_gte_avg
+      check (
+        max_heart_rate is null
+        or avg_heart_rate is null
+        or max_heart_rate >= avg_heart_rate
+      );
+  end if;
+end $$;
+
+create index if not exists idx_activities_user_max_hr
+  on public.activities(user_id, max_heart_rate)
+  where max_heart_rate is not null and max_heart_rate > 0;
+
+-- The athlete's own values. Null means "not configured" — the calibration
+-- card then reports its estimate instead of claiming the setup is wrong.
+alter table public.profiles
+  add column if not exists max_hr integer,
+  add column if not exists resting_hr integer;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_max_hr_reasonable'
+  ) then
+    alter table public.profiles
+      add constraint profiles_max_hr_reasonable
+      check (max_hr is null or (max_hr between 120 and 230));
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_resting_hr_reasonable'
+  ) then
+    alter table public.profiles
+      add constraint profiles_resting_hr_reasonable
+      check (resting_hr is null or (resting_hr between 25 and 110));
+  end if;
+end $$;
