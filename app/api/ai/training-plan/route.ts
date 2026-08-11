@@ -249,6 +249,17 @@ function buildPrompt(
   blockPosition?: { blockNum: number; totalBlocks: number; phaseName: string; weekInPlan: number; totalWeeks: number } | null,
   comeback?: ComebackRecommendation,
 ): string {
+  // Only the elevated tiers argue for cutting volume. "detraining" is also
+  // "not low", and telling the coach to reduce a runner who is already under
+  // their own baseline is the opposite of what that tier means.
+  const acwrNote = !acwr
+    ? ""
+    : acwr.risk === "moderate" || acwr.risk === "high" || acwr.risk === "unsafe"
+      ? " — consider reducing volume this week"
+      : acwr.risk === "detraining"
+        ? " — running under their own baseline; rebuild toward it rather than cutting further"
+        : ""
+
   const focusDescription = {
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
     workouts: "structured sessions (long run, tempo, easy runs with clear purpose)",
@@ -383,7 +394,7 @@ ${weekSummaryText}
 ## Current Fitness Snapshot
 - Avg weekly km (last ${recentWindow} weeks): ${currentAvgWeeklyKm.toFixed(1)} km
 - Volume trend vs prior ${recentWindow} weeks: ${trendLine}
-- Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwr.risk !== "low" ? " — consider reducing volume this week" : ""}` : ""}
+- Longest recent run: ${longestRecentRun.toFixed(1)} km${goal.target_distance_km > longestRecentRun ? ` (goal: ${goal.target_distance_km} km — long run ceiling for this block: ${Math.min(longestRecentRun + blockWeeks * 2, goal.target_distance_km * 0.85).toFixed(1)} km)` : ""}${recentEasyPace ? `\n- Recent easy pace: ${formatPace(recentEasyPace)} (average of slower 50% of runs)` : ""}${recentBestPace ? `\n- Recent best pace: ${formatPace(recentBestPace)} (fastest run)` : ""}${acwr ? `\n- Injury risk (ACWR): ${acwr.ratio.toFixed(2)} (${acwr.risk})${acwrNote}` : ""}
 
 ## Weekly Volume (fixed)
 These are the volumes for this block. They already account for the runner's rolling average, injury-risk load, any recent pause, and the progression limits for their level, so treat them as settled — write the summary and coach notes to match them rather than proposing different numbers.

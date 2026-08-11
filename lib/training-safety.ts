@@ -14,10 +14,17 @@
  */
 
 import type { TrainingPlan, TrainingWeek, GoalPreferences } from "@/lib/types"
-import { computeACWR, computeTrainingLoad, gradeAdjustedPace } from "@/lib/training-utils"
+import {
+  computeACWR,
+  computeTrainingLoad,
+  gradeAdjustedPace,
+  type TrainingLoadPoint,
+} from "@/lib/training-utils"
 import {
   ACWR_HIGH_THRESHOLD,
   ACWR_UNSAFE_THRESHOLD,
+  ACWR_LOW_THRESHOLD,
+  FATIGUE_INTENSITY_MATCH_TOLERANCE,
   RECOVERY_WEEK_THRESHOLD,
   LONG_RUN_MAX_FRACTION,
   FATIGUE_MIN_QUALIFYING_RUNS,
@@ -35,13 +42,18 @@ import {
 export {
   checkSkipLoadSpike,
   classifyAthleteLevel,
+  hasAthleteLevelEvidence,
   MAX_WEEKLY_INCREASE,
   type SafetyActivity,
   type AthleteLevel,
   type SkipLoadWarning,
 } from "@/lib/training-safety-client"
 import type { SafetyActivity, AthleteLevel } from "@/lib/training-safety-client"
-import { MAX_WEEKLY_INCREASE, classifyAthleteLevel } from "@/lib/training-safety-client"
+import {
+  MAX_WEEKLY_INCREASE,
+  classifyAthleteLevel,
+  hasAthleteLevelEvidence,
+} from "@/lib/training-safety-client"
 import { logWarn } from "@/lib/log"
 
 // Distance parsing lives in training-sessions.ts, alongside the allocation that
@@ -211,9 +223,13 @@ export interface AcwrSafety {
    * - "no_baseline" — no chronic load to compare against (new user or
    *   returning after a long pause). Treat any reported ratio as meaningless
    *   and start cautiously.
+   * - "detraining" — running well under their own baseline (ACWR below
+   *   ACWR_LOW_THRESHOLD). Not a safety problem, but not "fine" either: this
+   *   used to be folded into "low" with a null message, so a runner losing
+   *   fitness got the same green "Optimal" as a runner sitting in the band.
    * - "low" / "moderate" / "high" / "unsafe" — normal ACWR tiers.
    */
-  risk: "no_baseline" | "low" | "moderate" | "high" | "unsafe"
+  risk: "no_baseline" | "detraining" | "low" | "moderate" | "high" | "unsafe"
   /** Recommended multiplier to apply to the first week's target (e.g. 0.8 for 20% cut) */
   weekOneMultiplier: number
   message: string | null
@@ -267,6 +283,17 @@ export function evaluateAcwrSafety(
       message: `Load is slightly above your baseline (ACWR ${ratio.toFixed(2)}). Keep this week manageable to stay in the optimal range.`,
     }
   }
+  // Below the band the runner is detraining, not "safe". The week-one
+  // multiplier stays at 1.0 — the plan should not be cut further for someone
+  // who is already running less than they used to.
+  if (ratio < ACWR_LOW_THRESHOLD) {
+    return {
+      ratio,
+      risk: "detraining",
+      weekOneMultiplier: 1.0,
+      message: `You're running well below your own baseline (ACWR ${ratio.toFixed(2)}). Fitness fades from here — a steady week back at your usual volume is the way out.`,
+    }
+  }
   return { ratio, risk: "low", weekOneMultiplier: 1.0, message: null }
 }
 
@@ -315,6 +342,16 @@ export interface FatigueResult {
   description: string | null
   /** Recommended intensity reduction (0–1 multiplier for hard session volume) */
   intensityMultiplier: number
+  /**
+   * Whether the comparison actually ran. False means "not enough runs, or the
+   * newest one is too old to compare" — NOT "no fatigue detected".
+   *
+   * Both cases return signal "none", which the load card was rendering as a
+   * confident "Normal". Callers that display the result must check this;
+   * callers that only branch on the signal can ignore it, since an absent
+   * signal and an unknown one both mean "do not act".
+   */
+  hasEnoughData: boolean
 }
 
 /** Returns the median of a sorted-ascending numeric array */
@@ -329,6 +366,15 @@ function median(values: number[]): number {
  * Uses median (not mean) for robustness against outlier sessions.
  * - HR elevated: recent median HR > baseline median + 5 bpm
  * - Pace declining: recent median pace worse than baseline median by >5%
+ *
+ * Both signals are gated on a like-for-like check (see
+ * FATIGUE_INTENSITY_MATCH_TOLERANCE). Recent and baseline are whole samples of
+ * whatever the runner happened to do, so a week of intervals against a week of
+ * easy running raised HR by design and reported it as fatigue. HR only counts
+ * as elevated when the recent runs were not meaningfully faster, and pace only
+ * counts as declining when the effort was not meaningfully lower. The gate is
+ * skipped when the other variable is missing, so pace-only (no HR strap)
+ * runners keep the pace signal they had before.
  *
  * Requires 8+ qualifying runs (4 recent + 4 baseline minimum).
  */
@@ -345,7 +391,7 @@ export function detectFatigue(
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   if (runs.length < FATIGUE_MIN_QUALIFYING_RUNS) {
-    return { signal: "none", description: null, intensityMultiplier: 1.0 }
+    return unknownFatigue()
   }
 
   // Freshness guard: if the latest qualifying run is older than
@@ -355,7 +401,7 @@ export function detectFatigue(
   const latestMs = new Date(runs[0].date).getTime()
   const ageDays = (now - latestMs) / (24 * 60 * 60 * 1000)
   if (ageDays > FATIGUE_FRESHNESS_DAYS) {
-    return { signal: "none", description: null, intensityMultiplier: 1.0 }
+    return unknownFatigue()
   }
 
   const recent = runs.slice(0, FATIGUE_RECENT_RUNS_COUNT)
@@ -368,10 +414,7 @@ export function detectFatigue(
   const baselineHrs = baseline
     .filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0)
     .map((a) => a.avg_heart_rate!)
-  let hrElevated = false
-  if (recentHrs.length >= 3 && baselineHrs.length >= 4) {
-    hrElevated = median(recentHrs) > median(baselineHrs) + FATIGUE_HR_ELEVATION_BPM
-  }
+  const hasHr = recentHrs.length >= 3 && baselineHrs.length >= 4
 
   // Pace fatigue signal — use grade-adjusted pace so hilly runs don't falsely
   // register as "slower" (higher pace value = slower, using median)
@@ -381,16 +424,34 @@ export function detectFatigue(
   const baselinePaces = baseline
     .filter((a) => a.pace_min_per_km && a.pace_min_per_km > 0)
     .map((a) => gradeAdjustedPace(a.pace_min_per_km!, a.distance_km, a.elevation_gain_m))
-  let paceDeclining = false
-  if (recentPaces.length >= 3 && baselinePaces.length >= 4) {
-    paceDeclining = median(recentPaces) > median(baselinePaces) * FATIGUE_PACE_DECLINE_FACTOR
-  }
+  const hasPace = recentPaces.length >= 3 && baselinePaces.length >= 4
+
+  // Like-for-like gates. `ranFaster` means the recent sample was harder than
+  // the baseline (lower GAP = quicker), which explains a higher HR without any
+  // fatigue; `ranEasier` means the recent sample was run at a lower effort,
+  // which explains a slower pace the same way.
+  const tol = FATIGUE_INTENSITY_MATCH_TOLERANCE
+  const ranFaster =
+    hasPace && median(recentPaces) < median(baselinePaces) * (1 - tol)
+  const ranEasier =
+    hasHr && median(recentHrs) < median(baselineHrs) * (1 - tol)
+
+  const hrElevated =
+    hasHr &&
+    median(recentHrs) > median(baselineHrs) + FATIGUE_HR_ELEVATION_BPM &&
+    !ranFaster
+
+  const paceDeclining =
+    hasPace &&
+    median(recentPaces) > median(baselinePaces) * FATIGUE_PACE_DECLINE_FACTOR &&
+    !ranEasier
 
   if (hrElevated && paceDeclining) {
     return {
       signal: "both",
       description: "Heart rate elevated and pace declining — strong fatigue signal. Reduce intensity and add recovery sessions.",
       intensityMultiplier: 0.75,
+      hasEnoughData: true,
     }
   }
   if (hrElevated) {
@@ -398,6 +459,7 @@ export function detectFatigue(
       signal: "hr_elevated",
       description: "Heart rate is elevated vs recent baseline — possible fatigue. Consider reducing intensity.",
       intensityMultiplier: 0.85,
+      hasEnoughData: true,
     }
   }
   if (paceDeclining) {
@@ -405,10 +467,24 @@ export function detectFatigue(
       signal: "pace_declining",
       description: "Pace is declining with stable heart rate — possible fatigue. Consider an easy week.",
       intensityMultiplier: 0.90,
+      hasEnoughData: true,
     }
   }
 
-  return { signal: "none", description: null, intensityMultiplier: 1.0 }
+  // A clean "none" only counts as a finding if at least one of the two
+  // comparisons could be made. Eight runs with neither HR nor pace recorded
+  // tell us nothing.
+  return {
+    signal: "none",
+    description: null,
+    intensityMultiplier: 1.0,
+    hasEnoughData: hasHr || hasPace,
+  }
+}
+
+/** The "we could not compare" result: no signal, and no claim that there is none. */
+function unknownFatigue(): FatigueResult {
+  return { signal: "none", description: null, intensityMultiplier: 1.0, hasEnoughData: false }
 }
 
 // ── Long run protection ───────────────────────────────────────────────────────
@@ -518,8 +594,15 @@ export function checkProlongedFatigue(
   activities: SafetyActivity[],
   /** The last day of the load series this reads. Defaults to today. */
   referenceDate: Date = new Date(),
+  /**
+   * Pre-computed load series for the same activities and reference date.
+   * computeTrainingLoad walks 120 days of EWMA; callers that already have the
+   * series (computeTrainingLoadStatus, and the card that renders it) pass it in
+   * rather than paying for a second identical pass.
+   */
+  precomputedLoad?: TrainingLoadPoint[],
 ): ProlongedFatigueResult {
-  const loadPoints = computeTrainingLoad(activities, referenceDate)
+  const loadPoints = precomputedLoad ?? computeTrainingLoad(activities, referenceDate)
   if (loadPoints.length < PROLONGED_FATIGUE_MIN_POINTS) {
     return { detected: false, consecutiveNegativeTsbWeeks: 0, deloadMultiplier: 1.0, message: null }
   }
@@ -553,7 +636,12 @@ export function checkProlongedFatigue(
 
 // ── Composite training load status ───────────────────────────────────────────
 
-export type LoadStatus = "insufficient_data" | "optimal" | "high" | "overtraining_risk"
+export type LoadStatus =
+  | "insufficient_data"
+  | "detraining"
+  | "optimal"
+  | "high"
+  | "overtraining_risk"
 
 export interface TrainingLoadStatus {
   status: LoadStatus
@@ -561,21 +649,38 @@ export interface TrainingLoadStatus {
   fatigue: FatigueResult
   prolongedFatigue: ProlongedFatigueResult
   athleteLevel: AthleteLevel
+  /**
+   * False when `athleteLevel` is the "beginner" fallback for thin history
+   * rather than a classification. Display code must not present the level as a
+   * finding when this is false.
+   */
+  athleteLevelKnown: boolean
+  /**
+   * The ATL/CTL/TSB series every other field was derived from, measured to the
+   * same `referenceDate`. Exposed so the UI can chart fitness without running
+   * the 120-day EWMA a second time — and so it cannot accidentally chart a
+   * series anchored to a different instant than the status it sits next to.
+   */
+  loadPoints: TrainingLoadPoint[]
 }
 
 /**
  * Computes the composite training load status for UI display.
- * Returns one of: "optimal" | "high" | "overtraining_risk"
+ *
+ * Every signal is measured from the same `referenceDate` — including the
+ * athlete level, which used to read Date.now() internally.
  */
 export function computeTrainingLoadStatus(
   activities: SafetyActivity[],
   /** The instant every window is measured from. Defaults to now. */
   referenceDate: Date = new Date(),
 ): TrainingLoadStatus {
+  const loadPoints = computeTrainingLoad(activities, referenceDate)
   const acwr = evaluateAcwrSafety(activities, referenceDate)
   const fatigue = detectFatigue(activities, referenceDate.getTime())
-  const prolongedFatigue = checkProlongedFatigue(activities, referenceDate)
-  const athleteLevel = classifyAthleteLevel(activities)
+  const prolongedFatigue = checkProlongedFatigue(activities, referenceDate, loadPoints)
+  const athleteLevel = classifyAthleteLevel(activities, referenceDate)
+  const athleteLevelKnown = hasAthleteLevelEvidence(activities, referenceDate)
 
   let status: LoadStatus = "optimal"
 
@@ -596,9 +701,21 @@ export function computeTrainingLoadStatus(
     fatigue.signal === "pace_declining"
   ) {
     status = "high"
+  } else if (acwr.risk === "detraining") {
+    // Ranked below every fatigue signal: a runner who is both under their
+    // baseline AND showing drift needs to hear about the drift first.
+    status = "detraining"
   }
 
-  return { status, acwr, fatigue, prolongedFatigue, athleteLevel }
+  return {
+    status,
+    acwr,
+    fatigue,
+    prolongedFatigue,
+    athleteLevel,
+    athleteLevelKnown,
+    loadPoints,
+  }
 }
 
 // ── Full plan validation + adjustment ────────────────────────────────────────
