@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import type { GoalPreferences } from "@/lib/types"
 import {
   parseSessionDistanceKm,
   parseSessionDistanceParts,
@@ -12,6 +13,26 @@ import {
 } from "./training-safety"
 import type { SafetyActivity } from "./training-safety"
 import type { TrainingPlan, TrainingWeek } from "./types"
+
+/**
+ * A valid GoalPreferences. These fixtures previously inlined an older shape of
+ * the type (goal / goal_race_distance / current_weekly_km), which no longer
+ * compiles. validateAndAdjustPlan only reads sessions_per_week, so that is the
+ * one field worth varying per test.
+ */
+function makePrefs(sessionsPerWeek: number): GoalPreferences {
+  return {
+    goal_id: "goal-1",
+    sessions_per_week: sessionsPerWeek,
+    focus: "balanced",
+    notes: null,
+    injury_notes: null,
+    notes_history: [],
+    weekly_increase_pct: 10,
+    block_weeks: 4,
+    regenerate_every_weeks: 4,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -472,13 +493,7 @@ describe("validateAndAdjustPlan", () => {
   it("passes a clean plan with no adjustments needed", () => {
     const activities = chronicActivities(8, 4, 10) // steady 40 km/wk
     const plan = makePlan([40, 42, 44, 40])
-    const result = validateAndAdjustPlan(plan, activities, {
-      goal: "base_building",
-      goal_race_distance: null,
-      goal_race_date: null,
-      sessions_per_week: 4,
-      current_weekly_km: 40,
-    })
+    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
     expect(result.passed).toBe(true)
     expect(result.safetyNotes).toHaveLength(0)
   })
@@ -489,13 +504,7 @@ describe("validateAndAdjustPlan", () => {
     const spike = acuteActivities(7, 10) // 70 km this week
     const activities = [...spike, ...base]
     const plan = makePlan([70, 72, 74, 70])
-    const result = validateAndAdjustPlan(plan, activities, {
-      goal: "base_building",
-      goal_race_distance: null,
-      goal_race_date: null,
-      sessions_per_week: 4,
-      current_weekly_km: 70,
-    })
+    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
     expect(result.acwrSafety.risk).toBe("unsafe")
     expect(result.adjustedPlan.weeks[0].targetKm).toBeLessThan(plan.weeks[0].targetKm)
     expect(result.passed).toBe(false)
@@ -505,13 +514,7 @@ describe("validateAndAdjustPlan", () => {
     const activities = chronicActivities(8, 4, 10) // 40 km/wk steady
     // Plan jumps too aggressively
     const plan = makePlan([40, 60, 70, 75])
-    const result = validateAndAdjustPlan(plan, activities, {
-      goal: "base_building",
-      goal_race_distance: null,
-      goal_race_date: null,
-      sessions_per_week: 4,
-      current_weekly_km: 40,
-    })
+    const result = validateAndAdjustPlan(plan, activities, makePrefs(4))
     expect(result.weeklyLoadViolations.length).toBeGreaterThan(0)
     expect(result.passed).toBe(false)
     // Adjusted plan should not have same jumps
@@ -524,13 +527,7 @@ describe("validateAndAdjustPlan", () => {
     const spike = acuteActivities(3, 9)         // 27 km this week → ratio slightly > 1
     const activities = [...spike, ...base]
     const plan = makePlan([30, 32, 34, 30])
-    const result = validateAndAdjustPlan(plan, activities, {
-      goal: "base_building",
-      goal_race_distance: null,
-      goal_race_date: null,
-      sessions_per_week: 3,
-      current_weekly_km: 30,
-    })
+    const result = validateAndAdjustPlan(plan, activities, makePrefs(3))
     if (result.acwrSafety.risk === "moderate") {
       // The moderate ACWR message must appear in safetyNotes (not silent)
       expect(result.safetyNotes.some((n) => n.includes("ACWR"))).toBe(true)
@@ -540,13 +537,7 @@ describe("validateAndAdjustPlan", () => {
   it("includes frequency warning in safetyNotes when jump is too aggressive", () => {
     const activities = chronicActivities(4, 3, 10) // 3 sessions/wk
     const plan = makePlan([40, 42, 44, 40])
-    const result = validateAndAdjustPlan(plan, activities, {
-      goal: "base_building",
-      goal_race_distance: null,
-      goal_race_date: null,
-      sessions_per_week: 7, // Massive jump from 3
-      current_weekly_km: 40,
-    })
+    const result = validateAndAdjustPlan(plan, activities, makePrefs(7)) // Massive jump from 3
     expect(result.frequencyWarning).not.toBeNull()
     expect(result.safetyNotes.some((n) => n.includes("Frequency"))).toBe(true)
   })

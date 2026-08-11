@@ -256,6 +256,7 @@ export function deriveWarningContext(
       distance_km: a.distance_km,
       elevation_gain_m: a.elevation_gain_m,
     })),
+    referenceDate.getTime(),
   ).ratio
 
   // ── ACWR one week ago (shift windows back 7 days) ──
@@ -288,7 +289,7 @@ export function deriveWarningContext(
     avg_heart_rate: a.avg_heart_rate,
     elevation_gain_m: a.elevation_gain_m,
   }))
-  const fatigue = detectFatigue(safetyActs)
+  const fatigue = detectFatigue(safetyActs, referenceDate.getTime())
 
   // ── Consecutive weeks below TSB threshold ──
   // computeTrainingLoad returns daily ATL/CTL/TSB points; bucket into weeks
@@ -299,6 +300,7 @@ export function deriveWarningContext(
       distance_km: a.distance_km,
       elevation_gain_m: a.elevation_gain_m,
     })),
+    referenceDate,
   )
   const tsbBelowThresholdWeeks = countTrailingFatigueWeeks(loadPoints, referenceDate)
 

@@ -304,7 +304,8 @@ function PreferencesForm({
           Regenerate plan every
         </label>
         <p className="mb-2 text-micro text-muted-foreground/70">
-          How often you want to generate a new plan. You'll see a reminder when it's due.
+          How often you want to generate a new plan. You&apos;ll see a reminder when
+          it&apos;s due.
         </p>
         <div className="flex gap-2">
           {([2, 4, 6, 8] as const).map((n) => (
@@ -1606,7 +1607,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               {showAdjustForm && (
                 <AppCard className="flex flex-col gap-2">
                   <p className="text-micro text-muted-foreground">
-                    Tell Claude what to change — e.g. "fewer runs but longer", "no tempo work yet", "I can only run at weekends"
+                    Tell Claude what to change — e.g. &ldquo;fewer runs but longer&rdquo;,
+                    &ldquo;no tempo work yet&rdquo;, &ldquo;I can only run at weekends&rdquo;
                   </p>
                   <textarea
                     value={adjustNote}

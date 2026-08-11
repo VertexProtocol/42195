@@ -265,4 +265,26 @@ describe("deriveWarningContext", () => {
     const ctx = deriveWarningContext(acts, REF)
     expect(["hr_elevated", "both"]).toContain(ctx.fatigueSignal)
   })
+
+  it("measures every window from the reference date, not the wall clock", () => {
+    // Regression guard. deriveWarningContext takes a referenceDate, but the
+    // ACWR, fatigue and TSB computations underneath it each read the system
+    // clock instead, so the same history evaluated at any date other than
+    // "today" came back empty — which is what made the two tests above fail.
+    const acts: WarningActivity[] = []
+    for (let week = 0; week < 6; week++) {
+      for (const d of [1, 3, 5]) acts.push(activity(week * 7 + d, 10))
+    }
+
+    // Evaluated at the reference date, the runner has a live training history.
+    const atRef = deriveWarningContext(acts, REF)
+    expect(atRef.acwr).toBeGreaterThan(0)
+
+    // Evaluated a year later, the very same history is long stale and every
+    // window is empty. A clock-reading implementation cannot tell these apart.
+    const muchLater = new Date(REF.getTime() + 365 * DAY_MS)
+    const atLater = deriveWarningContext(acts, muchLater)
+    expect(atLater.acwr).toBe(0)
+    expect(atLater.fatigueSignal).toBe("none")
+  })
 })

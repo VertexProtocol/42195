@@ -259,8 +259,12 @@ export interface AcwrSafety {
  * Extends the basic ACWR computation with "unsafe" tier and concrete week-1
  * adjustment recommendations.
  */
-export function evaluateAcwrSafety(activities: SafetyActivity[]): AcwrSafety {
-  const { acuteLoad, chronicLoad, ratio } = computeACWR(activities)
+export function evaluateAcwrSafety(
+  activities: SafetyActivity[],
+  /** The instant the ACWR windows are measured from. Defaults to now. */
+  referenceDate: Date = new Date(),
+): AcwrSafety {
+  const { acuteLoad, chronicLoad, ratio } = computeACWR(activities, referenceDate.getTime())
 
   // No chronic load = no baseline to compare against. Distinct from "low"
   // because the runner needs to ramp UP cautiously, not because they're
@@ -317,9 +321,11 @@ export interface FrequencyWarning {
 export function checkFrequencyProgression(
   activities: SafetyActivity[],
   requestedSessionsPerWeek: number,
+  /** The instant the 4-week lookback is measured from. Defaults to now. */
+  now: number = Date.now(),
 ): FrequencyWarning | null {
   const fourWeeksMs = 28 * 24 * 60 * 60 * 1000
-  const cutoff = Date.now() - fourWeeksMs
+  const cutoff = now - fourWeeksMs
   const recent = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
   const avgSessions = recent.length / 4  // sessions per week over last 4 weeks
 
@@ -362,7 +368,14 @@ function median(values: number[]): number {
  *
  * Requires 8+ qualifying runs (4 recent + 4 baseline minimum).
  */
-export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
+export function detectFatigue(
+  activities: SafetyActivity[],
+  /**
+   * The instant "recent" is measured from, used by the freshness guard below.
+   * Defaults to the current time.
+   */
+  now: number = Date.now(),
+): FatigueResult {
   const runs = activities
     .filter((a) => a.distance_km > 3 && a.duration_seconds > 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -376,7 +389,7 @@ export function detectFatigue(activities: SafetyActivity[]): FatigueResult {
   // produces a stale signal the runner cannot act on. Skip detection during
   // multi-week pauses — the comeback calculator handles return-to-training.
   const latestMs = new Date(runs[0].date).getTime()
-  const ageDays = (Date.now() - latestMs) / (24 * 60 * 60 * 1000)
+  const ageDays = (now - latestMs) / (24 * 60 * 60 * 1000)
   if (ageDays > FATIGUE_FRESHNESS_DAYS) {
     return { signal: "none", description: null, intensityMultiplier: 1.0 }
   }
@@ -537,8 +550,12 @@ export interface ProlongedFatigueResult {
  * Detects if TSB has been below -15 for 3+ consecutive weeks,
  * indicating accumulated fatigue that requires a forced deload.
  */
-export function checkProlongedFatigue(activities: SafetyActivity[]): ProlongedFatigueResult {
-  const loadPoints = computeTrainingLoad(activities)
+export function checkProlongedFatigue(
+  activities: SafetyActivity[],
+  /** The last day of the load series this reads. Defaults to today. */
+  referenceDate: Date = new Date(),
+): ProlongedFatigueResult {
+  const loadPoints = computeTrainingLoad(activities, referenceDate)
   if (loadPoints.length < PROLONGED_FATIGUE_MIN_POINTS) {
     return { detected: false, consecutiveNegativeTsbWeeks: 0, deloadMultiplier: 1.0, message: null }
   }
@@ -586,10 +603,14 @@ export interface TrainingLoadStatus {
  * Computes the composite training load status for UI display.
  * Returns one of: "optimal" | "high" | "overtraining_risk"
  */
-export function computeTrainingLoadStatus(activities: SafetyActivity[]): TrainingLoadStatus {
-  const acwr = evaluateAcwrSafety(activities)
-  const fatigue = detectFatigue(activities)
-  const prolongedFatigue = checkProlongedFatigue(activities)
+export function computeTrainingLoadStatus(
+  activities: SafetyActivity[],
+  /** The instant every window is measured from. Defaults to now. */
+  referenceDate: Date = new Date(),
+): TrainingLoadStatus {
+  const acwr = evaluateAcwrSafety(activities, referenceDate)
+  const fatigue = detectFatigue(activities, referenceDate.getTime())
+  const prolongedFatigue = checkProlongedFatigue(activities, referenceDate)
   const athleteLevel = classifyAthleteLevel(activities)
 
   let status: LoadStatus = "optimal"
