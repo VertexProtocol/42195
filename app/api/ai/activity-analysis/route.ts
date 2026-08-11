@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { logAiUsage } from "@/lib/ai-usage"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
 
@@ -117,7 +118,7 @@ Recent context (last 2 weeks): ${recentActivities?.length ?? 0} runs${recentAvgP
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5",
       // Deterministic analysis — the same activity should produce the same
       // insight whether generated now or on a re-render.
       temperature: 0,
@@ -131,6 +132,8 @@ Recent context (last 2 weeks): ${recentActivities?.length ?? 0} runs${recentAvgP
       ],
       messages: [{ role: "user", content: prompt }],
     })
+
+    logAiUsage("activity-analysis", response.usage, { activityId })
 
     const textBlock = response.content.find((b) => b.type === "text")
     if (!textBlock || textBlock.type !== "text") {

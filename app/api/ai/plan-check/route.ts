@@ -3,6 +3,7 @@ import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { logAiUsage } from "@/lib/ai-usage"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
 
@@ -25,16 +26,29 @@ const PlanCheckResponseSchema = z.object({
  * against the plan and returns a recommendation: keep, adjust, or regenerate.
  */
 
-const CHECK_SYSTEM_PROMPT = `You are a running coach evaluating whether a training plan needs adjustment. Analyze the runner's actual training versus their plan.
+/**
+ * JSON Schema mirror of PlanCheckResponseSchema, for structured outputs.
+ * Hand-maintained: the SDK's zodOutputFormat() needs zod v4 and this project
+ * is on zod 3. The 0-1 bound on confidence is absent because structured
+ * outputs does not support numeric constraints — zod still enforces it below.
+ */
+const PLAN_CHECK_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recommendation", "confidence", "reason", "adjustments"],
+  properties: {
+    recommendation: { type: "string", enum: ["keep", "adjust", "regenerate"] },
+    confidence: { type: "number", description: "How sure you are, from 0 to 1" },
+    reason: { type: "string", description: "1-2 sentences explaining the recommendation" },
+    adjustments: {
+      type: "array",
+      items: { type: "string" },
+      description: "Specific changes when recommending 'adjust'; empty otherwise",
+    },
+  },
+} as const
 
-Respond in this exact JSON format:
-{
-  "recommendation": "keep" | "adjust" | "regenerate",
-  "confidence": 0.0 to 1.0,
-  "reason": "1-2 sentences explaining the recommendation",
-  "adjustments": ["specific changes if recommendation is 'adjust'"],
-  "alerts": ["urgent concerns if any — overtraining, injury risk, etc."]
-}
+const CHECK_SYSTEM_PROMPT = `You are a running coach evaluating whether a training plan needs adjustment. Analyse the runner's actual training against their plan.
 
 Guidelines:
 - "keep": Plan is on track (within 20% of targets), no changes needed
@@ -170,11 +184,14 @@ Should this plan be kept as-is, adjusted, or fully regenerated?`
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5",
       // Safety-adjacent decision (keep/adjust/regenerate) — determinism matters
       // more than creative variation. Same state should yield same recommendation.
       temperature: 0,
-      max_tokens: 500,
+      max_tokens: 1500,
+      output_config: {
+        format: { type: "json_schema" as const, schema: PLAN_CHECK_JSON_SCHEMA },
+      },
       system: [
         {
           type: "text" as const,
@@ -185,25 +202,16 @@ Should this plan be kept as-is, adjusted, or fully regenerated?`
       messages: [{ role: "user", content: prompt }],
     })
 
+    logAiUsage("plan-check", response.usage, { goalId })
+
     const textBlock = response.content.find((b) => b.type === "text")
     if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json({ error: "No response" }, { status: 500 })
     }
 
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return NextResponse.json({ error: "Invalid response format" }, { status: 500 })
-    }
-
-    let parsedJson: unknown
-    try {
-      parsedJson = JSON.parse(jsonMatch[0])
-    } catch {
-      console.error("[plan-check] Claude returned invalid JSON:", textBlock.text.slice(0, 500))
-      return NextResponse.json({ error: "Invalid response JSON" }, { status: 502 })
-    }
-
-    const checkResult = PlanCheckResponseSchema.safeParse(parsedJson)
+    // Structured outputs guarantees valid JSON matching the schema; zod is the
+    // type guard, not the parser-of-last-resort it used to be.
+    const checkResult = PlanCheckResponseSchema.safeParse(JSON.parse(textBlock.text))
     if (!checkResult.success) {
       console.error(
         "[plan-check] Claude returned malformed plan check:",

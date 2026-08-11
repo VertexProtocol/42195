@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type Anthropic from "@anthropic-ai/sdk"
 import { anthropic } from "@/lib/anthropic"
+import { logAiUsage, sumAiUsage, type AiUsageLike } from "@/lib/ai-usage"
 import { createClient } from "@/lib/supabase/server"
 import { classifyAthleteLevel, detectFatigue, type SafetyActivity } from "@/lib/training-safety"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
@@ -715,6 +716,9 @@ export async function POST(req: NextRequest) {
         let currentMessages = [...messages]
         let iterations = 0
         const maxIterations = 5
+        // A coach answer can take several tool round trips. Collect each turn's
+        // usage so the conversation is reported as one cost, not five log lines.
+        const usagePerTurn: AiUsageLike[] = []
 
         while (iterations < maxIterations) {
           iterations++
@@ -734,12 +738,14 @@ export async function POST(req: NextRequest) {
           }
 
           const response = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: "claude-haiku-4-5",
             max_tokens: 2048,
             system: systemBlocks,
             tools,
             messages: currentMessages,
           })
+
+          usagePerTurn.push(response.usage)
 
           // Check if there are tool uses
           const toolUses = response.content.filter(
@@ -785,6 +791,8 @@ export async function POST(req: NextRequest) {
         if (iterations >= maxIterations) {
           send({ status: "done", text: "I needed too many steps to answer that. Could you try a simpler question?" })
         }
+
+        logAiUsage("coach", sumAiUsage(usagePerTurn), { turns: usagePerTurn.length })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Coach API error:", msg)
