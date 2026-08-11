@@ -78,6 +78,14 @@
      declaration in `.surface` is invalid and the elevation disappears. */
   --elevation-edge: 0 0 0 0 transparent;
 
+  /* ---- Chrome ----------------------------------------------------------- */
+  /* Height of the dissolve the app bar casts over the content below it. A
+     screen's top gutter is derived from this (see .screen-body) so the ramp
+     always lands on the ground rather than on the first card. Changing this
+     value moves both together; they were previously independent, and the
+     gutter was a quarter of the ramp. */
+  --chrome-ramp-top: 1rem;
+
   /* ---- Motion ----------------------------------------------------------- */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-tap: 110ms;
@@ -345,7 +353,7 @@
      ramp is where the work is — lists scroll under the tab bar constantly. */
   .chrome-top::after {
     top: 100%;
-    height: 1rem;
+    height: var(--chrome-ramp-top);
     background-image: linear-gradient(
       to bottom,
       var(--background),
@@ -364,6 +372,14 @@
 
   .chrome-top[data-raised="true"] {
     box-shadow: var(--elevation-1), var(--elevation-edge);
+  }
+
+  /* The top gutter of a screen's content, directly under the app bar.
+     Clears the bar's dissolve first, then adds the gutter proper — so at rest
+     the ramp fades out over the ground and the first card starts clean. While
+     scrolling the ramp does its job over the content passing beneath it. */
+  .screen-body {
+    padding-top: calc(var(--chrome-ramp-top) + 0.25rem);
   }
 
   /* Data glyphs: paces, splits, distances, clock times. Mono earns its place

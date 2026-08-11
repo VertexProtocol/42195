@@ -229,7 +229,7 @@ export function HomeScreen({
   }
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── First run, while there is still first-run work ────────────── */}
       {guide}
 

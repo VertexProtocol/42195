@@ -1308,7 +1308,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         }
       />
 
-      <div className="flex flex-col gap-5 px-4 pb-8 pt-1">
+      <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {goal.is_active && !past && <Pill tone="action">{t("plan.activePlan")}</Pill>}
           <span className="flex items-center gap-1.5 text-micro text-muted-foreground">

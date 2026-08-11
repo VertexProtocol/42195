@@ -21,7 +21,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -33,6 +33,11 @@ export default async function Page() {
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
         .order("display_order", { ascending: true }),
       supabase.from("profiles").select("id, display_name, email, avatar_url, locale, max_hr, resting_hr, hr_analysis_cache, onboarding_dismissed_at").eq("id", authUser.id).single(),
+      // Which activities are test runs. Fetched here rather than from the
+      // Activities screen on mount: that screen unmounts on every tab change,
+      // so its filter chip appeared a round-trip late each time the tab was
+      // opened, shifting the row it sits in.
+      supabase.from("test_runs").select("activity_id").eq("user_id", authUser.id),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
@@ -93,6 +98,7 @@ export default async function Page() {
           resting_hr: null,
           onboarding_dismissed_at: null,
         },
+    testRunActivityIds: (testRunsRes.data ?? []).map((tr) => tr.activity_id as string),
     stravaConnected: !!stravaTokenRes.data,
     syncStatus: syncStatusRes.data
       ? {

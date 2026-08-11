@@ -327,6 +327,7 @@ export function AppShell({ initialData }: AppShellProps) {
             activities={data.activities}
             stravaConnected={data.stravaConnected}
             syncStatus={data.syncStatus}
+            testRunActivityIds={data.testRunActivityIds}
             onSelectActivity={handleSelectActivity}
             onSync={data.sync}
             onAddActivity={() => setIsManualActivityOpen(true)}
@@ -339,6 +340,7 @@ export function AppShell({ initialData }: AppShellProps) {
               activity={selectedActivity}
               onBack={handleBackFromDetail}
               onDelete={handleDeleteActivity}
+              onTestRunChange={data.setTestRunTag}
               allActivities={data.activities}
             />
           </Suspense>

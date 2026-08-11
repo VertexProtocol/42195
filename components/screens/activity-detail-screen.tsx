@@ -21,6 +21,11 @@ interface ActivityDetailScreenProps {
   activity: Activity
   onBack: () => void
   onDelete?: (activityId: string) => Promise<boolean>
+  /**
+   * Tagging or untagging a test run here changes which filter chips the
+   * Activities list offers, and that list no longer refetches on every visit.
+   */
+  onTestRunChange?: (activityId: string, isTestRun: boolean) => void
   /** All activities — used to compute global max HR for consistent zone calculation */
   allActivities?: Activity[]
 }
@@ -140,7 +145,7 @@ function RouteMap({ polyline }: { polyline: string }) {
   )
 }
 
-export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities }: ActivityDetailScreenProps) {
+export function ActivityDetailScreen({ activity, onBack, onDelete, onTestRunChange, allActivities }: ActivityDetailScreenProps) {
   const { t } = useI18n()
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
@@ -253,10 +258,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         const data = await res.json()
         setTestRun(data.test_run)
         setShowTestRunPicker(false)
+        onTestRunChange?.(activity.id, true)
       }
     } catch {}
     setTestRunLoading(false)
-  }, [activity.id])
+  }, [activity.id, onTestRunChange])
 
   const handleRemoveTestRun = useCallback(async () => {
     setTestRunLoading("remove")
@@ -265,10 +271,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       if (res.ok) {
         setTestRun(null)
         setTestRunExpanded(false)
+        onTestRunChange?.(activity.id, false)
       }
     } catch {}
     setTestRunLoading(false)
-  }, [activity.id])
+  }, [activity.id, onTestRunChange])
 
   const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
   const hasPace = streams?.some((p) => p.pace !== null) ?? false
@@ -347,7 +354,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     <>
       <AppBar title={activity.name} onBack={onBack} backLabel={t("tab.activities")} />
 
-      <div className="flex flex-col gap-6 px-4 pb-6 pt-1">
+      <div className="flex flex-col gap-6 px-4 pb-6 screen-body">
         <div className="flex flex-wrap items-center gap-2">
           <ActivityTypeBadge type={activity.type} size="md" />
           <span className="text-micro text-muted-foreground">{formatDate(activity.date)}</span>

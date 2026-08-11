@@ -21,6 +21,8 @@ export interface InitialData {
   goals: Goal[]
   weeklyGoals: WeeklyGoal[]
   user: UserProfile
+  /** Activity IDs that have been logged as test runs. */
+  testRunActivityIds: string[]
   stravaConnected: boolean
   syncStatus: SyncStatus | null
 }
@@ -39,6 +41,13 @@ export function useAppData(initialData?: InitialData | null) {
   const [stravaConnected, setStravaConnected] = useState(initialData?.stravaConnected ?? false)
   const [isLoading, setIsLoading] = useState(!hasInitial)
 
+  // Held here rather than in the Activities screen: that screen unmounts on
+  // every tab change, so owning the fetch made its test-run filter chip
+  // appear late on each visit.
+  const [testRunActivityIds, setTestRunActivityIds] = useState<Set<string>>(
+    () => new Set(initialData?.testRunActivityIds ?? []),
+  )
+
   // "Get started" checklist: dismissal belongs to the account, not the tab.
   const [onboardingDismissed, setOnboardingDismissedState] = useState(
     initialData?.user?.onboarding_dismissed_at != null
@@ -52,6 +61,37 @@ export function useAppData(initialData?: InitialData | null) {
   weeklyGoalsRef.current = weeklyGoals
 
   const [, startTransition] = useTransition()
+
+  /** Reflect a test-run tag being added or removed, without a refetch. */
+  const setTestRunTag = useCallback((activityId: string, isTestRun: boolean) => {
+    setTestRunActivityIds((prev) => {
+      if (prev.has(activityId) === isTestRun) return prev
+      const next = new Set(prev)
+      if (isTestRun) next.add(activityId)
+      else next.delete(activityId)
+      return next
+    })
+  }, [])
+
+  // Without SSR data there is nothing to seed from, so fetch once here — still
+  // once per session rather than once per visit to the Activities tab.
+  useEffect(() => {
+    if (hasInitial) return
+    let cancelled = false
+    fetch("/api/test-runs")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.test_runs) {
+          setTestRunActivityIds(
+            new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)),
+          )
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [hasInitial])
 
   // ----- Fetch data from Supabase on mount -----
   // If we have SSR data, only fetch sync status (lightweight).
@@ -754,6 +794,8 @@ export function useAppData(initialData?: InitialData | null) {
     stravaConnected,
     isLoading,
     onboardingDismissed,
+    testRunActivityIds,
+    setTestRunTag,
 
     // Derived
     activeGoals,
