@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useI18n } from "@/lib/i18n"
@@ -30,8 +31,32 @@ function sanitizeAuthError(message: string, t: (k: any) => string): string {
   return t("auth.errorDefault")
 }
 
+/**
+ * Resolves once the session cookie is readable from this document.
+ *
+ * `signInWithPassword` resolves as soon as the session is in memory; the
+ * cookie write follows it. Whatever is in `document.cookie` at the moment we
+ * hand over is what the request for the app carries, and handing over early is
+ * what sends a runner who just signed in to the signed-out screen. Waiting for
+ * the cookie is the part the old full page load was really buying.
+ */
+async function sessionCookieReady(timeoutMs = 1500): Promise<boolean> {
+  // @supabase/ssr writes `sb-<project-ref>-auth-token`, chunked as `.0`, `.1`
+  // when the session is too large for one cookie. Anchored on the `=` so the
+  // PKCE `…-auth-token-code-verifier` cookie, which is set before a session
+  // exists, cannot pass for one.
+  const written = () => /(^|;\s*)sb-[^=;]*?auth-token(\.\d+)?=/.test(document.cookie)
+  const deadline = performance.now() + timeoutMs
+  while (!written()) {
+    if (performance.now() > deadline) return false
+    await new Promise((resolve) => setTimeout(resolve, 40))
+  }
+  return true
+}
+
 export default function LoginPage() {
   const { t } = useI18n()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [showPassword, setShowPassword] = useState(false)
@@ -54,12 +79,27 @@ export default function LoginPage() {
           return
         }
 
-        // A hard navigation so the browser sends the freshly-set session
-        // cookies in a brand-new request. router.push() is a client-side
-        // navigation that can race with the cookie write and hand the
-        // middleware an empty session.
         setHandingOff(true)
-        window.location.href = "/"
+
+        // This used to be a hard `window.location.href` so the app would be
+        // requested with the freshly-set cookies. It worked, but it made this
+        // screen the outgoing page of a document load, and a browser stops
+        // rendering a document it is replacing — so the wait it shows froze on
+        // its first frame for the whole load.
+        //
+        // Navigating client-side keeps the page alive, and the race the hard
+        // load was avoiding is handled directly: wait for the cookie, then go.
+        // The request for "/" still passes the proxy, which sends anyone
+        // without a session back here — so the cookie is the whole of it.
+        // `replace`, not `push`: back from the app should not return to a
+        // login form for an account that is already signed in.
+        if (await sessionCookieReady()) {
+          router.replace("/")
+        } else {
+          // The cookie never appeared where we can see it. Whatever is going
+          // on, a fresh document request is the one that has always worked.
+          window.location.href = "/"
+        }
       } catch {
         setError(t("auth.errorDefault"))
       }
@@ -68,19 +108,14 @@ export default function LoginPage() {
 
   if (handingOff) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-5">
-        {/* Nothing here can animate. This screen paints and then the hand-off
-            navigation starts, and a document being replaced stops being
-            rendered — a lap that never runs reads as a spinner that has hung,
-            which is worse than no spinner at all. So the mark stands still, in
-            the same lockup as the rest of the signed-out screens, and the line
-            below carries the wait. */}
-        <div className="flex items-center gap-2">
-          <TrackMark size={17} className="text-muted-foreground" />
-          <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
-            42195
-          </p>
-        </div>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-5">
+        {/* The lap only runs because the hand-off above stays on this
+            document. If this ever goes back to a full page load, the browser
+            stops rendering here and the arc freezes for the length of it. */}
+        <TrackMark size={26} running className="text-foreground" />
+        <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
+          42195
+        </p>
         {/* What is happening, not what is being fetched: an account created
             five seconds ago has no training to load, and the first thing the
             app would ever have told that runner would have been wrong. */}
