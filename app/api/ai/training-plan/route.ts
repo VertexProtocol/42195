@@ -16,7 +16,11 @@ import {
   type SafetyActivity,
 } from "@/lib/training-safety"
 import { computeWeeklyTargets } from "@/lib/training-volume"
-import { allocateSessionDistances, formatSessionDistance } from "@/lib/training-sessions"
+import {
+  allocateSessionDistances,
+  formatSessionDistance,
+  supportedSessionCount,
+} from "@/lib/training-sessions"
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { predictRaceTimes } from "@/lib/training-utils"
@@ -233,6 +237,7 @@ function buildPrompt(
   daysUntilRace: number,
   adjustNote: string | null,
   weekTargets: number[],
+  weekSessionCounts: number[],
   acwr?: { ratio: number; risk: string },
   recentEasyPace?: number | null,
   recentBestPace?: number | null,
@@ -246,6 +251,15 @@ function buildPrompt(
     volume: "hitting weekly km targets — sessions are flexible, no fixed structure required",
     workouts: "structured sessions (long run, tempo, easy runs with clear purpose)",
     balanced: "a mix of structured sessions and flexible volume targets",
+  }[prefs.focus]
+
+  // What the focus preference actually changes about the plan. It used to change
+  // only the adjective above, which made "sessions are flexible" a promise the
+  // pipeline never kept.
+  const focusInstruction = {
+    volume: `This runner asked for volume over structure. Keep the session types simple — long runs, base runs and recovery runs. Do not prescribe tempo, intervals, hill repeats or race-pace work; they came here for kilometres, not a workout schedule. Some weeks below carry fewer sessions than others: that is deliberate, and it is how a small week gets runs worth doing instead of a handful of token jogs.`,
+    workouts: `This runner asked for structure. Vary the session types across the block and give each week a clear shape, including quality work — tempo, intervals, hill repeats or fartlek — wherever the training phase supports it, up to the two-per-week ceiling. Every session should be recognisably different from the others in its week.`,
+    balanced: `Mix structure with flexibility. Most sessions should be easy base and long runs; add quality work where the phase clearly calls for it, and keep it to one or two sessions a week.`,
   }[prefs.focus]
 
   const weekSummaryText = weeklySummaries.length === 0
@@ -266,8 +280,10 @@ function buildPrompt(
 
   const weekTargetLines = weekTargets
     .map((km, i) => {
-      if (i === blockWeeks - 1 && blockWeeks > 1) return `- Week ${i + 1}: ${km} km (recovery week)`
-      return `- Week ${i + 1}: ${km} km`
+      const sessions = weekSessionCounts[i]
+      const plural = sessions === 1 ? "session" : "sessions"
+      const recovery = i === blockWeeks - 1 && blockWeeks > 1 ? " (recovery week)" : ""
+      return `- Week ${i + 1}: ${km} km across ${sessions} ${plural}${recovery}`
     })
     .join("\n")
 
@@ -323,8 +339,10 @@ function buildPrompt(
 - Training start: ${goal.start_date ?? goal.created_at.split("T")[0]}${taperNote}
 
 ## Runner's Preferences
-- Sessions per week: ${prefs.sessions_per_week}
+- Sessions per week: ${prefs.sessions_per_week} (requested; the per-week counts below are what to actually plan for)
 - Focus: ${focusDescription}
+
+${focusInstruction}
 ${(() => {
   const coachHistory = formatNotesHistoryForPrompt(prefs.notes_history, "coach")
   const injuryHistory = formatNotesHistoryForPrompt(prefs.notes_history, "injury")
@@ -373,7 +391,7 @@ ${weekSummaryText}
 These are the volumes for this block. They already account for the runner's rolling average, injury-risk load, any recent pause, and the progression limits for their level, so treat them as settled — write the summary and coach notes to match them rather than proposing different numbers.
 ${weekTargetLines}
 
-Do not assign sessions to particular days of the week; the runner fits them in where they can. Give exactly ${blockWeeks} ${blockWeeks === 1 ? "week" : "weeks"}, with ${prefs.sessions_per_week} sessions in each.`
+Do not assign sessions to particular days of the week; the runner fits them in where they can. Give exactly ${blockWeeks} ${blockWeeks === 1 ? "week" : "weeks"}, each with the session count listed above.`
 }
 
 
@@ -761,6 +779,20 @@ export async function POST(req: NextRequest) {
     console.log(`[plan-volume] goal ${goalId} (${athleteLevel}):`, volumeNotes)
   }
 
+  // How many sessions each week can actually carry. Only differs from the
+  // requested count in "volume" focus, where a week too small for the count
+  // trades sessions for length rather than prescribing runs too short to matter.
+  const weekSessionCounts = weekTargets.map((km) =>
+    supportedSessionCount(km, prefs.sessions_per_week, prefs.focus),
+  )
+  const reducedWeeks = weekSessionCounts.filter((n) => n < prefs.sessions_per_week).length
+  if (reducedWeeks > 0) {
+    console.log(
+      `[plan-volume] goal ${goalId}: ${reducedWeeks} week(s) carry fewer than ` +
+      `${prefs.sessions_per_week} sessions (focus: ${prefs.focus})`,
+    )
+  }
+
   const prompt = buildPrompt(
     goal,
     prefs,
@@ -770,6 +802,7 @@ export async function POST(req: NextRequest) {
     daysUntilRace,
     adjustNote,
     weekTargets,
+    weekSessionCounts,
     { ratio: acwrSafety.ratio, risk: acwrSafety.risk },
     recentEasyPace,
     recentBestPace,
@@ -869,7 +902,7 @@ export async function POST(req: NextRequest) {
             if (belowMinimum) {
               console.warn(
                 `[plan-validation] Week ${wi + 1}: ${week.sessions.length} sessions in a ${targetKm} km week ` +
-                `falls below the minimum useful session length`,
+                `falls below the minimum useful session length (asked for ${weekSessionCounts[wi]})`,
               )
             }
             return {
