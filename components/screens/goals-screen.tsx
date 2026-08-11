@@ -14,7 +14,6 @@ import {
   Repeat,
   Timer,
   Trophy,
-  CalendarCheck,
   Footprints,
   ChevronDown,
   GripVertical,
@@ -95,7 +94,6 @@ interface GoalsScreenProps {
   onToggleStar: (goalId: string) => void
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
-  onAddEventGoal: () => void
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
   onAddWeeklyGoal: () => void
   onSelectGoal: (goal: Goal) => void
@@ -176,7 +174,6 @@ export function GoalsScreen({
   onToggleStar,
   onEditGoal,
   onAddGoal,
-  onAddEventGoal,
   onEditWeeklyGoal,
   onAddWeeklyGoal,
   onSelectGoal,
@@ -469,16 +466,10 @@ export function GoalsScreen({
               title={t("goals.noTargets")}
               body={t("goals.setEventTargets")}
               action={
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={onAddGoal}>
-                    <Timer size={15} />
-                    {t("goals.addPerfGoal")}
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={onAddEventGoal}>
-                    <CalendarCheck size={15} />
-                    {t("plan.addEvent")}
-                  </Button>
-                </div>
+                <Button size="sm" onClick={onAddGoal}>
+                  <Plus size={16} />
+                  {t("goals.addGoal")}
+                </Button>
               }
             />
           ) : (
@@ -773,16 +764,16 @@ export function GoalsScreen({
                 </SortableContext>
               </DndContext>
 
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={onAddGoal}>
-                  <Timer size={15} />
-                  {t("goals.addPerfGoal")}
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1" onClick={onAddEventGoal}>
-                  <CalendarCheck size={15} />
-                  {t("plan.addEvent")}
-                </Button>
-              </div>
+              {/* One entry point, not one per category. The sheet opens on its
+                  own goal-type selector, so a pair of buttons here asked the
+                  same question twice in a row and made the first tap read as
+                  though it had not registered. That selector cannot move up
+                  here either: it is how an existing goal's type is changed, and
+                  editing has no button to arrive through. */}
+              <Button variant="outline" size="sm" block onClick={onAddGoal}>
+                <Plus size={16} />
+                {t("goals.addGoal")}
+              </Button>
             </>
           )}
         </div>

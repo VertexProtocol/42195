@@ -190,7 +190,7 @@ const translations = {
     "goals.weekly": "Weekly",
     "goals.performance": "Performance",
     "goals.addWeeklyGoal": "Add weekly goal",
-    "goals.addPerfGoal": "Add performance goal",
+    "goals.addGoal": "Add goal",
     "goals.noWeeklyGoals": "No weekly goals",
     "goals.setTargets": "Set targets for distance, sessions, or more",
     "goals.noPerfGoals": "No performance goals",
@@ -221,7 +221,6 @@ const translations = {
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Race preparation and long-term training",
-    "plan.addEvent": "Add event / race goal",
     "plan.noEvents": "No events planned",
     "plan.noEventsDesc": "Add a race or event goal to start tracking your training preparation",
     "plan.raceComplete": "Race complete",
@@ -866,7 +865,7 @@ const translations = {
     "goals.weekly": "Ukentlig",
     "goals.performance": "Ytelse",
     "goals.addWeeklyGoal": "Legg til ukentlig mål",
-    "goals.addPerfGoal": "Legg til ytelsesmål",
+    "goals.addGoal": "Legg til mål",
     "goals.noWeeklyGoals": "Ingen ukentlige mål",
     "goals.setTargets": "Sett mål for distanse, økter eller mer",
     "goals.noPerfGoals": "Ingen ytelsesmål",
@@ -897,7 +896,6 @@ const translations = {
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Løpsforberedelse og langsiktig trening",
-    "plan.addEvent": "Legg til arrangement / løpsmål",
     "plan.noEvents": "Ingen planlagte løp",
     "plan.noEventsDesc": "Legg til et løps- eller arrangementsmål for å begynne å spore treningsforberedelsene dine",
     "plan.raceComplete": "Løp fullført",
