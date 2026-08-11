@@ -385,6 +385,9 @@ export function AppShell({ initialData }: AppShellProps) {
                 activities={data.activities}
                 goals={data.goals}
                 onViewGoal={(goal) => navigate({ tab: "goals", goal: goal.id })}
+                onSelectActivity={(activity) =>
+                  navigate({ tab: "activities", activity: activity.id })
+                }
               />
             </Suspense>
           </div>

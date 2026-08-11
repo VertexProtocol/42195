@@ -397,6 +397,10 @@ const translations = {
     "profile.deleting": "Deleting…",
     // Training plan
     "plan.generate": "Generate your training plan",
+    "plan.generateBody": "Claude will analyse your activity history and build a personalised {weeks}-week training block for {name}.",
+    "plan.generateCta": "Generate plan",
+    "plan.raceIsPast": "This race has already happened",
+    "plan.raceIsPastBody": "{name} was on {date}. A training block is built forward from today, so there is nothing left to plan — change the date to train toward it again.",
     "plan.generateDesc": "Claude will analyse your activity history and build a personalised training block",
     "plan.generateBtn": "Generate plan",
     "plan.preferences": "Preferences",
@@ -1078,6 +1082,10 @@ const translations = {
     "profile.deleting": "Sletter...",
     // Training plan
     "plan.generate": "Generer treningsplanen din",
+    "plan.generateBody": "Claude analyserer treningshistorikken din og bygger en personlig {weeks}-ukers treningsblokk for {name}.",
+    "plan.generateCta": "Generer plan",
+    "plan.raceIsPast": "Dette løpet er allerede gjennomført",
+    "plan.raceIsPastBody": "{name} var {date}. En treningsblokk bygges framover fra i dag, så det er ingenting igjen å planlegge — endre datoen for å trene mot det igjen.",
     "plan.generateDesc": "Claude analyserer aktivitetshistorikken din og bygger en personlig treningsblokk",
     "plan.generateBtn": "Generer plan",
     "plan.preferences": "Innstillinger",

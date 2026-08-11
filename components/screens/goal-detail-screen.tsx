@@ -1114,9 +1114,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
         (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
       )
       if (daysUntilRace <= 0) {
-        setError(
-          "This goal's target date has passed. Update the date before generating a new plan.",
-        )
+        // Unreachable from the empty state, which no longer offers to generate
+        // for a past race. Kept for the adjust-note path, and translated:
+        // it used to be the only English sentence a Norwegian runner hit here.
+        setError(t("plan.raceIsPast"))
         return
       }
 
@@ -1205,7 +1206,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
         setGenerateStatus(null)
       }
     },
-    [goal.id, onPlanChange]
+    [goal.id, onPlanChange, t]
   )
 
   // Derived values
@@ -1447,15 +1448,40 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
           <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText="Loading your plan…" />
         )}
 
-        {planResolved && !aiPlan && !isGenerating && (
+        {/* A block is built forward from today toward a race date, so a race
+            that has already happened has nothing to build. handleGenerate
+            refuses it, but the invitation was offered anyway: a full pitch and
+            an enabled button whose only outcome was an error. Say why up
+            front instead. */}
+        {planResolved && !aiPlan && !isGenerating && past && (
+          <div className="flex flex-col items-center gap-3 surface px-6 py-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
+              <CalendarCheck size={24} className="text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-semibold text-card-foreground">{t("plan.raceIsPast")}</p>
+              <p className="mt-1 text-label text-muted-foreground">
+                {t("plan.raceIsPastBody", {
+                  name: goal.name,
+                  date: formatDate(goal.target_date),
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {planResolved && !aiPlan && !isGenerating && !past && (
           <div className="flex flex-col items-center gap-4 surface px-6 py-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
               <Sparkles size={24} className="text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">Generate your training plan</p>
+              <p className="font-semibold text-card-foreground">{t("plan.generate")}</p>
               <p className="mt-1 text-label text-muted-foreground">
-                Claude will analyse your activity history and build a personalised 4-week training block for {goal.name}.
+                {t("plan.generateBody", {
+                  weeks: prefs.block_weeks ?? 4,
+                  name: goal.name,
+                })}
               </p>
             </div>
             <button
@@ -1463,7 +1489,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80"
             >
               <Sparkles size={16} />
-              Generate plan
+              {t("plan.generateCta")}
             </button>
           </div>
         )}
