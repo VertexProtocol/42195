@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback, useSyncExternalStore } from "react"
 import { ArrowLeft, CheckCircle2, RefreshCw, TriangleAlert, User } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
@@ -10,7 +11,25 @@ import type { SyncStatus, UserProfile } from "@/lib/types"
  * It carries where you are, whether the data behind the screen is current, and
  * the way out to your account. Sync state lives here rather than being redrawn
  * as a different pill on three different screens.
+ *
+ * The bar draws no rule at rest. It takes elevation only while content is
+ * actually passing underneath it, so a screen that fits without scrolling reads
+ * as one surface rather than three stacked boxes.
  */
+
+/** True while the page is scrolled far enough for content to sit under the bar. */
+function useScrolledUnder(threshold = 4): boolean {
+  const subscribe = useCallback((onChange: () => void) => {
+    window.addEventListener("scroll", onChange, { passive: true })
+    return () => window.removeEventListener("scroll", onChange)
+  }, [])
+
+  return useSyncExternalStore(
+    subscribe,
+    () => window.scrollY > threshold,
+    () => false,
+  )
+}
 
 interface AppBarProps {
   title: string
@@ -76,9 +95,10 @@ export function AppBar({
   action,
 }: AppBarProps) {
   const { t } = useI18n()
+  const raised = useScrolledUnder()
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background">
+    <header className="chrome chrome-top sticky top-0 z-40" data-raised={raised}>
       <div
         className="mx-auto flex max-w-md items-center gap-3 px-4 pb-2.5 pt-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}

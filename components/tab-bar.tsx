@@ -14,6 +14,10 @@ import type { TabId } from "@/lib/types"
  *
  * The active tab is marked twice — by an ember lane above the icon and by
  * weight — so the state does not rely on colour alone.
+ *
+ * The bar carries no rule along its top edge. Content dissolves into the ground
+ * through a short scrim instead, which separates the bar from the list without
+ * boxing the screen in.
  */
 
 const tabs: {
@@ -37,7 +41,7 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background"
+      className="chrome chrome-bottom fixed inset-x-0 bottom-0 z-50"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="tablist"
       aria-label={t("nav.main")}
