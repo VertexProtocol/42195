@@ -2,12 +2,22 @@
  * Heart Rate Analysis Engine
  *
  * Analyzes historical HR data to:
- * - Determine observed max HR and estimated threshold HR
- * - Evaluate whether current zones are well calibrated
+ * - Determine max HR from recorded peaks (falling back to an estimate)
+ * - Evaluate whether the athlete's *configured* zones are well calibrated
  * - Generate recommended zone boundaries
- * - Provide clear explanations for recommendations
+ * - Explain, in translatable terms, why an adjustment is recommended
  *
- * Zone model: 5-zone percentage-of-max-HR
+ * Two rules keep the output honest:
+ *
+ *   1. Calibration is only judged against a max HR the athlete actually set.
+ *      With nothing configured there is nothing to be misconfigured about, so
+ *      the result is `not_configured`, not a warning.
+ *   2. Current and recommended zones always use the same zone model, so the
+ *      difference between them reflects the max HR alone — never a silent
+ *      switch between percentage-of-max and Karvonen.
+ *
+ * Zone model: 5 zones, either percentage-of-max-HR or, when a resting HR is
+ * known, Karvonen (percentage of HR reserve).
  *   Z1 Recovery  50–60%
  *   Z2 Aerobic   60–70%
  *   Z3 Tempo     70–80%
@@ -24,7 +34,11 @@ import {
   HR_MAJOR_MISALIGNMENT_THRESHOLD,
   HR_MINOR_MISALIGNMENT_THRESHOLD,
   HR_ZONE_CLUSTER_THRESHOLD,
-  RESTING_HR_OFFSET,
+  HR_MIN_PEAK_SAMPLES,
+  HR_PEAK_SPIKE_GAP,
+  HR_PEAK_EFFORT_RATIO,
+  RESTING_HR_MIN,
+  RESTING_HR_MAX,
 } from "@/lib/training-constants"
 
 // ─── Types ──────────────────────────────────────────
@@ -40,31 +54,77 @@ export type CalibrationStatus =
   | "well_calibrated"
   | "slightly_misaligned"
   | "likely_misconfigured"
+  /** No max HR configured — the engine reports its estimate and judges nothing */
+  | "not_configured"
   | "insufficient_data"
 
+/** Which model produced the zone boundaries. Both zone sets always share one. */
+export type ZoneModel = "percent_max" | "karvonen"
+
+/** Where the max HR driving the recommendation came from, worst confidence last */
+export type MaxHrSource =
+  /** Highest peak actually recorded by the athlete's HR monitor */
+  | "recorded_peaks"
+  /** Inferred from the highest *average* HR — a guess, used when no peaks exist */
+  | "estimated_from_averages"
+
+/**
+ * Explanations are emitted as codes plus parameters rather than prose so the
+ * UI can render them in the user's language. The engine has no locale.
+ */
+export type HrExplanationCode =
+  | "insufficient_data"
+  | "not_configured"
+  | "max_hr_higher_than_configured"
+  | "max_hr_lower_than_configured"
+  | "max_hr_slight_difference"
+  | "easy_runs_above_zone2"
+  | "activities_cluster_in_one_zone"
+  | "threshold_within_zone4"
+  | "threshold_above_zone4"
+  | "max_hr_from_recorded_peaks"
+  | "max_hr_estimated_from_averages"
+  | "well_calibrated"
+
+export interface HrExplanation {
+  code: HrExplanationCode
+  params?: Record<string, string | number>
+}
+
 export interface HrAnalysisResult {
-  /** Observed max HR across all activities */
+  /** Highest max HR actually recorded, after outlier rejection. 0 when unknown. */
   observedMaxHr: number
-  /** Estimated true max HR (observed + small buffer for sub-max efforts) */
+  /** Max HR the recommendation is built on */
   estimatedMaxHr: number
+  /** How `estimatedMaxHr` was arrived at */
+  maxHrSource: MaxHrSource
+  /** How many activities carried a recorded peak */
+  peakSamples: number
   /** Estimated threshold HR from sustained efforts */
   estimatedThresholdHr: number | null
-  /** Average resting HR approximation */
-  estimatedRestingHr: number | null
-  /** Current zone boundaries (derived from current max HR estimate) */
+  /** The athlete's configured max HR, or null if they have not set one */
+  configuredMaxHr: number | null
+  /** The athlete's configured resting HR, or null. Drives the Karvonen model. */
+  restingHr: number | null
+  /** Model used for both zone sets */
+  zoneModel: ZoneModel
+  /**
+   * Zones implied by the configured max HR. Identical to `recommendedZones`
+   * when nothing is configured — there is no second opinion to show.
+   */
   currentZones: HrZoneBoundary[]
   /** Recommended zone boundaries */
   recommendedZones: HrZoneBoundary[]
   /** Overall calibration status */
   calibrationStatus: CalibrationStatus
-  /** Human-readable explanations for why adjustments are recommended */
-  explanations: string[]
+  /** Translatable reasons behind the status */
+  explanations: HrExplanation[]
   /** Summary of HR data quality and coverage */
   dataQuality: {
     activitiesWithHr: number
     totalActivities: number
     recentActivitiesWithHr: number
-    highestHrActivity: { name: string; date: string; avgHr: number } | null
+    highestHrActivity: { name: string; date: string; maxHr: number } | null
   }
   /** Whether recommended zones match current zones (within tolerance) */
   zonesMatch: boolean
@@ -72,18 +132,31 @@ export interface HrAnalysisResult {
   analyzedAt: string
 }
 
-// ─── Constants (imported from training-constants) ───────────
+export interface HrAnalysisOptions {
+  /** The athlete's configured max HR. Omit when they have not set one. */
+  configuredMaxHr?: number | null
+  /** The athlete's configured resting HR. Enables the Karvonen model. */
+  restingHr?: number | null
+}
 
-// ─── Core Engine ────────────────────────────────────
+// ─── Zone construction ──────────────────────────────
+
+/** A resting HR only enters the model when it is physiologically plausible. */
+function usableRestingHr(restingHr: number | null | undefined, maxHr: number): number | null {
+  if (restingHr == null) return null
+  if (restingHr < RESTING_HR_MIN || restingHr > RESTING_HR_MAX) return null
+  // Karvonen needs a meaningful reserve; a resting HR near max is bad data.
+  if (restingHr >= maxHr * 0.6) return null
+  return restingHr
+}
 
 /**
- * Builds HR zones. If restingHr is provided, uses Karvonen (HR reserve) model
- * which is more accurate for individual athletes:
- *   target = restingHR + (maxHR - restingHR) × intensity%
- * Otherwise falls back to simple percentage-of-max model.
+ * Builds zones with an explicit model, so the caller — not a hidden threshold
+ * inside this function — decides whether Karvonen applies. Both zone sets in
+ * a result are built with the same model.
  */
-function buildZones(maxHr: number, restingHr?: number | null): HrZoneBoundary[] {
-  if (restingHr && restingHr > 30 && restingHr < maxHr * 0.5) {
+function buildZones(maxHr: number, model: ZoneModel, restingHr: number | null): HrZoneBoundary[] {
+  if (model === "karvonen" && restingHr != null) {
     const reserve = maxHr - restingHr
     return HR_ZONE_LABELS.map((label, i) => ({
       zone: i + 1,
@@ -100,48 +173,91 @@ function buildZones(maxHr: number, restingHr?: number | null): HrZoneBoundary[] 
   }))
 }
 
+// ─── Max HR ─────────────────────────────────────────
+
 /**
- * Estimate true max HR from activity data.
+ * Determine max HR.
  *
- * We take the highest avg HR observed and apply a multiplier,
- * because avg HR during a hard effort is always below true max.
- * For very high avg HR values (>175 bpm) the buffer is smaller
- * since the athlete was likely near max.
+ * Preferred path: the athlete's monitor recorded a peak on each run, so max HR
+ * is an observation. The single highest sample is not taken at face value —
+ * straps throw isolated spikes — so a peak standing more than
+ * HR_PEAK_SPIKE_GAP clear of the next-highest one is discarded as an artifact
+ * and the search continues downward, unless the activity's own average HR
+ * shows the effort genuinely was maximal.
+ *
+ * Fallback path (rows synced before peaks were stored, or no HR strap): infer
+ * from the highest *average* HR with a buffer, since an average during a hard
+ * effort always sits below true max. This is a guess and is labelled as one.
  */
-function estimateMaxHr(activitiesWithHr: Activity[]): {
+function resolveMaxHr(activitiesWithHr: Activity[]): {
   observedMax: number
   estimatedMax: number
-  highestActivity: { name: string; date: string; avgHr: number }
+  source: MaxHrSource
+  peakSamples: number
+  highestActivity: { name: string; date: string; maxHr: number } | null
 } {
+  const withPeaks = activitiesWithHr.filter(
+    (a) => a.max_heart_rate != null && a.max_heart_rate > 0,
+  )
+
+  if (withPeaks.length >= HR_MIN_PEAK_SAMPLES) {
+    const sorted = [...withPeaks].sort((a, b) => b.max_heart_rate! - a.max_heart_rate!)
+
+    // A peak is credible when either the next-hardest session comes close to
+    // it, or the activity's own average HR shows the effort really was
+    // maximal. Walk down only past peaks that satisfy neither.
+    const credible = (a: Activity, next: Activity | undefined): boolean => {
+      const peak = a.max_heart_rate!
+      if (next != null && peak - next.max_heart_rate! <= HR_PEAK_SPIKE_GAP) return true
+      return a.avg_heart_rate != null && a.avg_heart_rate >= peak * HR_PEAK_EFFORT_RATIO
+    }
+
+    let idx = 0
+    while (idx < sorted.length - 1 && !credible(sorted[idx], sorted[idx + 1])) {
+      idx++
+    }
+
+    const best = sorted[idx]
+    const observedMax = best.max_heart_rate!
+
+    return {
+      observedMax,
+      // A recorded peak *is* a max HR observation — multiplying it would
+      // reintroduce exactly the fabrication this path removes.
+      estimatedMax: observedMax,
+      source: "recorded_peaks",
+      peakSamples: withPeaks.length,
+      highestActivity: { name: best.name, date: best.date, maxHr: observedMax },
+    }
+  }
+
   let best = activitiesWithHr[0]
   for (const a of activitiesWithHr) {
     if (a.avg_heart_rate! > best.avg_heart_rate!) best = a
   }
+  const observedAvgMax = best.avg_heart_rate!
 
-  const observedMax = best.avg_heart_rate!
-
-  // Buffer: high observed avg HR gets a smaller buffer
+  // Buffer: a high observed average means the athlete was already near max.
   let multiplier: number
-  if (observedMax >= 180) multiplier = 1.05
-  else if (observedMax >= 170) multiplier = 1.08
-  else if (observedMax >= 160) multiplier = 1.10
+  if (observedAvgMax >= 180) multiplier = 1.05
+  else if (observedAvgMax >= 170) multiplier = 1.08
+  else if (observedAvgMax >= 160) multiplier = 1.10
   else multiplier = 1.15
 
-  const estimatedMax = Math.round(observedMax * multiplier)
-
   return {
-    observedMax,
-    estimatedMax,
-    highestActivity: { name: best.name, date: best.date, avgHr: observedMax },
+    observedMax: 0,
+    estimatedMax: Math.round(observedAvgMax * multiplier),
+    source: "estimated_from_averages",
+    peakSamples: withPeaks.length,
+    highestActivity: { name: best.name, date: best.date, maxHr: observedAvgMax },
   }
 }
 
 /**
  * Estimate threshold HR from sustained hard efforts.
  *
- * Looks for activities in the sweet spot: 20-60 min, pace > 3 km,
- * with HR data. The avg HR of the hardest sustained efforts
- * approximates threshold HR.
+ * Looks for activities in the sweet spot: 20-60 min, over 3 km, with HR data.
+ * The avg HR of the hardest sustained efforts approximates threshold HR.
  */
 function estimateThresholdHr(activities: Activity[]): number | null {
   const sustained = activities.filter(
@@ -165,72 +281,47 @@ function estimateThresholdHr(activities: Activity[]): number | null {
 }
 
 /**
- * Estimate resting HR from the lowest avg HR in easy long runs.
- * Not truly resting HR, but a proxy from training data.
- */
-function estimateRestingHr(activities: Activity[]): number | null {
-  const easy = activities.filter(
-    (a) =>
-      a.avg_heart_rate != null &&
-      a.avg_heart_rate > 0 &&
-      a.duration_seconds >= 30 * 60 &&
-      a.distance_km >= 5,
-  )
-
-  if (easy.length < 3) return null
-
-  const sorted = [...easy].sort((a, b) => a.avg_heart_rate! - b.avg_heart_rate!)
-  const lowest3 = sorted.slice(0, 3)
-  const avg = lowest3.reduce((s, a) => s + a.avg_heart_rate!, 0) / lowest3.length
-
-  // Resting HR is roughly avg easy run HR minus RESTING_HR_OFFSET bpm
-  // This is a rough approximation
-  return Math.round(avg - RESTING_HR_OFFSET)
-}
-
-/**
- * Detect misalignment indicators between current and recommended zones.
+ * Detect misalignment between the configured max HR and what the data shows.
+ * Only ever called with a max HR the athlete actually set.
  */
 function detectMisalignment(
-  currentMaxHr: number,
+  configuredMaxHr: number,
   recommendedMaxHr: number,
   thresholdHr: number | null,
   activities: Activity[],
-): { status: CalibrationStatus; explanations: string[] } {
-  const explanations: string[] = []
+  model: ZoneModel,
+  restingHr: number | null,
+): { status: CalibrationStatus; explanations: HrExplanation[] } {
+  const explanations: HrExplanation[] = []
   let severity = 0
 
-  const maxHrDiff = Math.abs(recommendedMaxHr - currentMaxHr)
+  const maxHrDiff = Math.abs(recommendedMaxHr - configuredMaxHr)
   const maxHrPctDiff = maxHrDiff / recommendedMaxHr
 
   // 1. Max HR significantly different
   if (maxHrPctDiff > HR_MAJOR_MISALIGNMENT_THRESHOLD) {
     severity += 2
-    if (recommendedMaxHr > currentMaxHr) {
-      explanations.push(
-        `Your highest recorded heart rates suggest a max HR around ${recommendedMaxHr} bpm, ` +
-        `which is ${maxHrDiff} bpm higher than the ${currentMaxHr} bpm currently used for zone calculations. ` +
-        `This means your zones are set too low.`
-      )
-    } else {
-      explanations.push(
-        `Your activity data suggests a max HR around ${recommendedMaxHr} bpm, ` +
-        `which is ${maxHrDiff} bpm lower than the ${currentMaxHr} bpm currently used. ` +
-        `Your zones may be set too high.`
-      )
-    }
+    explanations.push({
+      code:
+        recommendedMaxHr > configuredMaxHr
+          ? "max_hr_higher_than_configured"
+          : "max_hr_lower_than_configured",
+      params: { recommended: recommendedMaxHr, configured: configuredMaxHr, diff: maxHrDiff },
+    })
   } else if (maxHrPctDiff > HR_MINOR_MISALIGNMENT_THRESHOLD) {
     severity += 1
-    explanations.push(
-      `Your estimated max HR (${recommendedMaxHr} bpm) differs slightly from the current ` +
-      `value (${currentMaxHr} bpm). A small adjustment may improve zone accuracy.`
-    )
+    explanations.push({
+      code: "max_hr_slight_difference",
+      params: { recommended: recommendedMaxHr, configured: configuredMaxHr },
+    })
   }
+
+  // Zone boundaries the athlete is training against today.
+  const configuredZones = buildZones(configuredMaxHr, model, restingHr)
 
   // 2. Zone 2 runs appearing too hard
   if (thresholdHr != null) {
-    const currentZ2Max = Math.round(currentMaxHr * HR_ZONE_PCTS[1][1])
-    const recZ2Max = Math.round(recommendedMaxHr * HR_ZONE_PCTS[1][1])
+    const currentZ2Max = configuredZones[1].max
 
     // Count easy/long runs where avg HR falls above current Z2 max.
     // Use grade-adjusted pace so hilly runs with artificially slow raw pace
@@ -245,61 +336,50 @@ function detectMisalignment(
         gradeAdjustedPace(a.pace_min_per_km, a.distance_km, a.elevation_gain_m) > 5.5, // slower GAP = likely easy run
     )
 
-    const z2Misclassified = longEasyRuns.filter(
-      (a) => a.avg_heart_rate! > currentZ2Max,
-    )
+    const z2Misclassified = longEasyRuns.filter((a) => a.avg_heart_rate! > currentZ2Max)
 
     if (longEasyRuns.length >= 3 && z2Misclassified.length / longEasyRuns.length > 0.5) {
       severity += 1
-      explanations.push(
-        `${z2Misclassified.length} of your ${longEasyRuns.length} easy long runs have an average HR above ` +
-        `Zone 2 (${currentZ2Max} bpm). These runs are likely aerobic efforts that should fall within Zone 2. ` +
-        `Adjusting your max HR upward would fix this.`
-      )
+      explanations.push({
+        code: "easy_runs_above_zone2",
+        params: {
+          count: z2Misclassified.length,
+          total: longEasyRuns.length,
+          zone2Max: currentZ2Max,
+        },
+      })
     }
   }
 
   // 3. Most workouts clustering in a single zone
-  if (activities.length >= 10) {
-    const withHr = activities.filter((a) => a.avg_heart_rate != null && a.avg_heart_rate > 0)
-    if (withHr.length >= 8) {
-      const zoneCounts = [0, 0, 0, 0, 0]
-      const z1Max = Math.round(currentMaxHr * HR_ZONE_PCTS[0][1])
-      const z2Max = Math.round(currentMaxHr * HR_ZONE_PCTS[1][1])
-      const z3Max = Math.round(currentMaxHr * HR_ZONE_PCTS[2][1])
-      const z4Max = Math.round(currentMaxHr * HR_ZONE_PCTS[3][1])
+  const withHr = activities.filter((a) => a.avg_heart_rate != null && a.avg_heart_rate > 0)
+  if (withHr.length >= 8) {
+    const zoneCounts = [0, 0, 0, 0, 0]
+    for (const a of withHr) {
+      const hr = a.avg_heart_rate!
+      // Zone index by upper boundary; anything above Z4 lands in Z5.
+      const idx = configuredZones.findIndex((z) => hr < z.max)
+      zoneCounts[idx === -1 ? 4 : idx]++
+    }
 
-      for (const a of withHr) {
-        const hr = a.avg_heart_rate!
-        if (hr < z1Max) zoneCounts[0]++
-        else if (hr < z2Max) zoneCounts[1]++
-        else if (hr < z3Max) zoneCounts[2]++
-        else if (hr < z4Max) zoneCounts[3]++
-        else zoneCounts[4]++
-      }
-
-      const maxInOneZone = Math.max(...zoneCounts)
-      if (maxInOneZone / withHr.length > HR_ZONE_CLUSTER_THRESHOLD) {
-        const dominantZone = zoneCounts.indexOf(maxInOneZone) + 1
-        severity += 1
-        explanations.push(
-          `${Math.round((maxInOneZone / withHr.length) * 100)}% of your activities fall into Zone ${dominantZone}. ` +
-          `A well-calibrated zone setup typically spreads workouts across multiple zones. ` +
-          `Your max HR estimate may need adjustment.`
-        )
-      }
+    const maxInOneZone = Math.max(...zoneCounts)
+    if (maxInOneZone / withHr.length > HR_ZONE_CLUSTER_THRESHOLD) {
+      const dominantZone = zoneCounts.indexOf(maxInOneZone) + 1
+      severity += 1
+      explanations.push({
+        code: "activities_cluster_in_one_zone",
+        params: {
+          percent: Math.round((maxInOneZone / withHr.length) * 100),
+          zone: dominantZone,
+        },
+      })
     }
   }
 
-  // Determine status
   let status: CalibrationStatus
   if (severity === 0) {
     status = "well_calibrated"
-    if (explanations.length === 0) {
-      explanations.push(
-        "Your heart rate zones appear well calibrated based on your recent training data."
-      )
-    }
+    explanations.push({ code: "well_calibrated" })
   } else if (severity <= 1) {
     status = "slightly_misaligned"
   } else {
@@ -326,14 +406,17 @@ function zonesMatch(a: HrZoneBoundary[], b: HrZoneBoundary[]): boolean {
  * Run the full heart rate zone analysis on a set of activities.
  *
  * @param activities All user activities (sorted by date desc preferred)
- * @param currentMaxHr The max HR currently used for zones (if known).
- *                     If not provided, uses the same estimation the app currently does.
+ * @param options    The athlete's configured max/resting HR. With no
+ *                   configured max HR the result is `not_configured`: the
+ *                   engine reports its estimate and asserts nothing about
+ *                   whether the athlete's setup is wrong.
  */
 export function analyzeHeartRateZones(
   activities: Activity[],
-  currentMaxHr?: number,
+  options: HrAnalysisOptions = {},
 ): HrAnalysisResult {
   const now = new Date().toISOString()
+  const configuredMaxHr = options.configuredMaxHr ?? null
 
   // Filter to activities with HR data
   const withHr = activities.filter(
@@ -342,19 +425,23 @@ export function analyzeHeartRateZones(
 
   // Insufficient data
   if (withHr.length < 5) {
-    const fallbackMax = currentMaxHr ?? 190
+    const fallbackMax = configuredMaxHr ?? 190
+    const resting = usableRestingHr(options.restingHr, fallbackMax)
+    const model: ZoneModel = resting != null ? "karvonen" : "percent_max"
+    const zones = buildZones(fallbackMax, model, resting)
     return {
       observedMaxHr: 0,
       estimatedMaxHr: fallbackMax,
+      maxHrSource: "estimated_from_averages",
+      peakSamples: 0,
       estimatedThresholdHr: null,
-      estimatedRestingHr: null,
-      currentZones: buildZones(fallbackMax),
-      recommendedZones: buildZones(fallbackMax),
+      configuredMaxHr,
+      restingHr: resting,
+      zoneModel: model,
+      currentZones: zones,
+      recommendedZones: zones,
       calibrationStatus: "insufficient_data",
-      explanations: [
-        "Not enough activities with heart rate data to analyze zones. " +
-        "Continue training with a heart rate monitor to enable calibration.",
-      ],
+      explanations: [{ code: "insufficient_data" }],
       dataQuality: {
         activitiesWithHr: withHr.length,
         totalActivities: activities.length,
@@ -372,52 +459,76 @@ export function analyzeHeartRateZones(
     (a) => new Date(a.date).getTime() >= cutoff90d,
   )
 
-  // Estimate max HR
-  const { observedMax, estimatedMax, highestActivity } = estimateMaxHr(withHr)
+  const { observedMax, estimatedMax, source, peakSamples, highestActivity } =
+    resolveMaxHr(withHr)
 
-  // Current max HR: use provided value or fallback to same estimation the app does
-  const effectiveCurrentMaxHr = currentMaxHr ?? Math.round(observedMax * 1.2)
-
-  // Estimate threshold HR and resting HR first (needed for Karvonen zones)
   const thresholdHr = estimateThresholdHr(withHr)
-  const restingHr = estimateRestingHr(withHr)
 
-  // Build current zones (what the app currently uses — without resting HR)
-  const currentZones = buildZones(effectiveCurrentMaxHr)
+  // One model for both zone sets, chosen from the configured resting HR only.
+  // Nothing here infers a resting HR from training data: subtracting a fixed
+  // offset from easy-run averages produced values like 104 bpm, which then
+  // silently distorted every Karvonen boundary.
+  const restingHr = usableRestingHr(options.restingHr, estimatedMax)
+  const zoneModel: ZoneModel = restingHr != null ? "karvonen" : "percent_max"
 
-  // Build recommended zones using Karvonen model when resting HR is available
-  const recommendedZones = buildZones(estimatedMax, restingHr)
+  const recommendedZones = buildZones(estimatedMax, zoneModel, restingHr)
+  const currentZones =
+    configuredMaxHr != null
+      ? buildZones(configuredMaxHr, zoneModel, restingHr)
+      : recommendedZones
 
-  // Detect misalignment
-  const { status, explanations } = detectMisalignment(
-    effectiveCurrentMaxHr,
-    estimatedMax,
-    thresholdHr,
-    withHr,
+  let status: CalibrationStatus
+  let explanations: HrExplanation[]
+
+  if (configuredMaxHr == null) {
+    // Nothing to compare against — report, don't judge.
+    status = "not_configured"
+    explanations = [{ code: "not_configured", params: { estimated: estimatedMax } }]
+  } else {
+    const result = detectMisalignment(
+      configuredMaxHr,
+      estimatedMax,
+      thresholdHr,
+      withHr,
+      zoneModel,
+      restingHr,
+    )
+    status = result.status
+    explanations = result.explanations
+  }
+
+  // How much the max HR figure can be trusted, stated either way.
+  explanations.push(
+    source === "recorded_peaks"
+      ? { code: "max_hr_from_recorded_peaks", params: { samples: peakSamples } }
+      : { code: "max_hr_estimated_from_averages" },
   )
 
-  // Add threshold info if available
-  if (thresholdHr != null && status !== "insufficient_data") {
-    const recZ4Min = Math.round(estimatedMax * HR_ZONE_PCTS[3][0])
-    const recZ4Max = Math.round(estimatedMax * HR_ZONE_PCTS[3][1])
-    if (thresholdHr >= recZ4Min && thresholdHr <= recZ4Max) {
-      explanations.push(
-        `Your estimated threshold HR (${thresholdHr} bpm) falls within the recommended ` +
-        `Zone 4 (${recZ4Min}–${recZ4Max} bpm), which confirms the zone boundaries are reasonable.`
-      )
-    } else if (thresholdHr > recZ4Max) {
-      explanations.push(
-        `Your estimated threshold HR (${thresholdHr} bpm) is above the recommended Zone 4 ceiling ` +
-        `(${recZ4Max} bpm). This suggests your true max HR may be higher than estimated.`
-      )
+  // Threshold HR corroborates (or contradicts) the Z4 boundary.
+  if (thresholdHr != null) {
+    const recZ4 = recommendedZones[3]
+    if (thresholdHr >= recZ4.min && thresholdHr <= recZ4.max) {
+      explanations.push({
+        code: "threshold_within_zone4",
+        params: { threshold: thresholdHr, zone4Min: recZ4.min, zone4Max: recZ4.max },
+      })
+    } else if (thresholdHr > recZ4.max) {
+      explanations.push({
+        code: "threshold_above_zone4",
+        params: { threshold: thresholdHr, zone4Max: recZ4.max },
+      })
     }
   }
 
   return {
     observedMaxHr: observedMax,
     estimatedMaxHr: estimatedMax,
+    maxHrSource: source,
+    peakSamples,
     estimatedThresholdHr: thresholdHr,
-    estimatedRestingHr: restingHr,
+    configuredMaxHr,
+    restingHr,
+    zoneModel,
     currentZones,
     recommendedZones,
     calibrationStatus: status,

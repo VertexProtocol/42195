@@ -32,7 +32,7 @@ export default async function Page() {
         .from("weekly_goals")
         .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
         .order("display_order", { ascending: true }),
-      supabase.from("profiles").select("id, display_name, email, avatar_url, locale, hr_analysis_cache, onboarding_dismissed_at").eq("id", authUser.id).single(),
+      supabase.from("profiles").select("id, display_name, email, avatar_url, locale, max_hr, resting_hr, hr_analysis_cache, onboarding_dismissed_at").eq("id", authUser.id).single(),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
@@ -72,6 +72,10 @@ export default async function Page() {
           email: profileRes.data.email ?? authUser.email ?? "",
           avatar_url: profileRes.data.avatar_url ?? null,
           locale: profileRes.data.locale ?? null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          max_hr: (profileRes.data as any).max_hr ?? null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          resting_hr: (profileRes.data as any).resting_hr ?? null,
           // The cache is selected above but was never passed through, so the
           // profile screen re-ran the HR analysis on every visit.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +89,8 @@ export default async function Page() {
           email: authUser.email ?? "",
           avatar_url: null,
           locale: null,
+          max_hr: null,
+          resting_hr: null,
           onboarding_dismissed_at: null,
         },
     stravaConnected: !!stravaTokenRes.data,

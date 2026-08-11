@@ -238,13 +238,37 @@ export const HR_MINOR_MISALIGNMENT_THRESHOLD = 0.04
 /** If more than this fraction of activities cluster in a single zone, flag it */
 export const HR_ZONE_CLUSTER_THRESHOLD = 0.70
 
-// ── Resting HR Estimation ────────────────────────────────────────────────────
+/** Minimum recorded peaks needed before max HR is treated as observed rather than estimated */
+export const HR_MIN_PEAK_SAMPLES = 3
+/**
+ * How far a peak may stand above the next-highest one before it is treated as
+ * a sensor artifact rather than a real effort.
+ *
+ * The test is isolation, not height: chest straps and optical sensors throw
+ * lone spikes tens of bpm clear of everything else, whereas a genuine maximal
+ * effort is corroborated by the next-hardest session within a few bpm. A
+ * margin measured against the *typical* peak would instead throw away the one
+ * hard session that actually reached max — which is precisely the sample that
+ * matters most here.
+ */
+export const HR_PEAK_SPIKE_GAP = 15
+/**
+ * An isolated peak is kept anyway when the activity's *average* HR reaches
+ * this fraction of it. You cannot average 85% of a heart rate you never hit,
+ * so a high average corroborates the peak — while a one-second sensor spike
+ * leaves the average of the surrounding hour untouched. This is what tells a
+ * maximal race effort apart from a strap glitch when both stand alone.
+ */
+export const HR_PEAK_EFFORT_RATIO = 0.85
+
+// ── Resting HR ───────────────────────────────────────────────────────────────
 
 /**
- * Approximate BPM offset subtracted from the average easy-run HR to estimate
- * resting HR. This is a rough heuristic — not a clinical resting HR measurement.
+ * Plausible resting HR range. A value outside this is rejected rather than
+ * fed into the Karvonen model, where it would silently distort every zone.
  */
-export const RESTING_HR_OFFSET = 45
+export const RESTING_HR_MIN = 25
+export const RESTING_HR_MAX = 110
 
 // ── Skip Load Spike Detection ─────────────────────────────────────────────────
 

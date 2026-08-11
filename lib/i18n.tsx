@@ -317,12 +317,15 @@ const translations = {
     "profile.hrZonesDesc": "Zones are calculated from your activity history using a 5-zone model.",
     "profile.hrAnalyze": "Analyze",
     "profile.hrEstMaxHr": "Est. Max HR",
+    "profile.hrMaxHr": "Max HR",
     "profile.hrThreshold": "Threshold",
     "profile.hrActivities": "Activities",
     "profile.hrRecommendedZones": "Zone Comparison",
+    "profile.hrYourZones": "Your Zones",
     "profile.hrZone": "Zone",
     "profile.hrCurrent": "Current",
     "profile.hrRecommended": "Rec.",
+    "profile.hrRange": "Range",
     "profile.hrDiff": "Diff",
     "profile.hrZonesMatch": "Zones match",
     "profile.hrReanalyze": "Re-analyze",
@@ -331,7 +334,50 @@ const translations = {
     "profile.hrStatus_well_calibrated": "Well Calibrated",
     "profile.hrStatus_slightly_misaligned": "Slightly Misaligned",
     "profile.hrStatus_likely_misconfigured": "Likely Misconfigured",
+    "profile.hrStatus_not_configured": "Not Configured",
     "profile.hrStatus_insufficient_data": "Insufficient Data",
+    "profile.hrModel_karvonen": "Karvonen (HR reserve)",
+    "profile.hrModel_percent_max": "% of max HR",
+    "profile.hrAnalyzedAt": "Analyzed {when}",
+    // ── Your settings ──
+    "profile.hrSettings": "Your values",
+    "profile.hrSettingsDesc": "Set these and the zones below are built from your numbers instead of an estimate.",
+    "profile.hrMaxHrLabel": "Max HR",
+    "profile.hrRestingHrLabel": "Resting HR",
+    "profile.hrNotSet": "Not set",
+    "profile.hrUseEstimate": "Use estimate ({value})",
+    "profile.hrSave": "Save",
+    "profile.hrCancel": "Cancel",
+    "profile.hrEdit": "Edit",
+    "profile.hrClear": "Clear",
+    "profile.hrMaxHrRange": "Max HR must be between 120 and 230 bpm.",
+    "profile.hrRestingHrRange": "Resting HR must be between 25 and 110 bpm.",
+    "profile.hrSaveFailed": "Could not save your heart rate settings.",
+    // ── Explanations (engine emits codes; these render them) ──
+    "profile.hrExp_insufficient_data":
+      "Not enough activities with heart rate data to analyze zones. Keep training with a heart rate monitor to enable calibration.",
+    "profile.hrExp_not_configured":
+      "You have not set a max HR, so there is nothing to compare against. Based on your activity data it is around {estimated} bpm — the zones below use that figure.",
+    "profile.hrExp_max_hr_higher_than_configured":
+      "Your recorded heart rates suggest a max HR around {recommended} bpm, {diff} bpm higher than the {configured} bpm you have set. Your zones are likely too low.",
+    "profile.hrExp_max_hr_lower_than_configured":
+      "Your recorded heart rates suggest a max HR around {recommended} bpm, {diff} bpm lower than the {configured} bpm you have set. Your zones are likely too high.",
+    "profile.hrExp_max_hr_slight_difference":
+      "Your data suggests a max HR of {recommended} bpm, slightly different from the {configured} bpm you have set. A small adjustment may improve accuracy.",
+    "profile.hrExp_easy_runs_above_zone2":
+      "{count} of your {total} easy long runs average above Zone 2 ({zone2Max} bpm). Runs at that effort should normally fall inside Zone 2.",
+    "profile.hrExp_activities_cluster_in_one_zone":
+      "{percent}% of your activities fall into Zone {zone}. Well-calibrated zones usually spread training across several zones.",
+    "profile.hrExp_threshold_within_zone4":
+      "Your estimated threshold HR ({threshold} bpm) sits inside Zone 4 ({zone4Min}–{zone4Max} bpm), which supports these boundaries.",
+    "profile.hrExp_threshold_above_zone4":
+      "Your estimated threshold HR ({threshold} bpm) is above the Zone 4 ceiling ({zone4Max} bpm), which suggests your true max HR may be higher.",
+    "profile.hrExp_max_hr_from_recorded_peaks":
+      "Max HR is taken from the highest peak your monitor actually recorded, across {samples} activities.",
+    "profile.hrExp_max_hr_estimated_from_averages":
+      "No peak heart rate has been recorded on your activities, so max HR is inferred from your highest average — a rough estimate. Re-sync Strava to pull in peak values.",
+    "profile.hrExp_well_calibrated":
+      "Your heart rate zones look well calibrated against your recent training.",
     "profile.trainingPreferences": "Training Preferences",
     "profile.trainingPrefsDesc": "Manage training plans and AI coaching preferences in the Coach tab.",
     "profile.legalData": "Legal and data",
@@ -943,12 +989,15 @@ const translations = {
     "profile.hrZonesDesc": "Soner beregnes fra aktivitetshistorikken din ved hjelp av en 5-sonemodell.",
     "profile.hrAnalyze": "Analyser",
     "profile.hrEstMaxHr": "Est. maks puls",
+    "profile.hrMaxHr": "Maks puls",
     "profile.hrThreshold": "Terskel",
     "profile.hrActivities": "Aktiviteter",
     "profile.hrRecommendedZones": "Sonesammenligning",
+    "profile.hrYourZones": "Sonene dine",
     "profile.hrZone": "Sone",
     "profile.hrCurrent": "Nåværende",
     "profile.hrRecommended": "Anbefalt",
+    "profile.hrRange": "Område",
     "profile.hrDiff": "Diff",
     "profile.hrZonesMatch": "Soner stemmer",
     "profile.hrReanalyze": "Analyser på nytt",
@@ -957,7 +1006,50 @@ const translations = {
     "profile.hrStatus_well_calibrated": "Godt kalibrert",
     "profile.hrStatus_slightly_misaligned": "Litt forskjøvet",
     "profile.hrStatus_likely_misconfigured": "Trolig feilkonfigurert",
+    "profile.hrStatus_not_configured": "Ikke konfigurert",
     "profile.hrStatus_insufficient_data": "Utilstrekkelig data",
+    "profile.hrModel_karvonen": "Karvonen (pulsreserve)",
+    "profile.hrModel_percent_max": "% av maks puls",
+    "profile.hrAnalyzedAt": "Analysert {when}",
+    // ── Dine verdier ──
+    "profile.hrSettings": "Dine verdier",
+    "profile.hrSettingsDesc": "Fyller du inn disse, bygges sonene under på tallene dine i stedet for et estimat.",
+    "profile.hrMaxHrLabel": "Maks puls",
+    "profile.hrRestingHrLabel": "Hvilepuls",
+    "profile.hrNotSet": "Ikke satt",
+    "profile.hrUseEstimate": "Bruk estimat ({value})",
+    "profile.hrSave": "Lagre",
+    "profile.hrCancel": "Avbryt",
+    "profile.hrEdit": "Endre",
+    "profile.hrClear": "Tøm",
+    "profile.hrMaxHrRange": "Maks puls må være mellom 120 og 230 slag/min.",
+    "profile.hrRestingHrRange": "Hvilepuls må være mellom 25 og 110 slag/min.",
+    "profile.hrSaveFailed": "Kunne ikke lagre pulsinnstillingene dine.",
+    // ── Forklaringer (motoren sender koder; disse gjengir dem) ──
+    "profile.hrExp_insufficient_data":
+      "Ikke nok aktiviteter med pulsdata til å analysere soner. Fortsett å trene med pulsmåler for å muliggjøre kalibrering.",
+    "profile.hrExp_not_configured":
+      "Du har ikke satt en maks puls, så det finnes ingenting å sammenligne mot. Ut fra aktivitetsdataene dine ligger den rundt {estimated} slag/min — sonene under bruker det tallet.",
+    "profile.hrExp_max_hr_higher_than_configured":
+      "Pulsverdiene dine tyder på en maks puls rundt {recommended} slag/min, {diff} slag/min høyere enn de {configured} du har satt. Sonene dine er trolig for lave.",
+    "profile.hrExp_max_hr_lower_than_configured":
+      "Pulsverdiene dine tyder på en maks puls rundt {recommended} slag/min, {diff} slag/min lavere enn de {configured} du har satt. Sonene dine er trolig for høye.",
+    "profile.hrExp_max_hr_slight_difference":
+      "Dataene dine tyder på en maks puls på {recommended} slag/min, litt ulikt de {configured} du har satt. En liten justering kan gi bedre presisjon.",
+    "profile.hrExp_easy_runs_above_zone2":
+      "{count} av dine {total} rolige langturer ligger i snitt over sone 2 ({zone2Max} slag/min). Turer på det nivået bør normalt havne innenfor sone 2.",
+    "profile.hrExp_activities_cluster_in_one_zone":
+      "{percent} % av aktivitetene dine havner i sone {zone}. Godt kalibrerte soner fordeler vanligvis treningen over flere soner.",
+    "profile.hrExp_threshold_within_zone4":
+      "Estimert terskelpuls ({threshold} slag/min) ligger inne i sone 4 ({zone4Min}–{zone4Max} slag/min), noe som støtter disse grensene.",
+    "profile.hrExp_threshold_above_zone4":
+      "Estimert terskelpuls ({threshold} slag/min) ligger over taket i sone 4 ({zone4Max} slag/min). Det kan bety at reell maks puls er høyere.",
+    "profile.hrExp_max_hr_from_recorded_peaks":
+      "Maks puls er hentet fra den høyeste toppverdien pulsmåleren din faktisk registrerte, på tvers av {samples} aktiviteter.",
+    "profile.hrExp_max_hr_estimated_from_averages":
+      "Ingen toppuls er registrert på aktivitetene dine, så maks puls er utledet fra den høyeste snittpulsen — et grovt estimat. Synkroniser Strava på nytt for å hente inn toppverdier.",
+    "profile.hrExp_well_calibrated":
+      "Pulssonene dine ser godt kalibrert ut mot den siste treningen din.",
     "profile.trainingPreferences": "Treningspreferanser",
     "profile.trainingPrefsDesc": "Administrer treningsplaner og AI-treningspreferanser i Trener-fanen.",
     "profile.legalData": "Juridisk og data",
@@ -1170,6 +1262,11 @@ export type TranslationKey = keyof typeof translations.en
  */
 export type TranslationParams = Record<string, string | number>
 
+/**
+ * Replaces every `{name}` in the string with params[name]. A placeholder with
+ * no matching param is left as-is: a visible `{count}` in the UI is a louder
+ * bug report than a silent empty string.
+ */
 function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
