@@ -400,13 +400,17 @@
 
 /* The icon's lead arc, running the lane. The path is normalised to
    `pathLength="100"`, so one lap is exactly 100 units of offset. Under reduced
-   motion this settles on its first frame, which is the mark as it is drawn. */
+   motion this settles on its first frame, which is the mark as it is drawn.
+
+   The offset climbs rather than falls, which walks the arc backwards along the
+   rect's own clockwise path — so it runs anticlockwise, the way a track is run
+   with the inside kerb on your left. */
 @keyframes lap {
   from {
     stroke-dashoffset: -5;
   }
   to {
-    stroke-dashoffset: -105;
+    stroke-dashoffset: 95;
   }
 }
 
