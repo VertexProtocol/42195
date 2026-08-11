@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
 import { hasActiveInjury, type NoteHistoryEntry } from "@/lib/notes-history"
 import { assessComeback } from "@/lib/training-comeback"
+import { logAiUsage } from "@/lib/ai-usage"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
 
@@ -35,34 +36,73 @@ const RaceStrategySchema = z.object({
   keyReminders: z.array(z.string().min(1)).min(1),
 })
 
-const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal, and fitness level, create a detailed pacing and preparation plan.
+/**
+ * JSON Schema mirror of RaceStrategySchema, for structured outputs.
+ *
+ * Hand-maintained rather than derived. The SDK ships zodOutputFormat(), which
+ * would generate this, but it calls z.toJSONSchema() — a zod v4 API, and this
+ * project is on zod 3. Upgrading zod is the change that deletes this constant
+ * and its siblings in the other AI routes.
+ *
+ * The `.min(1)` constraints from the zod schema are deliberately absent:
+ * structured outputs does not support length constraints. Zod still enforces
+ * them when the response is validated below.
+ */
+const RACE_STRATEGY_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targetTime", "pacingStrategy", "preRace", "nutrition", "mentalStrategy", "keyReminders"],
+  properties: {
+    targetTime: { type: "string", description: "Predicted finish time based on training, e.g. 3:45:00" },
+    pacingStrategy: {
+      type: "object",
+      additionalProperties: false,
+      required: ["overall", "segments"],
+      properties: {
+        overall: { type: "string", description: "Target pace per km, e.g. 5:20 min/km" },
+        segments: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "pace", "notes"],
+            properties: {
+              name: { type: "string", description: "Segment name, e.g. First 5 km" },
+              pace: { type: "string" },
+              notes: { type: "string", description: "Specific instructions for this segment" },
+            },
+          },
+        },
+      },
+    },
+    preRace: {
+      type: "object",
+      additionalProperties: false,
+      required: ["week", "dayBefore", "morning"],
+      properties: {
+        week: { type: "string", description: "What to do in the final week" },
+        dayBefore: { type: "string" },
+        morning: { type: "string", description: "Race morning routine" },
+      },
+    },
+    nutrition: {
+      type: "object",
+      additionalProperties: false,
+      required: ["before", "during", "hydration"],
+      properties: {
+        before: { type: "string" },
+        during: { type: "string", description: "During-race fuelling plan" },
+        hydration: { type: "string" },
+      },
+    },
+    mentalStrategy: { type: "string", description: "1-2 sentences on mental approach" },
+    keyReminders: { type: "array", items: { type: "string" }, description: "3-5 concise race-day reminders" },
+  },
+} as const
 
-Respond with ONLY a valid JSON object:
-{
-  "targetTime": "predicted finish time based on training (e.g. '3:45:00')",
-  "pacingStrategy": {
-    "overall": "target pace per km (e.g. '5:20 min/km')",
-    "segments": [
-      {
-        "name": "segment name (e.g. 'First 5km', 'Middle 10-30km', 'Final 5km')",
-        "pace": "target pace",
-        "notes": "specific instructions"
-      }
-    ]
-  },
-  "preRace": {
-    "week": "what to do in the final week",
-    "dayBefore": "day-before instructions",
-    "morning": "race morning routine"
-  },
-  "nutrition": {
-    "before": "pre-race nutrition",
-    "during": "during-race fueling plan",
-    "hydration": "hydration strategy"
-  },
-  "mentalStrategy": "1-2 sentences on mental approach",
-  "keyReminders": ["3-5 concise race-day reminders"]
-}
+const STRATEGY_SYSTEM_PROMPT = `You are an expert running coach creating a race-day strategy. Based on the runner's training data, goal and fitness level, write a pacing and preparation plan for the day.
+
+Break the race into segments that suit the distance — a 10K wants a different breakdown than a marathon. Pace targets, fuelling and the mental approach should all follow from what this runner has actually been doing in training.
 
 Be specific to the runner's actual fitness level and race distance. Do not suggest paces faster than their training supports.`
 
@@ -215,9 +255,18 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
         send({ status: "thinking" })
 
         const stream = anthropic.messages.stream({
-          model: "claude-sonnet-4-6",
-          max_tokens: 3000,
-          thinking: { type: "enabled", budget_tokens: 1500 },
+          model: "claude-opus-5",
+          // Thinking counts against max_tokens, so this ceiling covers reasoning
+          // plus the strategy itself. 3000 was sized for the strategy alone.
+          max_tokens: 16000,
+          thinking: { type: "adaptive" },
+          output_config: {
+            effort: "high",
+            format: {
+              type: "json_schema" as const,
+              schema: RACE_STRATEGY_JSON_SCHEMA,
+            },
+          },
           system: [
             {
               type: "text" as const,
@@ -237,22 +286,19 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
         })
 
         const message = await stream.finalMessage()
+        logAiUsage("race-strategy", message.usage, { goalId })
+
+        if (message.stop_reason === "max_tokens") {
+          throw new Error("Response hit the output token limit before the strategy was complete")
+        }
+
         const textBlock = message.content.find((b: { type: string }) => b.type === "text")
         if (!textBlock || textBlock.type !== "text") throw new Error("No text block")
 
         const rawText = (textBlock as { type: "text"; text: string }).text
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error("No JSON found in response")
-
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(jsonMatch[0])
-        } catch {
-          console.error("[race-strategy] Claude returned invalid JSON:", rawText.slice(0, 500))
-          throw new Error("Response was not valid JSON")
-        }
-
-        const strategyResult = RaceStrategySchema.safeParse(parsed)
+        // Structured outputs guarantees the response matches the schema, so zod
+        // is a type guard here rather than the parse-and-hope it replaced.
+        const strategyResult = RaceStrategySchema.safeParse(JSON.parse(rawText))
         if (!strategyResult.success) {
           console.error(
             "[race-strategy] Response failed schema validation:",

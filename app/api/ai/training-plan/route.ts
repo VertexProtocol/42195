@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { anthropic } from "@/lib/anthropic"
+import { logAiUsage } from "@/lib/ai-usage"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
@@ -826,15 +827,7 @@ export async function POST(req: NextRequest) {
 
         const message = await stream.finalMessage()
 
-        // Cost and cache visibility. cache_read_input_tokens staying at 0 across
-        // repeated requests means the system prompt is not actually caching.
-        console.log("[plan-generation] usage:", {
-          goalId,
-          input: message.usage.input_tokens,
-          output: message.usage.output_tokens,
-          cacheRead: message.usage.cache_read_input_tokens,
-          cacheWrite: message.usage.cache_creation_input_tokens,
-        })
+        logAiUsage("training-plan", message.usage, { goalId })
 
         if (message.stop_reason === "max_tokens") {
           throw new Error("Response hit the output token limit before the plan was complete")

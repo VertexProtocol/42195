@@ -3,6 +3,7 @@ import { z } from "zod"
 import { anthropic } from "@/lib/anthropic"
 import { createClient } from "@/lib/supabase/server"
 import { checkAiRateLimit, rateLimitExceededResponse } from "@/lib/ai-rate-limit"
+import { logAiUsage } from "@/lib/ai-usage"
 
 const RUN_TYPES = ["Run", "Trail Run", "Virtual Run", "Treadmill", "Race"]
 
@@ -15,16 +16,26 @@ const WeeklyReviewSchema = z.object({
   nextWeekAdvice: z.string().min(1),
 })
 
-const REVIEW_SYSTEM_PROMPT = `You are a concise running coach doing a weekly training review. Compare the runner's actual training against their plan and provide actionable feedback.
+/**
+ * JSON Schema mirror of WeeklyReviewSchema, for structured outputs.
+ * Hand-maintained: the SDK's zodOutputFormat() needs zod v4 and this project
+ * is on zod 3. Length constraints from the zod schema are absent because
+ * structured outputs does not support them — zod still enforces them below.
+ */
+const WEEKLY_REVIEW_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["grade", "summary", "highlights", "concerns", "nextWeekAdvice"],
+  properties: {
+    grade: { type: "string", enum: ["A", "B", "C", "D"] },
+    summary: { type: "string", description: "1-2 sentence overview of the week" },
+    highlights: { type: "array", items: { type: "string" }, description: "1-3 positive things" },
+    concerns: { type: "array", items: { type: "string" }, description: "0-2 things to watch; empty if none" },
+    nextWeekAdvice: { type: "string", description: "One sentence of advice for next week" },
+  },
+} as const
 
-Respond in this exact JSON format:
-{
-  "grade": "A" | "B" | "C" | "D",
-  "summary": "1-2 sentence overview of the week",
-  "highlights": ["1-3 positive things"],
-  "concerns": ["0-2 things to watch"],
-  "nextWeekAdvice": "1 sentence of advice for next week"
-}
+const REVIEW_SYSTEM_PROMPT = `You are a concise running coach doing a weekly training review. Compare the runner's actual training against their plan and give feedback they can act on.
 
 Grading: A = exceeded plan, B = completed plan well, C = partially completed, D = significantly below plan.
 Be specific — reference actual numbers. Keep each field brief.`
@@ -123,11 +134,14 @@ Session completion: ${weekCompletions.filter((c) => c.status === "completed").le
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5",
       // Grading a completed week should be deterministic — the same week
       // shouldn't get different grades on refresh.
       temperature: 0,
-      max_tokens: 500,
+      max_tokens: 1500,
+      output_config: {
+        format: { type: "json_schema" as const, schema: WEEKLY_REVIEW_JSON_SCHEMA },
+      },
       system: [
         {
           type: "text" as const,
@@ -138,28 +152,17 @@ Session completion: ${weekCompletions.filter((c) => c.status === "completed").le
       messages: [{ role: "user", content: prompt }],
     })
 
+    logAiUsage("weekly-review", response.usage)
+
     const textBlock = response.content.find((b) => b.type === "text")
     if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json({ error: "No response" }, { status: 500 })
     }
 
-    // Parse JSON from response and validate against the review schema so
-    // a malformed Claude output can't break the UI that renders grade/
-    // highlights/concerns.
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return NextResponse.json({ error: "Invalid response format" }, { status: 500 })
-    }
-
-    let parsedJson: unknown
-    try {
-      parsedJson = JSON.parse(jsonMatch[0])
-    } catch {
-      console.error("[weekly-review] Claude returned invalid JSON:", textBlock.text.slice(0, 500))
-      return NextResponse.json({ error: "Invalid response JSON" }, { status: 502 })
-    }
-
-    const reviewResult = WeeklyReviewSchema.safeParse(parsedJson)
+    // Structured outputs guarantees valid JSON matching the schema, so zod is a
+    // type guard for the UI that renders grade/highlights/concerns rather than
+    // the last line of defence against a malformed response.
+    const reviewResult = WeeklyReviewSchema.safeParse(JSON.parse(textBlock.text))
     if (!reviewResult.success) {
       console.error(
         "[weekly-review] Response failed schema validation:",
