@@ -68,15 +68,24 @@ export default function LoginPage() {
 
   if (handingOff) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-5">
-        {/* The one screen with nothing on it yet, so the mark itself runs the
-            lap rather than standing still above a line of text. */}
-        <TrackMark size={26} running className="text-foreground" />
-        <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
-          42195
-        </p>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-5">
+        {/* Nothing here can animate. This screen paints and then the hand-off
+            navigation starts, and a document being replaced stops being
+            rendered — a lap that never runs reads as a spinner that has hung,
+            which is worse than no spinner at all. So the mark stands still, in
+            the same lockup as the rest of the signed-out screens, and the line
+            below carries the wait. */}
+        <div className="flex items-center gap-2">
+          <TrackMark size={17} className="text-muted-foreground" />
+          <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
+            42195
+          </p>
+        </div>
+        {/* What is happening, not what is being fetched: an account created
+            five seconds ago has no training to load, and the first thing the
+            app would ever have told that runner would have been wrong. */}
         <p className="text-body text-muted-foreground" role="status">
-          {t("auth.loadingData")}
+          {t("auth.signingIn")}
         </p>
       </div>
     )

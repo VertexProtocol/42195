@@ -14,6 +14,11 @@ import { cn } from '@/lib/utils'
  * whatever it sits in — the chalk of a primary button, the ember of the sync
  * indicator — with the unlit lane held back. The mark keeps the icon's own
  * pairing instead: the lane in `currentColor`, the arc in the ember.
+ *
+ * The loader belongs on a live document only. A page that is being replaced
+ * stops being rendered, so a lap started on the way out of a screen freezes at
+ * its first frame and reads as a spinner that has hung; those screens take the
+ * still mark.
  */
 
 // A 42×24 stadium inside a 48×30 box: the 4-unit stroke is centred on the
@@ -44,11 +49,6 @@ interface MarkProps extends React.ComponentProps<'svg'> {
   size?: number
 }
 
-interface TrackMarkProps extends MarkProps {
-  /** Sends the lead arc round the lane, for a screen that is only a wait. */
-  running?: boolean
-}
-
 function frame(size: number, style: React.CSSProperties | undefined) {
   return {
     viewBox: `0 0 ${BOX.w} ${BOX.h}`,
@@ -58,22 +58,11 @@ function frame(size: number, style: React.CSSProperties | undefined) {
   }
 }
 
-export function TrackMark({
-  size = 20,
-  running = false,
-  className,
-  style,
-  ...props
-}: TrackMarkProps) {
+export function TrackMark({ size = 20, className, style, ...props }: MarkProps) {
   return (
-    <svg
-      {...frame(size, style)}
-      aria-hidden
-      className={cn('shrink-0', className)}
-      {...props}
-    >
+    <svg {...frame(size, style)} aria-hidden className={cn('shrink-0', className)} {...props}>
       <rect {...LANE} stroke="currentColor" />
-      <rect {...LEAD} className={cn('stroke-primary', running && 'animate-lap')} />
+      <rect {...LEAD} className="stroke-primary" />
     </svg>
   )
 }
