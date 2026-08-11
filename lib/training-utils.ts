@@ -146,8 +146,13 @@ export interface AcwrResult {
  */
 export function computeACWR(
   activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
+  /**
+   * The instant the 7- and 28-day windows are measured back from. Defaults to
+   * the current time; pass it explicitly to evaluate a past date, and so that
+   * tests are not coupled to the day they run on.
+   */
+  now: number = Date.now(),
 ): AcwrResult {
-  const now = Date.now()
   const day7 = now - ACWR_ACUTE_DAYS * 24 * 60 * 60 * 1000
   const day28 = now - ACWR_CHRONIC_DAYS * 24 * 60 * 60 * 1000
 
@@ -188,11 +193,13 @@ export interface TrainingLoadPoint {
  */
 export function computeTrainingLoad(
   activities: Array<{ date: string; distance_km: number; elevation_gain_m?: number | null }>,
+  /** The last day of the returned series. Defaults to today. */
+  referenceDate: Date = new Date(),
 ): TrainingLoadPoint[] {
   if (activities.length === 0) return []
 
   // Build daily effort-adjusted distance map for the last 120 days (buffer for EWMA warmup)
-  const now = new Date()
+  const now = new Date(referenceDate)
   now.setUTCHours(0, 0, 0, 0)
   const startDays = TRAINING_LOAD_BUFFER_DAYS
   const outputDays = TRAINING_LOAD_OUTPUT_DAYS
