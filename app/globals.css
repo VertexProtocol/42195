@@ -83,6 +83,9 @@
   --dur-tap: 110ms;
   --dur-state: 180ms;
   --dur-view: 280ms;
+  /* One lap of the track loader. Slow enough to read as a runner on a lane,
+     quick enough that a short wait still shows movement. */
+  --dur-lap: 1500ms;
 
   /* Sidebar tokens kept for shadcn primitives that reference them. */
   --sidebar: oklch(0.985 0.006 72);
@@ -214,6 +217,7 @@
   --text-display--line-height: 2.5rem;
 
   --animate-rise: rise var(--dur-view) var(--ease-out) both;
+  --animate-lap: lap var(--dur-lap) linear infinite;
 }
 
 @layer base {
@@ -340,6 +344,18 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* The icon's lead arc, running the lane. The path is normalised to
+   `pathLength="100"`, so one lap is exactly 100 units of offset. Under reduced
+   motion this settles on its first frame, which is the mark as it is drawn. */
+@keyframes lap {
+  from {
+    stroke-dashoffset: -5;
+  }
+  to {
+    stroke-dashoffset: -105;
   }
 }
 

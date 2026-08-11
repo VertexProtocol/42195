@@ -4,7 +4,6 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import {
   Trophy,
   Send,
-  Loader2,
   Trash2,
   ChevronRight,
   Sparkles,
@@ -12,6 +11,7 @@ import {
   ArrowLeft,
   LineChart,
 } from "lucide-react"
+import { TrackLoader } from "@/components/ui/track-loader"
 import {
   formatTargetTime,
   formatPace,
@@ -329,7 +329,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
           {isLoading && (
             <div className="flex justify-start" role="status" aria-live="polite">
               <div className="surface flex items-center gap-2 rounded-bl-sm px-3.5 py-2.5 text-label text-muted-foreground">
-                <Loader2 size={14} className="animate-spin" aria-hidden />
+                <TrackLoader size={13} />
                 {thinkingDetail ?? t("coach.thinking")}
               </div>
             </div>
