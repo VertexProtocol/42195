@@ -320,6 +320,7 @@ const translations = {
     "profile.hrMaxHr": "Max HR",
     "profile.hrThreshold": "Threshold",
     "profile.hrActivities": "Activities",
+    "profile.hrRuns": "Runs",
     "profile.hrRecommendedZones": "Zone Comparison",
     "profile.hrYourZones": "Your Zones",
     "profile.hrZone": "Zone",
@@ -376,6 +377,8 @@ const translations = {
       "Max HR is taken from the highest peak your monitor actually recorded, across {samples} activities.",
     "profile.hrExp_max_hr_estimated_from_averages":
       "No peak heart rate has been recorded on your activities, so max HR is inferred from your highest average — a rough estimate. Re-sync Strava to pull in peak values.",
+    "profile.hrExp_basis_all_activities":
+      "You do not have enough runs with heart rate data yet, so these zones are based on all your activities. Rides and walks reach heart rates differently from running, so expect the boundaries to shift once you have more runs recorded.",
     "profile.hrExp_well_calibrated":
       "Your heart rate zones look well calibrated against your recent training.",
     "profile.trainingPreferences": "Training Preferences",
@@ -992,6 +995,7 @@ const translations = {
     "profile.hrMaxHr": "Maks puls",
     "profile.hrThreshold": "Terskel",
     "profile.hrActivities": "Aktiviteter",
+    "profile.hrRuns": "Løpeturer",
     "profile.hrRecommendedZones": "Sonesammenligning",
     "profile.hrYourZones": "Sonene dine",
     "profile.hrZone": "Sone",
@@ -1048,6 +1052,8 @@ const translations = {
       "Maks puls er hentet fra den høyeste toppverdien pulsmåleren din faktisk registrerte, på tvers av {samples} aktiviteter.",
     "profile.hrExp_max_hr_estimated_from_averages":
       "Ingen toppuls er registrert på aktivitetene dine, så maks puls er utledet fra den høyeste snittpulsen — et grovt estimat. Synkroniser Strava på nytt for å hente inn toppverdier.",
+    "profile.hrExp_basis_all_activities":
+      "Du har ikke nok løpeturer med pulsdata ennå, så disse sonene bygger på alle aktivitetene dine. Sykling og gåturer når pulsnivåer annerledes enn løping, så forvent at grensene flytter seg når du har flere løpeturer registrert.",
     "profile.hrExp_well_calibrated":
       "Pulssonene dine ser godt kalibrert ut mot den siste treningen din.",
     "profile.trainingPreferences": "Treningspreferanser",

@@ -39,7 +39,11 @@ import {
   HR_PEAK_EFFORT_RATIO,
   RESTING_HR_MIN,
   RESTING_HR_MAX,
+  RUN_TYPES,
 } from "@/lib/training-constants"
+
+/** Below this many runs with HR, running data alone cannot carry the analysis. */
+const MIN_RUNS_FOR_RUN_ONLY_BASIS = 5
 
 // ─── Types ──────────────────────────────────────────
 
@@ -60,6 +64,18 @@ export type CalibrationStatus =
 
 /** Which model produced the zone boundaries. Both zone sets always share one. */
 export type ZoneModel = "percent_max" | "karvonen"
+
+/**
+ * Which activities the HR figures were derived from.
+ *
+ * Running is preferred: these zones are prescribed for running, and other
+ * sports distort them in both directions — cycling sustains a higher HR for
+ * the same effort, while a walk that spikes the sensor can hand the athlete a
+ * max HR no run of theirs ever produced. But an athlete who mostly walks or
+ * rides still deserves an answer, so the analysis falls back to everything
+ * rather than refusing, and says which basis it used.
+ */
+export type AnalysisBasis = "runs" | "all_activities"
 
 /** Where the max HR driving the recommendation came from, worst confidence last */
 export type MaxHrSource =
@@ -84,6 +100,7 @@ export type HrExplanationCode =
   | "threshold_above_zone4"
   | "max_hr_from_recorded_peaks"
   | "max_hr_estimated_from_averages"
+  | "basis_all_activities"
   | "well_calibrated"
 
 export interface HrExplanation {
@@ -108,6 +125,8 @@ export interface HrAnalysisResult {
   restingHr: number | null
   /** Model used for both zone sets */
   zoneModel: ZoneModel
+  /** Which activities every HR figure above was derived from */
+  analysisBasis: AnalysisBasis
   /**
    * Zones implied by the configured max HR. Identical to `recommendedZones`
    * when nothing is configured — there is no second opinion to show.
@@ -121,7 +140,13 @@ export interface HrAnalysisResult {
   explanations: HrExplanation[]
   /** Summary of HR data quality and coverage */
   dataQuality: {
+    /** Activities with HR the analysis actually drew on */
     activitiesWithHr: number
+    /**
+     * Activities with HR held back from the derivation because they were not
+     * runs. Always 0 when the basis is all_activities — nothing was excluded.
+     */
+    excludedNonRunWithHr: number
     totalActivities: number
     recentActivitiesWithHr: number
     highestHrActivity: { name: string; date: string; maxHr: number } | null
@@ -405,6 +430,10 @@ function zonesMatch(a: HrZoneBoundary[], b: HrZoneBoundary[]): boolean {
 /**
  * Run the full heart rate zone analysis on a set of activities.
  *
+ * Pass every activity: the function decides for itself which ones may drive
+ * the HR figures (see AnalysisBasis) while still reporting on the whole
+ * history.
+ *
  * @param activities All user activities (sorted by date desc preferred)
  * @param options    The athlete's configured max/resting HR. With no
  *                   configured max HR the result is `not_configured`: the
@@ -418,10 +447,17 @@ export function analyzeHeartRateZones(
   const now = new Date().toISOString()
   const configuredMaxHr = options.configuredMaxHr ?? null
 
-  // Filter to activities with HR data
-  const withHr = activities.filter(
+  const allWithHr = activities.filter(
     (a) => a.avg_heart_rate != null && a.avg_heart_rate > 0,
   )
+  const runsWithHr = allWithHr.filter((a) => RUN_TYPES.has(a.type))
+
+  // Prefer running data, but never at the cost of having no answer at all:
+  // an athlete who mostly walks or rides falls back to their full history.
+  const basis: AnalysisBasis =
+    runsWithHr.length >= MIN_RUNS_FOR_RUN_ONLY_BASIS ? "runs" : "all_activities"
+  const withHr = basis === "runs" ? runsWithHr : allWithHr
+  const excludedNonRunWithHr = basis === "runs" ? allWithHr.length - runsWithHr.length : 0
 
   // Insufficient data
   if (withHr.length < 5) {
@@ -438,12 +474,14 @@ export function analyzeHeartRateZones(
       configuredMaxHr,
       restingHr: resting,
       zoneModel: model,
+      analysisBasis: basis,
       currentZones: zones,
       recommendedZones: zones,
       calibrationStatus: "insufficient_data",
       explanations: [{ code: "insufficient_data" }],
       dataQuality: {
         activitiesWithHr: withHr.length,
+        excludedNonRunWithHr,
         totalActivities: activities.length,
         recentActivitiesWithHr: 0,
         highestHrActivity: null,
@@ -504,6 +542,12 @@ export function analyzeHeartRateZones(
       : { code: "max_hr_estimated_from_averages" },
   )
 
+  // Zones built on rides and walks are worth a caveat; zones built on runs are
+  // the expected case and need none.
+  if (basis === "all_activities" && allWithHr.length > runsWithHr.length) {
+    explanations.push({ code: "basis_all_activities" })
+  }
+
   // Threshold HR corroborates (or contradicts) the Z4 boundary.
   if (thresholdHr != null) {
     const recZ4 = recommendedZones[3]
@@ -529,12 +573,14 @@ export function analyzeHeartRateZones(
     configuredMaxHr,
     restingHr,
     zoneModel,
+    analysisBasis: basis,
     currentZones,
     recommendedZones,
     calibrationStatus: status,
     explanations,
     dataQuality: {
       activitiesWithHr: withHr.length,
+      excludedNonRunWithHr,
       totalActivities: activities.length,
       recentActivitiesWithHr: recentWithHr.length,
       highestHrActivity: highestActivity,
