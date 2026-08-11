@@ -20,23 +20,6 @@ export interface NoteHistoryEntry {
 }
 
 /**
- * Labels a week's position within its block as base/build/taper, for the
- * context snapshot attached to a note.
- *
- * Not the same thing as the plan generator's phase, which is derived from days
- * until the race — "build" here means "week 3 of a 4-week block", not "the build
- * phase of this training cycle". The two share a vocabulary and nothing else.
- */
-export function getPhaseLabel(weekIndex: number, totalWeeks: number): string {
-  const taperWeeks = Math.min(3, Math.max(1, Math.floor(totalWeeks * 0.15)))
-  const buildWeeks = Math.max(2, Math.floor(totalWeeks * 0.25))
-  const baseWeeks = totalWeeks - buildWeeks - taperWeeks
-  if (weekIndex < baseWeeks) return "base"
-  if (weekIndex < baseWeeks + buildWeeks) return "build"
-  return "taper"
-}
-
-/**
  * True if the history has at least one injury entry that hasn't been marked
  * as resolved. Used by plan generation to apply a tighter volume cap on
  * return from pause.

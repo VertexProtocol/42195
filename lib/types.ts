@@ -151,7 +151,17 @@ export interface TrainingPlan {
   weeks: TrainingWeek[]
   keyPrinciples: string[]
   watchOut: string | null
+  /**
+   * How confident the session paces are: derived from a test run, from race
+   * predictions, from training history, or not at all. Stored with the plan
+   * because it describes the plan's paces, which are fixed when it is
+   * generated — recomputing it on read would report the confidence of a
+   * calculation the plan never used.
+   */
+  paceSource?: PaceSource
 }
+
+export type PaceSource = "test_run" | "prediction" | "historical" | "none"
 
 export interface PlanWeekSummary {
   weekNumber: number

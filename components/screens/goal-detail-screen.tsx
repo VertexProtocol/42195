@@ -38,7 +38,7 @@ import type {
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
-import { RUN_TYPES } from "@/lib/training-constants"
+import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 // Shared with the server so a session reads as the same distance on both sides.
 // The client used to take the midpoint of a range where the server took the
 // high end, so weekly totals in the app never matched the stored targetKm.
@@ -152,7 +152,7 @@ function PreferencesForm({
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch("/api/ai/training-plan", {
+      const res = await fetch("/api/ai/training-plan/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -375,6 +375,12 @@ function PreferencesForm({
                   })
                 : null
               const isResolving = resolvingAt === entry.added_at
+              // An unresolved note keeps tightening the comeback cap and keeps
+              // reaching the coach as a current restriction. People rarely go
+              // back to mark one resolved, so after a while we ask.
+              const weeksOld =
+                (Date.now() - new Date(entry.added_at).getTime()) / (7 * 24 * 60 * 60 * 1000)
+              const isStale = !entry.resolved_at && weeksOld >= INJURY_NOTE_STALE_WEEKS
 
               return (
                 <div
@@ -393,6 +399,12 @@ function PreferencesForm({
                       {resolvedDate ? `Added ${addedDate} · Resolved ${resolvedDate}` : `Added ${addedDate}`}
                       {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase} phase`}
                     </span>
+                    {isStale && (
+                      <span className="text-micro text-warning">
+                        Added {Math.floor(weeksOld)} weeks ago and still holding your volume
+                        down. Still an issue?
+                      </span>
+                    )}
                   </div>
                   {!entry.resolved_at && (
                     <button
