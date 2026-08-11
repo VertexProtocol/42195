@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { TrackMark } from "@/components/ui/track-mark"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeAuthError(message: string, t: (k: any) => string): string {
@@ -67,7 +68,10 @@ export default function LoginPage() {
 
   if (handingOff) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-5">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-5">
+        {/* The one screen with nothing on it yet, so the mark itself runs the
+            lap rather than standing still above a line of text. */}
+        <TrackMark size={26} running className="text-foreground" />
         <p className="measure text-label font-bold tracking-[-0.03em] text-muted-foreground">
           42195
         </p>

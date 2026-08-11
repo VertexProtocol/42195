@@ -126,6 +126,7 @@ const translations = {
     "activities.allTypes": "All",
     "activities.showing": "Showing",
     "activities.of": "of",
+    "activities.showMore": "Show more",
     "activities.noResults": "No activities match your search",
     "activities.clearFilters": "Clear filters",
     // Activity detail
@@ -667,6 +668,7 @@ const translations = {
     "activities.allTypes": "Alle",
     "activities.showing": "Viser",
     "activities.of": "av",
+    "activities.showMore": "Vis flere",
     "activities.noResults": "Ingen aktiviteter matcher soket ditt",
     "activities.clearFilters": "Fjern filter",
     // Activity detail
