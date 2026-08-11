@@ -30,16 +30,32 @@ for (const file of [".env.local", ".env"]) {
   if (existsSync(path)) process.loadEnvFile(path)
 }
 
-if (!process.env.ANTHROPIC_API_KEY) {
+/**
+ * ANTHROPIC_API_KEY first, since that is what the routes read and what a local
+ * checkout will already have. SMOKE_ANTHROPIC_API_KEY exists because a Claude
+ * Code environment reserves the former: those sessions authenticate through the
+ * account, so a variable by that name is stripped rather than passed to the
+ * container, and it arrives absent no matter what the environment config says.
+ * Any unreserved name gets through.
+ */
+const KEY_VARS = ["ANTHROPIC_API_KEY", "SMOKE_ANTHROPIC_API_KEY"] as const
+
+const keyVar = KEY_VARS.find((name) => process.env[name])
+
+if (!keyVar) {
   console.error(
-    "ANTHROPIC_API_KEY is not set — nothing here can run without it.\n" +
-      "Export it, or put it in .env.local (gitignored) as ANTHROPIC_API_KEY=sk-ant-...",
+    `No API key found. Set one of: ${KEY_VARS.join(", ")}\n` +
+      "  - locally: put ANTHROPIC_API_KEY=sk-ant-... in .env.local (gitignored)\n" +
+      "  - in a Claude Code environment: use SMOKE_ANTHROPIC_API_KEY, as\n" +
+      "    ANTHROPIC_API_KEY is reserved there and never reaches the container",
   )
   process.exit(1)
 }
 
+console.log(`using key from ${keyVar}`)
+
 const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env[keyVar],
   defaultHeaders: {
     // Mirrors lib/anthropic.ts. The header has never been sent by these calls;
     // an API that rejected an unknown header would fail every request below.
