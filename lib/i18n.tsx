@@ -386,7 +386,7 @@ const translations = {
     "manualActivity.saving": "Saving...",
     "manualActivity.save": "Save Activity",
     // Auth pages
-    "auth.signInTagline": "Pick up where your training left off.",
+    "auth.signInTagline": "Your runs, your goals, and the distance between them.",
     "auth.createAccountTagline": "Start tracking the runway to your next race.",
     "auth.emailLabel": "Email",
     "auth.nameLabel": "Name",
@@ -693,7 +693,7 @@ const translations = {
     "activityDetail.deleteConfirm": "Er du sikker på at du vil slette denne aktiviteten?",
     "activityDetail.deleting": "Sletter...",
     // Auth pages
-    "auth.signInTagline": "Fortsett der treningen slapp.",
+    "auth.signInTagline": "Løpene dine, målene dine, og avstanden mellom dem.",
     "auth.createAccountTagline": "Begynn å følge veien fram til neste løp.",
     "auth.emailLabel": "E-post",
     "auth.nameLabel": "Navn",
