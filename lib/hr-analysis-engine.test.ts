@@ -111,6 +111,88 @@ describe("analyzeHeartRateZones — no invented baseline", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Which activities drive the numbers
+// ---------------------------------------------------------------------------
+
+describe("analyzeHeartRateZones — analysis basis", () => {
+  it("does not let a walk's sensor spike set max HR", () => {
+    // Taken from real data: a 78-minute stroll at 20:33 min/km whose monitor
+    // logged a 199 bpm peak against a 138 bpm average. The spike filter alone
+    // let it through, because a genuine 190 bpm run peak sat only 9 bpm below
+    // it — close enough to read as corroboration.
+    const walkSpike = makeActivity({
+      type: "Walk",
+      name: "Lunch Walk",
+      avg_heart_rate: 138,
+      max_heart_rate: 199,
+      distance_km: 3.775,
+      duration_seconds: 4655,
+      pace_min_per_km: 20.55,
+    })
+    const runs = [
+      makeActivity({ type: "Run", name: "Evening Run", avg_heart_rate: 159, max_heart_rate: 190 }),
+      makeActivity({ type: "Run", avg_heart_rate: 175, max_heart_rate: 189 }),
+      makeActivity({ type: "Run", avg_heart_rate: 171, max_heart_rate: 188 }),
+      makeActivity({ type: "Run", avg_heart_rate: 156, max_heart_rate: 183 }),
+      makeActivity({ type: "Run", avg_heart_rate: 163, max_heart_rate: 181 }),
+    ]
+    const result = analyzeHeartRateZones([walkSpike, ...runs])
+
+    expect(result.analysisBasis).toBe("runs")
+    expect(result.estimatedMaxHr).toBe(190)
+    expect(result.dataQuality.highestHrActivity?.name).toBe("Evening Run")
+    expect(result.dataQuality.excludedNonRunWithHr).toBe(1)
+  })
+
+  it("counts only runs once running data carries the analysis", () => {
+    const result = analyzeHeartRateZones([
+      ...makePeakActivities(6, 150, 180),
+      makeActivity({ type: "Ride", avg_heart_rate: 165, max_heart_rate: 195 }),
+      makeActivity({ type: "Walk", avg_heart_rate: 110, max_heart_rate: 130 }),
+    ])
+    expect(result.analysisBasis).toBe("runs")
+    expect(result.dataQuality.activitiesWithHr).toBe(6)
+    expect(result.dataQuality.excludedNonRunWithHr).toBe(2)
+    // The whole history is still reported, just not used to derive the zones.
+    expect(result.dataQuality.totalActivities).toBe(8)
+  })
+
+  it("falls back to all activities for someone who mostly rides", () => {
+    // Refusing to answer a cyclist is worse than answering with a caveat.
+    const result = analyzeHeartRateZones([
+      ...Array.from({ length: 8 }, () =>
+        makeActivity({ type: "Ride", avg_heart_rate: 150, max_heart_rate: 178 }),
+      ),
+      makeActivity({ type: "Run", avg_heart_rate: 150, max_heart_rate: 170 }),
+    ])
+    expect(result.analysisBasis).toBe("all_activities")
+    expect(result.calibrationStatus).not.toBe("insufficient_data")
+    expect(result.estimatedMaxHr).toBe(178)
+    expect(codes(result)).toContain("basis_all_activities")
+    // Nothing was held back, so nothing is reported as excluded.
+    expect(result.dataQuality.excludedNonRunWithHr).toBe(0)
+  })
+
+  it("adds no caveat when the athlete only runs", () => {
+    const result = analyzeHeartRateZones(makePeakActivities(8, 150, 185))
+    expect(result.analysisBasis).toBe("runs")
+    expect(codes(result)).not.toContain("basis_all_activities")
+  })
+
+  it("treats every configured run type as running", () => {
+    const result = analyzeHeartRateZones([
+      makeActivity({ type: "Trail Run", avg_heart_rate: 160, max_heart_rate: 185 }),
+      makeActivity({ type: "Race", avg_heart_rate: 172, max_heart_rate: 188 }),
+      makeActivity({ type: "Virtual Run", avg_heart_rate: 150, max_heart_rate: 175 }),
+      makeActivity({ type: "Treadmill", avg_heart_rate: 148, max_heart_rate: 170 }),
+      makeActivity({ type: "Run", avg_heart_rate: 155, max_heart_rate: 178 }),
+    ])
+    expect(result.analysisBasis).toBe("runs")
+    expect(result.dataQuality.excludedNonRunWithHr).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Max HR resolution
 // ---------------------------------------------------------------------------
 

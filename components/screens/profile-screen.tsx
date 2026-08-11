@@ -56,6 +56,7 @@ import { Pill } from "@/components/ui/pill"
 function usableCache(cached: HrAnalysisResult | null | undefined): HrAnalysisResult | null {
   if (!cached) return null
   if (typeof cached.maxHrSource !== "string") return null
+  if (typeof cached.analysisBasis !== "string") return null
   if (!Array.isArray(cached.explanations)) return null
   if (cached.explanations.some((e) => typeof e?.code !== "string")) return null
   return cached
@@ -687,7 +688,11 @@ export function ProfileScreen({
                     {hrAnalysis.dataQuality.activitiesWithHr}
                   </dd>
                   <dt className="mt-1.5 text-micro text-muted-foreground">
-                    {t("profile.hrActivities")}
+                    {/* Name what was counted: with a run-only basis this is a
+                        run count, not the whole history. */}
+                    {hrAnalysis.analysisBasis === "runs"
+                      ? t("profile.hrRuns")
+                      : t("profile.hrActivities")}
                   </dt>
                 </div>
               </dl>
