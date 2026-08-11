@@ -9,6 +9,23 @@
 
 import { afterEach } from "vitest"
 
+// jsdom ships no matchMedia, and components that respect prefers-reduced-motion
+// call it during their mount effect — so a missing stub fails the render rather
+// than the behaviour under test. Reports "no preference", which is the branch
+// that exercises the real animation path.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia
+}
+
 afterEach(async () => {
   if (typeof document === "undefined") return
   const { cleanup } = await import("@testing-library/react")

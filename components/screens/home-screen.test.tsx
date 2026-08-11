@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
-import type { Activity, WeeklyGoal, WeeklySummary } from "@/lib/types"
+import type { Activity, Goal, WeeklyGoal, WeeklySummary } from "@/lib/types"
 
 /**
  * The "This week" card.
@@ -181,5 +181,86 @@ describe("HomeScreen — targets that measure something narrower", () => {
     )
     expect(screen.getByText("of 10 km")).toBeTruthy()
     expect(screen.getByText("Stretch week")).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pinned goals
+// ---------------------------------------------------------------------------
+
+function makeRaceGoal(overrides: Partial<Goal> = {}): Goal {
+  return {
+    id: crypto.randomUUID(),
+    name: "Oslo Marathon",
+    goal_category: "event_training",
+    target_distance_km: 42.195,
+    target_date: daysFromNow(32),
+    target_time_seconds: null,
+    start_date: daysFromNow(-60),
+    is_active: true,
+    is_starred: true,
+    display_order: 0,
+    created_at: daysFromNow(-60),
+    ...overrides,
+  } as Goal
+}
+
+function daysFromNow(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d.toISOString().split("T")[0]
+}
+
+function renderPinned(goals: Goal[]) {
+  return render(
+    <I18nProvider>
+      <HomeScreen
+        starredGoals={goals}
+        currentWeekGoals={[]}
+        activities={[]}
+        weeklySummary={summaryOf([])}
+        recentActivities={[]}
+        warnings={[]}
+        planBadges={{}}
+        onViewActivities={() => {}}
+        onViewGoal={() => {}}
+        onViewGoals={() => {}}
+        onViewInsights={() => {}}
+        onSelectActivity={() => {}}
+      />
+    </I18nProvider>,
+  )
+}
+
+describe("HomeScreen — pinned goals that have been run", () => {
+  it("puts a race that has happened behind one that has not", () => {
+    renderPinned([
+      makeRaceGoal({ name: "Last spring", target_date: daysFromNow(-120), display_order: 0 }),
+      makeRaceGoal({ name: "Still ahead", target_date: daysFromNow(32), display_order: 1 }),
+    ])
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)
+    expect(headings).toEqual(["Still ahead", "Last spring"])
+  })
+
+  it("calls a finished race finished rather than the active goal", () => {
+    renderPinned([makeRaceGoal({ target_date: daysFromNow(-120) })])
+    expect(screen.getByText("Finished")).toBeTruthy()
+    expect(screen.queryByText("Active goal")).toBeNull()
+  })
+
+  it("counts the days the other way once the date has gone", () => {
+    // daysUntil floors at zero, so this used to read "0 days left" for a race
+    // four months old — the same as one happening tomorrow.
+    renderPinned([makeRaceGoal({ target_date: daysFromNow(-120) })])
+    expect(screen.getByText("days ago")).toBeTruthy()
+    expect(screen.getByText("120")).toBeTruthy()
+    expect(screen.queryByText("days left")).toBeNull()
+  })
+
+  it("leaves a race still to come exactly as it was", () => {
+    renderPinned([makeRaceGoal({ target_date: daysFromNow(32) })])
+    expect(screen.getByText("Active goal")).toBeTruthy()
+    expect(screen.getByText("days left")).toBeTruthy()
+    expect(screen.getByText("32")).toBeTruthy()
   })
 })
