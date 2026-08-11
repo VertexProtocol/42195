@@ -70,6 +70,38 @@ const translations = {
     "loadIndicator.levelHelp":
       "Your training level, based on average weekly kilometres over the last 12 weeks.",
     "loadIndicator.dismiss": "Dismiss",
+    "loadIndicator.ratio": "{ratio}× baseline",
+    "loadIndicator.ratioHelp":
+      "Your last 7 days of running compared with your 4-week average. Around 1× means you are training at your usual level.",
+    "loadIndicator.baselineEmptyBody":
+      "You have not run in the last four weeks, so there is no baseline to measure today against. This card starts working again after a few runs.",
+    "loadIndicator.lastRun": "Last run",
+    "loadIndicator.unknown": "Not enough data",
+    "loadIndicator.fatigueSustained": "Sustained ({weeks} wks)",
+    "loadIndicator.advice_detraining":
+      "You are running well under your own baseline. A steady week back at your usual volume is the way back.",
+    "loadIndicator.advice_moderate":
+      "Slightly above your baseline. Keep this week manageable to stay in the band.",
+    "loadIndicator.advice_high":
+      "Load is elevated. Ease off the intensity this week and prioritise sleep.",
+    "loadIndicator.advice_unsafe":
+      "Well above your baseline. Take a rest day or an easy run — leave the hard sessions until this comes down.",
+    "loadIndicator.advice_prolongedFatigue":
+      "Your form has been low for several weeks running. A recovery week helps your body absorb the work you have already done.",
+    "warning.elevated_acwr.title": "Training load is climbing fast",
+    "warning.elevated_acwr.message":
+      "Your load has been elevated ({acwr}×) for the second week in a row. Consider pulling back.",
+    "warning.elevated_acwr.messageCritical":
+      "Your recent load is {acwr}× your baseline — injury risk is high. Consider an easy week.",
+    "warning.prolonged_fatigue.title": "You've been running fatigued for a while",
+    "warning.prolonged_fatigue.message":
+      "Training stress balance has stayed low for {weeks} straight weeks. A recovery week would help your body absorb the work.",
+    "warning.hr_drift.title": "Heart rate is trending up",
+    "warning.hr_drift.message":
+      "Your average heart rate has crept higher on recent runs compared with your baseline. That's a common fatigue signal — consider an easier week.",
+    "warning.pace_drift.title": "Easy pace is slipping",
+    "warning.pace_drift.message":
+      "Your grade-adjusted pace has drifted slower recently at similar effort. Consider an easy week or extra rest.",
     "manualActivity.activityType": "Activity type",
     "manualActivity.namePlaceholder": "Morning long run",
     "manualActivity.date": "Date",
@@ -84,6 +116,10 @@ const translations = {
     "home.logged": "logged",
     "home.target": "Target",
     "home.elapsed": "elapsed",
+    "home.finishedGoal": "Finished",
+    "home.daysAgo": "days ago",
+    "home.weeklyTargets": "Targets",
+    "home.ofTarget": "of {target}",
     "home.thisWeek": "This week",
     "home.trainingLoad": "Training load",
     "home.km": "km",
@@ -126,6 +162,7 @@ const translations = {
     "activities.showing": "Showing",
     "activities.of": "of",
     "activities.showMore": "Show more",
+    "activities.perPage": "Per page",
     "activities.noResults": "No activities match your search",
     "activities.clearFilters": "Clear filters",
     // Activity detail
@@ -157,7 +194,7 @@ const translations = {
     "goals.weekly": "Weekly",
     "goals.performance": "Performance",
     "goals.addWeeklyGoal": "Add weekly goal",
-    "goals.addPerfGoal": "Add performance goal",
+    "goals.addGoal": "Add goal",
     "goals.noWeeklyGoals": "No weekly goals",
     "goals.setTargets": "Set targets for distance, sessions, or more",
     "goals.noPerfGoals": "No performance goals",
@@ -188,7 +225,6 @@ const translations = {
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Race preparation and long-term training",
-    "plan.addEvent": "Add event / race goal",
     "plan.noEvents": "No events planned",
     "plan.noEventsDesc": "Add a race or event goal to start tracking your training preparation",
     "plan.raceComplete": "Race complete",
@@ -271,6 +307,10 @@ const translations = {
     "profile.syncSettings": "Sync settings",
     "profile.lastSynced": "Last synced",
     "profile.neverSynced": "Never synced",
+    "profile.syncedAgo": "Synced {time}",
+    "time.minutesAgo": "{n}m ago",
+    "time.hoursAgo": "{n}h ago",
+    "time.daysAgo": "{n}d ago",
     "profile.fullResync": "Full re-sync",
     "profile.fullResyncWarning": "This will re-fetch all your activities from Strava. This may take a while and will overwrite locally stored activity data.",
     "profile.fullResyncConfirm": "Run Full Re-sync",
@@ -285,12 +325,16 @@ const translations = {
     "profile.hrZonesDesc": "Zones are calculated from your activity history using a 5-zone model.",
     "profile.hrAnalyze": "Analyze",
     "profile.hrEstMaxHr": "Est. Max HR",
+    "profile.hrMaxHr": "Max HR",
     "profile.hrThreshold": "Threshold",
     "profile.hrActivities": "Activities",
+    "profile.hrRuns": "Runs",
     "profile.hrRecommendedZones": "Zone Comparison",
+    "profile.hrYourZones": "Your Zones",
     "profile.hrZone": "Zone",
     "profile.hrCurrent": "Current",
     "profile.hrRecommended": "Rec.",
+    "profile.hrRange": "Range",
     "profile.hrDiff": "Diff",
     "profile.hrZonesMatch": "Zones match",
     "profile.hrReanalyze": "Re-analyze",
@@ -299,7 +343,52 @@ const translations = {
     "profile.hrStatus_well_calibrated": "Well Calibrated",
     "profile.hrStatus_slightly_misaligned": "Slightly Misaligned",
     "profile.hrStatus_likely_misconfigured": "Likely Misconfigured",
+    "profile.hrStatus_not_configured": "Not Configured",
     "profile.hrStatus_insufficient_data": "Insufficient Data",
+    "profile.hrModel_karvonen": "Karvonen (HR reserve)",
+    "profile.hrModel_percent_max": "% of max HR",
+    "profile.hrAnalyzedAt": "Analyzed {when}",
+    // ── Your settings ──
+    "profile.hrSettings": "Your values",
+    "profile.hrSettingsDesc": "Set these and the zones below are built from your numbers instead of an estimate.",
+    "profile.hrMaxHrLabel": "Max HR",
+    "profile.hrRestingHrLabel": "Resting HR",
+    "profile.hrNotSet": "Not set",
+    "profile.hrUseEstimate": "Use estimate ({value})",
+    "profile.hrSave": "Save",
+    "profile.hrCancel": "Cancel",
+    "profile.hrEdit": "Edit",
+    "profile.hrClear": "Clear",
+    "profile.hrMaxHrRange": "Max HR must be between 120 and 230 bpm.",
+    "profile.hrRestingHrRange": "Resting HR must be between 25 and 110 bpm.",
+    "profile.hrSaveFailed": "Could not save your heart rate settings.",
+    // ── Explanations (engine emits codes; these render them) ──
+    "profile.hrExp_insufficient_data":
+      "Not enough activities with heart rate data to analyze zones. Keep training with a heart rate monitor to enable calibration.",
+    "profile.hrExp_not_configured":
+      "You have not set a max HR, so there is nothing to compare against. Based on your activity data it is around {estimated} bpm — the zones below use that figure.",
+    "profile.hrExp_max_hr_higher_than_configured":
+      "Your recorded heart rates suggest a max HR around {recommended} bpm, {diff} bpm higher than the {configured} bpm you have set. Your zones are likely too low.",
+    "profile.hrExp_max_hr_lower_than_configured":
+      "Your recorded heart rates suggest a max HR around {recommended} bpm, {diff} bpm lower than the {configured} bpm you have set. Your zones are likely too high.",
+    "profile.hrExp_max_hr_slight_difference":
+      "Your data suggests a max HR of {recommended} bpm, slightly different from the {configured} bpm you have set. A small adjustment may improve accuracy.",
+    "profile.hrExp_easy_runs_above_zone2":
+      "{count} of your {total} easy long runs average above Zone 2 ({zone2Max} bpm). Runs at that effort should normally fall inside Zone 2.",
+    "profile.hrExp_activities_cluster_in_one_zone":
+      "{percent}% of your activities fall into Zone {zone}. Well-calibrated zones usually spread training across several zones.",
+    "profile.hrExp_threshold_within_zone4":
+      "Your estimated threshold HR ({threshold} bpm) sits inside Zone 4 ({zone4Min}–{zone4Max} bpm), which supports these boundaries.",
+    "profile.hrExp_threshold_above_zone4":
+      "Your estimated threshold HR ({threshold} bpm) is above the Zone 4 ceiling ({zone4Max} bpm), which suggests your true max HR may be higher.",
+    "profile.hrExp_max_hr_from_recorded_peaks":
+      "Max HR is taken from the highest peak your monitor actually recorded, across {samples} activities.",
+    "profile.hrExp_max_hr_estimated_from_averages":
+      "No peak heart rate has been recorded on your activities, so max HR is inferred from your highest average — a rough estimate. Re-sync Strava to pull in peak values.",
+    "profile.hrExp_basis_all_activities":
+      "You do not have enough runs with heart rate data yet, so these zones are based on all your activities. Rides and walks reach heart rates differently from running, so expect the boundaries to shift once you have more runs recorded.",
+    "profile.hrExp_well_calibrated":
+      "Your heart rate zones look well calibrated against your recent training.",
     "profile.trainingPreferences": "Training Preferences",
     "profile.trainingPrefsDesc": "Manage training plans and AI coaching preferences in the Coach tab.",
     "profile.legalData": "Legal and data",
@@ -310,6 +399,10 @@ const translations = {
     "profile.deleting": "Deleting…",
     // Training plan
     "plan.generate": "Generate your training plan",
+    "plan.generateBody": "Claude will analyse your activity history and build a personalised {weeks}-week training block for {name}.",
+    "plan.generateCta": "Generate plan",
+    "plan.raceIsPast": "This race has already happened",
+    "plan.raceIsPastBody": "{name} was on {date}. A training block is built forward from today, so there is nothing left to plan — change the date to train toward it again.",
     "plan.generateDesc": "Claude will analyse your activity history and build a personalised training block",
     "plan.generateBtn": "Generate plan",
     "plan.preferences": "Preferences",
@@ -518,6 +611,7 @@ const translations = {
     "loadIndicator.high": "High Load",
     "loadIndicator.overtraining": "Overtraining Risk",
     "loadIndicator.insufficientData": "Building Baseline",
+    "loadIndicator.detraining": "Under Baseline",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Fatigue",
     "loadIndicator.level": "Level",
@@ -611,6 +705,38 @@ const translations = {
     "loadIndicator.levelHelp":
       "Treningsnivået ditt, basert på snitt-kilometer per uke de siste 12 ukene.",
     "loadIndicator.dismiss": "Lukk",
+    "loadIndicator.ratio": "{ratio}× grunnlaget",
+    "loadIndicator.ratioHelp":
+      "De siste 7 dagene med løping sammenlignet med snittet ditt de siste 4 ukene. Rundt 1× betyr at du trener som du pleier.",
+    "loadIndicator.baselineEmptyBody":
+      "Du har ikke løpt de siste fire ukene, så vi har ingenting å måle dagen i dag mot. Kortet våkner igjen etter noen turer.",
+    "loadIndicator.lastRun": "Siste løpetur",
+    "loadIndicator.unknown": "For lite data",
+    "loadIndicator.fatigueSustained": "Vedvarende ({weeks} uker)",
+    "loadIndicator.advice_detraining":
+      "Du løper godt under ditt eget grunnlag. Veien tilbake er en jevn uke på det volumet du pleier å ligge på.",
+    "loadIndicator.advice_moderate":
+      "Litt over grunnlaget ditt. Hold uka overkommelig, så blir du liggende i sonen.",
+    "loadIndicator.advice_high":
+      "Belastningen er forhøyet. Ta ned intensiteten denne uka og prioriter søvn.",
+    "loadIndicator.advice_unsafe":
+      "Godt over grunnlaget ditt. Ta en hviledag eller en rolig tur — la de harde øktene vente til dette har roet seg.",
+    "loadIndicator.advice_prolongedFatigue":
+      "Formen har ligget lavt flere uker på rad. En rolig uke gjør at kroppen får tatt opp jobben du allerede har lagt ned.",
+    "warning.elevated_acwr.title": "Belastningen stiger raskt",
+    "warning.elevated_acwr.message":
+      "Belastningen har vært forhøyet ({acwr}×) andre uka på rad. Vurder å ta ned litt.",
+    "warning.elevated_acwr.messageCritical":
+      "Den siste belastningen din er {acwr}× grunnlaget — skaderisikoen er høy. Vurder en rolig uke.",
+    "warning.prolonged_fatigue.title": "Du har løpt sliten en stund",
+    "warning.prolonged_fatigue.message":
+      "Formbalansen har ligget lavt {weeks} uker på rad. En restitusjonsuke vil hjelpe kroppen med å ta opp jobben.",
+    "warning.hr_drift.title": "Pulsen trender oppover",
+    "warning.hr_drift.message":
+      "Snittpulsen har krøpet oppover på de siste turene sammenlignet med grunnlaget ditt. Det er et vanlig tretthetssignal — vurder en roligere uke.",
+    "warning.pace_drift.title": "Den rolige farten siger",
+    "warning.pace_drift.message":
+      "Den stigningsjusterte farten din har blitt tregere den siste tida ved samme innsats. Vurder en rolig uke eller ekstra hvile.",
     "manualActivity.activityType": "Aktivitetstype",
     "manualActivity.namePlaceholder": "Langtur om morgenen",
     "manualActivity.date": "Dato",
@@ -625,6 +751,10 @@ const translations = {
     "home.logged": "logget",
     "home.target": "Mål",
     "home.elapsed": "brukt",
+    "home.finishedGoal": "Gjennomført",
+    "home.daysAgo": "dager siden",
+    "home.weeklyTargets": "Ukesmål",
+    "home.ofTarget": "av {target}",
     "home.thisWeek": "Denne uken",
     "home.trainingLoad": "Treningsbelastning",
     "home.km": "km",
@@ -667,6 +797,7 @@ const translations = {
     "activities.showing": "Viser",
     "activities.of": "av",
     "activities.showMore": "Vis flere",
+    "activities.perPage": "Per side",
     "activities.noResults": "Ingen aktiviteter matcher soket ditt",
     "activities.clearFilters": "Fjern filter",
     // Activity detail
@@ -750,7 +881,7 @@ const translations = {
     "goals.weekly": "Ukentlig",
     "goals.performance": "Ytelse",
     "goals.addWeeklyGoal": "Legg til ukentlig mål",
-    "goals.addPerfGoal": "Legg til ytelsesmål",
+    "goals.addGoal": "Legg til mål",
     "goals.noWeeklyGoals": "Ingen ukentlige mål",
     "goals.setTargets": "Sett mål for distanse, økter eller mer",
     "goals.noPerfGoals": "Ingen ytelsesmål",
@@ -781,7 +912,6 @@ const translations = {
     // Plan
     "plan.title": "Plan",
     "plan.subtitle": "Løpsforberedelse og langsiktig trening",
-    "plan.addEvent": "Legg til arrangement / løpsmål",
     "plan.noEvents": "Ingen planlagte løp",
     "plan.noEventsDesc": "Legg til et løps- eller arrangementsmål for å begynne å spore treningsforberedelsene dine",
     "plan.raceComplete": "Løp fullført",
@@ -864,6 +994,10 @@ const translations = {
     "profile.syncSettings": "Synkroniseringsinnstillinger",
     "profile.lastSynced": "Sist synkronisert",
     "profile.neverSynced": "Aldri synkronisert",
+    "profile.syncedAgo": "Synkronisert {time}",
+    "time.minutesAgo": "for {n} min siden",
+    "time.hoursAgo": "for {n} t siden",
+    "time.daysAgo": "for {n} d siden",
     "profile.fullResync": "Full re-synk",
     "profile.fullResyncWarning": "Dette vil hente alle aktivitetene dine fra Strava på nytt. Dette kan ta litt tid og vil overskrive lokalt lagrede aktivitetsdata.",
     "profile.fullResyncConfirm": "Kjør full re-synk",
@@ -878,12 +1012,16 @@ const translations = {
     "profile.hrZonesDesc": "Soner beregnes fra aktivitetshistorikken din ved hjelp av en 5-sonemodell.",
     "profile.hrAnalyze": "Analyser",
     "profile.hrEstMaxHr": "Est. maks puls",
+    "profile.hrMaxHr": "Maks puls",
     "profile.hrThreshold": "Terskel",
     "profile.hrActivities": "Aktiviteter",
+    "profile.hrRuns": "Løpeturer",
     "profile.hrRecommendedZones": "Sonesammenligning",
+    "profile.hrYourZones": "Sonene dine",
     "profile.hrZone": "Sone",
     "profile.hrCurrent": "Nåværende",
     "profile.hrRecommended": "Anbefalt",
+    "profile.hrRange": "Område",
     "profile.hrDiff": "Diff",
     "profile.hrZonesMatch": "Soner stemmer",
     "profile.hrReanalyze": "Analyser på nytt",
@@ -892,7 +1030,52 @@ const translations = {
     "profile.hrStatus_well_calibrated": "Godt kalibrert",
     "profile.hrStatus_slightly_misaligned": "Litt forskjøvet",
     "profile.hrStatus_likely_misconfigured": "Trolig feilkonfigurert",
+    "profile.hrStatus_not_configured": "Ikke konfigurert",
     "profile.hrStatus_insufficient_data": "Utilstrekkelig data",
+    "profile.hrModel_karvonen": "Karvonen (pulsreserve)",
+    "profile.hrModel_percent_max": "% av maks puls",
+    "profile.hrAnalyzedAt": "Analysert {when}",
+    // ── Dine verdier ──
+    "profile.hrSettings": "Dine verdier",
+    "profile.hrSettingsDesc": "Fyller du inn disse, bygges sonene under på tallene dine i stedet for et estimat.",
+    "profile.hrMaxHrLabel": "Maks puls",
+    "profile.hrRestingHrLabel": "Hvilepuls",
+    "profile.hrNotSet": "Ikke satt",
+    "profile.hrUseEstimate": "Bruk estimat ({value})",
+    "profile.hrSave": "Lagre",
+    "profile.hrCancel": "Avbryt",
+    "profile.hrEdit": "Endre",
+    "profile.hrClear": "Tøm",
+    "profile.hrMaxHrRange": "Maks puls må være mellom 120 og 230 slag/min.",
+    "profile.hrRestingHrRange": "Hvilepuls må være mellom 25 og 110 slag/min.",
+    "profile.hrSaveFailed": "Kunne ikke lagre pulsinnstillingene dine.",
+    // ── Forklaringer (motoren sender koder; disse gjengir dem) ──
+    "profile.hrExp_insufficient_data":
+      "Ikke nok aktiviteter med pulsdata til å analysere soner. Fortsett å trene med pulsmåler for å muliggjøre kalibrering.",
+    "profile.hrExp_not_configured":
+      "Du har ikke satt en maks puls, så det finnes ingenting å sammenligne mot. Ut fra aktivitetsdataene dine ligger den rundt {estimated} slag/min — sonene under bruker det tallet.",
+    "profile.hrExp_max_hr_higher_than_configured":
+      "Pulsverdiene dine tyder på en maks puls rundt {recommended} slag/min, {diff} slag/min høyere enn de {configured} du har satt. Sonene dine er trolig for lave.",
+    "profile.hrExp_max_hr_lower_than_configured":
+      "Pulsverdiene dine tyder på en maks puls rundt {recommended} slag/min, {diff} slag/min lavere enn de {configured} du har satt. Sonene dine er trolig for høye.",
+    "profile.hrExp_max_hr_slight_difference":
+      "Dataene dine tyder på en maks puls på {recommended} slag/min, litt ulikt de {configured} du har satt. En liten justering kan gi bedre presisjon.",
+    "profile.hrExp_easy_runs_above_zone2":
+      "{count} av dine {total} rolige langturer ligger i snitt over sone 2 ({zone2Max} slag/min). Turer på det nivået bør normalt havne innenfor sone 2.",
+    "profile.hrExp_activities_cluster_in_one_zone":
+      "{percent} % av aktivitetene dine havner i sone {zone}. Godt kalibrerte soner fordeler vanligvis treningen over flere soner.",
+    "profile.hrExp_threshold_within_zone4":
+      "Estimert terskelpuls ({threshold} slag/min) ligger inne i sone 4 ({zone4Min}–{zone4Max} slag/min), noe som støtter disse grensene.",
+    "profile.hrExp_threshold_above_zone4":
+      "Estimert terskelpuls ({threshold} slag/min) ligger over taket i sone 4 ({zone4Max} slag/min). Det kan bety at reell maks puls er høyere.",
+    "profile.hrExp_max_hr_from_recorded_peaks":
+      "Maks puls er hentet fra den høyeste toppverdien pulsmåleren din faktisk registrerte, på tvers av {samples} aktiviteter.",
+    "profile.hrExp_max_hr_estimated_from_averages":
+      "Ingen toppuls er registrert på aktivitetene dine, så maks puls er utledet fra den høyeste snittpulsen — et grovt estimat. Synkroniser Strava på nytt for å hente inn toppverdier.",
+    "profile.hrExp_basis_all_activities":
+      "Du har ikke nok løpeturer med pulsdata ennå, så disse sonene bygger på alle aktivitetene dine. Sykling og gåturer når pulsnivåer annerledes enn løping, så forvent at grensene flytter seg når du har flere løpeturer registrert.",
+    "profile.hrExp_well_calibrated":
+      "Pulssonene dine ser godt kalibrert ut mot den siste treningen din.",
     "profile.trainingPreferences": "Treningspreferanser",
     "profile.trainingPrefsDesc": "Administrer treningsplaner og AI-treningspreferanser i Trener-fanen.",
     "profile.legalData": "Juridisk og data",
@@ -903,6 +1086,10 @@ const translations = {
     "profile.deleting": "Sletter...",
     // Training plan
     "plan.generate": "Generer treningsplanen din",
+    "plan.generateBody": "Claude analyserer treningshistorikken din og bygger en personlig {weeks}-ukers treningsblokk for {name}.",
+    "plan.generateCta": "Generer plan",
+    "plan.raceIsPast": "Dette løpet er allerede gjennomført",
+    "plan.raceIsPastBody": "{name} var {date}. En treningsblokk bygges framover fra i dag, så det er ingenting igjen å planlegge — endre datoen for å trene mot det igjen.",
     "plan.generateDesc": "Claude analyserer aktivitetshistorikken din og bygger en personlig treningsblokk",
     "plan.generateBtn": "Generer plan",
     "plan.preferences": "Innstillinger",
@@ -1061,6 +1248,7 @@ const translations = {
     "loadIndicator.high": "H\u00f8y belastning",
     "loadIndicator.overtraining": "Overtreningsrisiko",
     "loadIndicator.insufficientData": "Bygger grunnlag",
+    "loadIndicator.detraining": "Under grunnlaget",
     "loadIndicator.acwr": "ACWR",
     "loadIndicator.fatigue": "Tretthet",
     "loadIndicator.level": "Niv\u00e5",
@@ -1094,10 +1282,32 @@ const translations = {
 
 export type TranslationKey = keyof typeof translations.en
 
+/**
+ * Values substituted into a translation's `{name}` placeholders.
+ *
+ * Kept deliberately small: this is for numbers the caller has already
+ * formatted (a distance, a week count, an ACWR), not for composing sentences
+ * out of fragments — word order differs between the locales here, so anything
+ * bigger than a value belongs in the phrase itself.
+ */
+export type TranslationParams = Record<string, string | number>
+
+/**
+ * Replaces every `{name}` in the string with params[name]. A placeholder with
+ * no matching param is left as-is: a visible `{count}` in the UI is a louder
+ * bug report than a silent empty string.
+ */
+function interpolate(template: string, params?: TranslationParams): string {
+  if (!params) return template
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match,
+  )
+}
+
 interface I18nContextValue {
   locale: Locale
   setLocale: (locale: Locale) => void
-  t: (key: TranslationKey) => string
+  t: (key: TranslationKey, params?: TranslationParams) => string
 }
 
 const I18nContext = createContext<I18nContextValue>({
@@ -1122,8 +1332,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const t = useCallback(
-    (key: TranslationKey): string => {
-      return translations[locale]?.[key] ?? translations.en[key] ?? key
+    (key: TranslationKey, params?: TranslationParams): string => {
+      const template = translations[locale]?.[key] ?? translations.en[key] ?? key
+      return interpolate(template, params)
     },
     [locale],
   )

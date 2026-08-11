@@ -1,4 +1,4 @@
--- Migration 025: shared goals — several runners working towards one race.
+-- Migration 026: shared goals — several runners working towards one race.
 --
 -- A shared goal owns the race and the date. It does not own anyone's target
 -- time: each member points at their own existing `goals` row, so the training

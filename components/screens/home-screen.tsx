@@ -4,7 +4,6 @@ import {
   useMemo,
   lazy,
   Suspense,
-  useEffect,
   useState,
   useRef,
   useCallback,
@@ -19,14 +18,25 @@ import {
   formatDateShort,
   daysUntil,
   timeElapsedPercentage,
+  isDatePast,
+  daysSince,
   formatTargetTime,
   computeDistanceInRange,
   computeWeeklyProgress,
   formatWeeklyMetric,
   progressPercentage,
+  isRunActivity,
 } from "@/lib/format"
-import type { Goal, WeeklySummary, Activity, SyncStatus, WeeklyGoal } from "@/lib/types"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { LOAD_INDICATOR_MIN_RUNS } from "@/lib/training-constants"
+import type {
+  Goal,
+  WeeklySummary,
+  Activity,
+  SyncStatus,
+  WeeklyGoal,
+  WeeklyGoalMetric,
+} from "@/lib/types"
+import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
@@ -34,12 +44,12 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
 
 const TrainingLoadIndicator = lazy(() =>
   import("@/components/training-load-indicator").then((m) => ({ default: m.TrainingLoadIndicator })),
 )
 import type { Warning, WarningType } from "@/lib/training-warnings"
+import type { PlanBadge } from "@/lib/plan-badges"
 
 /**
  * Today.
@@ -49,6 +59,57 @@ import type { Warning, WarningType } from "@/lib/training-warnings"
  * week so far, then what was run last. Everything below the first screenful is
  * reference; everything above it is decision.
  */
+
+/** Weekly-goal metrics that the "This week" stat row already reports. */
+const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "sessions"]
+
+const WEEKLY_LABELS: Record<WeeklyGoalMetric, TranslationKey> = {
+  distance_km: "goals.weeklyDistance",
+  sessions: "goals.trainingSessions",
+  duration_minutes: "goals.activeMinutes",
+  elevation_m: "goals.elevationGain",
+}
+
+/**
+ * A weekly target, set under the number that is already tracking it.
+ *
+ * Deliberately quiet: a weekly goal is something the runner set once and lets
+ * tick along, so it earns a hairline and a target — not a headline. The value
+ * it is measured against is the stat above, which is why nothing here repeats
+ * the current figure.
+ */
+function WeeklyTarget({
+  goal,
+  current,
+  t,
+}: {
+  goal: WeeklyGoal | undefined
+  current: number
+  t: (key: TranslationKey, params?: TranslationParams) => string
+}) {
+  if (!goal) return null
+  const isComplete = current >= goal.target
+  const label = t(WEEKLY_LABELS[goal.metric])
+  const target = formatWeeklyMetric(goal.target, goal.metric)
+  return (
+    <>
+      <Meter
+        size="sm"
+        value={progressPercentage(current, goal.target)}
+        tone={isComplete ? "done" : "action"}
+        label={label}
+        valueText={`${formatWeeklyMetric(current, goal.metric)} / ${target}`}
+      />
+      <p
+        className={`measure mt-1 truncate text-micro ${
+          isComplete ? "text-success" : "text-muted-foreground"
+        }`}
+      >
+        {t("home.ofTarget", { target })}
+      </p>
+    </>
+  )
+}
 
 interface HomeScreenProps {
   /**
@@ -62,6 +123,13 @@ interface HomeScreenProps {
   activities: Activity[]
   weeklySummary: WeeklySummary
   recentActivities: Activity[]
+  /**
+   * Both derived during the page render and owned by the app shell. This
+   * screen unmounts on every tab change, so fetching them here made the
+   * warning cards and goal badges arrive a round-trip late on each return.
+   */
+  warnings: Warning[]
+  planBadges: Record<string, PlanBadge>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
   onViewActivities: () => void
@@ -78,6 +146,8 @@ export function HomeScreen({
   activities,
   weeklySummary,
   recentActivities,
+  warnings,
+  planBadges,
   onViewActivities,
   onViewGoal,
   onViewGoals,
@@ -85,27 +155,14 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const { t } = useI18n()
 
-  const [planBadges, setPlanBadges] = useState<
-    Record<string, { checkpoint: boolean; blockCompleted: boolean }>
-  >({})
-  const [warnings, setWarnings] = useState<Warning[]>([])
-
-  // Proactive training warnings need history before the engine can say
-  // anything useful, so we do not ask for them on a near-empty account.
-  useEffect(() => {
-    if (activities.length < 7) return
-    let cancelled = false
-    fetch("/api/warnings")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.warnings) return
-        setWarnings(data.warnings as Warning[])
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [activities.length])
+  // The load engine only ever looks at runs, so the gate counts runs. Counting
+  // activities of any type meant seven bike rides both fetched warnings that
+  // could not exist and mounted a load card that rendered nothing.
+  const runCount = useMemo(
+    () => activities.filter((a) => isRunActivity(a.type)).length,
+    [activities],
+  )
+  const hasLoadHistory = runCount >= LOAD_INDICATOR_MIN_RUNS
 
   const handleDismissWarning = async (type: WarningType) => {
     try {
@@ -120,41 +177,6 @@ export function HomeScreen({
     }
   }
 
-  useEffect(() => {
-    if (starredGoals.length === 0) return
-    const supabase = createClient()
-    supabase
-      .from("ai_training_plans")
-      .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-      .in(
-        "goal_id",
-        starredGoals.map((g) => g.id),
-      )
-      .then(({ data }) => {
-        if (!data) return
-        const now = new Date()
-        const badges: Record<string, { checkpoint: boolean; blockCompleted: boolean }> = {}
-        for (const row of data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const weeks = (row.plan as any)?.weeks
-          // Snap to Monday (same as goal-detail-screen) so blockEnd lands on a
-          // week boundary.
-          const blockStart = new Date(row.block_start_date)
-          blockStart.setHours(0, 0, 0, 0)
-          const dow = blockStart.getDay()
-          blockStart.setDate(blockStart.getDate() + (dow === 0 ? -6 : 1 - dow))
-          const blockEnd = new Date(blockStart)
-          blockEnd.setDate(blockEnd.getDate() + (Array.isArray(weeks) ? weeks.length : 0) * 7)
-          badges[row.goal_id] = {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            checkpoint: !!(row.mid_block_checkpoint as any)?.adjustmentApplied,
-            blockCompleted: Array.isArray(weeks) && weeks.length > 0 && now > blockEnd,
-          }
-        }
-        setPlanBadges(badges)
-      })
-  }, [starredGoals])
-
   const currentMondayStr = useMemo(() => {
     const now = new Date()
     const day = now.getDay()
@@ -165,10 +187,19 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
+  // A race that has been run is not competing for attention with one that is
+  // 32 days out, so it sorts behind it. Pinned still means pinned — the card
+  // stays reachable, it just stops leading a screen whose whole job is "what
+  // is next".
+  const orderedGoals = useMemo(() => {
+    const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
+    return [...starredGoals].sort((a, b) => past(a) - past(b))
+  }, [starredGoals])
+
   // Precomputed outside JSX so we never run O(goals × activities) per render.
   const goalMetrics = useMemo(
     () =>
-      starredGoals.map((goal) => {
+      orderedGoals.map((goal) => {
         const logged = computeDistanceInRange(
           activities,
           goal.start_date,
@@ -176,14 +207,18 @@ export function HomeScreen({
           goal.created_at,
         )
         const effectiveStart = goal.start_date ?? goal.created_at
+        const past = isDatePast(goal.target_date)
         return {
           id: goal.id,
           logged,
+          past,
           timeProgress: timeElapsedPercentage(effectiveStart, goal.target_date),
-          days: daysUntil(goal.target_date),
+          // daysUntil floors at zero, so a race last spring and one tomorrow
+          // both read "0 days left". Past cards count the other way instead.
+          days: past ? daysSince(goal.target_date) : daysUntil(goal.target_date),
         }
       }),
-    [starredGoals, activities],
+    [orderedGoals, activities],
   )
 
   // Pinned goals ride a snap rail once there is more than one of them: stacked
@@ -210,15 +245,36 @@ export function HomeScreen({
     setRailIndex(nearest)
   }, [])
 
-  const WEEKLY_LABELS: Record<string, TranslationKey> = {
-    distance_km: "goals.weeklyDistance",
-    sessions: "goals.trainingSessions",
-    duration_minutes: "goals.activeMinutes",
-    elevation_m: "goals.elevationGain",
-  }
+  // Each measurement appears once. The card used to print Distance, Duration
+  // and Runs as stats and then the same three again as weekly targets, so
+  // every number on it was stated twice — once bare, once with a target.
+  //
+  // A target now annotates the stat it belongs to, unless it measures
+  // something narrower: a sessions goal with a minimum length counts only
+  // qualifying sessions, and elevation has no stat at all.
+  const { statGoals, standaloneGoals } = useMemo(() => {
+    const byMetric: Partial<Record<WeeklyGoalMetric, WeeklyGoal>> = {}
+    const standalone: WeeklyGoal[] = []
+    for (const wg of currentWeekGoals) {
+      const isQualified =
+        wg.metric === "sessions" &&
+        Boolean(wg.session_min_duration_minutes || wg.session_min_distance_km)
+      const fitsAStat = STAT_METRICS.includes(wg.metric) && !isQualified
+      // Only the first goal per metric can annotate its stat; a second one for
+      // the same measurement still deserves to be visible.
+      if (fitsAStat && !byMetric[wg.metric]) byMetric[wg.metric] = wg
+      else standalone.push(wg)
+    }
+    return { statGoals: byMetric, standaloneGoals: standalone.slice(0, 3) }
+  }, [currentWeekGoals])
+
+  // Read from the same summary the stat above shows, so an annotation can
+  // never disagree with the number it sits under.
+  const weeklyDistanceKm = weeklySummary.total_distance_km
+  const weeklyMinutes = weeklySummary.total_time_seconds / 60
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── First run, while there is still first-run work ────────────── */}
       {guide}
 
@@ -246,7 +302,7 @@ export function HomeScreen({
                 : "flex flex-col gap-3"
             }
           >
-            {starredGoals.map((goal, i) => {
+            {orderedGoals.map((goal, i) => {
               const m = goalMetrics[i]
               const badge = planBadges[goal.id]
               return (
@@ -266,10 +322,14 @@ export function HomeScreen({
                       at the foot of the card, where an extra row on one goal
                       pushed every line below it out of step with the card
                       beside it — up here they cost no height at all. */}
-                  <div className="flex items-center gap-1.5 text-primary">
+                  <div
+                    className={`flex items-center gap-1.5 ${
+                      m.past ? "text-muted-foreground" : "text-primary"
+                    }`}
+                  >
                     <Star size={12} fill="currentColor" aria-hidden />
                     <span className="truncate text-micro font-semibold">
-                      {t("home.activeGoal")}
+                      {m.past ? t("home.finishedGoal") : t("home.activeGoal")}
                     </span>
                     {(badge?.checkpoint || badge?.blockCompleted) && (
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -297,7 +357,7 @@ export function HomeScreen({
                           {m.days}
                         </span>
                         <span className="text-label text-muted-foreground">
-                          {t("home.daysLeft")}
+                          {m.past ? t("home.daysAgo") : t("home.daysLeft")}
                         </span>
                       </p>
 
@@ -351,7 +411,7 @@ export function HomeScreen({
             // count is already in the section header. Tapping a dot would be a
             // second way to do what the swipe already does.
             <div className="flex justify-center gap-1.5 pt-1" aria-hidden>
-              {starredGoals.map((goal, i) => (
+              {orderedGoals.map((goal, i) => (
                 <span
                   key={goal.id}
                   className={`size-1.5 rounded-full ${
@@ -376,7 +436,7 @@ export function HomeScreen({
       )}
 
       {/* ── Is the body handling it ───────────────────────────────────── */}
-      {activities.length >= 7 && (
+      {hasLoadHistory && (
         <Suspense fallback={null}>
           <TrainingLoadIndicator
             activities={activities}
@@ -388,24 +448,42 @@ export function HomeScreen({
 
       {/* ── The week so far ───────────────────────────────────────────── */}
       <Section>
-        <SectionHeader title={t("home.thisWeek")} />
+        <SectionHeader
+          title={t("home.thisWeek")}
+          action={
+            currentWeekGoals.length > 0 ? (
+              <SectionAction onClick={onViewGoals}>{t("home.weeklyTargets")}</SectionAction>
+            ) : undefined
+          }
+        />
         <AppCard>
           <StatGroup>
             <Stat
               label={t("stats.distance")}
               value={weeklySummary.total_distance_km.toFixed(1)}
               unit="km"
-            />
+            >
+              <WeeklyTarget goal={statGoals.distance_km} current={weeklyDistanceKm} t={t} />
+            </Stat>
             <Stat
               label={t("activityDetail.duration")}
               value={formatDuration(weeklySummary.total_time_seconds)}
-            />
-            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count} />
+            >
+              <WeeklyTarget goal={statGoals.duration_minutes} current={weeklyMinutes} t={t} />
+            </Stat>
+            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count}>
+              <WeeklyTarget goal={statGoals.sessions} current={weeklySummary.run_count} t={t} />
+            </Stat>
           </StatGroup>
 
-          {currentWeekGoals.length > 0 && (
+          {/* Targets that measure something the row above does not: elevation,
+              which has no stat, and session goals with a minimum length, whose
+              qualifying count is narrower than the plain run count. Merging
+              either into a column would put two different numbers on one
+              measurement. */}
+          {standaloneGoals.length > 0 && (
             <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
-              {currentWeekGoals.slice(0, 3).map((wg) => {
+              {standaloneGoals.map((wg) => {
                 const current = computeWeeklyProgress(
                   activities,
                   wg.metric,
@@ -415,7 +493,7 @@ export function HomeScreen({
                 )
                 const progress = progressPercentage(current, wg.target)
                 const isComplete = current >= wg.target
-                const label = t(WEEKLY_LABELS[wg.metric]) || wg.label
+                const label = wg.label || t(WEEKLY_LABELS[wg.metric])
                 const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(
                   wg.target,
                   wg.metric,

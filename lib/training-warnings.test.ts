@@ -47,7 +47,10 @@ describe("evaluateWarnings — elevated ACWR", () => {
     const ctx: WarningContext = { ...HEALTHY, acwr: 1.6, acwrOneWeekAgo: 1.4 }
     const r = evaluateWarnings(ctx, {}, REF)
     expect(r.newWarnings[0].severity).toBe("critical")
-    expect(r.newWarnings[0].message).toContain("injury risk")
+    expect(r.newWarnings[0].messageKey).toBe("warning.elevated_acwr.messageCritical")
+    // The ratio is formatted by the engine so both the card and the coach
+    // report the same number of decimals.
+    expect(r.newWarnings[0].params).toMatchObject({ acwr: "1.60" })
   })
 
   it("respects cooldown — does not re-surface within 14 days", () => {
@@ -89,7 +92,8 @@ describe("evaluateWarnings — prolonged fatigue", () => {
     expect(r.newWarnings).toHaveLength(1)
     expect(r.newWarnings[0].type).toBe("prolonged_fatigue")
     expect(r.newWarnings[0].severity).toBe("critical")
-    expect(r.newWarnings[0].message).toContain("3 straight weeks")
+    expect(r.newWarnings[0].messageKey).toBe("warning.prolonged_fatigue.message")
+    expect(r.newWarnings[0].params).toMatchObject({ weeks: 3 })
   })
 
   it("respects cooldown for prolonged fatigue", () => {

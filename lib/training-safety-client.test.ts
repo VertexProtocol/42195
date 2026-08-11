@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import {
   classifyAthleteLevel,
+  hasAthleteLevelEvidence,
   checkSkipLoadSpike,
   MAX_WEEKLY_INCREASE,
 } from "./training-safety-client"
@@ -190,5 +191,56 @@ describe("checkSkipLoadSpike", () => {
   it("uses MAX_WEEKLY_INCREASE values for the level caps", () => {
     const result = checkSkipLoadSpike(100, 115, "intermediate")
     expect(result!.maxAllowedPct).toBe(Math.round(MAX_WEEKLY_INCREASE.intermediate * 100))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// hasAthleteLevelEvidence
+// ---------------------------------------------------------------------------
+
+describe("hasAthleteLevelEvidence", () => {
+  it("is false with no activities at all", () => {
+    expect(hasAthleteLevelEvidence([])).toBe(false)
+  })
+
+  it("is false below the minimum, where 'beginner' is a fallback and not a finding", () => {
+    const activities = [makeActivity(3, 5), makeActivity(6, 5), makeActivity(9, 5)]
+    expect(classifyAthleteLevel(activities)).toBe("beginner")
+    expect(hasAthleteLevelEvidence(activities)).toBe(false)
+  })
+
+  it("is true once the window holds enough runs to classify from", () => {
+    const activities = Array.from({ length: 4 }, (_, i) => makeActivity(i * 3 + 1, 5))
+    expect(hasAthleteLevelEvidence(activities)).toBe(true)
+  })
+
+  it("ignores runs that fall outside the 12-week window", () => {
+    const activities = [
+      makeActivity(2, 5),
+      makeActivity(4, 5),
+      makeActivity(200, 5),
+      makeActivity(210, 5),
+    ]
+    expect(hasAthleteLevelEvidence(activities)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// classifyAthleteLevel — reference date
+// ---------------------------------------------------------------------------
+
+describe("classifyAthleteLevel reference date", () => {
+  it("measures the window from the reference date rather than from now", () => {
+    // 12 weeks of high volume: advanced when measured today, invisible when
+    // measured from a year later.
+    const activities: SafetyActivity[] = []
+    for (let w = 0; w < 12; w++) {
+      for (let s = 0; s < 5; s++) activities.push(makeActivity(w * 7 + s, 15))
+    }
+    expect(classifyAthleteLevel(activities)).toBe("advanced")
+
+    const longAfter = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000)
+    expect(classifyAthleteLevel(activities, longAfter)).toBe("beginner")
+    expect(hasAthleteLevelEvidence(activities, longAfter)).toBe(false)
   })
 })

@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client"
 // import { toast } from "sonner" // Temporarily disabled
 import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
+import type { Warning } from "@/lib/training-warnings"
+import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
 import { logError } from "@/lib/log"
 
 const supabase = createClient()
@@ -21,6 +23,12 @@ export interface InitialData {
   goals: Goal[]
   weeklyGoals: WeeklyGoal[]
   user: UserProfile
+  /** Activity IDs that have been logged as test runs. */
+  testRunActivityIds: string[]
+  /** Proactive training warnings, derived during the page render. */
+  warnings: Warning[]
+  /** Plan badges keyed by goal id, derived during the page render. */
+  planBadges: Record<string, PlanBadge>
   stravaConnected: boolean
   syncStatus: SyncStatus | null
 }
@@ -39,6 +47,20 @@ export function useAppData(initialData?: InitialData | null) {
   const [stravaConnected, setStravaConnected] = useState(initialData?.stravaConnected ?? false)
   const [isLoading, setIsLoading] = useState(!hasInitial)
 
+  // Held here rather than in the Activities screen: that screen unmounts on
+  // every tab change, so owning the fetch made its test-run filter chip
+  // appear late on each visit.
+  const [testRunActivityIds, setTestRunActivityIds] = useState<Set<string>>(
+    () => new Set(initialData?.testRunActivityIds ?? []),
+  )
+
+  // Seeded from the page render so Today paints them immediately, then kept
+  // fresh from the same session-scoped state rather than refetched per visit.
+  const [warnings, setWarnings] = useState<Warning[]>(initialData?.warnings ?? [])
+  const [planBadges, setPlanBadges] = useState<Record<string, PlanBadge>>(
+    initialData?.planBadges ?? {},
+  )
+
   // "Get started" checklist: dismissal belongs to the account, not the tab.
   const [onboardingDismissed, setOnboardingDismissedState] = useState(
     initialData?.user?.onboarding_dismissed_at != null
@@ -52,6 +74,72 @@ export function useAppData(initialData?: InitialData | null) {
   weeklyGoalsRef.current = weeklyGoals
 
   const [, startTransition] = useTransition()
+
+  /**
+   * Re-derive the starred-goal plan badges. Called when a plan actually
+   * changes — generated, regenerated, or a checkpoint applied — rather than on
+   * every visit to Today, which is what made them appear late.
+   */
+  const refreshPlanBadges = useCallback(async () => {
+    const { data } = await supabase
+      .from("ai_training_plans")
+      .select("goal_id, block_start_date, plan, mid_block_checkpoint")
+    if (data) setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+  }, [])
+
+  /** Warnings are a function of the activity list, so a sync invalidates them. */
+  const refreshWarnings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/warnings")
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.warnings) setWarnings(data.warnings as Warning[])
+    } catch {
+      // Warnings are advisory; a failure leaves the last known set in place.
+    }
+  }, [])
+
+  /** Reflect a test-run tag being added or removed, without a refetch. */
+  const setTestRunTag = useCallback((activityId: string, isTestRun: boolean) => {
+    setTestRunActivityIds((prev) => {
+      if (prev.has(activityId) === isTestRun) return prev
+      const next = new Set(prev)
+      if (isTestRun) next.add(activityId)
+      else next.delete(activityId)
+      return next
+    })
+  }, [])
+
+  // Without SSR data there is nothing to seed from, so fetch once here — still
+  // once per session rather than once per visit to the tab that shows it.
+  useEffect(() => {
+    if (hasInitial) return
+    let cancelled = false
+    fetch("/api/test-runs")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.test_runs) {
+          setTestRunActivityIds(
+            new Set(data.test_runs.map((tr: { activity_id: string }) => tr.activity_id)),
+          )
+        }
+      })
+      .catch(() => {})
+    refreshWarnings()
+    refreshPlanBadges()
+    return () => {
+      cancelled = true
+    }
+  }, [hasInitial, refreshWarnings, refreshPlanBadges])
+
+  // A sync rewrites the activity list, and the warning engine reads exactly
+  // that — so the seeded set is stale the moment new activities land.
+  const prevSyncStateForWarnings = useRef(syncStatus.state)
+  useEffect(() => {
+    const prev = prevSyncStateForWarnings.current
+    prevSyncStateForWarnings.current = syncStatus.state
+    if (prev === "syncing" && syncStatus.state === "success") refreshWarnings()
+  }, [syncStatus.state, refreshWarnings])
 
   // ----- Fetch data from Supabase on mount -----
   // If we have SSR data, only fetch sync status (lightweight).
@@ -605,6 +693,17 @@ export function useAppData(initialData?: InitialData | null) {
         const data = await res.json()
 
         if (!res.ok) {
+          // Strava switched the app's API access off. The athlete's tokens are
+          // fine, so sending them through OAuth again would just loop them back
+          // to the same 403 — show what is actually wrong instead.
+          if (data.code === "STRAVA_APP_INACTIVE") {
+            setSyncStatus((prev) => ({
+              ...prev,
+              state: "error",
+              error_message: data.error ?? "Strava has deactivated this app's API access.",
+            }))
+            return
+          }
           if (
             data.code === "STRAVA_NOT_CONNECTED" ||
             data.code === "STRAVA_DISCONNECTED"
@@ -743,6 +842,11 @@ export function useAppData(initialData?: InitialData | null) {
     stravaConnected,
     isLoading,
     onboardingDismissed,
+    testRunActivityIds,
+    setTestRunTag,
+    warnings,
+    planBadges,
+    refreshPlanBadges,
 
     // Derived
     activeGoals,

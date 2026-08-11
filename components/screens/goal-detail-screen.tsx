@@ -53,6 +53,12 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
+  /**
+   * A plan was generated, regenerated, or had a checkpoint applied. Today's
+   * goal badges are derived from plans, and it no longer re-queries them on
+   * every visit, so it needs telling.
+   */
+  onPlanChange?: () => void
 }
 
 // ---- Collapsible Section ----
@@ -895,7 +901,7 @@ function TrainingTimelineView({
 }
 
 // ---- Main screen ----
-export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalDetailScreenProps) {
+export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanChange }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
     goal_id: goal.id,
@@ -917,6 +923,11 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Until the lookup answers, "no plan" is unknown rather than false. The
+  // empty state it used to render carries a live Generate button, so a goal
+  // that already had a plan briefly offered to build a second one — an
+  // expensive, streamed model call.
+  const [planResolved, setPlanResolved] = useState(false)
   const [checkpoint, setCheckpoint] = useState<MidBlockCheckpoint | null>(null)
   const [pendingCheckpoint, setPendingCheckpoint] = useState<MidBlockCheckpoint | null>(null)
   const [showCheckpointReview, setShowCheckpointReview] = useState(false)
@@ -969,7 +980,8 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         if (p.preferences) setPrefs(p.preferences)
       }
     }
-    load()
+    setPlanResolved(false)
+    load().finally(() => setPlanResolved(true))
   }, [goal.id])
 
   // Manual overrides persisted to database (with localStorage fallback)
@@ -1085,12 +1097,13 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
       }
       setPendingCheckpoint(null)
       setShowCheckpointReview(false)
+      if (result?.adjustmentApplied) onPlanChange?.()
     } catch {
       // silently ignore
     } finally {
       setIsApplyingCheckpoint(false)
     }
-  }, [goal.id])
+  }, [goal.id, onPlanChange])
 
   const handleGenerate = useCallback(
     async (note?: string) => {
@@ -1101,9 +1114,10 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         (new Date(goal.target_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
       )
       if (daysUntilRace <= 0) {
-        setError(
-          "This goal's target date has passed. Update the date before generating a new plan.",
-        )
+        // Unreachable from the empty state, which no longer offers to generate
+        // for a past race. Kept for the adjust-note path, and translated:
+        // it used to be the only English sentence a Norwegian runner hit here.
+        setError(t("plan.raceIsPast"))
         return
       }
 
@@ -1179,6 +1193,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
                   : prev?.previous_plans ?? [],
               }))
               setAdjustNote("")
+              onPlanChange?.()
             } else if (event.status === "error") {
               setError(event.error ?? "Failed to generate plan")
             }
@@ -1191,7 +1206,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         setGenerateStatus(null)
       }
     },
-    [goal.id]
+    [goal.id, onPlanChange, t]
   )
 
   // Derived values
@@ -1308,7 +1323,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         }
       />
 
-      <div className="flex flex-col gap-5 px-4 pb-8 pt-1">
+      <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {goal.is_active && !past && <Pill tone="action">{t("plan.activePlan")}</Pill>}
           <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
@@ -1429,15 +1444,44 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
         )}
 
         {/* No plan yet */}
-        {!aiPlan && !isGenerating && (
+        {!planResolved && !isGenerating && (
+          <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText="Loading your plan…" />
+        )}
+
+        {/* A block is built forward from today toward a race date, so a race
+            that has already happened has nothing to build. handleGenerate
+            refuses it, but the invitation was offered anyway: a full pitch and
+            an enabled button whose only outcome was an error. Say why up
+            front instead. */}
+        {planResolved && !aiPlan && !isGenerating && past && (
+          <div className="flex flex-col items-center gap-3 surface px-6 py-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
+              <CalendarCheck size={24} className="text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-semibold text-card-foreground">{t("plan.raceIsPast")}</p>
+              <p className="mt-1 text-label text-muted-foreground">
+                {t("plan.raceIsPastBody", {
+                  name: goal.name,
+                  date: formatDate(goal.target_date),
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {planResolved && !aiPlan && !isGenerating && !past && (
           <div className="flex flex-col items-center gap-4 surface px-6 py-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
               <Sparkles size={24} className="text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">Generate your training plan</p>
+              <p className="font-semibold text-card-foreground">{t("plan.generate")}</p>
               <p className="mt-1 text-label text-muted-foreground">
-                Claude will analyse your activity history and build a personalised 4-week training block for {goal.name}.
+                {t("plan.generateBody", {
+                  weeks: prefs.block_weeks ?? 4,
+                  name: goal.name,
+                })}
               </p>
             </div>
             <button
@@ -1445,7 +1489,7 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal }: GoalD
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80"
             >
               <Sparkles size={16} />
-              Generate plan
+              {t("plan.generateCta")}
             </button>
           </div>
         )}

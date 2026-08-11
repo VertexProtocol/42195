@@ -21,6 +21,11 @@ interface ActivityDetailScreenProps {
   activity: Activity
   onBack: () => void
   onDelete?: (activityId: string) => Promise<boolean>
+  /**
+   * Tagging or untagging a test run here changes which filter chips the
+   * Activities list offers, and that list no longer refetches on every visit.
+   */
+  onTestRunChange?: (activityId: string, isTestRun: boolean) => void
   /** All activities — used to compute global max HR for consistent zone calculation */
   allActivities?: Activity[]
 }
@@ -140,17 +145,25 @@ function RouteMap({ polyline }: { polyline: string }) {
   )
 }
 
-export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities }: ActivityDetailScreenProps) {
+export function ActivityDetailScreen({ activity, onBack, onDelete, onTestRunChange, allActivities }: ActivityDetailScreenProps) {
   const { t } = useI18n()
   const [streams, setStreams] = useState<StreamPoint[] | null>(null)
   const [laps, setLaps] = useState<Lap[] | null>(null)
   const [loadingCharts, setLoadingCharts] = useState(true)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  // Null is not "no analysis" until the lookup has answered. Rendering the
+  // "get analysis" button before then offered to buy something the runner may
+  // already own — and the button was live, so tapping it spent a real
+  // Anthropic call and a slice of the AI rate limit on a duplicate.
+  const [aiAnalysisResolved, setAiAnalysisResolved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   // Test run state
   const [testRun, setTestRun] = useState<TestRun | null>(null)
+  // Same reason: an activity already tagged as a test run showed the "tag it"
+  // affordance until its lookup landed.
+  const [testRunResolved, setTestRunResolved] = useState(false)
   const [testRunLoading, setTestRunLoading] = useState<TestRunType | "remove" | false>(false)
   const [showTestRunPicker, setShowTestRunPicker] = useState(false)
   const [testRunExpanded, setTestRunExpanded] = useState(false)
@@ -181,10 +194,12 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   // Load cached analysis on mount
   useEffect(() => {
     let cancelled = false
+    setAiAnalysisResolved(false)
     fetch(`/api/ai/activity-analysis?activityId=${activity.id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (!cancelled && data?.analysis) setAiAnalysis(data.analysis) })
       .catch(() => {})
+      .finally(() => { if (!cancelled) setAiAnalysisResolved(true) })
     return () => { cancelled = true }
   }, [activity.id])
 
@@ -225,6 +240,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
   // Fetch test run status for this activity
   useEffect(() => {
     let cancelled = false
+    setTestRunResolved(false)
     fetch(`/api/test-runs?activity_id=${activity.id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
@@ -234,6 +250,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         }
       })
       .catch(() => {})
+      .finally(() => { if (!cancelled) setTestRunResolved(true) })
     return () => { cancelled = true }
   }, [activity.id])
 
@@ -253,10 +270,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
         const data = await res.json()
         setTestRun(data.test_run)
         setShowTestRunPicker(false)
+        onTestRunChange?.(activity.id, true)
       }
     } catch {}
     setTestRunLoading(false)
-  }, [activity.id])
+  }, [activity.id, onTestRunChange])
 
   const handleRemoveTestRun = useCallback(async () => {
     setTestRunLoading("remove")
@@ -265,10 +283,11 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
       if (res.ok) {
         setTestRun(null)
         setTestRunExpanded(false)
+        onTestRunChange?.(activity.id, false)
       }
     } catch {}
     setTestRunLoading(false)
-  }, [activity.id])
+  }, [activity.id, onTestRunChange])
 
   const hasAltitude = streams?.some((p) => p.altitude !== null) ?? false
   const hasPace = streams?.some((p) => p.pace !== null) ?? false
@@ -347,7 +366,7 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
     <>
       <AppBar title={activity.name} onBack={onBack} backLabel={t("tab.activities")} />
 
-      <div className="flex flex-col gap-6 px-4 pb-6 pt-1">
+      <div className="flex flex-col gap-6 px-4 pb-6 screen-body">
         <div className="flex flex-wrap items-center gap-2">
           <ActivityTypeBadge type={activity.type} size="md" />
           <span className="text-micro text-muted-foreground">{formatDate(activity.date)}</span>
@@ -435,7 +454,10 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
       {/* AI Analysis */}
       <section>
-        {aiAnalysis ? (
+        {!aiAnalysisResolved ? (
+          // Same height as either real branch, so nothing below it moves.
+          <div className="surface h-[3.25rem] animate-pulse" aria-hidden />
+        ) : aiAnalysis ? (
           <AppCard>
             <div className="mb-2 flex items-center gap-2">
               <Sparkles size={14} className="text-primary" />
@@ -466,7 +488,9 @@ export function ActivityDetailScreen({ activity, onBack, onDelete, allActivities
 
       {/* Test Run Section */}
       <section>
-        {testRun ? (
+        {!testRunResolved ? (
+          <div className="h-[3.25rem] animate-pulse rounded-lg bg-surface-sunken" aria-hidden />
+        ) : testRun ? (
           <div className="rounded-lg bg-chart-5/5 ring-1 ring-chart-5/20 overflow-hidden">
             <button
               onClick={() => setTestRunExpanded(!testRunExpanded)}

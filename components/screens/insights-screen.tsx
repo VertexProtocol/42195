@@ -52,12 +52,18 @@ interface InsightsScreenProps {
   activities: Activity[]
   goals: Goal[]
   onViewGoal?: (goal: Goal) => void
+  onSelectActivity?: (activity: Activity) => void
 }
 
 type InsightsTab = "overview" | "coach"
 type StatsPeriod = "30d" | "year" | "last_year" | "all"
 
-export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreenProps) {
+export function InsightsScreen({
+  activities,
+  goals,
+  onViewGoal,
+  onSelectActivity,
+}: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
 
@@ -258,7 +264,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   if (activeTab === "coach") {
     return (
       <div className="flex flex-col" style={{ height: "calc(100dvh - 5.5rem)" }}>
-        <header className="flex items-center gap-2 px-4 pb-2 pt-1">
+        <header className="flex items-center gap-2 px-4 pb-2 screen-body">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -367,7 +373,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
   const hasAnyInsight = personalRecords.length > 0 || racePredictions.predictions.length > 0
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 pt-1">
+    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* The coach is the primary action on this screen, so it leads. */}
       <button
         onClick={() => setActiveTab("coach")}
@@ -418,24 +424,44 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
         <Section>
           <SectionHeader title={t("insights.personalRecords")} />
           <AppCard variant="rows">
-            {personalRecords.map((pr) => (
-              <CardRow key={pr.distance_label} className="flex items-center gap-3">
-                <Trophy size={16} className="shrink-0 text-success" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="text-label font-semibold text-card-foreground">
-                    {pr.distance_label}
-                  </p>
-                  <p className="mt-0.5 text-micro text-muted-foreground">
-                    {formatDateShort(pr.date)} ·{" "}
-                    <span className="measure">{formatPace(pr.pace_min_per_km)}</span>{" "}
-                    {t("insights.pace")}
-                  </p>
-                </div>
-                <span className="measure shrink-0 text-lead font-semibold text-foreground">
-                  {formatTargetTime(pr.time_seconds)}
-                </span>
-              </CardRow>
-            ))}
+            {personalRecords.map((pr) => {
+              const row = (
+                <>
+                  <Trophy size={16} className="shrink-0 text-success" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-label font-semibold text-card-foreground">
+                      {pr.distance_label}
+                    </p>
+                    <p className="mt-0.5 text-micro text-muted-foreground">
+                      {formatDateShort(pr.date)} ·{" "}
+                      <span className="measure">{formatPace(pr.pace_min_per_km)}</span>{" "}
+                      {t("insights.pace")}
+                    </p>
+                  </div>
+                  <span className="measure shrink-0 text-lead font-semibold text-foreground">
+                    {formatTargetTime(pr.time_seconds)}
+                  </span>
+                </>
+              )
+              // A record is a run the runner did on a day they remember. Every
+              // other list in the app opens the activity behind the row; this
+              // one held the same information and went nowhere.
+              return (
+                <CardRow key={pr.distance_label} className="p-0">
+                  {onSelectActivity ? (
+                    <button
+                      onClick={() => onSelectActivity(pr.activity)}
+                      className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                    >
+                      {row}
+                      <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-3.5">{row}</div>
+                  )}
+                </CardRow>
+              )
+            })}
           </AppCard>
         </Section>
       )}
@@ -602,6 +628,7 @@ export function InsightsScreen({ activities, goals, onViewGoal }: InsightsScreen
           goals={goals}
           testRuns={testRuns}
           onViewGoal={onViewGoal}
+          onSelectActivity={onSelectActivity}
         />
       </Section>
 

@@ -94,15 +94,15 @@ The long run in any week is capped at 35% of that week's total volume to prevent
 - Z4 Threshold: 80–90%
 - Z5 VO2max: 90–100%
 
-Max HR is estimated from your highest observed avg HR across activities, with a buffer of 5–15% (smaller buffer if observed HR is already high, larger if observed HR is low — since avg HR across a full run is always below true max).
+Max HR comes from the highest peak HR your monitor actually recorded across your activities, after discarding isolated sensor spikes. If none of your activities carry a peak HR (older synced rows, or no HR strap), it falls back to estimating from your highest observed avg HR with a buffer of 5–15% — a rough figure, and the app labels it as such.
 
-If you provide your resting HR, the app switches to the Karvonen (heart rate reserve) model for more personalised zones: zone boundary = resting HR + (max HR − resting HR) × zone percentage.
+You can set your own max HR and resting HR on the profile screen; your own values always take precedence over the estimate. Setting a resting HR switches zones to the Karvonen (heart rate reserve) model: zone boundary = resting HR + (max HR − resting HR) × zone percentage. Resting HR is never guessed from your training data.
 
 ### HR zone calibration (profile screen)
-The app checks whether your HR zones are well-configured by looking for:
-1. Your current max HR setting vs the estimated max from activity data (>10% difference = likely misconfigured)
-2. Whether your easy long runs are consistently pushing into zone 3+ (suggests max HR is set too high)
-3. Whether >60% of all your activities cluster in a single zone (suggests misconfiguration)
+Calibration is only assessed against a max HR you have set yourself. If you haven't set one, the app reports its own estimate and says "not configured" rather than claiming anything is wrong. When you have set one, it looks for:
+1. Your max HR setting vs what your activity data shows (>8% difference = likely misconfigured, >4% = slightly misaligned)
+2. Whether your easy long runs consistently average above zone 2 (suggests max HR is set too low)
+3. Whether >70% of all your activities cluster in a single zone (suggests misconfiguration)
 
 ### Test run benchmarks and VO2max
 Uses the Jack Daniels / VDOT formula:

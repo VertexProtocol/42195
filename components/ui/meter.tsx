@@ -20,6 +20,15 @@ interface MeterProps extends React.ComponentProps<'div'> {
   label: string
   /** Human-readable value, e.g. "32.4 / 50 km". Read out instead of the raw %. */
   valueText?: string
+  /**
+   * Optional target band drawn on the track, as 0–100 positions.
+   *
+   * For scales where the good answer is a range rather than "more", the band
+   * is what makes the fill readable: without it, a training load sitting in
+   * the sweet spot looks like a job two-thirds done. Purely decorative —
+   * `valueText` carries the same information for assistive technology.
+   */
+  zone?: { from: number; to: number }
 }
 
 const toneMap = {
@@ -35,10 +44,13 @@ export function Meter({
   size = 'md',
   label,
   valueText,
+  zone,
   className,
   ...props
 }: MeterProps) {
   const pct = Math.max(0, Math.min(100, Math.round(value)))
+  const zoneFrom = zone ? Math.max(0, Math.min(100, zone.from)) : 0
+  const zoneWidth = zone ? Math.max(0, Math.min(100, zone.to) - zoneFrom) : 0
   return (
     <div
       role="progressbar"
@@ -48,21 +60,45 @@ export function Meter({
       aria-valuemax={100}
       aria-valuetext={valueText}
       className={cn(
-        'w-full overflow-hidden rounded-full bg-surface-sunken',
+        'relative w-full overflow-hidden rounded-full bg-surface-sunken',
         size === 'sm' ? 'h-1.5' : 'h-2',
         className,
       )}
       {...props}
     >
+      {zone && (
+        <div
+          aria-hidden
+          className="absolute inset-y-0 bg-foreground/10"
+          style={{ left: `${zoneFrom}%`, width: `${zoneWidth}%` }}
+        />
+      )}
       {/* Scaled rather than resized: animating width forces layout on every
           frame, and the track already clips the fill to a rounded shape. */}
       <div
-        className={cn('h-full w-full origin-left', toneMap[tone])}
+        className={cn('relative h-full w-full origin-left', toneMap[tone])}
         style={{
           transform: `scaleX(${pct / 100})`,
           transition: 'transform var(--dur-view) var(--ease-out)',
         }}
       />
+      {/* Edges drawn ON TOP of the fill. The shaded band alone disappears
+          underneath it exactly when it matters most: a value past the band
+          covers the whole thing, leaving no way to see what it was past. */}
+      {zone && (
+        <>
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-px bg-foreground/30"
+            style={{ left: `${zoneFrom}%` }}
+          />
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-px bg-foreground/30"
+            style={{ left: `${zoneFrom + zoneWidth}%` }}
+          />
+        </>
+      )}
     </div>
   )
 }

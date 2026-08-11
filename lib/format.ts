@@ -47,17 +47,23 @@ export function formatDateShort(dateStr: string): string {
   })
 }
 
-export function formatTimeAgo(dateStr: string): string {
-  const now = new Date()
-  const date = new Date(dateStr)
-  const diffMs = now.getTime() - date.getTime()
+/**
+ * How long ago something happened, as a number and the unit it is in.
+ *
+ * Returns parts rather than a formatted string because both callers put the
+ * result inside a translated sentence, and a function in here cannot reach the
+ * dictionary. It used to return "54m ago" whatever the locale, which read as
+ * "Synkronisert 54m ago" to a Norwegian runner.
+ */
+export function timeAgoParts(dateStr: string): { value: number; unit: "m" | "h" | "d" } {
+  const diffMs = Date.now() - new Date(dateStr).getTime()
   const diffMins = Math.floor(diffMs / (1000 * 60))
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  return `${diffDays}d ago`
+  if (diffMins < 60) return { value: diffMins, unit: "m" }
+  if (diffHours < 24) return { value: diffHours, unit: "h" }
+  return { value: diffDays, unit: "d" }
 }
 
 export function daysUntil(dateStr: string): number {
@@ -65,6 +71,16 @@ export function daysUntil(dateStr: string): number {
   const target = new Date(dateStr)
   const diffMs = target.getTime() - now.getTime()
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+}
+
+/**
+ * Whole days since a date that has passed. The mirror of daysUntil, which
+ * floors at zero and so reports a race last spring and one tomorrow with the
+ * same "0 days left".
+ */
+export function daysSince(dateStr: string): number {
+  const diffMs = Date.now() - new Date(dateStr).getTime()
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 }
 
 export function progressPercentage(current: number, target: number): number {

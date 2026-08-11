@@ -13,6 +13,12 @@ export interface Activity {
   pace_min_per_km: number | null
   elevation_gain_m: number | null
   avg_heart_rate: number | null
+  /**
+   * Peak HR recorded during the activity. Null on rows synced before the
+   * field was mapped, and on activities without a HR strap — consumers must
+   * treat it as optional rather than assume backfill.
+   */
+  max_heart_rate?: number | null
   avg_cadence: number | null
   calories: number | null
   /** Encoded route. Absent from list queries; loaded by the detail screen. */
@@ -84,6 +90,14 @@ export interface UserProfile {
   email: string
   avatar_url: string | null
   locale?: string | null
+  /**
+   * The athlete's own max HR, if they have set it. Null means "not
+   * configured" — the calibration card reports its own estimate rather than
+   * comparing against a value nobody chose.
+   */
+  max_hr?: number | null
+  /** True resting HR, if set. Enables the Karvonen (HR reserve) zone model. */
+  resting_hr?: number | null
   hr_analysis_cache?: import("@/lib/hr-analysis-engine").HrAnalysisResult | null
   warning_state?: import("@/lib/training-warnings").WarningState | null
   /** When the runner closed the "Get started" checklist. Null while it is live. */

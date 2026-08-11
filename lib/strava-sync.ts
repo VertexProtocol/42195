@@ -23,6 +23,7 @@ interface StravaActivity {
   average_speed: number // m/s
   total_elevation_gain: number // metres
   average_heartrate?: number
+  max_heartrate?: number
   average_cadence?: number
   calories?: number
 }
@@ -114,6 +115,23 @@ function toEpochSeconds(startDate: string): number {
   return Math.floor(new Date(startDate).getTime() / 1000)
 }
 
+/**
+ * Peak HR for the row, or null.
+ *
+ * Strava occasionally reports a max below the average (sensor dropouts on
+ * their side). The `activities_max_hr_gte_avg` constraint would reject the
+ * whole upsert batch for one such row, so an inconsistent pair is stored as
+ * "no peak recorded" rather than failing the sync.
+ */
+function peakHeartRate(a: StravaActivity): number | null {
+  if (a.max_heartrate == null) return null
+  const max = Math.round(a.max_heartrate)
+  if (max <= 0) return null
+  const avg = a.average_heartrate != null ? Math.round(a.average_heartrate) : null
+  if (avg != null && max < avg) return null
+  return max
+}
+
 /** Maps a Strava activity onto an `activities` row. */
 function toActivityRow(userId: string, a: StravaActivity) {
   return {
@@ -127,6 +145,7 @@ function toActivityRow(userId: string, a: StravaActivity) {
     pace_min_per_km: speedToPace(a.average_speed),
     elevation_gain_m: a.total_elevation_gain,
     avg_heart_rate: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+    max_heart_rate: peakHeartRate(a),
     avg_cadence: a.average_cadence != null ? Math.round(a.average_cadence) : null,
     calories: a.calories != null ? Math.round(a.calories) : null,
   }
