@@ -166,6 +166,11 @@ interface HomeScreenProps {
   /** Unpins a goal from this screen. Offered only once its date has gone. */
   onUnpinGoal?: (goalId: string) => void
   onViewGoals: () => void
+  /**
+   * Plan, opened on the weekly list. A weekly goal that leads to the race list
+   * has led somewhere the goal is not, which is what the tap used to do.
+   */
+  onViewWeeklyGoals?: () => void
   onViewInsights: () => void
   onSelectActivity: (activity: Activity) => void
 }
@@ -182,10 +187,15 @@ export function HomeScreen({
   onViewActivities,
   onViewGoal,
   onViewGoals,
+  onViewWeeklyGoals,
   onSelectActivity,
   onUnpinGoal,
 }: HomeScreenProps) {
   const { t } = useI18n()
+
+  // Falls back to Plan's own default rather than doing nothing, so a caller
+  // that has not wired the weekly route still opens something.
+  const openWeeklyGoals = onViewWeeklyGoals ?? onViewGoals
 
   // The load engine only ever looks at runs, so the gate counts runs. Counting
   // activities of any type meant seven bike rides both fetched warnings that
@@ -523,7 +533,9 @@ export function HomeScreen({
         <Section>
           <SectionHeader
             title={t("home.weeklyTargets")}
-            action={<SectionAction onClick={onViewGoals}>{t("home.seeAll")}</SectionAction>}
+            action={
+              <SectionAction onClick={openWeeklyGoals}>{t("home.seeAll")}</SectionAction>
+            }
           />
           {/* No card. A card is a surface for content that needs one, and a
               row of lanes is already its own shape — boxing it added an edge
@@ -544,7 +556,7 @@ export function HomeScreen({
                 goal={goal}
                 current={current}
                 size={laneSize(weeklyLaps.length)}
-                onOpen={onViewGoals}
+                onOpen={openWeeklyGoals}
                 t={t}
               />
             ))}

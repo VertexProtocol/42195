@@ -64,7 +64,7 @@ import { Button } from "@/components/ui/button"
  * visibly the same kind of object.
  */
 
-type GoalTab = "weekly" | "race"
+export type GoalTab = "weekly" | "race"
 
 interface GoalsScreenProps {
   goals: Goal[]
@@ -79,6 +79,12 @@ interface GoalsScreenProps {
   onSelectGoal: (goal: Goal) => void
   onReorderGoals: (orderedIds: string[]) => Promise<void>
   onReorderWeeklyGoals: (orderedIds: string[]) => Promise<void>
+  /**
+   * Which horizon to open on. Races unless the caller says otherwise — coming
+   * here from a weekly goal on Today and landing on the race list is landing
+   * on the wrong screen.
+   */
+  initialTab?: GoalTab
 }
 
 function SortableGoalItem({
@@ -159,9 +165,10 @@ export function GoalsScreen({
   onSelectGoal,
   onReorderGoals,
   onReorderWeeklyGoals,
+  initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
-  const [tab, setTab] = useState<GoalTab>("race")
+  const [tab, setTab] = useState<GoalTab>(initialTab)
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
   const toggleExpanded = (id: string) => {
     setExpandedGoalIds((prev) => {

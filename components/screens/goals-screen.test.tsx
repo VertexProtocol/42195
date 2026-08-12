@@ -157,7 +157,7 @@ function makeWeeklyGoal(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
   }
 }
 
-function renderWeekly(weeklyGoals: WeeklyGoal[]) {
+function renderWeekly(weeklyGoals: WeeklyGoal[], initialTab?: "weekly" | "race") {
   const view = render(
     <I18nProvider>
       <GoalsScreen
@@ -173,12 +173,27 @@ function renderWeekly(weeklyGoals: WeeklyGoal[]) {
         onSelectGoal={() => {}}
         onReorderGoals={async () => {}}
         onReorderWeeklyGoals={async () => {}}
+        initialTab={initialTab}
       />
     </I18nProvider>,
   )
-  fireEvent.click(screen.getByRole("tab", { name: "Weekly" }))
+  if (!initialTab) fireEvent.click(screen.getByRole("tab", { name: "Weekly" }))
   return view
 }
+
+describe("GoalsScreen — which horizon it opens on", () => {
+  it("opens on races by default", () => {
+    renderWeekly([makeWeeklyGoal()], "race")
+    expect(screen.getByRole("tab", { name: "Targets" }).getAttribute("aria-selected")).toBe("true")
+  })
+
+  it("opens on the weekly list when the caller asks for it", () => {
+    // What a weekly goal on Today links to. Landing on the race list means
+    // landing on a screen the goal that was tapped is not on.
+    renderWeekly([makeWeeklyGoal()], "weekly")
+    expect(screen.getByRole("tab", { name: "Weekly" }).getAttribute("aria-selected")).toBe("true")
+  })
+})
 
 describe("GoalsScreen — weekly cards keep their metric icon", () => {
   it("marks each metric with its own icon", () => {

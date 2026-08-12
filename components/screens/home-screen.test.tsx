@@ -188,6 +188,37 @@ describe("HomeScreen — one lane per weekly goal", () => {
     expect(Number.parseFloat(lanes()[0].style.height)).toBeLessThan(heightOfTwo)
   })
 
+  it("opens Plan on the weekly list, not the race list", () => {
+    // Plan opens on races. A weekly goal that leads there has led to a screen
+    // its own goal is not on.
+    const onViewGoals = vi.fn()
+    const onViewWeeklyGoals = vi.fn()
+    render(
+      <I18nProvider>
+        <HomeScreen
+          starredGoals={[]}
+          currentWeekGoals={[makeGoal({ metric: "distance_km", target: 10 })]}
+          activities={[makeActivity()]}
+          weeklySummary={summaryOf([makeActivity()])}
+          recentActivities={[]}
+          warnings={[]}
+          planBadges={{}}
+          onViewActivities={() => {}}
+          onViewGoal={() => {}}
+          onViewGoals={onViewGoals}
+          onViewWeeklyGoals={onViewWeeklyGoals}
+          onViewInsights={() => {}}
+          onSelectActivity={() => {}}
+        />
+      </I18nProvider>,
+    )
+
+    fireEvent.click(screen.getByTitle(/Weekly distance/))
+    fireEvent.click(screen.getByRole("button", { name: "See all" }))
+    expect(onViewWeeklyGoals).toHaveBeenCalledTimes(2)
+    expect(onViewGoals).not.toHaveBeenCalled()
+  })
+
   it("draws a track that survives the page background", () => {
     // surface-sunken is a well in a card and is 0.035 off the page in
     // lightness. On the page, a goal at 0% would be an icon with no ring.
