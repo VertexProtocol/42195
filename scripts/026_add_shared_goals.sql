@@ -116,6 +116,12 @@ as $$
 $$;
 
 revoke all on function public.is_shared_goal_member(uuid, uuid) from public;
+-- Supabase hands `anon` and `authenticated` EXECUTE on public functions through
+-- schema default privileges, so revoking from PUBLIC leaves the direct grant to
+-- `anon` standing. This one takes both ids as arguments and bypasses RLS by
+-- design, so it would answer "is this person in that group" to anyone holding
+-- two uuids and no session.
+revoke execute on function public.is_shared_goal_member(uuid, uuid) from anon;
 grant execute on function public.is_shared_goal_member(uuid, uuid) to authenticated;
 
 
@@ -219,4 +225,8 @@ as $$
 $$;
 
 revoke all on function public.shared_goal_member_names(uuid) from public;
+-- Inert for a signed-out caller already — the guard compares against
+-- auth.uid(), which is null — but revoked for the same reason as above rather
+-- than left resting on that.
+revoke execute on function public.shared_goal_member_names(uuid) from anon;
 grant execute on function public.shared_goal_member_names(uuid) to authenticated;
