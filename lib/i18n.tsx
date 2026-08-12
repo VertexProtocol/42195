@@ -531,6 +531,25 @@ const translations = {
       "We sent a confirmation link to your address. Open it on this device and you are in — there is no second sign-in.",
     "auth.confirmEmailWrongAddress": "Use a different address",
     "auth.confirmEmailOtherBrowser": "Opened the link somewhere else?",
+    "auth.resend": "Send the email again",
+    "auth.resending": "Sending…",
+    "auth.resendSent": "Sent. Give it a minute, and look in your spam folder.",
+    "auth.resendThrottled": "One email a minute. Wait a moment, then try again.",
+    "auth.errorSignUpDefault":
+      "We could not create your account. Check your connection and try again.",
+    "authError.title": "We could not sign you in",
+    "authError.generic": "Something went wrong on our side. Try signing in again.",
+    "authError.stravaAlreadyLinked":
+      "That Strava account is already connected to another 42195 account. Disconnect it there first, or sign in with that account.",
+    "authError.stravaMissingScope":
+      "42195 needs permission to read your activities. Connect again and leave every box ticked on Strava's screen.",
+    "authError.invalidCredentials": "That email and password did not match. Check both and try again.",
+    "authError.emailNotConfirmed": "Confirm your email address first — the link is in your inbox.",
+    "authError.tooManyRequests": "Too many attempts. Wait a few minutes, then try again.",
+    "authError.confirmedElsewhere":
+      "Your email is confirmed. The link opened in a different browser from the one you signed up in, so sign in here with your email and password.",
+    "authError.linkExpired": "This link has expired or has already been used. Request a new one.",
+    "authError.alreadyRegistered": "An account with this email already exists. Sign in instead.",
     // Profile — account editing
     "profile.editName": "Edit",
     "profile.displayNameLabel": "Display name",
@@ -919,6 +938,25 @@ const translations = {
       "Vi har sendt en bekreftelseslenke til adressen din. Åpne den på denne enheten, så er du inne – du trenger ikke logge inn en gang til.",
     "auth.confirmEmailWrongAddress": "Bruk en annen adresse",
     "auth.confirmEmailOtherBrowser": "Åpnet du lenken et annet sted?",
+    "auth.resend": "Send e-posten på nytt",
+    "auth.resending": "Sender…",
+    "auth.resendSent": "Sendt. Gi den et minutt, og se i søppelposten.",
+    "auth.resendThrottled": "Én e-post i minuttet. Vent litt, og prøv igjen.",
+    "auth.errorSignUpDefault":
+      "Vi klarte ikke å opprette kontoen. Sjekk tilkoblingen og prøv igjen.",
+    "authError.title": "Vi fikk ikke logget deg inn",
+    "authError.generic": "Noe gikk galt hos oss. Prøv å logge inn igjen.",
+    "authError.stravaAlreadyLinked":
+      "Den Strava-kontoen er allerede koblet til en annen 42195-konto. Koble den fra der først, eller logg inn med den kontoen.",
+    "authError.stravaMissingScope":
+      "42195 trenger tilgang til å lese aktivitetene dine. Koble til på nytt, og la alle boksene stå avhuket på Stravas skjerm.",
+    "authError.invalidCredentials": "E-posten og passordet stemte ikke. Sjekk begge og prøv igjen.",
+    "authError.emailNotConfirmed": "Bekreft e-postadressen din først – lenken ligger i innboksen.",
+    "authError.tooManyRequests": "For mange forsøk. Vent noen minutter, og prøv igjen.",
+    "authError.confirmedElsewhere":
+      "E-posten din er bekreftet. Lenken ble åpnet i en annen nettleser enn den du registrerte deg i, så logg inn her med e-post og passord.",
+    "authError.linkExpired": "Denne lenken er utløpt eller allerede brukt. Be om en ny.",
+    "authError.alreadyRegistered": "Det finnes allerede en konto med denne e-posten. Logg inn i stedet.",
     // Profile — account editing
     "profile.editName": "Rediger",
     "profile.displayNameLabel": "Visningsnavn",

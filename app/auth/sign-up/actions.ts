@@ -1,18 +1,13 @@
 "use server"
 
 import { redirect } from "next/navigation"
-import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { safeNext } from "@/lib/auth-redirect"
+import { resolveSiteUrl } from "@/lib/site-url"
 
 export async function signUpAction(formData: FormData) {
   const supabase = await createClient()
-  const headersList = await headers()
-
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    headersList.get("origin") ??
-    ""
+  const siteUrl = await resolveSiteUrl()
 
   const email = formData.get("email") as string
   // Where the runner was headed when they were asked to sign in. Validated
