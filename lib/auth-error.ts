@@ -16,6 +16,11 @@ export function authErrorKey(message: string | undefined): TranslationKey {
   if (m === "strava_already_linked") return "authError.stravaAlreadyLinked"
   if (m === "strava_missing_scope") return "authError.stravaMissingScope"
   if (m === "strava_signup_closed") return "authError.stravaSignupClosed"
+  // Recovery has its own two, because "sign in with your password" is not
+  // advice you can give someone who came here having forgotten it.
+  if (m === "recovery_wrong_browser") return "authError.recoveryWrongBrowser"
+  if (m === "recovery_link_failed") return "authError.recoveryLinkFailed"
+  if (m === "confirmed_elsewhere") return "authError.confirmedElsewhere"
   if (m === "strava_session_failed") return "authError.stravaSessionFailed"
 
   if (

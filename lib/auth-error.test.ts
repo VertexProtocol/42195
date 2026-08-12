@@ -17,6 +17,14 @@ describe("authErrorKey", () => {
     expect(authErrorKey("strava_session_failed")).toBe("authError.stravaSessionFailed")
   })
 
+  it("keeps recovery apart from confirmation", () => {
+    // Both are "the link did not work", but only one of them can be answered
+    // with "sign in with your password".
+    expect(authErrorKey("recovery_wrong_browser")).toBe("authError.recoveryWrongBrowser")
+    expect(authErrorKey("recovery_link_failed")).toBe("authError.recoveryLinkFailed")
+    expect(authErrorKey("confirmed_elsewhere")).toBe("authError.confirmedElsewhere")
+  })
+
   it("maps Supabase's wording for a bad sign-in", () => {
     expect(authErrorKey("Invalid login credentials")).toBe("authError.invalidCredentials")
     expect(authErrorKey("Email not confirmed")).toBe("authError.emailNotConfirmed")

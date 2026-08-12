@@ -565,6 +565,11 @@ const translations = {
     "authError.confirmedElsewhere":
       "Your email is confirmed. The link opened in a different browser from the one you signed up in, so sign in here with your email and password.",
     "authError.linkExpired": "This link has expired or has already been used. Request a new one.",
+    "authError.recoveryWrongBrowser":
+      "The reset link has to be opened in the browser you asked for it from. Ask for a new one here, and open it from this browser.",
+    "authError.recoveryLinkFailed":
+      "That reset link did not work. It may have expired, or already been used. Ask for a new one.",
+    "authError.requestNewLink": "Request a new link",
     "authError.alreadyRegistered": "An account with this email already exists. Sign in instead.",
     // Profile — account editing
     "profile.editName": "Edit",
@@ -1002,6 +1007,11 @@ const translations = {
     "authError.confirmedElsewhere":
       "E-posten din er bekreftet. Lenken ble åpnet i en annen nettleser enn den du registrerte deg i, så logg inn her med e-post og passord.",
     "authError.linkExpired": "Denne lenken er utløpt eller allerede brukt. Be om en ny.",
+    "authError.recoveryWrongBrowser":
+      "Lenken for å nullstille passordet må åpnes i nettleseren du ba om den fra. Be om en ny her, og åpne den fra denne nettleseren.",
+    "authError.recoveryLinkFailed":
+      "Den lenken virket ikke. Den kan være utløpt, eller allerede brukt. Be om en ny.",
+    "authError.requestNewLink": "Be om en ny lenke",
     "authError.alreadyRegistered": "Det finnes allerede en konto med denne e-posten. Logg inn i stedet.",
     // Profile — account editing
     "profile.editName": "Rediger",
