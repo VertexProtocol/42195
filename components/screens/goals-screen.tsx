@@ -6,9 +6,6 @@ import {
   Plus,
   Pencil,
   Flame,
-  TrendingUp,
-  Clock,
-  Mountain,
   ChevronLeft,
   ChevronRight,
   Repeat,
@@ -18,7 +15,6 @@ import {
   ChevronDown,
   GripVertical,
   Star,
-  Target,
 } from "lucide-react"
 import {
   DndContext,
@@ -52,8 +48,9 @@ import {
   bestRelevantRun,
   longestRun,
 } from "@/lib/format"
-import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
+import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { AppCard } from "@/components/ui/app-card"
 import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
@@ -67,24 +64,7 @@ import { Button } from "@/components/ui/button"
  * visibly the same kind of object.
  */
 
-type GoalTab = "weekly" | "race"
-
-const METRIC_ICONS: Record<string, typeof Flame> = {
-  distance_km: TrendingUp,
-  sessions: Flame,
-  duration_minutes: Clock,
-  elevation_m: Mountain,
-}
-
-const METRIC_LABEL_KEYS: Record<
-  WeeklyGoalMetric,
-  "goals.weeklyDistance" | "goals.trainingSessions" | "goals.activeMinutes" | "goals.elevationGain"
-> = {
-  distance_km: "goals.weeklyDistance",
-  sessions: "goals.trainingSessions",
-  duration_minutes: "goals.activeMinutes",
-  elevation_m: "goals.elevationGain",
-}
+export type GoalTab = "weekly" | "race"
 
 interface GoalsScreenProps {
   goals: Goal[]
@@ -99,6 +79,12 @@ interface GoalsScreenProps {
   onSelectGoal: (goal: Goal) => void
   onReorderGoals: (orderedIds: string[]) => Promise<void>
   onReorderWeeklyGoals: (orderedIds: string[]) => Promise<void>
+  /**
+   * Which horizon to open on. Races unless the caller says otherwise — coming
+   * here from a weekly goal on Today and landing on the race list is landing
+   * on the wrong screen.
+   */
+  initialTab?: GoalTab
 }
 
 function SortableGoalItem({
@@ -179,9 +165,10 @@ export function GoalsScreen({
   onSelectGoal,
   onReorderGoals,
   onReorderWeeklyGoals,
+  initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
-  const [tab, setTab] = useState<GoalTab>("race")
+  const [tab, setTab] = useState<GoalTab>(initialTab)
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
   const toggleExpanded = (id: string) => {
     setExpandedGoalIds((prev) => {
@@ -350,9 +337,9 @@ export function GoalsScreen({
                       wg.session_min_distance_km,
                     )
                     const progress = progressPercentage(current, wg.target)
-                    const Icon = METRIC_ICONS[wg.metric] || Target
+                    const Icon = WEEKLY_METRIC_ICONS[wg.metric]
                     const isComplete = current >= wg.target
-                    const label = t(METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
+                    const label = t(WEEKLY_METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
                     const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(wg.target, wg.metric)}`
 
                     return (

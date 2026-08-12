@@ -155,6 +155,9 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             {t("weeklyGoalEditor.metric")}
           </legend>
           <div className="grid grid-cols-2 gap-2">
+            {/* No metric icon here, deliberately. This is a setting being
+                chosen, not a goal being read — the icon earns its place where
+                the goal is looked at, which is Today. */}
             {METRIC_OPTIONS.map((option) => (
               <button
                 key={option.value}

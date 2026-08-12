@@ -6,7 +6,7 @@ import { TabBar } from "@/components/tab-bar"
 import { AppBar } from "@/components/app-bar"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
-import { GoalsScreen } from "@/components/screens/goals-screen"
+import { GoalsScreen, type GoalTab } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
@@ -80,6 +80,10 @@ export function AppShell({ initialData }: AppShellProps) {
   // A group is reached from the goal it hangs off, so it lives inside the Plan
   // tab rather than becoming a fifth destination in the tab bar.
   const groupId = searchParams.get("group")
+  // Which horizon Plan opens on. In the URL rather than in the screen so that
+  // arriving from a weekly goal on Today lands on the weekly list, and so the
+  // back button puts you back where you were.
+  const planTab: GoalTab = searchParams.get("plan") === "weekly" ? "weekly" : "race"
   const inviteToken = searchParams.get("invite")
 
   // Keep InsightsScreen mounted after first visit so its fetch doesn't re-run on tab switch
@@ -135,8 +139,13 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleTabChange = useCallback((tab: TabId) => {
     navigate(tab === "home"
-      ? { tab: null, activity: null, goal: null }
-      : { tab, activity: null, goal: null })
+      ? { tab: null, activity: null, goal: null, plan: null }
+      : { tab, activity: null, goal: null, plan: null })
+  }, [navigate])
+
+  /** Plan, opened on the weekly list — where a weekly goal on Today leads. */
+  const handleViewWeeklyGoals = useCallback(() => {
+    navigate({ tab: "goals", plan: "weekly", activity: null, goal: null })
   }, [navigate])
 
   const handleSelectGoal = useCallback((goal: Goal) => {
@@ -337,6 +346,7 @@ export function AppShell({ initialData }: AppShellProps) {
             onViewActivities={() => handleTabChange("activities")}
             onViewGoal={(goal) => { navigate({ tab: "goals", goal: goal.id }) }}
             onViewGoals={() => handleTabChange("goals")}
+            onViewWeeklyGoals={handleViewWeeklyGoals}
             onViewInsights={() => handleTabChange("insights")}
             onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
             onUnpinGoal={data.toggleStarGoal}
@@ -381,6 +391,7 @@ export function AppShell({ initialData }: AppShellProps) {
             onSelectGoal={handleSelectGoal}
             onReorderGoals={data.reorderGoals}
             onReorderWeeklyGoals={data.reorderWeeklyGoals}
+            initialTab={planTab}
           />
         )}
 
