@@ -6,8 +6,13 @@
  *
  * The lookup runs through the service role because a runner holding an invite
  * is, by definition, not yet a member: no policy would let them read the
- * group or the invite. Holding the token is the authorisation, and the token
- * dies on first use.
+ * group or the invite. Holding the token is the authorisation.
+ *
+ * One link, many runners, for a week. Handing it to a running club is one
+ * message rather than one per person, and what limits the damage if it leaks
+ * is the clock rather than the fact that the first stranger to open it used
+ * it up. accepted_at and accepted_by are left where they are but decide
+ * nothing: who is in the group is shared_goal_members.
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -19,7 +24,7 @@ import type { SharedGoalMetric } from "@/lib/types"
 interface InviteRow {
   id: string
   shared_goal_id: string
-  accepted_at: string | null
+  expires_at: string
 }
 
 async function findOpenInvite(token: string): Promise<InviteRow | null> {
@@ -27,9 +32,9 @@ async function findOpenInvite(token: string): Promise<InviteRow | null> {
   const service = createServiceClient()
   const { data } = await service
     .from("shared_goal_invites")
-    .select("id, shared_goal_id, accepted_at")
+    .select("id, shared_goal_id, expires_at")
     .eq("token", token)
-    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle()
   return (data as InviteRow | null) ?? null
 }
@@ -145,15 +150,12 @@ export async function POST(req: NextRequest) {
     baseline_source: baseline.baseline_source,
   })
 
-  if (joinError) return NextResponse.json({ error: joinError.message }, { status: 500 })
-
-  // Spend the token only once the member row exists, so a failed join leaves
-  // the link usable rather than burning it on an error.
-  await service
-    .from("shared_goal_invites")
-    .update({ accepted_at: new Date().toISOString(), accepted_by: user.id })
-    .eq("id", invite.id)
-    .is("accepted_at", null)
+  // 23505: already a member. With a link that works more than once, opening
+  // it twice is an ordinary thing to do — and the runner is where they were
+  // trying to get to, so it is not a failure to report.
+  if (joinError && joinError.code !== "23505") {
+    return NextResponse.json({ error: joinError.message }, { status: 500 })
+  }
 
   // Give the new member a number now rather than a dash until their next
   // Strava sync, which could be days away.

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, LogOut, Share2, UserPlus } from "lucide-react"
+import { Check, Copy, LogOut, Share2, UserPlus } from "lucide-react"
 import { AppBar } from "@/components/app-bar"
 import { AppCard } from "@/components/ui/app-card"
 import { Button } from "@/components/ui/button"
@@ -10,10 +10,31 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { ProgressLap, type LaneMarker } from "@/components/progress-lap"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { daysUntil, formatDateShort } from "@/lib/format"
 import type { SharedGoalView, SharedGoalMemberView } from "@/app/api/shared-goals/[id]/route"
 import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
+
+/**
+ * How much longer the link works, in words.
+ *
+ * Read at render, so it is right every time the screen is opened and counts
+ * down as the week goes. It does not tick while you watch it, which for a
+ * number that changes once a day is the correct amount of machinery.
+ *
+ * The last day gets its own phrase rather than "1 days" — the count is a
+ * ceiling, so one means "less than a day", which is worth saying outright to
+ * an owner deciding whether the link they are about to send will still work
+ * when it is opened.
+ */
+function expiryLabel(
+  t: (key: TranslationKey, params?: TranslationParams) => string,
+  expiresAt: string,
+): string {
+  const days = Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000)
+  if (days <= 1) return t("shared.inviteExpiresSoon")
+  return t("shared.inviteExpires", { days })
+}
 
 /**
  * A group, on one lane.
@@ -140,6 +161,25 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
 
     try {
       await navigator.clipboard.writeText(url)
+      setCopiedToken(token)
+    } catch {
+      setFailedToken(token)
+    }
+  }, [])
+
+  /**
+   * Copy, and only copy.
+   *
+   * Share is the right default on a phone, but it is a sheet: it takes over
+   * the screen, and it is the wrong tool when the link is going somewhere the
+   * sheet does not know about — a note, a terminal, a message already half
+   * written. This is the plain one, beside the link rather than instead of
+   * the share button.
+   */
+  const copyInvite = useCallback(async (token: string) => {
+    setFailedToken(null)
+    try {
+      await navigator.clipboard.writeText(inviteUrl(token))
       setCopiedToken(token)
     } catch {
       setFailedToken(token)
@@ -303,7 +343,7 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
                   <li key={invite.id} className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-micro text-muted-foreground">
-                        {invite.label ?? t("shared.inviteLink")}
+                        {invite.label ?? expiryLabel(t, invite.expiresAt)}
                       </span>
                       <button
                         type="button"
@@ -324,10 +364,28 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
                       </button>
                     </div>
                     {/* On screen whatever the clipboard does, so the link is
-                        always reachable — select it by hand if nothing else. */}
-                    <p className="measure break-all rounded-md bg-surface-sunken px-2 py-1.5 text-micro leading-relaxed text-muted-foreground select-all">
-                      {inviteUrl(invite.token)}
-                    </p>
+                        always reachable — select it by hand if nothing else.
+                        Copy sits against it rather than in the row above: the
+                        share sheet is the right default on a phone, and this
+                        is for the times the link is going somewhere the sheet
+                        does not know about. */}
+                    <div className="flex items-stretch gap-1.5">
+                      <p className="measure min-w-0 flex-1 break-all rounded-md bg-surface-sunken px-2 py-1.5 text-micro leading-relaxed text-muted-foreground select-all">
+                        {inviteUrl(invite.token)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => copyInvite(invite.token)}
+                        aria-label={t("shared.copyLink")}
+                        className="press flex w-9 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-muted-foreground hover:text-foreground"
+                      >
+                        {copiedToken === invite.token ? (
+                          <Check className="size-3.5 text-success" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </button>
+                    </div>
                     {failedToken === invite.token && (
                       <p className="text-micro text-warning">{t("shared.copyFailed")}</p>
                     )}
