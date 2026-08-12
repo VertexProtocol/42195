@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Trash2, Repeat, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
-import { WEEKLY_METRIC_ICONS } from "@/lib/weekly-metrics"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -156,27 +155,24 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
             {t("weeklyGoalEditor.metric")}
           </legend>
           <div className="grid grid-cols-2 gap-2">
-            {METRIC_OPTIONS.map((option) => {
-              // The same icon the goal will carry once saved, on Plan and on
-              // Today — so the choice made here is recognisable afterwards.
-              const Icon = WEEKLY_METRIC_ICONS[option.value]
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setMetric(option.value)}
-                  aria-pressed={metric === option.value}
-                  className={`press flex min-h-[44px] items-center justify-center gap-2 rounded-md px-3 text-label font-semibold ${
-                    metric === option.value
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
-                  }`}
-                >
-                  <Icon size={16} aria-hidden />
-                  {t(option.labelKey)}
-                </button>
-              )
-            })}
+            {/* No metric icon here, deliberately. This is a setting being
+                chosen, not a goal being read — the icon earns its place where
+                the goal is looked at, which is Today. */}
+            {METRIC_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setMetric(option.value)}
+                aria-pressed={metric === option.value}
+                className={`press flex min-h-[44px] items-center justify-center rounded-md px-3 text-label font-semibold ${
+                  metric === option.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+                }`}
+              >
+                {t(option.labelKey)}
+              </button>
+            ))}
           </div>
         </fieldset>
 

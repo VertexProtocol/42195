@@ -72,9 +72,12 @@ const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "se
  * it is measured against is the stat above, which is why nothing here repeats
  * the current figure.
  *
- * The metric icon leads the line for the same reason the star leads a pinned
- * race: it marks the line as a goal rather than more of the stat above it,
- * and it is the same icon this goal carries on Plan.
+ * No metric icon, though the same goal carries one on Plan and on the rows
+ * below this row. A stat column is a third of a card wide, and an icon small
+ * enough to fit beside micro text does not read as an icon — it reads as a
+ * smudge, and three of them at different widths leave the bottom lines of the
+ * three columns visibly out of step. The icon needs a full-width row and a
+ * label at normal size to be worth anything.
  */
 function WeeklyTarget({
   goal,
@@ -86,7 +89,6 @@ function WeeklyTarget({
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
   if (!goal) return null
-  const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
   const label = t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
   const target = formatWeeklyMetric(goal.target, goal.metric)
@@ -100,12 +102,11 @@ function WeeklyTarget({
         valueText={`${formatWeeklyMetric(current, goal.metric)} / ${target}`}
       />
       <p
-        className={`mt-1 flex items-center gap-1 text-micro ${
+        className={`measure mt-1 truncate text-micro ${
           isComplete ? "text-success" : "text-muted-foreground"
         }`}
       >
-        <Icon size={11} className="shrink-0" aria-hidden />
-        <span className="measure truncate">{t("home.ofTarget", { target })}</span>
+        {t("home.ofTarget", { target })}
       </p>
     </>
   )
