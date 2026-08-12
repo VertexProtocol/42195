@@ -531,7 +531,15 @@ export function AppShell({ initialData }: AppShellProps) {
             token={inviteToken}
             goals={data.goals}
             onClose={handleDismissInvite}
-            onJoined={(id) => navigate({ invite: null, tab: "goals", group: id })}
+            onJoined={(id) => {
+              // The groups are seeded by the page render and re-read only when
+              // one is created, joined or left. Joining is one of those, and
+              // it was the one that never said so: the runner landed in a
+              // group the rest of the app had not heard of, and their own
+              // goal went on offering to create one.
+              void data.refreshSharedGoals()
+              navigate({ invite: null, tab: "goals", group: id })
+            }}
             onCreateGoal={handleCreateGoalForRace}
           />
         </Suspense>

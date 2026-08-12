@@ -47,6 +47,7 @@ export function SharedGoalEntry({
 
   const create = useCallback(async () => {
     setCreating(true)
+    setFailed(false)
     try {
       const res = await fetch("/api/shared-goals", {
         method: "POST",
@@ -54,6 +55,16 @@ export function SharedGoalEntry({
         body: JSON.stringify({ goalId }),
       })
       if (!res.ok) {
+        // 409 means this goal is already in a group, and the server hands back
+        // which one. That is the answer to the question the button asked, not
+        // a failure — throwing it away is what made the button look dead to a
+        // runner whose screen had not caught up with a group they had joined.
+        const body = (await res.json().catch(() => null)) as { id?: string } | null
+        if (res.status === 409 && body?.id) {
+          onCreated?.()
+          onOpen(body.id)
+          return
+        }
         setFailed(true)
         return
       }
@@ -69,11 +80,6 @@ export function SharedGoalEntry({
 
   if (hidden) return null
 
-  // Offering to make a group that cannot be made is worse than an empty space,
-  // so a failed attempt takes the card away rather than inviting a retry that
-  // will fail the same way.
-  if (failed) return null
-
   if (!group) {
     return (
       <AppCard>
@@ -81,6 +87,18 @@ export function SharedGoalEntry({
         <p className="mt-1 max-w-[46ch] text-label leading-relaxed text-muted-foreground">
           {t("shared.startBody")}
         </p>
+        {/* A failure used to take the whole card away on the reasoning that
+            offering something that cannot be done is worse than an empty
+            space. But the one failure that really could not be retried — the
+            goal is already in a group — now opens that group instead, and
+            what is left is a lost request. Vanishing is the wrong answer to
+            that: it reads as the button doing nothing, and it removes the
+            retry that would have worked. */}
+        {failed && (
+          <p role="alert" className="mt-2 text-micro leading-relaxed text-destructive">
+            {t("shared.startFailed")}
+          </p>
+        )}
         <Button size="sm" variant="secondary" className="mt-3" onClick={create} disabled={creating}>
           <Users className="size-4" />
           {t("shared.startAction")}
