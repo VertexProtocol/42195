@@ -294,3 +294,39 @@ export interface MidBlockCheckpoint {
   /** True if the scale was tightened beyond adherence because fatigue was detected */
   fatigueAdjustmentApplied?: boolean
 }
+
+// ---- Shared goal types ----
+
+/**
+ * What a group's lane measures. Chosen when the shared goal is created and
+ * never edited: the measure decides who leads, so a group that can switch
+ * mid-block will switch to whichever one flatters the loudest member.
+ */
+export type SharedGoalMetric = "progress" | "adherence" | "proximity"
+
+/** The race and the date. Target times stay on each member's own goal. */
+export interface SharedGoal {
+  id: string
+  owner_id: string
+  name: string
+  race_date: string
+  distance_km: number
+  metric: SharedGoalMetric
+  created_at: string
+}
+
+export interface SharedGoalMember {
+  shared_goal_id: string
+  user_id: string
+  /** The member's own goal row — their target time and plan stay theirs. */
+  goal_id: string
+  /** Predicted time over the race distance the day they joined. Locked. */
+  baseline_seconds: number | null
+  baseline_source: PaceSource | null
+  /** Written by this member's own sync run. Null until first measured. */
+  position_pct: number | null
+  adherence_done: number | null
+  adherence_target: number | null
+  updated_at: string | null
+  joined_at: string
+}

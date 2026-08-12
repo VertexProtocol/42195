@@ -20,6 +20,8 @@ const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "p
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
+const SharedGoalScreen = lazy(() => import("@/components/screens/shared-goal-screen").then(m => ({ default: m.SharedGoalScreen })))
+const JoinSharedGoalSheet = lazy(() => import("@/components/join-shared-goal-sheet").then(m => ({ default: m.JoinSharedGoalSheet })))
 const ProfileScreen = lazy(() => import("@/components/screens/profile-screen").then(m => ({ default: m.ProfileScreen })))
 const InsightsScreen = lazy(() => import("@/components/screens/insights-screen").then(m => ({ default: m.InsightsScreen })))
 
@@ -75,6 +77,10 @@ export function AppShell({ initialData }: AppShellProps) {
   const activeTab: TabId = urlTab && VALID_TABS.has(urlTab) ? urlTab : "home"
   const activityId = searchParams.get("activity")
   const goalId = searchParams.get("goal")
+  // A group is reached from the goal it hangs off, so it lives inside the Plan
+  // tab rather than becoming a fifth destination in the tab bar.
+  const groupId = searchParams.get("group")
+  const inviteToken = searchParams.get("invite")
 
   // Keep InsightsScreen mounted after first visit so its fetch doesn't re-run on tab switch
   const [insightsMounted, setInsightsMounted] = useState(activeTab === "insights")
@@ -139,6 +145,18 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleBackFromGoalDetail = useCallback(() => {
     navigate({ goal: null })
+  }, [navigate])
+
+  const handleOpenGroup = useCallback((id: string) => {
+    navigate({ tab: "goals", group: id })
+  }, [navigate])
+
+  const handleBackFromGroup = useCallback(() => {
+    navigate({ group: null })
+  }, [navigate])
+
+  const handleDismissInvite = useCallback(() => {
+    navigate({ invite: null })
   }, [navigate])
 
   const handleSelectActivity = useCallback((activity: Activity) => {
@@ -366,7 +384,7 @@ export function AppShell({ initialData }: AppShellProps) {
           />
         )}
 
-        {activeTab === "goals" && selectedGoal && (
+        {activeTab === "goals" && !groupId && selectedGoal && (
           <Suspense fallback={<ScreenFallback />}>
             <GoalDetailScreen
               goal={selectedGoal}
@@ -374,8 +392,15 @@ export function AppShell({ initialData }: AppShellProps) {
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
               onPlanChange={data.refreshPlanBadges}
+              onOpenGroup={handleOpenGroup}
               onToggleStar={data.toggleStarGoal}
             />
+          </Suspense>
+        )}
+
+        {activeTab === "goals" && groupId && (
+          <Suspense fallback={<ScreenFallback />}>
+            <SharedGoalScreen groupId={groupId} onBack={handleBackFromGroup} />
           </Suspense>
         )}
 
@@ -438,6 +463,19 @@ export function AppShell({ initialData }: AppShellProps) {
         onClose={() => setIsManualActivityOpen(false)}
         onSave={data.addActivity}
       />
+
+      {/* An invite link lands on whatever screen the runner was last on, and
+          asks its one question there rather than taking over the app. */}
+      {inviteToken && data.user && (
+        <Suspense fallback={null}>
+          <JoinSharedGoalSheet
+            token={inviteToken}
+            goals={data.goals}
+            onClose={handleDismissInvite}
+            onJoined={(id) => navigate({ invite: null, tab: "goals", group: id })}
+          />
+        </Suspense>
+      )}
 
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
