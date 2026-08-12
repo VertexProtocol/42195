@@ -271,7 +271,6 @@ export function useAppData(initialData?: InitialData | null) {
   }, [])
 
   // ----- Derived data -----
-  const activeGoals = useMemo(() => goals.filter((g) => g.is_active), [goals])
   // [STAR] Event goals pinned to the home screen, sorted by user-defined display_order
   const starredGoals = useMemo(
     () =>
@@ -849,7 +848,6 @@ export function useAppData(initialData?: InitialData | null) {
     refreshPlanBadges,
 
     // Derived
-    activeGoals,
     starredGoals, // [STAR]
     currentWeekMonday,
     weeklySummary,
