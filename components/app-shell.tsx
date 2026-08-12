@@ -393,6 +393,8 @@ export function AppShell({ initialData }: AppShellProps) {
               onEditGoal={handleEditGoal}
               onPlanChange={data.refreshPlanBadges}
               onOpenGroup={handleOpenGroup}
+              sharedGoal={data.sharedGoals[selectedGoal.id] ?? null}
+              onSharedGoalChange={data.refreshSharedGoals}
               onToggleStar={data.toggleStarGoal}
             />
           </Suspense>
@@ -400,7 +402,13 @@ export function AppShell({ initialData }: AppShellProps) {
 
         {activeTab === "goals" && groupId && (
           <Suspense fallback={<ScreenFallback />}>
-            <SharedGoalScreen groupId={groupId} onBack={handleBackFromGroup} />
+            <SharedGoalScreen
+              groupId={groupId}
+              onBack={handleBackFromGroup}
+              initial={
+                Object.values(data.sharedGoals).find((g) => g.id === groupId) ?? null
+              }
+            />
           </Suspense>
         )}
 

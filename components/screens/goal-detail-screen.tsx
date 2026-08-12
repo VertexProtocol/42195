@@ -52,6 +52,7 @@ import { parseSessionDistanceKm } from "@/lib/training-sessions"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
+import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui/pill'
 
@@ -186,6 +187,10 @@ interface GoalDetailScreenProps {
   onEditGoal: (goal: Goal) => void
   /** Opens the shared-goal screen for the group this goal belongs to. */
   onOpenGroup?: (groupId: string) => void
+  /** The group this goal belongs to, seeded by the page render. */
+  sharedGoal?: SharedGoalSummary | null
+  /** Re-reads the groups after one is created here. */
+  onSharedGoalChange?: () => void
   /**
    * A plan was generated, regenerated, or had a checkpoint applied. Today's
    * goal badges are derived from plans, and it no longer re-queries them on
@@ -1044,6 +1049,8 @@ export function GoalDetailScreen({
   onPlanChange,
   onToggleStar,
   onOpenGroup,
+  sharedGoal,
+  onSharedGoalChange,
 }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
@@ -1485,7 +1492,13 @@ export function GoalDetailScreen({
         </div>
 
       {onOpenGroup && (
-        <SharedGoalEntry goalId={goal.id} hidden={past} onOpen={onOpenGroup} />
+        <SharedGoalEntry
+          goalId={goal.id}
+          group={sharedGoal ?? null}
+          hidden={past}
+          onOpen={onOpenGroup}
+          onCreated={onSharedGoalChange}
+        />
       )}
 
       {/* Once the date has gone, the question is no longer "how far into the

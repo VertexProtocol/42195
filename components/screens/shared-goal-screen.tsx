@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useI18n } from "@/lib/i18n"
 import { daysUntil, formatDateShort } from "@/lib/format"
 import type { SharedGoalView, SharedGoalMemberView } from "@/app/api/shared-goals/[id]/route"
+import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 
 /**
  * A group, on one lane.
@@ -53,9 +54,15 @@ function daysSince(iso: string | null): number | null {
 interface SharedGoalScreenProps {
   groupId: string
   onBack: () => void
+  /**
+   * What the app already knew when the row was tapped: the name, the date and
+   * the reader's own position. Enough to paint the screen it is opening rather
+   * than a rectangle, while the rest of the group arrives.
+   */
+  initial?: SharedGoalSummary | null
 }
 
-export function SharedGoalScreen({ groupId, onBack }: SharedGoalScreenProps) {
+export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenProps) {
   const { t } = useI18n()
   const [view, setView] = useState<SharedGoalView | null>(null)
   const [loading, setLoading] = useState(true)
@@ -117,24 +124,64 @@ export function SharedGoalScreen({ groupId, onBack }: SharedGoalScreenProps) {
   }, [groupId, onBack])
 
   if (loading) {
+    const days = initial ? daysUntil(initial.race_date) : 0
     return (
-      <div className="pb-24">
-        <AppBar title={t("shared.title")} onBack={onBack} backLabel={t("common.back")} />
-        <div className="space-y-3 px-4">
-          <Skeleton className="h-64 w-full rounded-card" />
+      <>
+        <AppBar
+          title={initial?.name ?? t("shared.title")}
+          onBack={onBack}
+          backLabel={t("common.back")}
+        />
+        <div className="flex flex-col gap-3 px-4 pb-8 screen-body">
+          <AppCard padding="lg">
+            {initial && (
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-lead font-semibold tracking-tight">
+                  {t("shared.inGroup").replace("{count}", String(initial.memberCount))}
+                </h2>
+                <span className="measure text-micro text-muted-foreground">
+                  {days > 0
+                    ? t("shared.daysToGo").replace("{days}", String(days))
+                    : formatDateShort(initial.race_date)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-center py-3">
+              <ProgressLap
+                percentage={initial?.myPositionPct ?? 0}
+                size={180}
+                strokeWidth={7}
+                label={t("shared.laneLabel")}
+              >
+                {initial?.myPositionPct != null ? (
+                  <>
+                    <span className="measure text-[2rem] leading-none text-primary">
+                      {Math.round(initial.myPositionPct)}
+                      <span className="ml-0.5 align-super text-label">%</span>
+                    </span>
+                    <span className="text-micro text-muted-foreground">
+                      {t("shared.ofYourPlan")}
+                    </span>
+                  </>
+                ) : null}
+              </ProgressLap>
+            </div>
+            {/* The rows are the only part still in flight. */}
+            <Skeleton className="mt-2 h-16 w-full rounded-md" />
+          </AppCard>
         </div>
-      </div>
+      </>
     )
   }
 
   if (error || !view) {
     return (
-      <div className="pb-24">
+      <>
         <AppBar title={t("shared.title")} onBack={onBack} backLabel={t("common.back")} />
-        <div className="px-4">
+        <div className="px-4 pb-8 screen-body">
           <EmptyState title={t("shared.loadFailed")} body={t("shared.loadFailedBody")} />
         </div>
-      </div>
+      </>
     )
   }
 
@@ -155,10 +202,10 @@ export function SharedGoalScreen({ groupId, onBack }: SharedGoalScreenProps) {
     }))
 
   return (
-    <div className="pb-24">
+    <>
       <AppBar title={view.name} onBack={onBack} backLabel={t("common.back")} />
 
-      <div className="space-y-3 px-4">
+      <div className="flex flex-col gap-3 px-4 pb-8 screen-body">
         <AppCard padding="lg">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-lead font-semibold tracking-tight">
@@ -258,7 +305,7 @@ export function SharedGoalScreen({ groupId, onBack }: SharedGoalScreenProps) {
           {view.isOwner ? t("shared.disband") : t("shared.leave")}
         </button>
       </div>
-    </div>
+    </>
   )
 }
 

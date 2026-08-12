@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { AppShell } from "@/components/app-shell"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import type { GoalCategory, SyncStatus } from "@/lib/types"
+import type { GoalCategory, SharedGoalMetric, SyncStatus } from "@/lib/types"
 import { fetchAllActivities } from "@/lib/activities-query"
 import {
   deriveWarningContext,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadgeRow } from "@/lib/plan-badges"
 import { RUN_TYPES } from "@/lib/training-constants"
+import { initialOf, type SharedGoalSummary } from "@/app/api/shared-goals/route"
 
 export default async function Page() {
   const supabase = await createClient()
@@ -29,7 +30,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sharedRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -54,6 +55,13 @@ export default async function Page() {
         .from("ai_training_plans")
         .select("goal_id, block_start_date, plan, mid_block_checkpoint")
         .eq("user_id", authUser.id),
+      // The group a goal belongs to, so its row on the goal's detail screen is
+      // there on first paint. Fetched here for the same reason the plan badges
+      // are: that screen unmounts on every tab change, so owning the query
+      // meant a round trip — and a flash of "create a group" — on each visit.
+      supabase
+        .from("shared_goal_members")
+        .select("goal_id, position_pct, shared_goals(id, name, race_date, metric)"),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
@@ -138,6 +146,7 @@ export default async function Page() {
           resting_hr: null,
           onboarding_dismissed_at: null,
         },
+    sharedGoals: await buildSharedGoalSummaries(supabase, authUser.id, sharedRes.data ?? []),
     testRunActivityIds: (testRunsRes.data ?? []).map((tr) => tr.activity_id as string),
     stravaConnected: !!stravaTokenRes.data,
     syncStatus: syncStatusRes.data
@@ -154,4 +163,52 @@ export default async function Page() {
       <AppShell initialData={initialData} />
     </Suspense>
   )
+}
+
+/**
+ * The group each of the runner's goals belongs to, keyed by goal id.
+ *
+ * Names come from the definer function rather than a join, because `profiles`
+ * is select-own and stays that way — it returns the display names of the
+ * people you share a goal with and nobody else. Most runners are in no groups
+ * or one, so the per-group call is a loop over zero or one.
+ */
+async function buildSharedGoalSummaries(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  rows: Array<{ goal_id: string; position_pct: number | null; shared_goals: unknown }>,
+): Promise<Record<string, SharedGoalSummary>> {
+  const out: Record<string, SharedGoalSummary> = {}
+  if (rows.length === 0) return out
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const embed = row.shared_goals
+      const goal = (Array.isArray(embed) ? embed[0] : embed) as {
+        id: string
+        name: string
+        race_date: string
+        metric: SharedGoalMetric
+      } | null
+      if (!goal) return
+
+      const { data: names } = await supabase.rpc("shared_goal_member_names", { g: goal.id })
+      const members = (names ?? []) as Array<{ user_id: string; display_name: string | null }>
+
+      out[row.goal_id] = {
+        id: goal.id,
+        name: goal.name,
+        race_date: goal.race_date,
+        metric: goal.metric,
+        memberCount: members.length,
+        initials: members
+          .filter((m) => m.user_id !== userId)
+          .map((m) => initialOf(m.display_name))
+          .slice(0, 3),
+        myPositionPct: row.position_pct == null ? null : Number(row.position_pct),
+      }
+    }),
+  )
+
+  return out
 }

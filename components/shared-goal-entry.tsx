@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { ChevronRight, Users } from "lucide-react"
 import { AppCard } from "@/components/ui/app-card"
 import { Button } from "@/components/ui/button"
@@ -14,46 +14,36 @@ import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
  * question — what am I doing today — and how someone else's week is going is
  * not it. The whole social layer has to be ignorable without any other screen
  * noticing.
+ *
+ * The group is handed in rather than fetched. This screen unmounts on every
+ * tab change, so a fetch of its own meant a round trip on each visit and a
+ * flash of "create a group" before the real row arrived — the same pop-in the
+ * plan badges and the test-run chip were moved to the page render to avoid.
  */
 
 const AVATAR_COLORS = ["var(--chart-2)", "var(--chart-4)", "var(--chart-5)"]
 
 interface SharedGoalEntryProps {
   goalId: string
+  /** The group this goal belongs to, or null when it is in none. */
+  group: SharedGoalSummary | null
   /** Hidden for a race that has already been run. */
   hidden?: boolean
   onOpen: (groupId: string) => void
+  /** Re-reads the groups after one is created. */
+  onCreated?: () => void
 }
 
-export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps) {
+export function SharedGoalEntry({
+  goalId,
+  group,
+  hidden,
+  onOpen,
+  onCreated,
+}: SharedGoalEntryProps) {
   const { t } = useI18n()
-  const [group, setGroup] = useState<SharedGoalSummary | null>(null)
-  const [state, setState] = useState<"loading" | "ready" | "unavailable">("loading")
   const [creating, setCreating] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await fetch(`/api/shared-goals?goal=${encodeURIComponent(goalId)}`)
-        if (!res.ok) throw new Error(String(res.status))
-        const body = (await res.json()) as { group: SharedGoalSummary | null }
-        if (!cancelled) {
-          setGroup(body.group)
-          setState("ready")
-        }
-      } catch {
-        // "No group" and "could not ask" are different answers, and only one
-        // of them justifies offering to make one. Before the migration has
-        // been applied the query fails, and inviting a runner to create a
-        // group that cannot be created is worse than staying quiet.
-        if (!cancelled) setState("unavailable")
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [goalId])
+  const [failed, setFailed] = useState(false)
 
   const create = useCallback(async () => {
     setCreating(true)
@@ -63,18 +53,26 @@ export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goalId }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setFailed(true)
+        return
+      }
       const { id } = (await res.json()) as { id: string }
+      onCreated?.()
       onOpen(id)
+    } catch {
+      setFailed(true)
     } finally {
       setCreating(false)
     }
-  }, [goalId, onOpen])
+  }, [goalId, onCreated, onOpen])
 
-  // Nothing is drawn until the answer is known. A prompt that appears and then
-  // turns into a group row a moment later is the pop-in this screen has spent
-  // several passes removing.
-  if (hidden || state !== "ready") return null
+  if (hidden) return null
+
+  // Offering to make a group that cannot be made is worse than an empty space,
+  // so a failed attempt takes the card away rather than inviting a retry that
+  // will fail the same way.
+  if (failed) return null
 
   if (!group) {
     return (
@@ -94,7 +92,12 @@ export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps
   const others = group.memberCount - 1
 
   return (
-    <AppCard interactive className="w-full text-left" onClick={() => onOpen(group.id)} role="button" tabIndex={0}
+    <AppCard
+      interactive
+      className="w-full text-left"
+      onClick={() => onOpen(group.id)}
+      role="button"
+      tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()

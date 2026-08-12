@@ -36,46 +36,55 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const goalId = req.nextUrl.searchParams.get("goal")
-  if (!goalId) {
-    return NextResponse.json({ error: "Missing goal" }, { status: 400 })
-  }
 
-  const { data: mine, error } = await supabase
+  // The page render seeds these, so this route exists to re-read them after a
+  // group is created, joined or left — not on every visit to a goal.
+  let query = supabase
     .from("shared_goal_members")
-    .select("shared_goal_id, position_pct, shared_goals(id, name, race_date, metric)")
+    .select("goal_id, position_pct, shared_goals(id, name, race_date, metric)")
     .eq("user_id", user.id)
-    .eq("goal_id", goalId)
-    .maybeSingle()
+  if (goalId) query = query.eq("goal_id", goalId)
 
+  const { data: rows, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!mine) return NextResponse.json({ group: null })
 
-  const embed = mine.shared_goals as unknown
-  const goal = (Array.isArray(embed) ? embed[0] : embed) as {
-    id: string
-    name: string
-    race_date: string
-    metric: SharedGoalMetric
-  } | null
-  if (!goal) return NextResponse.json({ group: null })
+  const groups: Record<string, SharedGoalSummary> = {}
 
-  const { data: names } = await supabase.rpc("shared_goal_member_names", { g: goal.id })
-  const rows = (names ?? []) as Array<{ user_id: string; display_name: string | null }>
+  await Promise.all(
+    (rows ?? []).map(async (row) => {
+      const embed = row.shared_goals as unknown
+      const goal = (Array.isArray(embed) ? embed[0] : embed) as {
+        id: string
+        name: string
+        race_date: string
+        metric: SharedGoalMetric
+      } | null
+      if (!goal) return
 
-  const summary: SharedGoalSummary = {
-    id: goal.id,
-    name: goal.name,
-    race_date: goal.race_date,
-    metric: goal.metric,
-    memberCount: rows.length,
-    initials: rows
-      .filter((r) => r.user_id !== user.id)
-      .map((r) => initialOf(r.display_name))
-      .slice(0, 3),
-    myPositionPct: mine.position_pct == null ? null : Number(mine.position_pct),
+      const { data: names } = await supabase.rpc("shared_goal_member_names", { g: goal.id })
+      const members = (names ?? []) as Array<{ user_id: string; display_name: string | null }>
+
+      groups[row.goal_id as string] = {
+        id: goal.id,
+        name: goal.name,
+        race_date: goal.race_date,
+        metric: goal.metric,
+        memberCount: members.length,
+        initials: members
+          .filter((m) => m.user_id !== user.id)
+          .map((m) => initialOf(m.display_name))
+          .slice(0, 3),
+        myPositionPct: row.position_pct == null ? null : Number(row.position_pct),
+      }
+    }),
+  )
+
+  // Asking about one goal answers about that goal; asking about none answers
+  // about all of them, which is what the client-side refresh wants.
+  if (goalId) {
+    return NextResponse.json({ group: groups[goalId] ?? null, groups })
   }
-
-  return NextResponse.json({ group: summary })
+  return NextResponse.json({ groups })
 }
 
 export async function POST(req: NextRequest) {
