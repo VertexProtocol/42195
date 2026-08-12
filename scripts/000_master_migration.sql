@@ -780,6 +780,13 @@ create table if not exists public.shared_goal_members (
   adherence_done   numeric(8,2),
   adherence_target numeric(8,2),
   updated_at       timestamptz,
+  -- How it went, once the race has been run: 'reached' or 'ended', the same
+  -- two words the runner's own goal screen uses. Null means nobody recorded
+  -- one, which is not the same as falling short and must not read as it.
+  outcome          text check (outcome is null or outcome in ('reached', 'ended')),
+  -- When the verdict was written, and the freeze: a settled row is never
+  -- recomputed, so the standing a group finished with is the one it keeps.
+  settled_at       timestamptz,
   joined_at        timestamptz not null default now(),
   primary key (shared_goal_id, user_id)
 );

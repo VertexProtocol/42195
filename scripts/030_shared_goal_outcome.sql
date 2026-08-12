@@ -1,4 +1,4 @@
--- Migration 029: how it went, and when to stop asking
+-- Migration 030: how it went, and when to stop asking
 --
 -- A group had no ending. The day after the race its row vanished from the
 -- goal it hung off, nothing else linked to it, and the positions carried on
