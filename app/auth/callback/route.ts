@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { safeNext } from "@/lib/auth-redirect"
 
 /**
  * GET /auth/callback
@@ -27,10 +28,9 @@ export async function GET(request: NextRequest) {
     | "magiclink"
     | "email"
     | null
-  const rawNext = searchParams.get("next") ?? "/"
-  // Reject protocol-relative paths (//evil.com) and anything that isn't a
-  // relative path — prevents open-redirect abuse via the next parameter.
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/"
+  // Anything that is not a same-origin relative path collapses to the app
+  // root — prevents open-redirect abuse via the next parameter.
+  const next = safeNext(searchParams.get("next"))
 
   const supabase = await createClient()
 
@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
     // fully trusted source for the host. x-forwarded-host is only consulted
     // when the env var is absent (e.g. during local development previews) and
     // is validated against the canonical host to prevent header-spoofing redirects.
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    // Trailing slash stripped: `next` always starts with one, and this is now
+    // the path every confirmed sign-up comes through.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "")
     if (siteUrl) return `${siteUrl}${next}`
 
     const forwardedHost = request.headers.get("x-forwarded-host")
@@ -52,6 +54,15 @@ export async function GET(request: NextRequest) {
       if (forwardedHost === originHost) return `https://${forwardedHost}${next}`
     }
     return `${origin}${next}`
+  }
+
+  // The destination survives a failed confirmation too: the runner will be
+  // sent to sign in, and an invite link they followed should still be waiting
+  // on the other side of it.
+  const errorUrl = (message: string) => {
+    const params = new URLSearchParams({ message })
+    if (next !== "/") params.set("next", next)
+    return `${origin}/auth/error?${params.toString()}`
   }
 
   // --- PKCE flow (code exchange) ---
@@ -71,15 +82,13 @@ export async function GET(request: NextRequest) {
 
     if (isMissingVerifier) {
       return NextResponse.redirect(
-        `${origin}/auth/error?message=${encodeURIComponent(
-          "Email confirmed, but the session could not be created because the confirmation link was opened in a different browser. Please sign in with your email and password."
-        )}`,
+        errorUrl(
+          "Email confirmed, but the session could not be created because the confirmation link was opened in a different browser. Please sign in with your email and password.",
+        ),
       )
     }
 
-    return NextResponse.redirect(
-      `${origin}/auth/error?message=${encodeURIComponent(error.message)}`,
-    )
+    return NextResponse.redirect(errorUrl(error.message))
   }
 
   // --- Token-hash flow (works cross-browser, no cookie needed) ---
@@ -93,12 +102,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(getRedirectUrl())
     }
 
-    return NextResponse.redirect(
-      `${origin}/auth/error?message=${encodeURIComponent(error.message)}`,
-    )
+    return NextResponse.redirect(errorUrl(error.message))
   }
 
-  return NextResponse.redirect(
-    `${origin}/auth/error?message=${encodeURIComponent("No authorization code received.")}`,
-  )
+  return NextResponse.redirect(errorUrl("No authorization code received."))
 }

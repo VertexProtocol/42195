@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
+import { withNext } from "@/lib/auth-redirect"
+import { decodeStravaState, withSyncOnArrival } from "@/lib/strava-oauth-state"
+import { stravaSignupEnabled, type StravaAthlete } from "@/lib/strava-account"
+import {
+  createAccountForAthlete,
+  findUserIdForAthlete,
+  startSessionForEmail,
+} from "@/lib/strava-identity"
 
 interface StravaTokenResponse {
   token_type: string
@@ -8,11 +16,7 @@ interface StravaTokenResponse {
   expires_in: number
   refresh_token: string
   access_token: string
-  athlete: {
-    id: number
-    firstname: string
-    lastname: string
-  }
+  athlete: StravaAthlete
 }
 
 /**
@@ -21,7 +25,16 @@ interface StravaTokenResponse {
  * Handles the OAuth redirect from Strava.
  * 1. Verifies the CSRF state cookie matches the `state` query parameter.
  * 2. Exchanges the authorization code for tokens.
- * 3. Stores tokens in strava_tokens via the service client (bypasses RLS).
+ * 3. Establishes who this is — see the fork below.
+ * 4. Stores tokens in strava_tokens via the service client (bypasses RLS).
+ *
+ * Step 3 is the part that makes this an authentication route and not only a
+ * connection one. A signed-in runner is linking their athlete, as before. A
+ * signed-out one is signing in, and there are three possible answers: the
+ * athlete is already someone's, in which case that is who they are; the
+ * athlete is nobody's, in which case an account is made for them; or the
+ * athlete belongs to a different account than the session holds, which is
+ * refused, exactly as it was before.
  *
  * Strava API error details are logged server-side only — the browser only
  * receives a generic message to avoid leaking internal error text.
@@ -61,22 +74,26 @@ export async function GET(request: NextRequest) {
     return errorRedirect("strava_missing_scope")
   }
 
-  // Verify the user is still authenticated with Supabase
+  // CSRF check. The cookie carries the nonce Strava echoed back, plus which
+  // flow this is and where the runner was heading — checked before anything
+  // is exchanged or written.
+  const state = decodeStravaState(request.cookies.get("strava_oauth_state")?.value)
+  if (!state || stateParam !== state.nonce) {
+    return errorRedirect("Invalid OAuth state. Please try connecting again.")
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    const res = NextResponse.redirect(`${baseUrl}/auth/login`)
+  // A link that started signed in and arrived signed out is a session that
+  // expired mid-round-trip. Sign in and try again — do not silently turn it
+  // into a sign-up for whoever is holding the phone.
+  if (state.flow === "link" && !user) {
+    const res = NextResponse.redirect(`${baseUrl}${withNext("/auth/login", state.next)}`)
     res.cookies.delete("strava_oauth_state")
     return res
-  }
-
-  // CSRF check — verify state cookie
-  const cookieState = request.cookies.get("strava_oauth_state")?.value
-  if (!cookieState || stateParam !== cookieState) {
-    return errorRedirect("Invalid OAuth state. Please try connecting again.")
   }
 
   // Exchange authorization code for tokens
@@ -101,29 +118,59 @@ export async function GET(request: NextRequest) {
   }
 
   const tokens = (await tokenRes.json()) as StravaTokenResponse
+  const athleteId = tokens.athlete.id
 
-  // Store tokens using the service client — never accessible from the browser
-  const service = createServiceClient()
+  // ── Who is this? ─────────────────────────────────────────────────────────
+  // The athlete's existing owner, if it has one. This is the whole of the
+  // account matching: the row was written under someone's own session, so
+  // following it is not a guess about identity, it is a record of one.
+  const ownerUserId = await findUserIdForAthlete(athleteId)
 
   // One athlete, one account. Two accounts sharing an athlete_id would make the
   // webhook's athlete_id lookup ambiguous and silently drop every delivery for
   // both of them, so refuse the second link.
-  const { data: existingLink } = await service
-    .from("strava_tokens")
-    .select("user_id")
-    .eq("athlete_id", tokens.athlete.id)
-    .neq("user_id", user.id)
-    .limit(1)
-    .maybeSingle()
-
-  if (existingLink) {
+  if (user && ownerUserId && ownerUserId !== user.id) {
     return errorRedirect("strava_already_linked")
   }
 
+  // Whether this athlete has just been given an account, which decides where
+  // they land: everyone else goes to the app, a new runner is asked for an
+  // address on the way through.
+  let created = false
+  let userId = user?.id ?? null
+
+  if (!userId) {
+    if (ownerUserId) {
+      // Coming back. Sign in as the account this athlete already belongs to.
+      const { data: owner } = await createServiceClient().auth.admin.getUserById(ownerUserId)
+      const ownerEmail = owner.user?.email
+      if (!ownerEmail || !(await startSessionForEmail(ownerEmail))) {
+        return errorRedirect("strava_session_failed")
+      }
+      userId = ownerUserId
+    } else {
+      // New here. The gate, not the Supabase project setting — the admin call
+      // below is not subject to that one.
+      if (!stravaSignupEnabled()) {
+        return errorRedirect("strava_signup_closed")
+      }
+
+      const account = await createAccountForAthlete(tokens.athlete)
+      if (!account || !(await startSessionForEmail(account.email))) {
+        return errorRedirect("strava_session_failed")
+      }
+      userId = account.userId
+      created = true
+    }
+  }
+
+  // Store tokens using the service client — never accessible from the browser
+  const service = createServiceClient()
+
   const { error: upsertError } = await service.from("strava_tokens").upsert(
     {
-      user_id: user.id,
-      athlete_id: tokens.athlete.id,
+      user_id: userId,
+      athlete_id: athleteId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: new Date(tokens.expires_at * 1000).toISOString(),
@@ -143,9 +190,20 @@ export async function GET(request: NextRequest) {
     return errorRedirect("Failed to save Strava connection.")
   }
 
-  // Success — clear state cookie and send the user back to the app.
-  // The ?strava_connected=1 query parameter signals the client to auto-sync.
-  const res = NextResponse.redirect(`${baseUrl}/?strava_connected=1`)
+  // Success — clear state cookie and send the runner on. The destination
+  // carries ?strava_connected=1, which is what makes Today start the first
+  // sync instead of showing an empty screen to someone who just authorised a
+  // history.
+  const destination = withSyncOnArrival(state.next)
+
+  // A brand-new account has no address anyone can reach. Ask for one now,
+  // while it is obvious why — the screen hands over to `destination` either
+  // way, so nobody is held there.
+  const res = NextResponse.redirect(
+    created
+      ? `${baseUrl}${withNext("/auth/finish", destination)}`
+      : `${baseUrl}${destination}`,
+  )
   res.cookies.delete("strava_oauth_state")
   return res
 }

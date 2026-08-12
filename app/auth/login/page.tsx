@@ -5,8 +5,11 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { withNext } from "@/lib/auth-redirect"
+import { useNextTarget } from "@/hooks/use-next-target"
 import { useI18n } from "@/lib/i18n"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
+import { StravaSignIn } from "@/components/strava-sign-in"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { TrackMark } from "@/components/ui/track-mark"
@@ -62,6 +65,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [handingOff, setHandingOff] = useState(false)
 
+  // Where this runner was going before the middleware sent them here.
+  const next = useNextTarget()
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -93,20 +99,22 @@ export default function LoginPage() {
         // without a session back here — so the cookie is the whole of it.
         // `replace`, not `push`: back from the app should not return to a
         // login form for an account that is already signed in.
-        // Back to where they were going. The proxy sends anyone without a
-        // session here and keeps the query it came with, so an invite link
-        // opened signed out survives the sign-in instead of landing the
-        // runner on Today with no idea what happened to it. The path is
-        // always "/" — only the query is carried — so there is nothing here
-        // an attacker could redirect through.
-        const destination = `/${window.location.search}`
-
+        //
+        // Where it goes is `next`, the destination the proxy attached when it
+        // sent this runner here — an invite link opened signed out survives
+        // the sign-in instead of landing them on Today with no idea what
+        // happened to it. This replaces carrying `window.location.search`
+        // onto "/" directly: the same invite case, but the whole path is
+        // carried rather than the query alone, and the same value goes
+        // through sign-up and the confirmation email. It is safe for the
+        // reason the query-only version was — `safeNext` has already reduced
+        // it to a relative path on this origin.
         if (await sessionCookieReady()) {
-          router.replace(destination)
+          router.replace(next)
         } else {
           // The cookie never appeared where we can see it. Whatever is going
           // on, a fresh document request is the one that has always worked.
-          window.location.href = destination
+          window.location.href = next
         }
       } catch {
         setError(t("auth.errorDefault"))
@@ -143,7 +151,7 @@ export default function LoginPage() {
         <>
           {t("auth.noAccount")}{" "}
           <Link
-            href="/auth/sign-up"
+            href={withNext("/auth/sign-up", next)}
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             {t("auth.signUp")}
@@ -151,6 +159,8 @@ export default function LoginPage() {
         </>
       }
     >
+      <StravaSignIn next={next} />
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && <AuthError>{error}</AuthError>}
 

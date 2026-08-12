@@ -25,6 +25,7 @@ import {
   ListChecks,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
+import { isPlaceholderEmail } from "@/lib/strava-account"
 import { TrackLoader } from "@/components/ui/track-mark"
 import { createClient } from "@/lib/supabase/client"
 import { timeAgoParts } from "@/lib/format"
@@ -106,6 +107,9 @@ export function ProfileScreen({
 
   const [connecting, setConnecting] = useState(false)
   const [showResyncConfirm, setShowResyncConfirm] = useState(false)
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [disconnectError, setDisconnectError] = useState<string | null>(null)
   const [syncSuccess, setSyncSuccess] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -263,7 +267,13 @@ export function ProfileScreen({
     }
     startPwTransition(async () => {
       const supabase = createClient()
-      const { error } = await supabase.auth.updateUser({ password: pw })
+      // The flag rides along with the password: without it, an account that
+      // came in through Strava would keep being offered "set a password"
+      // after it had one.
+      const { error } = await supabase.auth.updateUser({
+        password: pw,
+        data: { has_password: true },
+      })
       if (error) {
         setPwError(error.message)
         return
@@ -296,6 +306,31 @@ export function ProfileScreen({
     // Every user authorises their own Strava account, so this is always the
     // full OAuth redirect.
     window.location.href = "/api/auth/strava"
+  }
+
+  // Whether this account could still get in with Strava gone. Checked again
+  // on the server, which is the copy that counts — this one is here so the
+  // screen can say why the button is not on offer instead of failing on it.
+  const canSignInWithoutStrava = !user.needs_password && !isPlaceholderEmail(user.email)
+
+  async function handleDisconnectStrava() {
+    setDisconnecting(true)
+    setDisconnectError(null)
+    try {
+      const res = await fetch("/api/auth/strava/disconnect", { method: "POST" })
+      if (!res.ok) {
+        setDisconnectError(t("profile.disconnectFailed"))
+        setDisconnecting(false)
+        return
+      }
+      // A full load rather than a router refresh: the connection, the sync
+      // record and the Get started checklist all change at once, and every
+      // one of them is server-rendered.
+      window.location.href = "/?tab=profile"
+    } catch {
+      setDisconnectError(t("profile.networkError"))
+      setDisconnecting(false)
+    }
   }
 
   async function handleDeleteAccount() {
@@ -386,7 +421,20 @@ export function ProfileScreen({
               {nameError}
             </p>
           )}
-          <p className="truncate text-label text-muted-foreground">{user.email}</p>
+          {/* An account that came in through Strava carries a placeholder
+              address until it is given a real one. Showing the placeholder
+              would be showing a lie; this is where someone who skipped the
+              question on the way in comes back to it. */}
+          {isPlaceholderEmail(user.email) ? (
+            <a
+              href="/auth/finish"
+              className="text-label text-primary underline-offset-4 hover:underline"
+            >
+              {t("profile.addEmail")}
+            </a>
+          ) : (
+            <p className="truncate text-label text-muted-foreground">{user.email}</p>
+          )}
         </div>
       </div>
 
@@ -459,22 +507,79 @@ export function ProfileScreen({
               {/* Reconnect and re-sync are repairs, not routine. They share the
                   one quiet row rather than each claiming a full-width one. */}
               <CardRow>
-                {!showResyncConfirm ? (
-                  <div className="-mx-2 flex flex-wrap items-center">
-                    <Button variant="ghost" size="sm" onClick={handleConnect}>
-                      <RotateCcw size={13} />
-                      {t("profile.reconnect")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground"
-                      disabled={isSyncing}
-                      onClick={() => setShowResyncConfirm(true)}
-                    >
-                      <TriangleAlert size={13} className="text-warning" />
-                      {t("profile.fullResync")}
-                    </Button>
+                {showDisconnectConfirm ? (
+                  <div className="flex flex-col gap-2.5">
+                    <p className="text-label leading-relaxed text-muted-foreground">
+                      {/* What survives it, said before the button is pressed:
+                          the runs are the reason the runner is here, and
+                          "disconnect" reads like it might take them. */}
+                      {t("profile.disconnectWarning")}
+                    </p>
+                    {disconnectError && (
+                      <p role="alert" className="text-micro text-destructive">
+                        {disconnectError}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        className="flex-1"
+                        loading={disconnecting}
+                        onClick={handleDisconnectStrava}
+                      >
+                        {t("profile.disconnectConfirm")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disconnecting}
+                        onClick={() => {
+                          setShowDisconnectConfirm(false)
+                          setDisconnectError(null)
+                        }}
+                      >
+                        {t("common.cancel")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : !showResyncConfirm ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="-mx-2 flex flex-wrap items-center">
+                      <Button variant="ghost" size="sm" onClick={handleConnect}>
+                        <RotateCcw size={13} />
+                        {t("profile.reconnect")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        disabled={isSyncing}
+                        onClick={() => setShowResyncConfirm(true)}
+                      >
+                        <TriangleAlert size={13} className="text-warning" />
+                        {t("profile.fullResync")}
+                      </Button>
+                      {canSignInWithoutStrava && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          onClick={() => setShowDisconnectConfirm(true)}
+                        >
+                          <Link2Off size={13} />
+                          {t("profile.disconnect")}
+                        </Button>
+                      )}
+                    </div>
+                    {/* Not a disabled button with no explanation: Strava is
+                        the only way into this account, and the way to change
+                        that is two rows further down this same screen. */}
+                    {!canSignInWithoutStrava && (
+                      <p className="text-micro leading-relaxed text-muted-foreground">
+                        {t("profile.disconnectBlocked")}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2.5">
@@ -982,14 +1087,14 @@ export function ProfileScreen({
                 className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-left text-label font-medium text-card-foreground"
               >
                 <KeyRound size={16} className="text-muted-foreground" aria-hidden />
-                {t("profile.changePassword")}
+                {t(user.needs_password ? "profile.setPassword" : "profile.changePassword")}
               </button>
             </CardRow>
           ) : (
             <CardRow>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-label font-semibold text-card-foreground">
-                  {t("profile.changePassword")}
+                  {t(user.needs_password ? "profile.setPassword" : "profile.changePassword")}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => setShowChangePassword(false)}>
                   {t("common.cancel")}
@@ -1001,6 +1106,13 @@ export function ProfileScreen({
                 </p>
               ) : (
                 <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+                  {/* Why it is worth doing, said only to the accounts that
+                      have one way in. */}
+                  {user.needs_password && (
+                    <p className="text-micro leading-relaxed text-muted-foreground">
+                      {t("profile.setPasswordBlurb")}
+                    </p>
+                  )}
                   {pwError && (
                     <p role="alert" className="text-micro text-destructive">
                       {pwError}

@@ -88,6 +88,12 @@ export default async function Page() {
     warningState,
   )
 
+  // An account made from a Strava sign-in has no password until it asks for
+  // one. Read from the auth user rather than the profile row: it is a fact
+  // about the credential, not about the runner.
+  const metadata = authUser.user_metadata ?? {}
+  const needsPassword = metadata.auth_source === "strava" && metadata.has_password !== true
+
   const initialData = {
     activities: activitiesRes,
     warnings: newWarnings,
@@ -135,6 +141,7 @@ export default async function Page() {
           hr_analysis_cache: (profileRes.data as any).hr_analysis_cache ?? null,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onboarding_dismissed_at: (profileRes.data as any).onboarding_dismissed_at ?? null,
+          needs_password: needsPassword,
         }
       : {
           id: authUser.id,
@@ -145,6 +152,7 @@ export default async function Page() {
           max_hr: null,
           resting_hr: null,
           onboarding_dismissed_at: null,
+          needs_password: needsPassword,
         },
     sharedGoals: await buildSharedGoalSummaries(supabase, authUser.id, sharedRes.data ?? []),
     testRunActivityIds: (testRunsRes.data ?? []).map((tr) => tr.activity_id as string),

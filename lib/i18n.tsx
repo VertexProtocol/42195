@@ -524,6 +524,48 @@ const translations = {
     "auth.errorEmailNotConfirmed": "Please confirm your email first. Check your inbox.",
     "auth.errorTooManyRequests": "Too many attempts. Please wait a few minutes.",
     "auth.errorDefault": "Sign in failed. Please try again.",
+    "auth.confirmEmailTitle": "Confirm your email",
+    "auth.confirmEmailBody":
+      "We sent a link to {email}. Open it on this device and you are in — there is no second sign-in.",
+    "auth.confirmEmailBodyGeneric":
+      "We sent a confirmation link to your address. Open it on this device and you are in — there is no second sign-in.",
+    "auth.confirmEmailWrongAddress": "Use a different address",
+    "auth.confirmEmailOtherBrowser": "Opened the link somewhere else?",
+    "auth.or": "or",
+    "auth.stravaBlurb": "Your runs come with you. No confirmation email.",
+    "auth.finishTitle": "Where can we reach you?",
+    "auth.finishBody":
+      "Strava does not pass on your email address, so the account has none yet. One address, and there is a way back in if you ever lose your Strava account.",
+    "auth.finishHint": "No confirmation email — you are already signed in.",
+    "auth.finishSave": "Save and continue",
+    "auth.finishSaving": "Saving…",
+    "auth.finishLater": "Do this later",
+    "auth.finishInvalid": "That does not look like an email address. Check it and try again.",
+    "auth.finishTaken": "That address already signs in to another account. Try a different one.",
+    "auth.finishFailed": "We could not save that address. Try again in a moment.",
+    "authError.stravaSignupClosed":
+      "42195 is not open for new accounts yet. If you already have one, sign in and connect Strava from Profile.",
+    "authError.stravaSessionFailed":
+      "Strava approved the connection, but we could not sign you in. Try again, or sign in with your email and password.",
+    "auth.resend": "Send the email again",
+    "auth.resending": "Sending…",
+    "auth.resendSent": "Sent. Give it a minute, and look in your spam folder.",
+    "auth.resendThrottled": "One email a minute. Wait a moment, then try again.",
+    "auth.errorSignUpDefault":
+      "We could not create your account. Check your connection and try again.",
+    "authError.title": "We could not sign you in",
+    "authError.generic": "Something went wrong on our side. Try signing in again.",
+    "authError.stravaAlreadyLinked":
+      "That Strava account is already connected to another 42195 account. Disconnect it there first, or sign in with that account.",
+    "authError.stravaMissingScope":
+      "42195 needs permission to read your activities. Connect again and leave every box ticked on Strava's screen.",
+    "authError.invalidCredentials": "That email and password did not match. Check both and try again.",
+    "authError.emailNotConfirmed": "Confirm your email address first — the link is in your inbox.",
+    "authError.tooManyRequests": "Too many attempts. Wait a few minutes, then try again.",
+    "authError.confirmedElsewhere":
+      "Your email is confirmed. The link opened in a different browser from the one you signed up in, so sign in here with your email and password.",
+    "authError.linkExpired": "This link has expired or has already been used. Request a new one.",
+    "authError.alreadyRegistered": "An account with this email already exists. Sign in instead.",
     // Profile — account editing
     "profile.editName": "Edit",
     "profile.displayNameLabel": "Display name",
@@ -531,6 +573,17 @@ const translations = {
     "profile.nameSaving": "Saving…",
     "profile.nameTooShort": "Name must be at least 2 characters.",
     "profile.changePassword": "Change password",
+    "profile.setPassword": "Set a password",
+    "profile.addEmail": "Add an email address",
+    "profile.disconnect": "Disconnect",
+    "profile.disconnectWarning":
+      "Your runs stay. 42195 stops syncing and gives up its access to your Strava account — connect again whenever you like, and the log picks up where it left off.",
+    "profile.disconnectConfirm": "Disconnect Strava",
+    "profile.disconnectBlocked":
+      "Strava is the only way into this account. Add an email address and set a password first, and disconnecting becomes available.",
+    "profile.disconnectFailed": "We could not disconnect Strava. Try again in a moment.",
+    "profile.setPasswordBlurb":
+      "You sign in with Strava. A password gives you a second way in, for the day Strava is down or you no longer use it.",
     "profile.passwordUpdated": "Password updated",
     "profile.updating": "Updating…",
     "profile.passwordMismatch": "Passwords do not match.",
@@ -908,6 +961,48 @@ const translations = {
     "auth.errorEmailNotConfirmed": "Bekreft e-postadressen din først. Sjekk innboksen.",
     "auth.errorTooManyRequests": "For mange forsøk. Vent noen minutter.",
     "auth.errorDefault": "Innlogging mislyktes. Prøv igjen.",
+    "auth.confirmEmailTitle": "Bekreft e-posten din",
+    "auth.confirmEmailBody":
+      "Vi har sendt en lenke til {email}. Åpne den på denne enheten, så er du inne – du trenger ikke logge inn en gang til.",
+    "auth.confirmEmailBodyGeneric":
+      "Vi har sendt en bekreftelseslenke til adressen din. Åpne den på denne enheten, så er du inne – du trenger ikke logge inn en gang til.",
+    "auth.confirmEmailWrongAddress": "Bruk en annen adresse",
+    "auth.confirmEmailOtherBrowser": "Åpnet du lenken et annet sted?",
+    "auth.or": "eller",
+    "auth.stravaBlurb": "Løpene dine blir med. Ingen bekreftelses-e-post.",
+    "auth.finishTitle": "Hvor kan vi nå deg?",
+    "auth.finishBody":
+      "Strava oppgir ikke e-postadressen din, så kontoen har ingen ennå. Én adresse, så finnes det en vei inn igjen hvis du en gang mister Strava-kontoen.",
+    "auth.finishHint": "Ingen bekreftelses-e-post – du er allerede logget inn.",
+    "auth.finishSave": "Lagre og fortsett",
+    "auth.finishSaving": "Lagrer…",
+    "auth.finishLater": "Gjør dette senere",
+    "auth.finishInvalid": "Dette ser ikke ut som en e-postadresse. Sjekk den og prøv igjen.",
+    "auth.finishTaken": "Den adressen logger allerede inn på en annen konto. Prøv en annen.",
+    "auth.finishFailed": "Vi klarte ikke å lagre adressen. Prøv igjen om et øyeblikk.",
+    "authError.stravaSignupClosed":
+      "42195 er ikke åpen for nye kontoer ennå. Har du allerede en, logg inn og koble til Strava fra Profil.",
+    "authError.stravaSessionFailed":
+      "Strava godkjente tilkoblingen, men vi fikk ikke logget deg inn. Prøv igjen, eller logg inn med e-post og passord.",
+    "auth.resend": "Send e-posten på nytt",
+    "auth.resending": "Sender…",
+    "auth.resendSent": "Sendt. Gi den et minutt, og se i søppelposten.",
+    "auth.resendThrottled": "Én e-post i minuttet. Vent litt, og prøv igjen.",
+    "auth.errorSignUpDefault":
+      "Vi klarte ikke å opprette kontoen. Sjekk tilkoblingen og prøv igjen.",
+    "authError.title": "Vi fikk ikke logget deg inn",
+    "authError.generic": "Noe gikk galt hos oss. Prøv å logge inn igjen.",
+    "authError.stravaAlreadyLinked":
+      "Den Strava-kontoen er allerede koblet til en annen 42195-konto. Koble den fra der først, eller logg inn med den kontoen.",
+    "authError.stravaMissingScope":
+      "42195 trenger tilgang til å lese aktivitetene dine. Koble til på nytt, og la alle boksene stå avhuket på Stravas skjerm.",
+    "authError.invalidCredentials": "E-posten og passordet stemte ikke. Sjekk begge og prøv igjen.",
+    "authError.emailNotConfirmed": "Bekreft e-postadressen din først – lenken ligger i innboksen.",
+    "authError.tooManyRequests": "For mange forsøk. Vent noen minutter, og prøv igjen.",
+    "authError.confirmedElsewhere":
+      "E-posten din er bekreftet. Lenken ble åpnet i en annen nettleser enn den du registrerte deg i, så logg inn her med e-post og passord.",
+    "authError.linkExpired": "Denne lenken er utløpt eller allerede brukt. Be om en ny.",
+    "authError.alreadyRegistered": "Det finnes allerede en konto med denne e-posten. Logg inn i stedet.",
     // Profile — account editing
     "profile.editName": "Rediger",
     "profile.displayNameLabel": "Visningsnavn",
@@ -915,6 +1010,17 @@ const translations = {
     "profile.nameSaving": "Lagrer…",
     "profile.nameTooShort": "Navn må være minst 2 tegn.",
     "profile.changePassword": "Endre passord",
+    "profile.setPassword": "Lag et passord",
+    "profile.addEmail": "Legg til en e-postadresse",
+    "profile.disconnect": "Koble fra",
+    "profile.disconnectWarning":
+      "Løpene dine blir liggende. 42195 slutter å synkronisere og gir fra seg tilgangen til Strava-kontoen din – koble til igjen når du vil, så fortsetter loggen der den slapp.",
+    "profile.disconnectConfirm": "Koble fra Strava",
+    "profile.disconnectBlocked":
+      "Strava er eneste vei inn på denne kontoen. Legg til en e-postadresse og lag et passord først, så blir frakobling tilgjengelig.",
+    "profile.disconnectFailed": "Vi klarte ikke å koble fra Strava. Prøv igjen om et øyeblikk.",
+    "profile.setPasswordBlurb":
+      "Du logger inn med Strava. Et passord gir deg en vei nummer to inn, den dagen Strava er nede eller du ikke bruker det lenger.",
     "profile.passwordUpdated": "Passord oppdatert",
     "profile.updating": "Oppdaterer…",
     "profile.passwordMismatch": "Passordene stemmer ikke overens.",
@@ -1389,6 +1495,24 @@ export type TranslationParams = Record<string, string | number>
  * no matching param is left as-is: a visible `{count}` in the UI is a louder
  * bug report than a silent empty string.
  */
+/**
+ * The locale to open on before the runner has said. English unless the
+ * browser's first stated preference is Norwegian — `no`, `nb` and `nn` are all
+ * Bokmål here, since that is the only Norwegian the app has.
+ */
+export function detectLocale(preferences: readonly (string | undefined)[]): Locale {
+  for (const tag of preferences) {
+    // Whatever the browser hands over, not what the spec says it will: a
+    // `navigator` with no language at all is a real thing in embedded
+    // webviews, and this runs on the first render of every signed-out screen.
+    if (typeof tag !== "string") continue
+    const primary = tag.toLowerCase().split("-")[0]
+    if (primary === "no" || primary === "nb" || primary === "nn") return "no"
+    if (primary === "en") return "en"
+  }
+  return "en"
+}
+
 function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
@@ -1414,8 +1538,18 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("locale") as Locale | null
-      if (stored === "en" || stored === "no") setLocaleState(stored)
+      if (stored === "en" || stored === "no") {
+        setLocaleState(stored)
+        return
+      }
     } catch {}
+
+    // Nobody has chosen yet, and on the auth screens nobody can: the switch
+    // lives in Profile, behind the sign-in. So the first guess comes from the
+    // browser, and the account's saved locale overrides it once there is one.
+    if (typeof navigator === "undefined") return
+    const preferences = navigator.languages?.length ? navigator.languages : [navigator.language]
+    if (detectLocale(preferences) === "no") setLocaleState("no")
   }, [])
 
   const setLocale = useCallback((l: Locale) => {
