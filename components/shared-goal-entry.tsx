@@ -28,7 +28,7 @@ interface SharedGoalEntryProps {
 export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps) {
   const { t } = useI18n()
   const [group, setGroup] = useState<SharedGoalSummary | null>(null)
-  const [loaded, setLoaded] = useState(false)
+  const [state, setState] = useState<"loading" | "ready" | "unavailable">("loading")
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
@@ -36,11 +36,18 @@ export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps
     void (async () => {
       try {
         const res = await fetch(`/api/shared-goals?goal=${encodeURIComponent(goalId)}`)
-        if (!res.ok) return
+        if (!res.ok) throw new Error(String(res.status))
         const body = (await res.json()) as { group: SharedGoalSummary | null }
-        if (!cancelled) setGroup(body.group)
-      } finally {
-        if (!cancelled) setLoaded(true)
+        if (!cancelled) {
+          setGroup(body.group)
+          setState("ready")
+        }
+      } catch {
+        // "No group" and "could not ask" are different answers, and only one
+        // of them justifies offering to make one. Before the migration has
+        // been applied the query fails, and inviting a runner to create a
+        // group that cannot be created is worse than staying quiet.
+        if (!cancelled) setState("unavailable")
       }
     })()
     return () => {
@@ -67,7 +74,7 @@ export function SharedGoalEntry({ goalId, hidden, onOpen }: SharedGoalEntryProps
   // Nothing is drawn until the answer is known. A prompt that appears and then
   // turns into a group row a moment later is the pop-in this screen has spent
   // several passes removing.
-  if (hidden || !loaded) return null
+  if (hidden || state !== "ready") return null
 
   if (!group) {
     return (
