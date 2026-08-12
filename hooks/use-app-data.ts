@@ -8,6 +8,7 @@ import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile 
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
 import type { Warning } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
+import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 import { logError } from "@/lib/log"
 
 const supabase = createClient()
@@ -29,6 +30,8 @@ export interface InitialData {
   warnings: Warning[]
   /** Plan badges keyed by goal id, derived during the page render. */
   planBadges: Record<string, PlanBadge>
+  /** The group each goal belongs to, keyed by goal id. */
+  sharedGoals: Record<string, SharedGoalSummary>
   stravaConnected: boolean
   syncStatus: SyncStatus | null
 }
@@ -57,6 +60,12 @@ export function useAppData(initialData?: InitialData | null) {
   // Seeded from the page render so Today paints them immediately, then kept
   // fresh from the same session-scoped state rather than refetched per visit.
   const [warnings, setWarnings] = useState<Warning[]>(initialData?.warnings ?? [])
+  // Seeded from the page render for the same reason as the plan badges: the
+  // goal detail screen unmounts on every tab change, so a fetch it owned meant
+  // a round trip — and a flash of the wrong card — on each visit.
+  const [sharedGoals, setSharedGoals] = useState<Record<string, SharedGoalSummary>>(
+    initialData?.sharedGoals ?? {},
+  )
   const [planBadges, setPlanBadges] = useState<Record<string, PlanBadge>>(
     initialData?.planBadges ?? {},
   )
@@ -85,6 +94,18 @@ export function useAppData(initialData?: InitialData | null) {
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
     if (data) setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+  }, [])
+
+  /** Called when a group is created, joined or left — not on every visit. */
+  const refreshSharedGoals = useCallback(async () => {
+    try {
+      const res = await fetch("/api/shared-goals")
+      if (!res.ok) return
+      const body = (await res.json()) as { groups?: Record<string, SharedGoalSummary> }
+      if (body.groups) setSharedGoals(body.groups)
+    } catch {
+      // The last known set stays on screen; the next page load re-seeds it.
+    }
   }, [])
 
   /** Warnings are a function of the activity list, so a sync invalidates them. */
@@ -846,6 +867,8 @@ export function useAppData(initialData?: InitialData | null) {
     warnings,
     planBadges,
     refreshPlanBadges,
+    sharedGoals,
+    refreshSharedGoals,
 
     // Derived
     starredGoals, // [STAR]
