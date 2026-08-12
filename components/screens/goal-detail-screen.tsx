@@ -51,6 +51,7 @@ import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 import { parseSessionDistanceKm } from "@/lib/training-sessions"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
+import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui/pill'
 
@@ -183,6 +184,8 @@ interface GoalDetailScreenProps {
   activities: Activity[]
   onBack: () => void
   onEditGoal: (goal: Goal) => void
+  /** Opens the shared-goal screen for the group this goal belongs to. */
+  onOpenGroup?: (groupId: string) => void
   /**
    * A plan was generated, regenerated, or had a checkpoint applied. Today's
    * goal badges are derived from plans, and it no longer re-queries them on
@@ -1040,6 +1043,7 @@ export function GoalDetailScreen({
   onEditGoal,
   onPlanChange,
   onToggleStar,
+  onOpenGroup,
 }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
@@ -1479,6 +1483,10 @@ export function GoalDetailScreen({
             </span>
           )}
         </div>
+
+      {onOpenGroup && (
+        <SharedGoalEntry goalId={goal.id} hidden={past} onOpen={onOpenGroup} />
+      )}
 
       {/* Once the date has gone, the question is no longer "how far into the
           training am I" — that bar reads 100% for every past goal and says

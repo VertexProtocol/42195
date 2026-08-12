@@ -266,17 +266,26 @@ export const PREDICTION_DISTANCES = [
  * Uses the best recent activity (last 90 days, >= 3km) as the reference.
  * If an exponentAdjustment is provided (from test run validation feedback),
  * it shifts the base exponent (1.06) to produce more personalized predictions.
+ *
+ * `asOf` moves the whole window — the lookback cutoff and the recency
+ * weighting — to a point in the past. A shared goal needs the prediction as it
+ * stood on the day a runner joined, and that has to be the same calculation
+ * today's number comes from, or the two are not comparable.
  */
-export function predictRaceTimes(activities: Activity[], exponentAdjustment?: number): {
+export function predictRaceTimes(
+  activities: Activity[],
+  exponentAdjustment?: number,
+  asOf: number = Date.now(),
+): {
   predictions: RacePrediction[]
   referenceActivity: Activity | null
 } {
-  const cutoff = Date.now() - RACE_PREDICTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+  const cutoff = asOf - RACE_PREDICTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
   const recent = activities.filter(
-    (a) =>
-      new Date(a.date).getTime() >= cutoff &&
-      a.distance_km >= 3 &&
-      a.duration_seconds > 0,
+    (a) => {
+      const t = new Date(a.date).getTime()
+      return t >= cutoff && t <= asOf && a.distance_km >= 3 && a.duration_seconds > 0
+    },
   )
 
   if (recent.length === 0) return { predictions: [], referenceActivity: null }
@@ -284,7 +293,7 @@ export function predictRaceTimes(activities: Activity[], exponentAdjustment?: nu
   // Find best "VDOT" equivalent — fastest pace-adjusted 5k equivalent,
   // with recency weighting: activities within 30 days get full weight,
   // older activities are penalized by up to 5% to prefer recent fitness.
-  const now = Date.now()
+  const now = asOf
   let bestRef = recent[0]
   let bestScore = Infinity
 
