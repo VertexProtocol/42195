@@ -104,7 +104,16 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       target_time_seconds: totalSeconds > 0 ? totalSeconds : null,
       target_date: targetDate + "T00:00:00Z",
       current_distance_km: isNew ? 0 : goal!.current_distance_km,
-      is_active: isNew ? false : goal!.is_active,
+      // A new goal starts active. It used to start inactive, which reads as a
+      // harmless default until you see what the flag gates: the coach's
+      // get_goals tool filters on it, so a runner could create a goal, ask the
+      // coach about it, and be told "No active goals found". Activity analysis
+      // skips inactive goals too, and the Strava sync never recalculates their
+      // logged distance. Nothing in the UI hinted that a goal was dormant.
+      //
+      // Turning it off stays available on the goal card, for narrowing what the
+      // coach looks at when there are several goals in flight.
+      is_active: isNew ? true : goal!.is_active,
       created_at: isNew ? new Date().toISOString() : goal!.created_at,
       // The editor does not own ordering or the Today pin, but it replaces the
       // goal object in local state — carrying them through stops an edit from

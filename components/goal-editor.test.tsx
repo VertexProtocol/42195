@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { GoalEditor } from "./goal-editor"
@@ -107,5 +107,65 @@ describe("GoalEditor — goal type selector", () => {
 
     fireEvent.click(typeButton(/event training/i))
     expect(screen.getByText(/preparing for a race or event/i)).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// What a new goal starts as
+// ---------------------------------------------------------------------------
+
+function fillAndSave() {
+  fireEvent.change(screen.getByLabelText("Goal name"), { target: { value: "20 km" } })
+  fireEvent.change(screen.getByLabelText("Target distance (km)"), { target: { value: "20" } })
+  fireEvent.change(screen.getByLabelText("Target date"), { target: { value: "2027-05-01" } })
+  fireEvent.click(screen.getByRole("button", { name: "Save" }))
+}
+
+describe("GoalEditor — a new goal starts active", () => {
+  it("saves a new goal the coach can actually see", () => {
+    // is_active gates the coach's get_goals tool, activity analysis, and the
+    // sync that recalculates logged distance. A new goal used to start with it
+    // off, so asking the coach about a goal just created answered "No active
+    // goals found".
+    const onSave = vi.fn()
+    render(
+      <I18nProvider>
+        <GoalEditor goal={null} isNew open onSave={onSave} onClose={() => {}} />
+      </I18nProvider>,
+    )
+
+    fillAndSave()
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave.mock.calls[0][0]).toMatchObject({ is_active: true, name: "20 km" })
+  })
+
+  it("leaves an existing goal's own setting alone", () => {
+    const onSave = vi.fn()
+    render(
+      <I18nProvider>
+        <GoalEditor
+          goal={makeGoal({ is_active: false, goal_category: "performance" })}
+          isNew={false}
+          open
+          onSave={onSave}
+          onClose={() => {}}
+        />
+      </I18nProvider>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    expect(onSave.mock.calls[0][0]).toMatchObject({ is_active: false })
+  })
+
+  it("does not pin a new goal to Today on its own", () => {
+    const onSave = vi.fn()
+    render(
+      <I18nProvider>
+        <GoalEditor goal={null} isNew open onSave={onSave} onClose={() => {}} />
+      </I18nProvider>,
+    )
+
+    fillAndSave()
+    expect(onSave.mock.calls[0][0]).toMatchObject({ is_starred: false })
   })
 })
