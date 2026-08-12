@@ -571,9 +571,20 @@ export function GoalsScreen({
                                         </>
                                       )}
                                       {" · "}
-                                      {isPast
-                                        ? t("plan.completed")
-                                        : `${days} ${t("common.daysLeft")}`}
+                                      {/* A date that has passed is not an
+                                          achievement. This said "Completed" for
+                                          any goal whose day had been and gone —
+                                          including a 20 km target whose longest
+                                          run, shown one tap below, was 10.5 km.
+                                          The engine already knows whether the
+                                          mark was hit; only goals with a
+                                          measurable target can be judged, so an
+                                          event goal simply ends. */}
+                                      {!isPast
+                                        ? `${days} ${t("common.daysLeft")}`
+                                        : status?.reached
+                                          ? t("plan.achieved")
+                                          : t("plan.ended")}
                                     </span>
                                   </span>
                                   <ChevronDown

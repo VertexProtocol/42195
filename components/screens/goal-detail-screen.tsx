@@ -9,6 +9,8 @@ import {
   ChevronUp,
   MapPin,
   CalendarCheck,
+  Trophy,
+  StarOff,
   AlertCircle,
   AlertTriangle,
   Info,
@@ -20,9 +22,13 @@ import {
 import {
   formatDistance,
   formatDate,
+  formatDateShort,
+  formatTargetTime,
   daysUntil,
   isDatePast,
   timeElapsedPercentage,
+  computeDistanceInRange,
+  evaluatePerformanceGoal,
 } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
@@ -49,6 +55,130 @@ import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui/pill'
 
+/**
+ * How a goal that has run its course actually went.
+ *
+ * The verdict comes from the engine, not the calendar: a target whose day has
+ * passed is finished, but only a target with a mark can be said to have been
+ * reached. An event goal has no mark — a marathon is not passed or failed by
+ * the app — so it reports what was logged toward it and leaves the judging
+ * alone.
+ */
+function GoalResultCard({
+  goal,
+  activities,
+  onUnpin,
+  t,
+}: {
+  goal: Goal
+  activities: Activity[]
+  onUnpin?: (goalId: string) => void
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+}) {
+  const isPerformance = goal.goal_category === "performance"
+  const status = isPerformance
+    ? evaluatePerformanceGoal(activities, goal.target_distance_km, goal.target_time_seconds)
+    : null
+  const reached = status?.reached ?? false
+
+  const logged = computeDistanceInRange(
+    activities,
+    goal.start_date,
+    goal.target_date,
+    goal.created_at,
+  )
+
+  // What the runner actually managed, in the unit the goal was set in.
+  const best = status?.bestActivity
+    ? goal.target_time_seconds && status.bestTimeSeconds
+      ? formatTargetTime(status.bestTimeSeconds)
+      : formatDistance(status.bestActivity.distance_km)
+    : null
+
+  return (
+    <AppCard variant="rows">
+      <div className="flex items-center gap-3 px-5 py-4">
+        <div
+          className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${
+            reached ? "bg-success/12" : "bg-secondary"
+          }`}
+        >
+          {reached ? (
+            <Trophy size={19} className="text-success" aria-hidden />
+          ) : (
+            <Flag size={19} className="text-muted-foreground" aria-hidden />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-lead font-semibold ${
+              reached ? "text-success" : "text-card-foreground"
+            }`}
+          >
+            {reached ? t("plan.achieved") : t("plan.ended")}
+          </p>
+          <p className="mt-0.5 text-micro text-muted-foreground">
+            {t("plan.resultOn", { date: formatDate(goal.target_date) })}
+          </p>
+        </div>
+      </div>
+
+      {isPerformance && (
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+          <span className="text-label text-muted-foreground">
+            {goal.target_time_seconds ? t("plan.bestTime") : t("plan.longestRun")}
+          </span>
+          <span className="measure text-label font-semibold text-card-foreground">
+            {best ?? "—"}
+            <span className="font-normal text-muted-foreground">
+              {" / "}
+              {goal.target_time_seconds
+                ? formatTargetTime(goal.target_time_seconds)
+                : formatDistance(goal.target_distance_km)}
+            </span>
+          </span>
+        </div>
+      )}
+
+      {status?.bestActivity && (
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+          <span className="text-label text-muted-foreground">{t("plan.bestEffortOn")}</span>
+          <span className="text-label text-card-foreground">
+            {formatDateShort(status.bestActivity.date)}
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+        <span className="text-label text-muted-foreground">{t("plan.loggedTowards")}</span>
+        <span className="measure text-label font-semibold text-card-foreground">
+          {formatDistance(logged)}
+        </span>
+      </div>
+
+      {/* Offered, not done for them. Unpinning is the runner's call — this is
+          the moment it stops being useful on Today, so it is the moment to
+          mention it. */}
+      {goal.is_starred && onUnpin && (
+        <div className="px-5 py-3.5">
+          <p className="text-micro leading-relaxed text-muted-foreground">
+            {t("plan.stillPinnedBody")}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-2.5"
+            onClick={() => onUnpin(goal.id)}
+          >
+            <StarOff size={14} />
+            {t("plan.unpinFromToday")}
+          </Button>
+        </div>
+      )}
+    </AppCard>
+  )
+}
+
 interface GoalDetailScreenProps {
   goal: Goal
   activities: Activity[]
@@ -62,6 +192,8 @@ interface GoalDetailScreenProps {
    * every visit, so it needs telling.
    */
   onPlanChange?: () => void
+  /** Unpins the goal from Today. Offered once its date has gone. */
+  onToggleStar?: (goalId: string) => void
 }
 
 // ---- Collapsible Section ----
@@ -904,7 +1036,15 @@ function TrainingTimelineView({
 }
 
 // ---- Main screen ----
-export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanChange, onOpenGroup }: GoalDetailScreenProps) {
+export function GoalDetailScreen({
+  goal,
+  activities,
+  onBack,
+  onEditGoal,
+  onPlanChange,
+  onToggleStar,
+  onOpenGroup,
+}: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
     goal_id: goal.id,
@@ -1348,30 +1488,42 @@ export function GoalDetailScreen({ goal, activities, onBack, onEditGoal, onPlanC
         <SharedGoalEntry goalId={goal.id} hidden={past} onOpen={onOpenGroup} />
       )}
 
-      {/* Progress bar + Training Timeline (merged) */}
-      <AppCard variant="rows">
-        <div className="px-5 py-4">
-          <div className="flex items-center justify-between text-micro mb-2">
-            <span className="text-muted-foreground">
-              {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
-            </span>
-            <span className="font-medium text-foreground">{timeProgress}%</span>
+      {/* Once the date has gone, the question is no longer "how far into the
+          training am I" — that bar reads 100% for every past goal and says
+          nothing. What is left to know is how it went, so the result leads and
+          the plan section falls in behind it. */}
+      {past ? (
+        <GoalResultCard
+          goal={goal}
+          activities={activities}
+          onUnpin={onToggleStar}
+          t={t}
+        />
+      ) : (
+        <AppCard variant="rows">
+          <div className="px-5 py-4">
+            <div className="flex items-center justify-between text-micro mb-2">
+              <span className="text-muted-foreground">
+                {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
+              </span>
+              <span className="font-medium text-foreground">{timeProgress}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${timeProgress}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${timeProgress}%` }}
+          {timeline && (
+            <TrainingTimelineView
+              timeline={timeline}
+              blockPosition={blockPosition}
+              embedded
             />
-          </div>
-        </div>
-        {timeline && !past && (
-          <TrainingTimelineView
-            timeline={timeline}
-            blockPosition={blockPosition}
-            embedded
-          />
-        )}
-      </AppCard>
+          )}
+        </AppCard>
+      )}
 
       {/* ---- AI Training Plan section ---- */}
       <section>

@@ -9,7 +9,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react"
-import { ChevronRight, Star } from "lucide-react"
+import { ChevronRight, Star, StarOff } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressLap } from "@/components/progress-lap"
 import {
@@ -134,6 +134,8 @@ interface HomeScreenProps {
   stravaConnected?: boolean
   onViewActivities: () => void
   onViewGoal: (goal: Goal) => void
+  /** Unpins a goal from this screen. Offered only once its date has gone. */
+  onUnpinGoal?: (goalId: string) => void
   onViewGoals: () => void
   onViewInsights: () => void
   onSelectActivity: (activity: Activity) => void
@@ -152,6 +154,7 @@ export function HomeScreen({
   onViewGoal,
   onViewGoals,
   onSelectActivity,
+  onUnpinGoal,
 }: HomeScreenProps) {
   const { t } = useI18n()
 
@@ -401,6 +404,21 @@ export function HomeScreen({
                     </div>
                   </div>
                 </button>
+
+                {/* A sibling of the card, not a child: the card is itself a
+                    button, and a button inside a button is not a thing. Offered
+                    only once the race is behind them, and only as an offer —
+                    unpinning something the runner chose to pin is their call,
+                    not a tidy-up the app does quietly overnight. */}
+                {m.past && onUnpinGoal && (
+                  <button
+                    onClick={() => onUnpinGoal(goal.id)}
+                    className="press mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-sm py-1.5 text-micro font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <StarOff size={13} aria-hidden />
+                    {t("home.unpinFinished")}
+                  </button>
+                )}
                 </div>
               )
             })}
