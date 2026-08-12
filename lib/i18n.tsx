@@ -524,6 +524,13 @@ const translations = {
     "auth.errorEmailNotConfirmed": "Please confirm your email first. Check your inbox.",
     "auth.errorTooManyRequests": "Too many attempts. Please wait a few minutes.",
     "auth.errorDefault": "Sign in failed. Please try again.",
+    "auth.confirmEmailTitle": "Confirm your email",
+    "auth.confirmEmailBody":
+      "We sent a link to {email}. Open it on this device and you are in — there is no second sign-in.",
+    "auth.confirmEmailBodyGeneric":
+      "We sent a confirmation link to your address. Open it on this device and you are in — there is no second sign-in.",
+    "auth.confirmEmailWrongAddress": "Use a different address",
+    "auth.confirmEmailOtherBrowser": "Opened the link somewhere else?",
     // Profile — account editing
     "profile.editName": "Edit",
     "profile.displayNameLabel": "Display name",
@@ -905,6 +912,13 @@ const translations = {
     "auth.errorEmailNotConfirmed": "Bekreft e-postadressen din først. Sjekk innboksen.",
     "auth.errorTooManyRequests": "For mange forsøk. Vent noen minutter.",
     "auth.errorDefault": "Innlogging mislyktes. Prøv igjen.",
+    "auth.confirmEmailTitle": "Bekreft e-posten din",
+    "auth.confirmEmailBody":
+      "Vi har sendt en lenke til {email}. Åpne den på denne enheten, så er du inne – du trenger ikke logge inn en gang til.",
+    "auth.confirmEmailBodyGeneric":
+      "Vi har sendt en bekreftelseslenke til adressen din. Åpne den på denne enheten, så er du inne – du trenger ikke logge inn en gang til.",
+    "auth.confirmEmailWrongAddress": "Bruk en annen adresse",
+    "auth.confirmEmailOtherBrowser": "Åpnet du lenken et annet sted?",
     // Profile — account editing
     "profile.editName": "Rediger",
     "profile.displayNameLabel": "Visningsnavn",
@@ -1383,6 +1397,20 @@ export type TranslationParams = Record<string, string | number>
  * no matching param is left as-is: a visible `{count}` in the UI is a louder
  * bug report than a silent empty string.
  */
+/**
+ * The locale to open on before the runner has said. English unless the
+ * browser's first stated preference is Norwegian — `no`, `nb` and `nn` are all
+ * Bokmål here, since that is the only Norwegian the app has.
+ */
+export function detectLocale(preferences: readonly string[]): Locale {
+  for (const tag of preferences) {
+    const primary = tag.toLowerCase().split("-")[0]
+    if (primary === "no" || primary === "nb" || primary === "nn") return "no"
+    if (primary === "en") return "en"
+  }
+  return "en"
+}
+
 function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
@@ -1408,8 +1436,18 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("locale") as Locale | null
-      if (stored === "en" || stored === "no") setLocaleState(stored)
+      if (stored === "en" || stored === "no") {
+        setLocaleState(stored)
+        return
+      }
     } catch {}
+
+    // Nobody has chosen yet, and on the auth screens nobody can: the switch
+    // lives in Profile, behind the sign-in. So the first guess comes from the
+    // browser, and the account's saved locale overrides it once there is one.
+    if (typeof navigator !== "undefined" && detectLocale(navigator.languages ?? [navigator.language]) === "no") {
+      setLocaleState("no")
+    }
   }, [])
 
   const setLocale = useCallback((l: Locale) => {

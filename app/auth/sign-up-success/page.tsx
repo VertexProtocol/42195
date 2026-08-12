@@ -1,27 +1,18 @@
-import Link from "next/link"
-import { AuthShell } from "@/components/auth-shell"
-import { Button } from "@/components/ui/button"
+import { safeNext } from "@/lib/auth-redirect"
+import { SignUpSuccess } from "./sign-up-success"
 
-export default function SignUpSuccessPage() {
-  return (
-    <AuthShell
-      title="Check your email"
-      lede="We sent a confirmation link to your address. Open it to activate your account, then sign in."
-      footer={
-        <>
-          Already confirmed?{" "}
-          <Link
-            href="/auth/login"
-            className="font-semibold text-primary underline-offset-4 hover:underline"
-          >
-            Sign in
-          </Link>
-        </>
-      }
-    >
-      <Button asChild block variant="secondary">
-        <Link href="/auth/login">Back to sign in</Link>
-      </Button>
-    </AuthShell>
-  )
+/**
+ * The wait between creating an account and confirming it.
+ *
+ * A server component so the two parameters can be read without pulling the
+ * whole screen out of prerendering; the screen itself is a client component
+ * because everything the runner reads here is translated.
+ */
+export default async function SignUpSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string; next?: string }>
+}) {
+  const { email, next } = await searchParams
+  return <SignUpSuccess email={email ?? null} next={safeNext(next)} />
 }

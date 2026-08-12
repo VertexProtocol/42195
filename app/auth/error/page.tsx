@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { withNext } from "@/lib/auth-redirect"
 import { AuthShell } from "@/components/auth-shell"
 import { Button } from "@/components/ui/button"
 
@@ -41,14 +42,16 @@ function sanitizeAuthErrorMessage(message: string | undefined): string {
 export default async function AuthErrorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>
+  searchParams: Promise<{ message?: string; next?: string }>
 }) {
-  const { message } = await searchParams
+  const { message, next } = await searchParams
 
   return (
     <AuthShell title="We could not sign you in" lede={sanitizeAuthErrorMessage(message)}>
+      {/* Signing in from here still ends up where the runner was going —
+          following an invite link should not have to be done twice. */}
       <Button asChild block>
-        <Link href="/auth/login">Back to sign in</Link>
+        <Link href={withNext("/auth/login", next)}>Back to sign in</Link>
       </Button>
     </AuthShell>
   )

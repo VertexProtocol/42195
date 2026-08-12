@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { withNext } from "@/lib/auth-redirect"
+import { useNextTarget } from "@/hooks/use-next-target"
 import { useI18n } from "@/lib/i18n"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
 import { Input } from "@/components/ui/input"
@@ -62,6 +64,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [handingOff, setHandingOff] = useState(false)
 
+  // Where this runner was going before the middleware sent them here.
+  const next = useNextTarget()
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -94,11 +99,11 @@ export default function LoginPage() {
         // `replace`, not `push`: back from the app should not return to a
         // login form for an account that is already signed in.
         if (await sessionCookieReady()) {
-          router.replace("/")
+          router.replace(next)
         } else {
           // The cookie never appeared where we can see it. Whatever is going
           // on, a fresh document request is the one that has always worked.
-          window.location.href = "/"
+          window.location.href = next
         }
       } catch {
         setError(t("auth.errorDefault"))
@@ -135,7 +140,7 @@ export default function LoginPage() {
         <>
           {t("auth.noAccount")}{" "}
           <Link
-            href="/auth/sign-up"
+            href={withNext("/auth/sign-up", next)}
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             {t("auth.signUp")}
