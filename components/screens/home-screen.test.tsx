@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi } from "vitest"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
 import type { Activity, Goal, WeeklyGoal, WeeklySummary } from "@/lib/types"
@@ -262,5 +262,66 @@ describe("HomeScreen — pinned goals that have been run", () => {
     expect(screen.getByText("Active goal")).toBeTruthy()
     expect(screen.getByText("days left")).toBeTruthy()
     expect(screen.getByText("32")).toBeTruthy()
+  })
+})
+
+describe("HomeScreen — unpinning a race that is done", () => {
+  it("offers to unpin once the date has gone", () => {
+    const onUnpinGoal = vi.fn()
+    const goal = makeRaceGoal({ target_date: daysFromNow(-120) })
+    render(
+      <I18nProvider>
+        <HomeScreen
+          starredGoals={[goal]}
+          currentWeekGoals={[]}
+          activities={[]}
+          weeklySummary={summaryOf([])}
+          recentActivities={[]}
+          warnings={[]}
+          planBadges={{}}
+          onViewActivities={() => {}}
+          onViewGoal={() => {}}
+          onViewGoals={() => {}}
+          onViewInsights={() => {}}
+          onSelectActivity={() => {}}
+          onUnpinGoal={onUnpinGoal}
+        />
+      </I18nProvider>,
+    )
+
+    const unpin = screen.getByRole("button", { name: /unpin from today/i })
+    fireEvent.click(unpin)
+    expect(onUnpinGoal).toHaveBeenCalledWith(goal.id)
+  })
+
+  it("does not offer it for a race still to come", () => {
+    render(
+      <I18nProvider>
+        <HomeScreen
+          starredGoals={[makeRaceGoal({ target_date: daysFromNow(32) })]}
+          currentWeekGoals={[]}
+          activities={[]}
+          weeklySummary={summaryOf([])}
+          recentActivities={[]}
+          warnings={[]}
+          planBadges={{}}
+          onViewActivities={() => {}}
+          onViewGoal={() => {}}
+          onViewGoals={() => {}}
+          onViewInsights={() => {}}
+          onSelectActivity={() => {}}
+          onUnpinGoal={() => {}}
+        />
+      </I18nProvider>,
+    )
+    expect(screen.queryByRole("button", { name: /unpin from today/i })).toBeNull()
+  })
+
+  it("does not unpin anything on its own", () => {
+    const onUnpinGoal = vi.fn()
+    renderPinned([makeRaceGoal({ target_date: daysFromNow(-120) })])
+    expect(onUnpinGoal).not.toHaveBeenCalled()
+    // Without a handler the card is simply not offering it.
+    expect(screen.queryByRole("button", { name: /unpin from today/i })).toBeNull()
   })
 })
