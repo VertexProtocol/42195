@@ -60,6 +60,22 @@ import type { PlanBadge } from "@/lib/plan-badges"
  */
 
 /**
+ * How big a lane is, and how many share a row.
+ *
+ * The lanes divide the width between them, so their size has to come from how
+ * many there are or a row of two would be two small marks with a screen of
+ * nothing beside them. Sized to leave a margin inside its column at a 390px
+ * screen, which is the narrowest this app is built for; past five they wrap
+ * rather than shrinking to a dot.
+ */
+const LANE_SIZES = [64, 58, 50, 44, 36] as const
+const MAX_LANE_COLUMNS = LANE_SIZES.length
+
+function laneSize(count: number): number {
+  return LANE_SIZES[Math.min(Math.max(count, 1), MAX_LANE_COLUMNS) - 1]
+}
+
+/**
  * A weekly goal, as a lane with its metric icon inside.
  *
  * The lane is the shape a pinned race carries, and the icon rides in it the
@@ -79,11 +95,13 @@ import type { PlanBadge } from "@/lib/plan-badges"
 function WeeklyGoalLap({
   goal,
   current,
+  size,
   onOpen,
   t,
 }: {
   goal: WeeklyGoal
   current: number
+  size: number
   onOpen: () => void
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
@@ -97,20 +115,23 @@ function WeeklyGoalLap({
   return (
     <button
       onClick={onOpen}
-      // Padding rather than a bigger lane: the lane is sized to read at a
-      // glance, the tap target to be hit with a thumb.
-      className="press rounded-md p-1.5"
+      // The button fills its column and centres the lane, so the row stays
+      // even however many lanes are in it and the tap target is the column
+      // rather than the mark.
+      className="press flex justify-center rounded-md py-1.5"
       title={`${label} — ${valueText}`}
     >
       <ProgressLap
         percentage={progressPercentage(current, goal.target)}
-        size={34}
-        strokeWidth={3}
+        size={size}
+        strokeWidth={Math.max(3, Math.round(size / 16))}
         tone={isComplete ? "done" : "action"}
+        // These sit on the page, not in a card.
+        track="border"
         label={`${label} — ${valueText}`}
       >
         <Icon
-          size={15}
+          size={Math.round(size * 0.4)}
           className={isComplete ? "text-success" : "text-muted-foreground"}
           aria-hidden
         />
@@ -504,19 +525,30 @@ export function HomeScreen({
             title={t("home.weeklyTargets")}
             action={<SectionAction onClick={onViewGoals}>{t("home.seeAll")}</SectionAction>}
           />
-          <AppCard padding="sm">
-            <div className="-m-1.5 flex flex-wrap">
-              {weeklyLaps.map(({ goal, current }) => (
-                <WeeklyGoalLap
-                  key={goal.id}
-                  goal={goal}
-                  current={current}
-                  onOpen={onViewGoals}
-                  t={t}
-                />
-              ))}
-            </div>
-          </AppCard>
+          {/* No card. A card is a surface for content that needs one, and a
+              row of lanes is already its own shape — boxing it added an edge
+              around four marks and nothing else. The lanes take the page's
+              track colour to make up for the surface they lost. */}
+          <div
+            className="grid gap-1"
+            style={{
+              gridTemplateColumns: `repeat(${Math.min(
+                weeklyLaps.length,
+                MAX_LANE_COLUMNS,
+              )}, minmax(0, 1fr))`,
+            }}
+          >
+            {weeklyLaps.map(({ goal, current }) => (
+              <WeeklyGoalLap
+                key={goal.id}
+                goal={goal}
+                current={current}
+                size={laneSize(weeklyLaps.length)}
+                onOpen={onViewGoals}
+                t={t}
+              />
+            ))}
+          </div>
         </Section>
       )}
 

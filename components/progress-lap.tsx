@@ -32,6 +32,15 @@ interface ProgressLapProps {
   strokeWidth?: number
   /** Semantic colour of the arc. */
   tone?: "action" | "done" | "caution" | "quiet"
+  /**
+   * What the unrun part of the lane is drawn in.
+   *
+   * `sunken` is a well in a card and is the default. It is a shade off the
+   * card by design, which makes it invisible on the page background — those
+   * two are 0.035 apart in lightness. A lap that sits on the page rather than
+   * in a card takes `border`, or an empty lane simply is not there.
+   */
+  track?: "sunken" | "border"
   /** What this lap measures — used as its accessible name. */
   label: string
   children?: React.ReactNode
@@ -71,10 +80,12 @@ export function ProgressLap({
   size = 48,
   strokeWidth = 5,
   tone = "action",
+  track = "sunken",
   label,
   children,
   markers,
 }: ProgressLapProps) {
+  const trackVar = track === "border" ? "var(--border)" : "var(--surface-sunken)"
   const target = Math.max(0, Math.min(100, percentage))
 
   const [drawn, setDrawn] = useState(0)
@@ -153,7 +164,7 @@ export function ProgressLap({
       aria-label={roster ? `${label}: ${roster}` : `${label}: ${Math.round(target)}%`}
     >
       <svg width={width} height={size} aria-hidden focusable="false">
-        <rect {...lane} stroke="var(--surface-sunken)" />
+        <rect {...lane} stroke={trackVar} />
         {Array.from({ length: usedLanes }, (_, i) => {
           const g = geomFor(i + 1)
           return (
@@ -166,7 +177,7 @@ export function ProgressLap({
               rx={g.r}
               fill="none"
               strokeWidth={strokeWidth}
-              stroke="var(--surface-sunken)"
+              stroke={trackVar}
             />
           )
         })}

@@ -163,6 +163,38 @@ describe("HomeScreen — one lane per weekly goal", () => {
     expect(headings).not.toContain("Targets")
   })
 
+  it("sizes the lanes by how many are sharing the row", () => {
+    // They divide the width between them, so a fixed size makes a row of two
+    // into two small marks with a screen of nothing beside them.
+    const two = renderHome(
+      [makeActivity()],
+      [
+        makeGoal({ metric: "distance_km", target: 10 }),
+        makeGoal({ metric: "sessions", target: 3 }),
+      ],
+    )
+    const heightOfTwo = Number.parseFloat(lanes()[0].style.height)
+    two.unmount()
+
+    renderHome(
+      [makeActivity()],
+      [
+        makeGoal({ metric: "distance_km", target: 10 }),
+        makeGoal({ metric: "sessions", target: 3 }),
+        makeGoal({ metric: "duration_minutes", target: 60 }),
+        makeGoal({ metric: "elevation_m", target: 300 }),
+      ],
+    )
+    expect(Number.parseFloat(lanes()[0].style.height)).toBeLessThan(heightOfTwo)
+  })
+
+  it("draws a track that survives the page background", () => {
+    // surface-sunken is a well in a card and is 0.035 off the page in
+    // lightness. On the page, a goal at 0% would be an icon with no ring.
+    renderHome([], [makeGoal({ metric: "distance_km", target: 10 })])
+    expect(lanes()[0].querySelector("rect")?.getAttribute("stroke")).toBe("var(--border)")
+  })
+
   it("leaves the stat row the same shape whether or not there are goals", () => {
     // Adding and removing goals is what the runner does to this card; the
     // week's own three numbers should not move when they do.
