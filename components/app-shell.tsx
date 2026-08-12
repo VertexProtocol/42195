@@ -17,6 +17,13 @@ import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/type
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
 
+// Everything the URL stacks on top of a tab. Moving to a tab clears all of
+// it, so a tab always opens on its own list. The group was the one missing
+// from this set: walking out of a group to another tab left `group` in the
+// URL, and coming back to Plan put the group you had left back on screen —
+// under the Plan list, since the list renders too when no goal is selected.
+const STACKED_VIEWS = { activity: null, goal: null, group: null, plan: null } as const
+
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
 const GoalDetailScreen = lazy(() => import("@/components/screens/goal-detail-screen").then(m => ({ default: m.GoalDetailScreen })))
@@ -145,14 +152,12 @@ export function AppShell({ initialData }: AppShellProps) {
   }, [])
 
   const handleTabChange = useCallback((tab: TabId) => {
-    navigate(tab === "home"
-      ? { tab: null, activity: null, goal: null, plan: null }
-      : { tab, activity: null, goal: null, plan: null })
+    navigate({ ...STACKED_VIEWS, tab: tab === "home" ? null : tab })
   }, [navigate])
 
   /** Plan, opened on the weekly list — where a weekly goal on Today leads. */
   const handleViewWeeklyGoals = useCallback(() => {
-    navigate({ tab: "goals", plan: "weekly", activity: null, goal: null })
+    navigate({ ...STACKED_VIEWS, tab: "goals", plan: "weekly" })
   }, [navigate])
 
   const handleSelectGoal = useCallback((goal: Goal) => {
@@ -280,7 +285,7 @@ export function AppShell({ initialData }: AppShellProps) {
   }, [])
 
   const handleOpenProfile = useCallback(() => {
-    navigate({ tab: "profile", activity: null, goal: null })
+    navigate({ ...STACKED_VIEWS, tab: "profile" })
   }, [navigate])
 
   // Profile → Get started. The checklist lives on Today, so asking for it from
@@ -291,7 +296,7 @@ export function AppShell({ initialData }: AppShellProps) {
   const handleResumeGetStarted = useCallback(() => {
     revealGetStarted()
     resumeOnboarding()
-    navigate({ tab: null, activity: null, goal: null })
+    navigate({ ...STACKED_VIEWS, tab: null })
   }, [revealGetStarted, resumeOnboarding, navigate])
 
   // ----- Loading state -----
@@ -308,8 +313,11 @@ export function AppShell({ initialData }: AppShellProps) {
     )
   }
 
+  // The group screen brings its own app bar with a back button, so the shell
+  // must not put a second one above it.
   const isDetail = Boolean(
-    (activeTab === "activities" && selectedActivity) || (activeTab === "goals" && selectedGoal),
+    (activeTab === "activities" && selectedActivity) ||
+      (activeTab === "goals" && (selectedGoal || groupId)),
   )
 
   const barTitle =
@@ -383,11 +391,11 @@ export function AppShell({ initialData }: AppShellProps) {
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
             onViewActivities={() => handleTabChange("activities")}
-            onViewGoal={(goal) => { navigate({ tab: "goals", goal: goal.id }) }}
+            onViewGoal={(goal) => { navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id }) }}
             onViewGoals={() => handleTabChange("goals")}
             onViewWeeklyGoals={handleViewWeeklyGoals}
             onViewInsights={() => handleTabChange("insights")}
-            onSelectActivity={(activity) => { navigate({ tab: "activities", activity: activity.id }) }}
+            onSelectActivity={(activity) => { navigate({ ...STACKED_VIEWS, tab: "activities", activity: activity.id }) }}
             onUnpinGoal={data.toggleStarGoal}
           />
         )}
@@ -416,7 +424,10 @@ export function AppShell({ initialData }: AppShellProps) {
           </Suspense>
         )}
 
-        {activeTab === "goals" && !selectedGoal && (
+        {/* One Plan screen at a time. The group sits on top of both the list
+            and the goal it hangs off, so it is excluded from each of them
+            rather than merely ordered after. */}
+        {activeTab === "goals" && !groupId && !selectedGoal && (
           <GoalsScreen
             goals={data.goals}
             activities={data.activities}
@@ -469,9 +480,9 @@ export function AppShell({ initialData }: AppShellProps) {
               <InsightsScreen
                 activities={data.activities}
                 goals={data.goals}
-                onViewGoal={(goal) => navigate({ tab: "goals", goal: goal.id })}
+                onViewGoal={(goal) => navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id })}
                 onSelectActivity={(activity) =>
-                  navigate({ tab: "activities", activity: activity.id })
+                  navigate({ ...STACKED_VIEWS, tab: "activities", activity: activity.id })
                 }
               />
             </Suspense>
