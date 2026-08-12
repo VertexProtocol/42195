@@ -352,7 +352,7 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
                   <li key={invite.id} className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-micro text-muted-foreground">
-                        {invite.label ?? expiryLabel(t, invite.expiresAt)}
+                        {expiryLabel(t, invite.expiresAt)}
                       </span>
                       <button
                         type="button"

@@ -52,7 +52,6 @@ export interface SharedGoalView {
    */
   pendingInvites: Array<{
     id: string
-    label: string | null
     token: string
     expiresAt: string
   }>
@@ -129,12 +128,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     // the question when one link started letting in more than one runner.
     const { data: invites } = await supabase
       .from("shared_goal_invites")
-      .select("id, label, token, expires_at")
+      .select("id, token, expires_at")
       .eq("shared_goal_id", id)
       .gt("expires_at", new Date().toISOString())
     pendingInvites = (invites ?? []).map((i) => ({
       id: i.id as string,
-      label: (i.label as string | null) ?? null,
       token: i.token as string,
       expiresAt: i.expires_at as string,
     }))
