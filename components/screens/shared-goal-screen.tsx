@@ -87,9 +87,16 @@ interface SharedGoalScreenProps {
    * than a rectangle, while the rest of the group arrives.
    */
   initial?: SharedGoalSummary | null
+  /**
+   * Said once the group has been left or disbanded, before the screen closes.
+   * The set of groups is held by the app rather than by this screen, so
+   * leaving one has to be reported upwards — otherwise the goal behind this
+   * screen goes on offering the group its owner just walked out of.
+   */
+  onLeft?: () => void | Promise<void>
 }
 
-export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenProps) {
+export function SharedGoalScreen({ groupId, onBack, initial, onLeft }: SharedGoalScreenProps) {
   const { t } = useI18n()
   const [view, setView] = useState<SharedGoalView | null>(null)
   const [loading, setLoading] = useState(true)
@@ -190,11 +197,16 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
     setBusy(true)
     try {
       const res = await fetch(`/api/shared-goals/${groupId}`, { method: "DELETE" })
-      if (res.ok) onBack()
+      if (!res.ok) return
+      // Awaited rather than fired off, so the goal this screen closes onto is
+      // already right. Left to settle afterwards it would paint one frame
+      // still offering the group, which reads as the leave not having worked.
+      await onLeft?.()
+      onBack()
     } finally {
       setBusy(false)
     }
-  }, [groupId, onBack])
+  }, [groupId, onBack, onLeft])
 
   if (loading) {
     const days = initial ? daysUntil(initial.race_date) : 0
