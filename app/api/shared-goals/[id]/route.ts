@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { isDatePast } from "@/lib/format"
 import type { SharedGoalMetric } from "@/lib/types"
 import { initialOf } from "../route"
 
@@ -27,6 +28,12 @@ export interface SharedGoalMemberView {
   adherenceTarget: number | null
   /** When this member's own sync last wrote a position. */
   updatedAt: string | null
+  /**
+   * How it went, once the race has been run: the same verdict this runner's
+   * own goal screen shows them. Null until their sync has recorded one —
+   * which is not the same as falling short, and must not read as it.
+   */
+  outcome: "reached" | "ended" | null
 }
 
 export interface SharedGoalView {
@@ -36,6 +43,8 @@ export interface SharedGoalView {
   distanceKm: number
   metric: SharedGoalMetric
   isOwner: boolean
+  /** The race has been run. The lane stops moving and the rows read as results. */
+  finished: boolean
   members: SharedGoalMemberView[]
   /**
    * The group's live invite link, if it has one. Owner only; empty for
@@ -69,7 +78,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const [{ data: memberRows }, { data: nameRows }] = await Promise.all([
     supabase
       .from("shared_goal_members")
-      .select("user_id, position_pct, adherence_done, adherence_target, updated_at")
+      .select("user_id, position_pct, adherence_done, adherence_target, updated_at, outcome")
       .eq("shared_goal_id", id),
     supabase.rpc("shared_goal_member_names", { g: id }),
   ])
@@ -87,6 +96,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     adherence_done: number | null
     adherence_target: number | null
     updated_at: string | null
+    outcome: "reached" | "ended" | null
   }>).map((m) => {
     const name = names.get(m.user_id) ?? null
     return {
@@ -97,6 +107,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       positionPct: m.position_pct == null ? null : Number(m.position_pct),
       adherenceDone: m.adherence_done == null ? null : Number(m.adherence_done),
       adherenceTarget: m.adherence_target == null ? null : Number(m.adherence_target),
+      outcome: m.outcome ?? null,
       updatedAt: m.updated_at,
     }
   })
@@ -134,6 +145,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     distanceKm: Number(goal.distance_km),
     metric: goal.metric as SharedGoalMetric,
     isOwner,
+    finished: isDatePast(goal.race_date),
     members,
     pendingInvites,
   }

@@ -12,11 +12,17 @@
  * A member row that has never been measured keeps a null position. The group
  * screen shows that as a dash: a zero would claim the runner has made no
  * progress, which is a different statement from not knowing yet.
+ *
+ * Once the race has been run the row settles. The first sync after the date
+ * writes the verdict — the same one the runner's own goal screen shows — and
+ * stamps settled_at, and a settled row is never recomputed again. A final
+ * standing that keeps moving for months is not a final standing.
  */
 
 import { createServiceClient } from "@/lib/supabase/service"
 import type { Activity, SharedGoalMetric, TrainingPlan } from "@/lib/types"
 import { goalFitness, memberPosition, blockAdherence } from "@/lib/shared-goal-progress"
+import { goalOutcome, isDatePast } from "@/lib/format"
 
 /** Activity columns the position needs — enough for the index and for week sums. */
 const ACTIVITY_COLUMNS = "date, distance_km, duration_seconds, elevation_gain_m"
@@ -81,7 +87,9 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
   try {
     const { data: memberships, error: memberError } = await service
       .from("shared_goal_members")
-      .select("shared_goal_id, goal_id, baseline_seconds, shared_goals(distance_km, metric)")
+      .select(
+        "shared_goal_id, goal_id, baseline_seconds, settled_at, shared_goals(distance_km, metric, race_date)",
+      )
       .eq("user_id", userId)
 
     if (memberError) throw memberError
@@ -100,7 +108,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
     const goalIds = Array.from(new Set(memberships.map((m) => m.goal_id)))
     const { data: goalRows } = await service
       .from("goals")
-      .select("id, target_time_seconds, target_distance_km")
+      .select("id, target_time_seconds, target_distance_km, goal_category")
       .eq("user_id", userId)
       .in("id", goalIds)
 
@@ -117,6 +125,11 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
 
     await Promise.all(
       memberships.map(async (member) => {
+        // Settled means finished: the race has been run and the verdict is
+        // written. Recomputing it would move a number somebody has already
+        // read as final.
+        if (member.settled_at) return
+
         const goal = goals.get(member.goal_id)
         if (!goal) return
 
@@ -126,10 +139,11 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
         // silently measuring against the member's own distance instead.
         const embed = member.shared_goals as unknown
         const shared = (Array.isArray(embed) ? embed[0] : embed) as
-          | { distance_km: number; metric: SharedGoalMetric }
+          | { distance_km: number; metric: SharedGoalMetric; race_date: string }
           | null
         const distanceKm = Number(shared?.distance_km ?? goal.target_distance_km)
         const metric: SharedGoalMetric = shared?.metric ?? "adherence"
+        const raceRun = shared?.race_date ? isDatePast(shared.race_date) : false
 
         const planRow = plans.get(member.goal_id)
         const adherence = blockAdherence(
@@ -150,6 +164,20 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
           adherence,
         })
 
+        // The verdict, in the same two words and by the same rule the
+        // runner's own goal screen uses: only a performance goal has a mark
+        // to be judged against, and an event goal simply ends. Saying more
+        // than their own screen says about them would be the group inventing
+        // a result nobody asked it for.
+        const outcome = raceRun
+          ? goalOutcome(
+              goal.goal_category as string | null,
+              asActivities,
+              Number(goal.target_distance_km),
+              goal.target_time_seconds,
+            )
+          : null
+
         const { error } = await service
           .from("shared_goal_members")
           .update({
@@ -157,6 +185,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
             adherence_done: adherence.weeks > 0 ? adherence.doneKm : null,
             adherence_target: adherence.weeks > 0 ? adherence.targetKm : null,
             updated_at: now,
+            ...(raceRun ? { outcome, settled_at: now } : {}),
           })
           .eq("shared_goal_id", member.shared_goal_id)
           .eq("user_id", userId)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { bestRelevantRun, longestRun, timeAgoParts } from "./format"
+import { bestRelevantRun, goalOutcome, longestRun, timeAgoParts } from "./format"
 import type { Activity } from "./types"
 
 const REF = new Date("2026-04-19T12:00:00Z")
@@ -119,5 +119,30 @@ describe("timeAgoParts", () => {
     const parts = timeAgoParts(minutesAgo(5))
     expect(typeof parts.value).toBe("number")
     expect(["m", "h", "d"]).toContain(parts.unit)
+  })
+})
+
+describe("goalOutcome", () => {
+  // A 10 km target of 50:00. The fast run beats it; the slow one does not.
+  const fast = [activity(1, 10, 47)]
+  const slow = [activity(1, 10, 55)]
+
+  it("reaches a performance goal that was met", () => {
+    expect(goalOutcome("performance", fast, 10, 50 * 60)).toBe("reached")
+  })
+
+  it("ends a performance goal that was not", () => {
+    expect(goalOutcome("performance", slow, 10, 50 * 60)).toBe("ended")
+  })
+
+  it("ends an event goal without judging it", () => {
+    // A marathon is not passed or failed by the app. Even a run that would
+    // have cleared the mark does not turn an event into a verdict.
+    expect(goalOutcome("event", fast, 10, 50 * 60)).toBe("ended")
+    expect(goalOutcome(null, fast, 10, 50 * 60)).toBe("ended")
+  })
+
+  it("ends a goal nobody ran for", () => {
+    expect(goalOutcome("performance", [], 10, 50 * 60)).toBe("ended")
   })
 })

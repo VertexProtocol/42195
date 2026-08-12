@@ -29,6 +29,7 @@ import {
   timeElapsedPercentage,
   computeDistanceInRange,
   evaluatePerformanceGoal,
+  goalOutcome,
 } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
@@ -80,7 +81,15 @@ function GoalResultCard({
   const status = isPerformance
     ? evaluatePerformanceGoal(activities, goal.target_distance_km, goal.target_time_seconds)
     : null
-  const reached = status?.reached ?? false
+  // Through the shared rule, so the group's closing row cannot come to a
+  // different conclusion about the same race.
+  const reached =
+    goalOutcome(
+      goal.goal_category,
+      activities,
+      goal.target_distance_km,
+      goal.target_time_seconds,
+    ) === "reached"
 
   const logged = computeDistanceInRange(
     activities,
@@ -1495,7 +1504,7 @@ export function GoalDetailScreen({
         <SharedGoalEntry
           goalId={goal.id}
           group={sharedGoal ?? null}
-          hidden={past}
+          finished={past}
           onOpen={onOpenGroup}
           onCreated={onSharedGoalChange}
         />

@@ -28,6 +28,7 @@ function member(overrides: Partial<SharedGoalMemberView> = {}): SharedGoalMember
     adherenceDone: 96,
     adherenceTarget: 95,
     updatedAt: NOW.toISOString(),
+    outcome: null,
     ...overrides,
   }
 }
@@ -40,6 +41,7 @@ function view(members: SharedGoalMemberView[], overrides: Partial<SharedGoalView
     distanceKm: 42.195,
     metric: "adherence",
     isOwner: false,
+    finished: false,
     members,
     pendingInvites: [],
     ...overrides,
@@ -243,6 +245,45 @@ describe("handing over an invite link", () => {
     })
     await renderScreen(almostGone)
     expect(screen.getByText("Stops working within a day")).toBeTruthy()
+  })
+})
+
+describe("after the race has been run", () => {
+  const finished = (outcome: SharedGoalMemberView["outcome"]) =>
+    view([member({ isSelf: true, name: "Kari L.", outcome })], { finished: true })
+
+  it("says the race was run rather than counting down to it", async () => {
+    await renderScreen(finished("reached"))
+    expect(screen.getByText(/Run on/)).toBeTruthy()
+  })
+
+  it("gives each runner the verdict their own goal gives them", async () => {
+    await renderScreen(finished("reached"))
+    expect(screen.getByText("Achieved")).toBeTruthy()
+  })
+
+  it("does not dress a finished block up as a failure", async () => {
+    await renderScreen(finished("ended"))
+    // The word the runner's own screen uses. An event goal is not passed or
+    // failed by the app, and the group does not get to say otherwise.
+    expect(screen.getByText("Ended")).toBeTruthy()
+    expect(screen.queryByText("Achieved")).toBeNull()
+  })
+
+  it("keeps 'nothing recorded' apart from 'fell short'", async () => {
+    await renderScreen(finished(null))
+    // Only one of those two is about the running.
+    expect(screen.getByText("No result recorded")).toBeTruthy()
+    expect(screen.queryByText("Ended")).toBeNull()
+  })
+
+  it("drops the quiet-days nudge, which is about training still to do", async () => {
+    const stale = view(
+      [member({ isSelf: true, outcome: "ended", updatedAt: "2026-01-01T00:00:00Z" })],
+      { finished: true },
+    )
+    await renderScreen(stale)
+    expect(screen.queryByText(/quiet/i)).toBeNull()
   })
 })
 

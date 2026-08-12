@@ -4,6 +4,7 @@ import { describe, it, expect, afterEach, vi } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { SharedGoalEntry } from "./shared-goal-entry"
+import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 
 /**
  * The row that offers a group, and what it does when the offer is stale.
@@ -72,5 +73,41 @@ describe("creating a group from a goal", () => {
     // A 409 carries somewhere to go; a 500 does not, and must not be silent.
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy())
     expect(onOpen).not.toHaveBeenCalled()
+  })
+})
+
+const GROUP: SharedGoalSummary = {
+  id: "grp",
+  name: "Oslo Marathon",
+  race_date: "2026-09-20",
+  metric: "adherence",
+  memberCount: 3,
+  initials: ["K", "T"],
+  myPositionPct: 87,
+}
+
+describe("a goal whose race has been run", () => {
+  it("keeps the group and points at how it finished", () => {
+    const onOpen = vi.fn()
+    render(
+      <I18nProvider>
+        <SharedGoalEntry goalId="g1" group={GROUP} finished onOpen={onOpen} />
+      </I18nProvider>,
+    )
+
+    // The row used to be hidden the day after the race, which took the group
+    // away on the one day people would go looking for it.
+    expect(screen.getByText("See how the group finished")).toBeTruthy()
+    expect(screen.queryByText(/87/)).toBeNull()
+  })
+
+  it("stops offering to start one", () => {
+    const { container } = render(
+      <I18nProvider>
+        <SharedGoalEntry goalId="g1" group={null} finished onOpen={vi.fn()} />
+      </I18nProvider>,
+    )
+    // A group is something you train towards, and there is none left to share.
+    expect(container.textContent).toBe("")
   })
 })
