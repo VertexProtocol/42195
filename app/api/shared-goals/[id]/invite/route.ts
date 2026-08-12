@@ -1,7 +1,7 @@
 /**
  * Make an invite link.
  *
- * POST   /api/shared-goals/[id]/invite    { label? }  → { token }
+ * POST   /api/shared-goals/[id]/invite                → { token }
  * DELETE /api/shared-goals/[id]/invite    { inviteId } revoke an unused link
  *
  * The owner hands the link over themselves. This app sends no mail of its
@@ -24,22 +24,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  let label: string | null = null
-  try {
-    const body = await req.json().catch(() => ({}))
-    const raw = typeof body?.label === "string" ? body.label.trim() : ""
-    label = raw ? raw.slice(0, 60) : null
-  } catch {
-    label = null
-  }
 
   const { data: goal } = await supabase
     .from("shared_goals")
@@ -72,7 +63,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { error } = await supabase.from("shared_goal_invites").insert({
     shared_goal_id: id,
     token,
-    label,
     invited_by: user.id,
     // Written rather than left to the column default, so the window is
     // decided by the app and reads in one place with the copy that states it.
