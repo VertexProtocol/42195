@@ -575,6 +575,13 @@ const translations = {
     "profile.changePassword": "Change password",
     "profile.setPassword": "Set a password",
     "profile.addEmail": "Add an email address",
+    "profile.disconnect": "Disconnect",
+    "profile.disconnectWarning":
+      "Your runs stay. 42195 stops syncing and gives up its access to your Strava account — connect again whenever you like, and the log picks up where it left off.",
+    "profile.disconnectConfirm": "Disconnect Strava",
+    "profile.disconnectBlocked":
+      "Strava is the only way into this account. Add an email address and set a password first, and disconnecting becomes available.",
+    "profile.disconnectFailed": "We could not disconnect Strava. Try again in a moment.",
     "profile.setPasswordBlurb":
       "You sign in with Strava. A password gives you a second way in, for the day Strava is down or you no longer use it.",
     "profile.passwordUpdated": "Password updated",
@@ -1005,6 +1012,13 @@ const translations = {
     "profile.changePassword": "Endre passord",
     "profile.setPassword": "Lag et passord",
     "profile.addEmail": "Legg til en e-postadresse",
+    "profile.disconnect": "Koble fra",
+    "profile.disconnectWarning":
+      "Løpene dine blir liggende. 42195 slutter å synkronisere og gir fra seg tilgangen til Strava-kontoen din – koble til igjen når du vil, så fortsetter loggen der den slapp.",
+    "profile.disconnectConfirm": "Koble fra Strava",
+    "profile.disconnectBlocked":
+      "Strava er eneste vei inn på denne kontoen. Legg til en e-postadresse og lag et passord først, så blir frakobling tilgjengelig.",
+    "profile.disconnectFailed": "Vi klarte ikke å koble fra Strava. Prøv igjen om et øyeblikk.",
     "profile.setPasswordBlurb":
       "Du logger inn med Strava. Et passord gir deg en vei nummer to inn, den dagen Strava er nede eller du ikke bruker det lenger.",
     "profile.passwordUpdated": "Passord oppdatert",
