@@ -616,18 +616,11 @@ alter table goal_preferences
 --  managed separately, see the EXCLUDED note at the top of this file.)
 -- ============================================================
 
--- Invite allowlist. Sign-up is refused unless the address has a row here.
--- Service-role only: no policies, so the invited addresses are not readable
--- from the browser.
-create table if not exists public.allowed_signups (
-  email      text        primary key check (email = lower(email)),
-  note       text,
-  created_at timestamptz not null default now(),
-  claimed_at timestamptz,
-  claimed_by uuid        references auth.users(id) on delete set null
-);
-
-alter table public.allowed_signups enable row level security;
+-- The invite allowlist that 023 introduced is gone: sign-up is closed at the
+-- Supabase project level instead, so a second gate in the application was one
+-- more thing to keep in step. 023 still creates the table for the record; an
+-- existing database can drop it by hand when convenient:
+--   drop table if exists public.allowed_signups;
 
 -- Resumable sync: a long history is pulled in chunks, so a run records where
 -- to continue from and when the rate limit window reopens.
