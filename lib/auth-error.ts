@@ -15,6 +15,8 @@ export function authErrorKey(message: string | undefined): TranslationKey {
 
   if (m === "strava_already_linked") return "authError.stravaAlreadyLinked"
   if (m === "strava_missing_scope") return "authError.stravaMissingScope"
+  if (m === "strava_signup_closed") return "authError.stravaSignupClosed"
+  if (m === "strava_session_failed") return "authError.stravaSessionFailed"
 
   if (
     m.includes("invalid login credentials") ||

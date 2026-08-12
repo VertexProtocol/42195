@@ -13,6 +13,8 @@ describe("authErrorKey", () => {
   it("recognises the Strava sentinels exactly", () => {
     expect(authErrorKey("strava_already_linked")).toBe("authError.stravaAlreadyLinked")
     expect(authErrorKey("strava_missing_scope")).toBe("authError.stravaMissingScope")
+    expect(authErrorKey("strava_signup_closed")).toBe("authError.stravaSignupClosed")
+    expect(authErrorKey("strava_session_failed")).toBe("authError.stravaSessionFailed")
   })
 
   it("maps Supabase's wording for a bad sign-in", () => {

@@ -42,7 +42,7 @@ export function AuthShell({
             {lede}
           </p>
         )}
-        <div className="mt-7">{children}</div>
+        <div className="mt-7 flex flex-col gap-5">{children}</div>
         {footer && <div className="mt-7 text-label text-muted-foreground">{footer}</div>}
       </main>
     </div>

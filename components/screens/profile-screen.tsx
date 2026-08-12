@@ -25,6 +25,7 @@ import {
   ListChecks,
 } from "lucide-react"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
+import { isPlaceholderEmail } from "@/lib/strava-account"
 import { TrackLoader } from "@/components/ui/track-mark"
 import { createClient } from "@/lib/supabase/client"
 import { timeAgoParts } from "@/lib/format"
@@ -263,7 +264,13 @@ export function ProfileScreen({
     }
     startPwTransition(async () => {
       const supabase = createClient()
-      const { error } = await supabase.auth.updateUser({ password: pw })
+      // The flag rides along with the password: without it, an account that
+      // came in through Strava would keep being offered "set a password"
+      // after it had one.
+      const { error } = await supabase.auth.updateUser({
+        password: pw,
+        data: { has_password: true },
+      })
       if (error) {
         setPwError(error.message)
         return
@@ -386,7 +393,20 @@ export function ProfileScreen({
               {nameError}
             </p>
           )}
-          <p className="truncate text-label text-muted-foreground">{user.email}</p>
+          {/* An account that came in through Strava carries a placeholder
+              address until it is given a real one. Showing the placeholder
+              would be showing a lie; this is where someone who skipped the
+              question on the way in comes back to it. */}
+          {isPlaceholderEmail(user.email) ? (
+            <a
+              href="/auth/finish"
+              className="text-label text-primary underline-offset-4 hover:underline"
+            >
+              {t("profile.addEmail")}
+            </a>
+          ) : (
+            <p className="truncate text-label text-muted-foreground">{user.email}</p>
+          )}
         </div>
       </div>
 
@@ -982,14 +1002,14 @@ export function ProfileScreen({
                 className="press flex w-full items-center gap-2.5 px-4 py-3.5 text-left text-label font-medium text-card-foreground"
               >
                 <KeyRound size={16} className="text-muted-foreground" aria-hidden />
-                {t("profile.changePassword")}
+                {t(user.needs_password ? "profile.setPassword" : "profile.changePassword")}
               </button>
             </CardRow>
           ) : (
             <CardRow>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-label font-semibold text-card-foreground">
-                  {t("profile.changePassword")}
+                  {t(user.needs_password ? "profile.setPassword" : "profile.changePassword")}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => setShowChangePassword(false)}>
                   {t("common.cancel")}
@@ -1001,6 +1021,13 @@ export function ProfileScreen({
                 </p>
               ) : (
                 <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+                  {/* Why it is worth doing, said only to the accounts that
+                      have one way in. */}
+                  {user.needs_password && (
+                    <p className="text-micro leading-relaxed text-muted-foreground">
+                      {t("profile.setPasswordBlurb")}
+                    </p>
+                  )}
                   {pwError && (
                     <p role="alert" className="text-micro text-destructive">
                       {pwError}

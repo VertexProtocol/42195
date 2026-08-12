@@ -1,22 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
+import { safeNext } from "@/lib/auth-redirect"
+import { encodeStravaState } from "@/lib/strava-oauth-state"
 
 /**
  * GET /api/auth/strava
  *
- * Redirects the authenticated user to Strava's OAuth authorization page.
- * The user must already be signed in to Supabase.
+ * Sends the athlete to Strava's authorisation page. Two callers:
+ *
+ *  - A signed-in runner connecting their athlete (`flow: "link"`).
+ *  - A signed-out runner using Strava as the way in (`flow: "login"`).
+ *
+ * Which one it is depends only on whether there is a session, and the answer
+ * travels in the state cookie so the callback does not have to work it out
+ * again from a session that the login flow will have created by then.
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url))
-  }
 
   const clientId = process.env.STRAVA_CLIENT_ID
   if (!clientId) {
@@ -27,7 +31,12 @@ export async function GET(request: NextRequest) {
   const baseUrl = rawBaseUrl.replace(/\/+$/, "")
   const callbackUrl = `${baseUrl}/api/auth/strava/callback`
 
-  const state = randomUUID()
+  const nonce = randomUUID()
+  const state = encodeStravaState({
+    nonce,
+    flow: user ? "link" : "login",
+    next: safeNext(request.nextUrl.searchParams.get("next")),
+  })
 
   const stravaAuthUrl = new URL("https://www.strava.com/oauth/authorize")
   stravaAuthUrl.searchParams.set("client_id", clientId)
@@ -35,7 +44,8 @@ export async function GET(request: NextRequest) {
   stravaAuthUrl.searchParams.set("response_type", "code")
   stravaAuthUrl.searchParams.set("approval_prompt", "auto")
   stravaAuthUrl.searchParams.set("scope", "read,activity:read_all")
-  stravaAuthUrl.searchParams.set("state", state)
+  // Strava only ever sees the nonce. Everything else stays in the cookie.
+  stravaAuthUrl.searchParams.set("state", nonce)
 
   const response = NextResponse.redirect(stravaAuthUrl.toString())
   response.cookies.set("strava_oauth_state", state, {

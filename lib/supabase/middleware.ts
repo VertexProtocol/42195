@@ -54,8 +54,13 @@ export async function updateSession(request: NextRequest) {
   // just confirmed — so for the one runner it was let through for, it was the
   // wrong screen. Confirming now lands in the app; anyone who reaches this
   // path with a session goes there too.
+  //
+  // /auth/finish is on it: it asks a runner who has just signed in through
+  // Strava for an address, so it is only ever reached with a session.
   const isAuthPassthrough =
-    pathname === "/auth/callback" || pathname === "/auth/reset-password"
+    pathname === "/auth/callback" ||
+    pathname === "/auth/reset-password" ||
+    pathname === "/auth/finish"
 
   if (user && isAuthRoute && !isAuthPassthrough) {
     const homeUrl = request.nextUrl.clone()

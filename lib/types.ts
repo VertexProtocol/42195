@@ -102,6 +102,12 @@ export interface UserProfile {
   warning_state?: import("@/lib/training-warnings").WarningState | null
   /** When the runner closed the "Get started" checklist. Null while it is live. */
   onboarding_dismissed_at?: string | null
+  /**
+   * True for an account that arrived through Strava and has not set a
+   * password since. Profile offers to set one rather than to change one, and
+   * the difference matters: Strava is the only way into such an account.
+   */
+  needs_password?: boolean
 }
 
 export type TabId = "home" | "activities" | "goals" | "insights" | "profile"

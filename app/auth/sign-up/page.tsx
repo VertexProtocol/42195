@@ -8,6 +8,7 @@ import { useNextTarget } from "@/hooks/use-next-target"
 import { useI18n } from "@/lib/i18n"
 import { signUpAction } from "./actions"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
+import { StravaSignIn } from "@/components/strava-sign-in"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
@@ -58,6 +59,8 @@ export default function SignUpPage() {
         </>
       }
     >
+      <StravaSignIn next={next} />
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && <AuthError>{error}</AuthError>}
 
