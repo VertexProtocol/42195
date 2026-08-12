@@ -720,7 +720,8 @@ const translations = {
     "shared.loadFailed": "Could not load the group",
     "shared.loadFailedBody": "Check your connection and open it again.",
     "shared.inviteTitle": "Invite someone",
-    "shared.inviteBody": "Creates a link you hand over yourself. Each one works once.",
+    "shared.inviteBody":
+      "A link you hand over yourself. It works once, and a new one replaces it.",
     "shared.inviteAction": "New link",
     "shared.inviteLink": "Invite link",
     "shared.copyLink": "Copy",
@@ -1461,7 +1462,8 @@ const translations = {
     "shared.loadFailed": "Fikk ikke lastet gruppa",
     "shared.loadFailedBody": "Sjekk nettforbindelsen og åpne den på nytt.",
     "shared.inviteTitle": "Inviter noen",
-    "shared.inviteBody": "Lager en lenke du sender selv. Hver av dem virker én gang.",
+    "shared.inviteBody":
+      "En lenke du sender selv. Den virker én gang, og en ny erstatter den.",
     "shared.inviteAction": "Ny lenke",
     "shared.inviteLink": "Invitasjonslenke",
     "shared.copyLink": "Kopier",
