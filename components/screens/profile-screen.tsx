@@ -544,32 +544,34 @@ export function ProfileScreen({
                     </div>
                   </div>
                 ) : !showResyncConfirm ? (
-                  <div className="flex flex-col gap-2">
-                    <div className="-mx-2 flex flex-wrap items-center">
-                      <Button variant="ghost" size="sm" onClick={handleConnect}>
-                        <RotateCcw size={13} />
-                        {t("profile.reconnect")}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground"
+                  <div className="flex flex-col gap-2.5">
+                    {/* Three repairs, evenly divided rather than laid out in a
+                        line that wraps: a third button turned the row into two
+                        ragged ones. A grid keeps them on one line at any label
+                        length, and the hairlines say these are three of a kind
+                        without giving any of them a button's weight. */}
+                    <div
+                      className={`-my-1 grid divide-x divide-border ${
+                        canSignInWithoutStrava ? "grid-cols-3" : "grid-cols-2"
+                      }`}
+                    >
+                      <RepairAction
+                        icon={<RotateCcw size={13} />}
+                        label={t("profile.reconnect")}
+                        onClick={handleConnect}
+                      />
+                      <RepairAction
+                        icon={<TriangleAlert size={13} className="text-warning" />}
+                        label={t("profile.fullResync")}
                         disabled={isSyncing}
                         onClick={() => setShowResyncConfirm(true)}
-                      >
-                        <TriangleAlert size={13} className="text-warning" />
-                        {t("profile.fullResync")}
-                      </Button>
+                      />
                       {canSignInWithoutStrava && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground"
+                        <RepairAction
+                          icon={<Link2Off size={13} />}
+                          label={t("profile.disconnect")}
                           onClick={() => setShowDisconnectConfirm(true)}
-                        >
-                          <Link2Off size={13} />
-                          {t("profile.disconnect")}
-                        </Button>
+                        />
                       )}
                     </div>
                     {/* Not a disabled button with no explanation: Strava is
@@ -1213,6 +1215,40 @@ export function ProfileScreen({
         </AppCard>
       </Section>
     </div>
+  )
+}
+
+/**
+ * One of the three Strava repairs.
+ *
+ * Deliberately not a Button: these are the things the app hopes nobody needs,
+ * and a row of three controls with a button's height and padding reads as the
+ * card's main business. This is the quiet version — the label at the size the
+ * status line above it uses, the icon only as a marker.
+ */
+function RepairAction({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="press flex min-w-0 items-center justify-center gap-1.5 px-1 py-2.5 text-micro font-medium text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-45"
+    >
+      <span className="shrink-0" aria-hidden>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
   )
 }
 

@@ -68,8 +68,12 @@ export async function POST(request: NextRequest) {
   if (prevSync?.state === "syncing") {
     const stuckThreshold = 2 * 60 * 1000
     if (prevSync.updated_at && Date.now() - new Date(prevSync.updated_at).getTime() < stuckThreshold) {
+      // Not a failure. Another run — another tab, a reload that landed on
+      // top of the first one — already owns this sync, and its results will
+      // arrive for both. The code is what lets the client say "syncing"
+      // instead of painting an error over a sync that is working.
       return NextResponse.json(
-        { error: "A sync is already in progress" },
+        { error: "A sync is already in progress", code: "SYNC_IN_PROGRESS" },
         { status: 409 },
       )
     }
