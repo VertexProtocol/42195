@@ -13,7 +13,7 @@ The name is the marathon distance in metres.
 
 ## Who uses it
 
-One person at a time, on a phone, in two moments:
+One runner, on a phone, in two moments:
 
 - **Before a run**, deciding what to do today: is the race close, is the week
   behind, is the body handling the load.
@@ -22,6 +22,14 @@ One person at a time, on a phone, in two moments:
 They are amateur runners training for a specific event, comfortable with pace,
 splits and heart-rate zones. They already use Strava. They are not looking for
 motivation graphics; they are looking for a number and a decision.
+
+A runner can share a race with other runners, and that is the only place anyone
+else appears. It is an addition to a goal, never a layer over the app: the
+group lives on the goal it belongs to, Today never mentions it, and a runner
+who joins none of them sees exactly the app described above. Everyone keeps
+their own target time and their own plan — a group owns the race and the date
+and nothing else, and what its members see of each other is one number and a
+name.
 
 The scene is a phone held in one hand, often outdoors, often in low light early
 or late in the day, sometimes immediately after finishing a run. Both light and
@@ -41,7 +49,7 @@ the runner and the number they came for.
 |---|---|
 | Today | The race countdown, training load, the week so far, the last runs. |
 | Activities | The log. Search, filter, open one. |
-| Plan | Race targets and weekly targets; the AI training plan per goal. |
+| Plan | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
 | Insights | Records, race predictions, benchmarks, calendar, and the AI coach. |
 | Profile | Account, Strava connection, HR calibration, appearance, language. |
 

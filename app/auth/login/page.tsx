@@ -93,12 +93,20 @@ export default function LoginPage() {
         // without a session back here — so the cookie is the whole of it.
         // `replace`, not `push`: back from the app should not return to a
         // login form for an account that is already signed in.
+        // Back to where they were going. The proxy sends anyone without a
+        // session here and keeps the query it came with, so an invite link
+        // opened signed out survives the sign-in instead of landing the
+        // runner on Today with no idea what happened to it. The path is
+        // always "/" — only the query is carried — so there is nothing here
+        // an attacker could redirect through.
+        const destination = `/${window.location.search}`
+
         if (await sessionCookieReady()) {
-          router.replace("/")
+          router.replace(destination)
         } else {
           // The cookie never appeared where we can see it. Whatever is going
           // on, a fresh document request is the one that has always worked.
-          window.location.href = "/"
+          window.location.href = destination
         }
       } catch {
         setError(t("auth.errorDefault"))
