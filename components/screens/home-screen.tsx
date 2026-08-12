@@ -37,6 +37,7 @@ import type {
   WeeklyGoalMetric,
 } from "@/lib/types"
 import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
+import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
@@ -63,13 +64,6 @@ import type { PlanBadge } from "@/lib/plan-badges"
 /** Weekly-goal metrics that the "This week" stat row already reports. */
 const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "sessions"]
 
-const WEEKLY_LABELS: Record<WeeklyGoalMetric, TranslationKey> = {
-  distance_km: "goals.weeklyDistance",
-  sessions: "goals.trainingSessions",
-  duration_minutes: "goals.activeMinutes",
-  elevation_m: "goals.elevationGain",
-}
-
 /**
  * A weekly target, set under the number that is already tracking it.
  *
@@ -77,6 +71,10 @@ const WEEKLY_LABELS: Record<WeeklyGoalMetric, TranslationKey> = {
  * tick along, so it earns a hairline and a target — not a headline. The value
  * it is measured against is the stat above, which is why nothing here repeats
  * the current figure.
+ *
+ * The metric icon leads the line for the same reason the star leads a pinned
+ * race: it marks the line as a goal rather than more of the stat above it,
+ * and it is the same icon this goal carries on Plan.
  */
 function WeeklyTarget({
   goal,
@@ -88,8 +86,9 @@ function WeeklyTarget({
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
   if (!goal) return null
+  const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
-  const label = t(WEEKLY_LABELS[goal.metric])
+  const label = t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
   const target = formatWeeklyMetric(goal.target, goal.metric)
   return (
     <>
@@ -101,11 +100,12 @@ function WeeklyTarget({
         valueText={`${formatWeeklyMetric(current, goal.metric)} / ${target}`}
       />
       <p
-        className={`measure mt-1 truncate text-micro ${
+        className={`mt-1 flex items-center gap-1 text-micro ${
           isComplete ? "text-success" : "text-muted-foreground"
         }`}
       >
-        {t("home.ofTarget", { target })}
+        <Icon size={11} className="shrink-0" aria-hidden />
+        <span className="measure truncate">{t("home.ofTarget", { target })}</span>
       </p>
     </>
   )
@@ -511,7 +511,8 @@ export function HomeScreen({
                 )
                 const progress = progressPercentage(current, wg.target)
                 const isComplete = current >= wg.target
-                const label = wg.label || t(WEEKLY_LABELS[wg.metric])
+                const label = wg.label || t(WEEKLY_METRIC_LABEL_KEYS[wg.metric])
+                const Icon = WEEKLY_METRIC_ICONS[wg.metric]
                 const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(
                   wg.target,
                   wg.metric,
@@ -523,8 +524,15 @@ export function HomeScreen({
                     className="press w-full rounded-sm text-left"
                   >
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="truncate text-label font-medium text-card-foreground">
-                        {label}
+                      <span className="flex min-w-0 items-center gap-1.5 text-label font-medium text-card-foreground">
+                        <Icon
+                          size={14}
+                          className={`shrink-0 ${
+                            isComplete ? "text-success" : "text-muted-foreground"
+                          }`}
+                          aria-hidden
+                        />
+                        <span className="truncate">{label}</span>
                       </span>
                       <span
                         className={`measure shrink-0 text-micro ${

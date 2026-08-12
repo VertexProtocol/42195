@@ -6,9 +6,6 @@ import {
   Plus,
   Pencil,
   Flame,
-  TrendingUp,
-  Clock,
-  Mountain,
   ChevronLeft,
   ChevronRight,
   Repeat,
@@ -18,7 +15,6 @@ import {
   ChevronDown,
   GripVertical,
   Star,
-  Target,
 } from "lucide-react"
 import {
   DndContext,
@@ -52,8 +48,9 @@ import {
   bestRelevantRun,
   longestRun,
 } from "@/lib/format"
-import type { Activity, Goal, WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
+import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { AppCard } from "@/components/ui/app-card"
 import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
@@ -68,23 +65,6 @@ import { Button } from "@/components/ui/button"
  */
 
 type GoalTab = "weekly" | "race"
-
-const METRIC_ICONS: Record<string, typeof Flame> = {
-  distance_km: TrendingUp,
-  sessions: Flame,
-  duration_minutes: Clock,
-  elevation_m: Mountain,
-}
-
-const METRIC_LABEL_KEYS: Record<
-  WeeklyGoalMetric,
-  "goals.weeklyDistance" | "goals.trainingSessions" | "goals.activeMinutes" | "goals.elevationGain"
-> = {
-  distance_km: "goals.weeklyDistance",
-  sessions: "goals.trainingSessions",
-  duration_minutes: "goals.activeMinutes",
-  elevation_m: "goals.elevationGain",
-}
 
 interface GoalsScreenProps {
   goals: Goal[]
@@ -350,9 +330,9 @@ export function GoalsScreen({
                       wg.session_min_distance_km,
                     )
                     const progress = progressPercentage(current, wg.target)
-                    const Icon = METRIC_ICONS[wg.metric] || Target
+                    const Icon = WEEKLY_METRIC_ICONS[wg.metric]
                     const isComplete = current >= wg.target
-                    const label = t(METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
+                    const label = t(WEEKLY_METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
                     const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(wg.target, wg.metric)}`
 
                     return (

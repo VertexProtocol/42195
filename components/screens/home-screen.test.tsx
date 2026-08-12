@@ -185,6 +185,60 @@ describe("HomeScreen — targets that measure something narrower", () => {
 })
 
 // ---------------------------------------------------------------------------
+// The metric icon
+// ---------------------------------------------------------------------------
+
+/**
+ * A weekly goal carries the same icon wherever it appears. Today used to be
+ * the exception: a target here was an unmarked bar under a stat, while the
+ * same goal on Plan led with its metric icon. The icon is a type marker — it
+ * says "this line is a goal", the way the star marks a pinned race — so the
+ * maps behind it live in one module rather than one copy per screen.
+ */
+const iconsIn = (container: HTMLElement, cls: string) =>
+  container.querySelectorAll(`svg.lucide-${cls}`).length
+
+describe("HomeScreen — weekly goals carry their metric icon", () => {
+  it("marks a target annotating a stat", () => {
+    const { container } = renderHome(
+      [makeActivity({ distance_km: 4 })],
+      [makeGoal({ metric: "distance_km", target: 10 })],
+    )
+    expect(screen.getByText("of 10 km")).toBeTruthy()
+    expect(iconsIn(container, "trending-up")).toBe(1)
+  })
+
+  it("uses a different icon per metric rather than one generic mark", () => {
+    const { container } = renderHome(
+      [makeActivity()],
+      [
+        makeGoal({ metric: "distance_km", target: 10 }),
+        makeGoal({ metric: "duration_minutes", target: 60 }),
+        makeGoal({ metric: "sessions", target: 3 }),
+      ],
+    )
+    expect(iconsIn(container, "trending-up")).toBe(1)
+    expect(iconsIn(container, "clock")).toBe(1)
+    expect(iconsIn(container, "flame")).toBe(1)
+  })
+
+  it("marks a goal that keeps a row of its own too", () => {
+    const { container } = renderHome(
+      [makeActivity({ elevation_gain_m: 120 })],
+      [makeGoal({ metric: "elevation_m", target: 300 })],
+    )
+    expect(screen.getByText("Elevation gain")).toBeTruthy()
+    expect(iconsIn(container, "mountain")).toBe(1)
+  })
+
+  it("adds no mark when there is no goal to mark", () => {
+    const { container } = renderHome([makeActivity()], [])
+    expect(iconsIn(container, "trending-up")).toBe(0)
+    expect(iconsIn(container, "mountain")).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Pinned goals
 // ---------------------------------------------------------------------------
 

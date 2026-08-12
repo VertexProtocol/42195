@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { GoalsScreen } from "./goals-screen"
-import type { Activity, Goal } from "@/lib/types"
+import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 
 /**
  * What a target's subtitle claims once its date has gone.
@@ -128,5 +128,68 @@ describe("GoalsScreen — what a past target claims", () => {
     renderGoals([makeGoal({ target_date: daysFromNow(32) })], [makeActivity(10.5)])
     expect(screen.getByText(/32 days left/)).toBeTruthy()
     expect(screen.queryByText(/Ended/)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The metric icon
+// ---------------------------------------------------------------------------
+
+/**
+ * The icons a weekly card leads with. They now come from a module shared with
+ * Today and the editor, so a card here and the same goal there are marked the
+ * same. These hold the icons in place through that move.
+ */
+
+function makeWeeklyGoal(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
+  const d = new Date()
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -6 : 1 - d.getDay()))
+  const p = (n: number) => String(n).padStart(2, "0")
+  return {
+    id: crypto.randomUUID(),
+    metric: "distance_km",
+    label: "",
+    target: 40,
+    current: 0,
+    week_start: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+    is_recurring: true,
+    ...overrides,
+  }
+}
+
+function renderWeekly(weeklyGoals: WeeklyGoal[]) {
+  const view = render(
+    <I18nProvider>
+      <GoalsScreen
+        goals={[]}
+        activities={[]}
+        weeklyGoals={weeklyGoals}
+        onToggleActive={() => {}}
+        onToggleStar={() => {}}
+        onEditGoal={() => {}}
+        onAddGoal={() => {}}
+        onEditWeeklyGoal={() => {}}
+        onAddWeeklyGoal={() => {}}
+        onSelectGoal={() => {}}
+        onReorderGoals={async () => {}}
+        onReorderWeeklyGoals={async () => {}}
+      />
+    </I18nProvider>,
+  )
+  fireEvent.click(screen.getByRole("tab", { name: "Weekly" }))
+  return view
+}
+
+describe("GoalsScreen — weekly cards keep their metric icon", () => {
+  it("marks each metric with its own icon", () => {
+    const { container } = renderWeekly([
+      makeWeeklyGoal({ metric: "distance_km" }),
+      makeWeeklyGoal({ metric: "duration_minutes" }),
+      makeWeeklyGoal({ metric: "sessions" }),
+      makeWeeklyGoal({ metric: "elevation_m" }),
+    ])
+    for (const cls of ["trending-up", "clock", "flame", "mountain"]) {
+      expect(container.querySelectorAll(`svg.lucide-${cls}`).length).toBe(1)
+    }
   })
 })
