@@ -740,6 +740,7 @@ const translations = {
     "shared.startTitle": "Train towards this with others",
     "shared.startBody": "Everyone keeps their own target time and their own plan. The group measures how much of your own plan you have done.",
     "shared.startAction": "Create a group",
+    "shared.startFailed": "We could not create the group. Check your connection and try again.",
     // Accepting an invite
     "shared.joinTitle": "Join the group",
     "shared.joinBody": "Pick which of your goals to bring. Your target time and plan stay yours.",
@@ -1484,6 +1485,7 @@ const translations = {
     "shared.startTitle": "Tren mot dette sammen med andre",
     "shared.startBody": "Alle beholder sin egen måltid og sin egen plan. Gruppa måler hvor mye av din egen plan du har gjort.",
     "shared.startAction": "Opprett gruppe",
+    "shared.startFailed": "Vi klarte ikke å opprette gruppa. Sjekk tilkoblingen og prøv igjen.",
     // Å ta imot en invitasjon
     "shared.joinTitle": "Bli med i gruppa",
     "shared.joinBody": "Velg hvilket av målene dine du tar med. Måltid og plan forblir dine.",

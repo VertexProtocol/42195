@@ -61,7 +61,12 @@ export default async function Page() {
       // meant a round trip — and a flash of "create a group" — on each visit.
       supabase
         .from("shared_goal_members")
-        .select("goal_id, position_pct, shared_goals(id, name, race_date, metric)"),
+        .select("goal_id, position_pct, shared_goals(id, name, race_date, metric)")
+        // Own rows only. A member may read everyone's row in their groups, so
+        // without this a runner was seeded an entry keyed by another member's
+        // goal id, carrying that member's position as "mine". The API that
+        // re-reads this always filtered; the page render did not.
+        .eq("user_id", authUser.id),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
     ])
