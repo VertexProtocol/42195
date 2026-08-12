@@ -14,6 +14,9 @@
 
 export const DEFAULT_AFTER_AUTH = "/"
 
+/** The one screen a password recovery is allowed to end on. */
+export const RESET_PASSWORD_PATH = "/auth/reset-password"
+
 /** Origin used only to parse relative targets; never appears in the result. */
 const PARSE_ORIGIN = "http://redirect.invalid"
 
@@ -60,4 +63,18 @@ export function withNext(path: string, next: string | null | undefined): string 
   const target = safeNext(next)
   if (target === DEFAULT_AFTER_AUTH) return path
   return `${path}?next=${encodeURIComponent(target)}`
+}
+
+/**
+ * Where a verified email link lands.
+ *
+ * Recovery has exactly one destination and it is not up to the URL. `safeNext`
+ * collapses every /auth path to the root — deliberately, so signing in cannot
+ * be sent back to the sign-in form — and password recovery is the one flow
+ * whose whole point is a screen inside /auth. Reading its destination out of
+ * `next` therefore sent the runner into the app, signed in, with the password
+ * they had forgotten still on the account and no screen offering to change it.
+ */
+export function landingAfterVerify(isRecovery: boolean, next: string | null | undefined): string {
+  return isRecovery ? RESET_PASSWORD_PATH : safeNext(next)
 }
