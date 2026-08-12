@@ -466,6 +466,7 @@ export function AppShell({ initialData }: AppShellProps) {
             <SharedGoalScreen
               groupId={groupId}
               onBack={handleBackFromGroup}
+              onLeft={data.refreshSharedGoals}
               initial={
                 Object.values(data.sharedGoals).find((g) => g.id === groupId) ?? null
               }

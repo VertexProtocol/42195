@@ -245,3 +245,94 @@ describe("handing over an invite link", () => {
     expect(screen.getByText("Stops working within a day")).toBeTruthy()
   })
 })
+
+/**
+ * Leaving.
+ *
+ * The set of groups is held by the app, not by this screen, so a leave that
+ * only closes the screen leaves the goal behind it still offering the group.
+ * That looked like the leave had failed: it had worked, and the only way to
+ * see it was to reload the page.
+ */
+describe("SharedGoalScreen — leaving", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  async function renderForLeave(isOwner: boolean) {
+    const v = view([member({ isSelf: true })], { isOwner })
+    const order: string[] = []
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") order.push("delete")
+      return { ok: true, json: async () => v }
+    })
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch)
+
+    const onBack = vi.fn(() => order.push("back"))
+    const onLeft = vi.fn(async () => {
+      order.push("told")
+    })
+
+    render(
+      <I18nProvider>
+        <SharedGoalScreen groupId="g1" onBack={onBack} onLeft={onLeft} />
+      </I18nProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("Oslo Marathon")).toBeTruthy())
+    return { onBack, onLeft, order, fetchMock }
+  }
+
+  it("tells the app the group is gone before closing the screen", async () => {
+    const { onBack, onLeft, order } = await renderForLeave(false)
+
+    fireEvent.click(screen.getByText("Leave the group"))
+
+    await waitFor(() => expect(onBack).toHaveBeenCalled())
+    expect(onLeft).toHaveBeenCalledTimes(1)
+    // Order matters: the goal this screen closes onto must already know the
+    // group is gone, or it paints a frame still offering it.
+    expect(order).toEqual(["delete", "told", "back"])
+  })
+
+  it("says the same when the owner disbands", async () => {
+    const { onLeft, order } = await renderForLeave(true)
+
+    fireEvent.click(screen.getByText("Disband the group"))
+
+    await waitFor(() => expect(onLeft).toHaveBeenCalled())
+    expect(order).toEqual(["delete", "told", "back"])
+  })
+
+  it("keeps the screen open, and says nothing, when the leave fails", async () => {
+    const v = view([member({ isSelf: true })], { isOwner: false })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === "DELETE"
+          ? { ok: false, status: 500, json: async () => ({}) }
+          : { ok: true, json: async () => v },
+      ) as unknown as typeof fetch,
+    )
+    const onBack = vi.fn()
+    const onLeft = vi.fn()
+    render(
+      <I18nProvider>
+        <SharedGoalScreen groupId="g1" onBack={onBack} onLeft={onLeft} />
+      </I18nProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("Oslo Marathon")).toBeTruthy())
+
+    fireEvent.click(screen.getByText("Leave the group"))
+
+    // A refresh here would be a lie about a group the runner is still in.
+    await waitFor(() => expect(screen.getByText("Leave the group")).toBeTruthy())
+    expect(onLeft).not.toHaveBeenCalled()
+    expect(onBack).not.toHaveBeenCalled()
+  })
+})
