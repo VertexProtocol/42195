@@ -285,9 +285,11 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
               {t("shared.inGroup").replace("{count}", String(view.members.length))}
             </h2>
             <span className="measure text-micro text-muted-foreground">
-              {days > 0
-                ? t("shared.daysToGo").replace("{days}", String(days))
-                : formatDateShort(view.raceDate)}
+              {view.finished
+                ? t("shared.finishedOn", { date: formatDateShort(view.raceDate) })
+                : days > 0
+                  ? t("shared.daysToGo").replace("{days}", String(days))
+                  : formatDateShort(view.raceDate)}
             </span>
           </div>
 
@@ -313,13 +315,20 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
             </ProgressLap>
           </div>
 
+          {/* The lane stops moving once the race has been run — every row is
+              settled — so the caption stops describing a race in progress. */}
           <p className="border-b border-border/50 pb-2.5 text-center text-micro text-muted-foreground">
-            {t("shared.laneCaption")}
+            {view.finished ? t("shared.finishedCaption") : t("shared.laneCaption")}
           </p>
 
           <div className="flex flex-col">
             {view.members.map((m, i) => (
-              <MemberRow key={m.userId} member={m} color={colorFor(m, i)} />
+              <MemberRow
+                key={m.userId}
+                member={m}
+                color={colorFor(m, i)}
+                finished={view.finished}
+              />
             ))}
           </div>
         </AppCard>
@@ -418,7 +427,15 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
  * with no number shows a dash and says why — a zero would be a claim about the
  * runner that the data does not support.
  */
-function MemberRow({ member, color }: { member: SharedGoalMemberView; color: string }) {
+function MemberRow({
+  member,
+  color,
+  finished,
+}: {
+  member: SharedGoalMemberView
+  color: string
+  finished: boolean
+}) {
   const { t } = useI18n()
   const quiet = daysSince(member.updatedAt)
   const hasRatio = member.adherenceDone != null && member.adherenceTarget != null
@@ -479,10 +496,27 @@ function MemberRow({ member, color }: { member: SharedGoalMemberView; color: str
               ? `${member.adherenceDone} / ${member.adherenceTarget} km`
               : t("shared.noPlanYet")}
           </span>
-          {quiet != null && quiet >= QUIET_DAYS && (
-            <Pill tone="caution">
-              {t("shared.quietDays").replace("{days}", String(quiet))}
-            </Pill>
+
+          {/* Once the race is run, the verdict from this runner's own goal —
+              the same two words their own screen gives them. A member whose
+              sync has not recorded one yet says so, because "not recorded" and
+              "fell short" are different things and only one of them is about
+              the running. */}
+          {finished ? (
+            member.outcome === "reached" ? (
+              <Pill tone="positive">{t("plan.achieved")}</Pill>
+            ) : member.outcome === "ended" ? (
+              <Pill>{t("plan.ended")}</Pill>
+            ) : (
+              <Pill>{t("shared.outcomeUnknown")}</Pill>
+            )
+          ) : (
+            quiet != null &&
+            quiet >= QUIET_DAYS && (
+              <Pill tone="caution">
+                {t("shared.quietDays").replace("{days}", String(quiet))}
+              </Pill>
+            )
           )}
         </div>
       </div>

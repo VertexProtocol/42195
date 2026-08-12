@@ -238,6 +238,31 @@ export interface PerformanceGoalStatus {
  * before-date filter at the call site rather than baking it in here.
  * ─────────────────────────────────────────────────────────────────────────
  */
+export type GoalOutcome = "reached" | "ended"
+
+/**
+ * How a goal that has run its course went, in one word.
+ *
+ * Only a goal with a measurable mark can be said to have been reached. An
+ * event goal has none — a marathon is not passed or failed by the app — so it
+ * ends, which is a statement about the calendar and not about the runner.
+ *
+ * Shared by the goal's own result card and by the group's closing rows,
+ * because those two showing a runner different verdicts about the same race
+ * would be worse than either of them being wrong.
+ */
+export function goalOutcome(
+  goalCategory: string | null | undefined,
+  activities: Activity[],
+  targetDistanceKm: number,
+  targetTimeSeconds: number | null,
+): GoalOutcome {
+  if (goalCategory !== "performance") return "ended"
+  return evaluatePerformanceGoal(activities, targetDistanceKm, targetTimeSeconds).reached
+    ? "reached"
+    : "ended"
+}
+
 export function evaluatePerformanceGoal(
   activities: Activity[],
   targetDistanceKm: number,

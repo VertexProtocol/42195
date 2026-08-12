@@ -27,8 +27,12 @@ interface SharedGoalEntryProps {
   goalId: string
   /** The group this goal belongs to, or null when it is in none. */
   group: SharedGoalSummary | null
-  /** Hidden for a race that has already been run. */
-  hidden?: boolean
+  /**
+   * The race has been run. The row stays — it used to be hidden, which took
+   * the group away on the one day people would go looking for it — and reads
+   * as a result rather than a position in something still running.
+   */
+  finished?: boolean
   onOpen: (groupId: string) => void
   /** Re-reads the groups after one is created. */
   onCreated?: () => void
@@ -37,7 +41,7 @@ interface SharedGoalEntryProps {
 export function SharedGoalEntry({
   goalId,
   group,
-  hidden,
+  finished,
   onOpen,
   onCreated,
 }: SharedGoalEntryProps) {
@@ -78,7 +82,9 @@ export function SharedGoalEntry({
     }
   }, [goalId, onCreated, onOpen])
 
-  if (hidden) return null
+  // Nothing to offer once the race is behind them: a group is something you
+  // train towards, and there is no training left to share.
+  if (!group && finished) return null
 
   if (!group) {
     return (
@@ -150,12 +156,14 @@ export function SharedGoalEntry({
               : t("shared.entryAlone")}
           </p>
           <p className="mt-0.5 truncate text-micro text-muted-foreground">
-            {group.myPositionPct == null
-              ? t("shared.entryUnmeasured")
-              : t("shared.entryPosition").replace(
-                  "{pct}",
-                  String(Math.round(group.myPositionPct)),
-                )}
+            {finished
+              ? t("shared.entryFinished")
+              : group.myPositionPct == null
+                ? t("shared.entryUnmeasured")
+                : t("shared.entryPosition").replace(
+                    "{pct}",
+                    String(Math.round(group.myPositionPct)),
+                  )}
           </p>
         </div>
 
