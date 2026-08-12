@@ -148,6 +148,21 @@ describe("HomeScreen — one lane per weekly goal", () => {
     expect(screen.queryByText("Weekly distance")).toBeNull()
   })
 
+  it("gives the targets a heading of their own, not the tail of This week", () => {
+    // Two unrelated readings in one card had nothing saying which was which.
+    renderHome([makeActivity()], [makeGoal({ metric: "distance_km", target: 10 })])
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
+    expect(headings).toContain("This week")
+    expect(headings).toContain("Targets")
+  })
+
+  it("drops that section entirely rather than heading an empty card", () => {
+    renderHome([makeActivity()], [])
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
+    expect(headings).toContain("This week")
+    expect(headings).not.toContain("Targets")
+  })
+
   it("leaves the stat row the same shape whether or not there are goals", () => {
     // Adding and removing goals is what the runner does to this card; the
     // week's own three numbers should not move when they do.

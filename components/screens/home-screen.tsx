@@ -474,18 +474,9 @@ export function HomeScreen({
 
       {/* ── The week so far ───────────────────────────────────────────── */}
       <Section>
-        <SectionHeader
-          title={t("home.thisWeek")}
-          action={
-            currentWeekGoals.length > 0 ? (
-              <SectionAction onClick={onViewGoals}>{t("home.weeklyTargets")}</SectionAction>
-            ) : undefined
-          }
-        />
+        <SectionHeader title={t("home.thisWeek")} />
         <AppCard>
-          {/* Unruled. A hairline between columns says the shape is settled,
-              and this card's other half is a set the runner edits. */}
-          <StatGroup dividers={false}>
+          <StatGroup>
             <Stat
               label={t("stats.distance")}
               value={weeklySummary.total_distance_km.toFixed(1)}
@@ -497,12 +488,24 @@ export function HomeScreen({
             />
             <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count} />
           </StatGroup>
+        </AppCard>
+      </Section>
 
-          {/* The goals: one lane each, wrapping. No rule above them either —
-              the space does the separating, and a rule would have to stretch
-              across a row whose length changes with the number of goals. */}
-          {weeklyLaps.length > 0 && (
-            <div className="-m-1.5 mt-2.5 flex flex-wrap">
+      {/* ── What the week was aiming at ───────────────────────────────── */}
+      {/* Its own section, not the tail of the one above. The week's three
+          numbers are a report and always the same three; the targets are a
+          set the runner edits, and there may be none. Sharing a card made the
+          card change shape as goals came and went, and left two unrelated
+          readings stacked with nothing saying which was which. A heading says
+          it in one word. */}
+      {weeklyLaps.length > 0 && (
+        <Section>
+          <SectionHeader
+            title={t("home.weeklyTargets")}
+            action={<SectionAction onClick={onViewGoals}>{t("home.seeAll")}</SectionAction>}
+          />
+          <AppCard padding="sm">
+            <div className="-m-1.5 flex flex-wrap">
               {weeklyLaps.map(({ goal, current }) => (
                 <WeeklyGoalLap
                   key={goal.id}
@@ -513,9 +516,9 @@ export function HomeScreen({
                 />
               ))}
             </div>
-          )}
-        </AppCard>
-      </Section>
+          </AppCard>
+        </Section>
+      )}
 
       {/* ── What was run ──────────────────────────────────────────────── */}
       {recentActivities.length > 0 && (
