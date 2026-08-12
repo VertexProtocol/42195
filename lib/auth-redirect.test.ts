@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_AFTER_AUTH, safeNext, withNext } from "./auth-redirect"
+import {
+  DEFAULT_AFTER_AUTH,
+  landingAfterVerify,
+  RESET_PASSWORD_PATH,
+  safeNext,
+  withNext,
+} from "./auth-redirect"
 
 describe("safeNext", () => {
   it("keeps a relative path with its query — the invite link case", () => {
@@ -50,5 +56,23 @@ describe("withNext", () => {
 
   it("carries a rejected destination no further than validation", () => {
     expect(withNext("/auth/login", "https://evil.example")).toBe("/auth/login")
+  })
+})
+
+describe("landingAfterVerify", () => {
+  it("sends a verified recovery to the screen that changes the password", () => {
+    // The bug this pins: recovery links carry next=/auth/reset-password, and
+    // safeNext collapses every /auth path to the root — so a runner who had
+    // forgotten their password was dropped into the app, signed in, with the
+    // old password still on the account and nothing offering to change it.
+    expect(landingAfterVerify(true, "/auth/reset-password")).toBe(RESET_PASSWORD_PATH)
+    expect(landingAfterVerify(true, null)).toBe(RESET_PASSWORD_PATH)
+    expect(landingAfterVerify(true, "/?invite=abc")).toBe(RESET_PASSWORD_PATH)
+  })
+
+  it("sends everything else where the runner was going", () => {
+    expect(landingAfterVerify(false, "/?invite=abc")).toBe("/?invite=abc")
+    expect(landingAfterVerify(false, null)).toBe(DEFAULT_AFTER_AUTH)
+    expect(landingAfterVerify(false, "https://evil.example")).toBe(DEFAULT_AFTER_AUTH)
   })
 })

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { safeNext } from "@/lib/auth-redirect"
+import { landingAfterVerify, safeNext } from "@/lib/auth-redirect"
 
 /**
  * GET /auth/callback
@@ -35,7 +35,11 @@ export async function GET(request: NextRequest) {
   // Recovery needs its own answers when something goes wrong. A confirmation
   // that fails can be told to sign in; someone who just clicked "forgot
   // password" cannot, and that was the advice they were getting.
-  const isRecovery = type === "recovery" || next.startsWith("/auth/reset-password")
+  const isRecovery = type === "recovery"
+
+  // Not `next`: see landingAfterVerify. Recovery ends on the set-a-password
+  // screen, and every other flow ends where the runner was going.
+  const landing = landingAfterVerify(isRecovery, searchParams.get("next"))
 
   const supabase = await createClient()
 
@@ -47,18 +51,18 @@ export async function GET(request: NextRequest) {
     // Trailing slash stripped: `next` always starts with one, and this is now
     // the path every confirmed sign-up comes through.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "")
-    if (siteUrl) return `${siteUrl}${next}`
+    if (siteUrl) return `${siteUrl}${landing}`
 
     const forwardedHost = request.headers.get("x-forwarded-host")
     const isLocalEnv = process.env.NODE_ENV === "development"
-    if (isLocalEnv) return `${origin}${next}`
+    if (isLocalEnv) return `${origin}${landing}`
     if (forwardedHost) {
       // Only trust x-forwarded-host when it matches the request origin host,
       // guarding against spoofed headers on non-Vercel infrastructure.
       const originHost = new URL(origin).host
-      if (forwardedHost === originHost) return `https://${forwardedHost}${next}`
+      if (forwardedHost === originHost) return `https://${forwardedHost}${landing}`
     }
-    return `${origin}${next}`
+    return `${origin}${landing}`
   }
 
   // The destination survives a failed confirmation too: the runner will be
