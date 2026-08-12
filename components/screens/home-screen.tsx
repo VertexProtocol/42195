@@ -41,7 +41,6 @@ import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metr
 import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
-import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
@@ -67,17 +66,15 @@ const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "se
 /**
  * A weekly target, set under the number that is already tracking it.
  *
- * Deliberately quiet: a weekly goal is something the runner set once and lets
- * tick along, so it earns a hairline and a target — not a headline. The value
- * it is measured against is the stat above, which is why nothing here repeats
- * the current figure.
+ * The lane is the shape a pinned race already carries, and the metric icon
+ * rides inside it the way the elapsed percentage does there. That makes the
+ * icon part of the measurement rather than a label stuck beside it — which is
+ * what a flat bar plus a separate icon amounted to, saying the same thing
+ * twice and looking like neither.
  *
- * No metric icon, though the same goal carries one on Plan and on the rows
- * below this row. A stat column is a third of a card wide, and an icon small
- * enough to fit beside micro text does not read as an icon — it reads as a
- * smudge, and three of them at different widths leave the bottom lines of the
- * three columns visibly out of step. The icon needs a full-width row and a
- * label at normal size to be worth anything.
+ * Still deliberately quiet: a weekly goal is something the runner set once and
+ * lets tick along, so the stat above stays the only thing at display weight,
+ * and nothing here repeats the current figure.
  */
 function WeeklyTarget({
   goal,
@@ -89,26 +86,36 @@ function WeeklyTarget({
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
   if (!goal) return null
+  const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
   const label = t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
   const target = formatWeeklyMetric(goal.target, goal.metric)
   return (
-    <>
-      <Meter
-        size="sm"
-        value={progressPercentage(current, goal.target)}
+    <div className="flex flex-col items-start gap-1.5">
+      <ProgressLap
+        percentage={progressPercentage(current, goal.target)}
+        size={30}
+        strokeWidth={3}
         tone={isComplete ? "done" : "action"}
-        label={label}
-        valueText={`${formatWeeklyMetric(current, goal.metric)} / ${target}`}
-      />
+        // The lane carries both figures for assistive technology: the current
+        // one belongs to the stat above and the target to the line below, so
+        // neither is inside the lane as text.
+        label={`${label} — ${formatWeeklyMetric(current, goal.metric)} / ${target}`}
+      >
+        <Icon
+          size={13}
+          className={isComplete ? "text-success" : "text-muted-foreground"}
+          aria-hidden
+        />
+      </ProgressLap>
       <p
-        className={`measure mt-1 truncate text-micro ${
+        className={`measure w-full truncate text-micro ${
           isComplete ? "text-success" : "text-muted-foreground"
         }`}
       >
         {t("home.ofTarget", { target })}
       </p>
-    </>
+    </div>
   )
 }
 
@@ -522,35 +529,36 @@ export function HomeScreen({
                   <button
                     key={wg.id}
                     onClick={onViewGoals}
-                    className="press w-full rounded-sm text-left"
+                    className="press flex w-full items-center gap-3 rounded-sm text-left"
                   >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="flex min-w-0 items-center gap-1.5 text-label font-medium text-card-foreground">
-                        <Icon
-                          size={14}
-                          className={`shrink-0 ${
-                            isComplete ? "text-success" : "text-muted-foreground"
-                          }`}
-                          aria-hidden
-                        />
-                        <span className="truncate">{label}</span>
+                    {/* The same lane the columns above use, one size up: this
+                        row has the width for it, and the goal it carries is
+                        one the stat row cannot show at all. */}
+                    <ProgressLap
+                      percentage={progress}
+                      size={34}
+                      strokeWidth={3}
+                      tone={isComplete ? "done" : "action"}
+                      label={`${label} — ${valueText}`}
+                    >
+                      <Icon
+                        size={15}
+                        className={isComplete ? "text-success" : "text-muted-foreground"}
+                        aria-hidden
+                      />
+                    </ProgressLap>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-label font-medium text-card-foreground">
+                        {label}
                       </span>
                       <span
-                        className={`measure shrink-0 text-micro ${
+                        className={`measure truncate text-micro ${
                           isComplete ? "text-success" : "text-muted-foreground"
                         }`}
                       >
                         {valueText}
                       </span>
-                    </div>
-                    <Meter
-                      className="mt-1.5"
-                      size="sm"
-                      value={progress}
-                      tone={isComplete ? "done" : "action"}
-                      label={label}
-                      valueText={valueText}
-                    />
+                    </span>
                   </button>
                 )
               })}

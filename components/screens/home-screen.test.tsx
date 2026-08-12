@@ -88,10 +88,16 @@ function renderHome(activities: Activity[], weeklyGoals: WeeklyGoal[]) {
   )
 }
 
-/** Weekly-target bars, which is what a duplicated measurement would add. */
+/**
+ * Weekly-target lanes, which is what a duplicated measurement would add.
+ *
+ * A lane is a `role="img"` rather than a progressbar — it draws its value
+ * instead of exposing a numeric range — so its accessible name carries both
+ * figures, and these read the name for the value.
+ */
 function targetBars(): HTMLElement[] {
   return screen
-    .queryAllByRole("progressbar")
+    .queryAllByRole("img")
     .filter((el) => /Weekly distance|Active minutes|Training sessions|Elevation/i.test(
       el.getAttribute("aria-label") ?? "",
     ))
@@ -133,9 +139,11 @@ describe("HomeScreen — this week", () => {
       [makeActivity({ distance_km: 5 }), makeActivity({ distance_km: 5 })],
       [makeGoal({ metric: "distance_km", target: 10 })],
     )
-    const bar = targetBars()[0]
-    expect(bar.getAttribute("aria-valuenow")).toBe("100")
-    expect(bar.getAttribute("aria-valuetext")).toBe("10 km / 10 km")
+    // The lane is the only element carrying both figures — the stat above it
+    // has the current one and the caption below it the target.
+    expect(targetBars()[0].getAttribute("aria-label")).toBe(
+      "Weekly distance — 10 km / 10 km: 100%",
+    )
   })
 })
 
@@ -189,52 +197,59 @@ describe("HomeScreen — targets that measure something narrower", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Where the metric icon goes on Today, and where it does not.
+ * The metric icon rides inside the lane.
  *
- * A goal with a row to itself leads with the same icon it carries on Plan. A
- * target annotating a stat does not: a stat column is a third of a card wide,
- * and an icon small enough to sit beside micro text reads as a smudge rather
- * than a mark — three of them at different widths also leave the bottom lines
- * of the three columns out of step. These hold that line, since the tidy
- * instinct is to mark both the same way.
+ * Every weekly goal on Today is drawn as the same lane a pinned race carries,
+ * with its metric icon where the elapsed percentage sits there — so the icon
+ * is part of the measurement rather than a mark beside it. These hold the
+ * pairing: a lane without its icon, or an icon outside a lane, is the shape
+ * this replaced.
  */
-const iconsIn = (container: HTMLElement, cls: string) =>
-  container.querySelectorAll(`svg.lucide-${cls}`).length
+const iconsIn = (scope: ParentNode, cls: string) =>
+  scope.querySelectorAll(`svg.lucide-${cls}`).length
 
-describe("HomeScreen — the metric icon", () => {
-  it("marks a goal that has a row of its own", () => {
-    const { container } = renderHome(
-      [makeActivity({ elevation_gain_m: 120 })],
-      [makeGoal({ metric: "elevation_m", target: 300 })],
-    )
-    expect(screen.getByText("Elevation gain")).toBeTruthy()
-    expect(iconsIn(container, "mountain")).toBe(1)
-  })
+/** The lane element itself, so an icon can be located inside one. */
+const laneFor = (name: RegExp) =>
+  screen
+    .getAllByRole("img")
+    .find((el) => name.test(el.getAttribute("aria-label") ?? ""))!
 
-  it("uses a different icon per metric rather than one generic mark", () => {
-    // A qualifying-session goal and an elevation goal both keep their own row.
-    const { container } = renderHome(
-      [makeActivity({ elevation_gain_m: 120, duration_seconds: 2400 })],
-      [
-        makeGoal({ metric: "elevation_m", target: 300 }),
-        makeGoal({ metric: "sessions", target: 2, session_min_duration_minutes: 30 }),
-      ],
-    )
-    expect(iconsIn(container, "mountain")).toBe(1)
-    expect(iconsIn(container, "flame")).toBe(1)
-  })
-
-  it("leaves a target annotating a stat unmarked", () => {
-    const { container } = renderHome(
+describe("HomeScreen — the metric icon rides inside the lane", () => {
+  it("puts a stat's target icon inside that target's lane", () => {
+    renderHome(
       [makeActivity({ distance_km: 4 })],
       [makeGoal({ metric: "distance_km", target: 10 })],
     )
     expect(screen.getByText("of 10 km")).toBeTruthy()
-    expect(iconsIn(container, "trending-up")).toBe(0)
+    expect(iconsIn(laneFor(/Weekly distance/), "trending-up")).toBe(1)
   })
 
-  it("adds no mark when there is no goal to mark", () => {
+  it("puts a standalone goal's icon inside its lane too", () => {
+    renderHome(
+      [makeActivity({ elevation_gain_m: 120 })],
+      [makeGoal({ metric: "elevation_m", target: 300 })],
+    )
+    expect(screen.getByText("Elevation gain")).toBeTruthy()
+    expect(iconsIn(laneFor(/Elevation gain/), "mountain")).toBe(1)
+  })
+
+  it("uses a different icon per metric rather than one generic mark", () => {
+    renderHome(
+      [makeActivity()],
+      [
+        makeGoal({ metric: "distance_km", target: 10 }),
+        makeGoal({ metric: "duration_minutes", target: 60 }),
+        makeGoal({ metric: "sessions", target: 3 }),
+      ],
+    )
+    expect(iconsIn(laneFor(/Weekly distance/), "trending-up")).toBe(1)
+    expect(iconsIn(laneFor(/Active minutes/), "clock")).toBe(1)
+    expect(iconsIn(laneFor(/Training sessions/), "flame")).toBe(1)
+  })
+
+  it("draws no lane and no icon when there is no goal", () => {
     const { container } = renderHome([makeActivity()], [])
+    expect(targetBars()).toHaveLength(0)
     expect(iconsIn(container, "trending-up")).toBe(0)
     expect(iconsIn(container, "mountain")).toBe(0)
   })
