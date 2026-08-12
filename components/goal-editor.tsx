@@ -13,13 +13,26 @@ interface GoalEditorProps {
   isNew: boolean
   /** Pre-select category when opening from a specific context (e.g. Plan tab) */
   defaultCategory?: GoalCategory
+  /**
+   * Fields a new goal already knows.
+   *
+   * Opening this from an invite means the race, the date and the distance are
+   * settled — the group holds them. Only the target time is the runner's to
+   * decide, and it is the one thing a group never owns, so it is the one field
+   * left blank.
+   */
+  prefill?: {
+    name?: string
+    target_date?: string
+    target_distance_km?: number
+  }
   open: boolean
   onSave: (goal: Goal) => void
   onDelete?: (goalId: string) => void
   onClose: () => void
 }
 
-export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelete, onClose }: GoalEditorProps) {
+export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave, onDelete, onClose }: GoalEditorProps) {
   const { t } = useI18n()
   const [category, setCategory] = useState<GoalCategory>("performance")
   const [name, setName] = useState("")
@@ -55,17 +68,21 @@ export function GoalEditor({ goal, isNew, defaultCategory, open, onSave, onDelet
       setTouched({ name: false, distance: false, date: false })
     } else if (open && isNew) {
       setCategory(defaultCategory ?? "performance")
-      setName("")
-      setTargetDistance("")
+      setName(prefill?.name ?? "")
+      setTargetDistance(
+        prefill?.target_distance_km != null
+          ? String(prefill.target_distance_km).replace(".", ",")
+          : "",
+      )
       setTargetTimeH("")
       setTargetTimeM("")
       setTargetTimeS("")
       setStartDate("")
-      setTargetDate("")
+      setTargetDate(prefill?.target_date ? prefill.target_date.split("T")[0] : "")
       setShowConfirmDelete(false)
       setTouched({ name: false, distance: false, date: false })
     }
-  }, [open, goal, isNew, defaultCategory])
+  }, [open, goal, isNew, defaultCategory, prefill])
 
   /** Parse distance string accepting both , and . as decimal separator */
   const parseDistance = (value: string): number => {

@@ -683,7 +683,8 @@ const translations = {
     "shared.joinTitle": "Join the group",
     "shared.joinBody": "Pick which of your goals to bring. Your target time and plan stay yours.",
     "shared.joinAction": "Join",
-    "shared.joinNoGoals": "You need a race goal on the same date before you can join.",
+    "shared.joinNoGoals": "A group hangs off one of your own goals, and you have none yet. Start one for this race and your target time stays yours.",
+    "shared.joinCreateGoal": "Create a goal for this race",
     "shared.joinFailed": "That invite has been used or is no longer valid.",
   },
   no: {
@@ -1365,7 +1366,8 @@ const translations = {
     "shared.joinTitle": "Bli med i gruppa",
     "shared.joinBody": "Velg hvilket av målene dine du tar med. Måltid og plan forblir dine.",
     "shared.joinAction": "Bli med",
-    "shared.joinNoGoals": "Du trenger et løpsmål på samme dato før du kan bli med.",
+    "shared.joinNoGoals": "En gruppe henger på et av dine egne mål, og du har ingen ennå. Lag ett for dette løpet — måltiden er fortsatt din.",
+    "shared.joinCreateGoal": "Lag et mål for dette løpet",
     "shared.joinFailed": "Den invitasjonen er brukt eller ikke gyldig lenger.",
   },
 } as const

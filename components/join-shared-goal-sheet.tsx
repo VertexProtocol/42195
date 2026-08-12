@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
-import { formatDate, formatDistance } from "@/lib/format"
+import { formatDate, formatDistance, isDatePast } from "@/lib/format"
 import type { Goal } from "@/lib/types"
 
 /**
@@ -29,9 +29,17 @@ interface JoinSharedGoalSheetProps {
   goals: Goal[]
   onClose: () => void
   onJoined: (groupId: string) => void
+  /**
+   * Start a goal for this race, with the race already filled in.
+   *
+   * Someone invited into their first group has no goal to bring, and the group
+   * knows the race, the date and the distance — asking them to go and type all
+   * three somewhere else, then find the link again, is not a flow.
+   */
+  onCreateGoal?: (race: { name: string; raceDate: string; distanceKm: number }) => void
 }
 
-export function JoinSharedGoalSheet({ token, goals, onClose, onJoined }: JoinSharedGoalSheetProps) {
+export function JoinSharedGoalSheet({ token, goals, onClose, onJoined, onCreateGoal }: JoinSharedGoalSheetProps) {
   const { t } = useI18n()
   const [preview, setPreview] = useState<InvitePreview | null>(null)
   const [failed, setFailed] = useState(false)
@@ -54,6 +62,10 @@ export function JoinSharedGoalSheet({ token, goals, onClose, onJoined }: JoinSha
       cancelled = true
     }
   }, [token])
+
+  // A race in the past is not something to train towards, so it is not offered
+  // — the list is what could sensibly carry this group, not everything owned.
+  const candidates = goals.filter((g) => !isDatePast(g.target_date))
 
   const join = useCallback(async () => {
     if (!selected) return
@@ -86,8 +98,26 @@ export function JoinSharedGoalSheet({ token, goals, onClose, onJoined }: JoinSha
         <p className="text-body text-muted-foreground">{t("shared.joinFailed")}</p>
       ) : !preview ? (
         <p className="text-body text-muted-foreground">{t("common.loading")}</p>
-      ) : goals.length === 0 ? (
-        <p className="text-body text-muted-foreground">{t("shared.joinNoGoals")}</p>
+      ) : candidates.length === 0 ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-label leading-relaxed text-muted-foreground">
+            {t("shared.joinNoGoals")}
+          </p>
+          {onCreateGoal && (
+            <Button
+              onClick={() =>
+                onCreateGoal({
+                  name: preview.name,
+                  raceDate: preview.raceDate,
+                  distanceKm: preview.distanceKm,
+                })
+              }
+              className="w-full"
+            >
+              {t("shared.joinCreateGoal")}
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-label leading-relaxed text-muted-foreground">
@@ -95,7 +125,7 @@ export function JoinSharedGoalSheet({ token, goals, onClose, onJoined }: JoinSha
           </p>
 
           <div className="flex flex-col gap-2">
-            {goals.map((goal) => {
+            {candidates.map((goal) => {
               const isSelected = selected === goal.id
               return (
                 <button
