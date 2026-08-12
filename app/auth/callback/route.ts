@@ -32,6 +32,11 @@ export async function GET(request: NextRequest) {
   // root — prevents open-redirect abuse via the next parameter.
   const next = safeNext(searchParams.get("next"))
 
+  // Recovery needs its own answers when something goes wrong. A confirmation
+  // that fails can be told to sign in; someone who just clicked "forgot
+  // password" cannot, and that was the advice they were getting.
+  const isRecovery = type === "recovery" || next.startsWith("/auth/reset-password")
+
   const supabase = await createClient()
 
   const getRedirectUrl = () => {
@@ -81,14 +86,15 @@ export async function GET(request: NextRequest) {
       error.message.includes("both pkce")
 
     if (isMissingVerifier) {
+      // The verifier is written where the flow started, and this browser is
+      // not it — a link opened from a mail app, or a request made against a
+      // different host than the one the link points at.
       return NextResponse.redirect(
-        errorUrl(
-          "Email confirmed, but the session could not be created because the confirmation link was opened in a different browser. Please sign in with your email and password.",
-        ),
+        errorUrl(isRecovery ? "recovery_wrong_browser" : "confirmed_elsewhere"),
       )
     }
 
-    return NextResponse.redirect(errorUrl(error.message))
+    return NextResponse.redirect(errorUrl(isRecovery ? "recovery_link_failed" : error.message))
   }
 
   // --- Token-hash flow (works cross-browser, no cookie needed) ---
@@ -102,8 +108,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(getRedirectUrl())
     }
 
-    return NextResponse.redirect(errorUrl(error.message))
+    return NextResponse.redirect(errorUrl(isRecovery ? "recovery_link_failed" : error.message))
   }
 
-  return NextResponse.redirect(errorUrl("No authorization code received."))
+  return NextResponse.redirect(
+    errorUrl(isRecovery ? "recovery_link_failed" : "No authorization code received."),
+  )
 }

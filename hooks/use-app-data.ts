@@ -174,10 +174,14 @@ export function useAppData(initialData?: InitialData | null) {
         const justConnected = params.get("strava_connected") === "1"
 
         if (justConnected) {
-          // Clean up the query parameter from the URL
+          // Take the flag out of the URL so a reload does not sync again —
+          // and put back everything else it arrived with. This used to hand
+          // over `url.pathname` alone, which dropped the rest of the query:
+          // an invite followed through a Strava sign-in arrives as
+          // ?invite=…&strava_connected=1, and lost the invite here.
           const url = new URL(window.location.href)
           url.searchParams.delete("strava_connected")
-          window.history.replaceState({}, "", url.pathname)
+          window.history.replaceState({}, "", `${url.pathname}${url.search}`)
           setStravaConnected(true)
         }
 
@@ -702,7 +706,16 @@ export function useAppData(initialData?: InitialData | null) {
   }, [activities])
 
   // ----- Strava Sync -----
+  // One sync at a time from this document. The chunk loop below can run for
+  // a while on a first full history, and a second caller — the auto-sync on
+  // arrival from Strava, a press of Sync now that slipped in before the
+  // button disabled itself — would race it into the server's own concurrency
+  // guard and surface as an error over a sync that was working.
+  const syncing = useRef(false)
+
   const doSync = useCallback(async (full = false) => {
+    if (syncing.current) return
+    syncing.current = true
     setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
 
     const url = full ? "/api/sync-strava?full=1" : "/api/sync-strava"
@@ -734,6 +747,13 @@ export function useAppData(initialData?: InitialData | null) {
               error_message: "Strava account disconnected. Reconnecting…",
             }))
             window.location.href = "/api/auth/strava"
+            return
+          }
+          // Someone else got there first. Theirs will finish and its
+          // activities are the same ones this run was going to fetch, so
+          // this is a state, not a failure — and never a red line.
+          if (data.code === "SYNC_IN_PROGRESS") {
+            setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
             return
           }
           if (data.code === "STRAVA_RATE_LIMITED") {
@@ -799,6 +819,10 @@ export function useAppData(initialData?: InitialData | null) {
         error_message: "Network error. Please try again.",
       }))
       // toast.error("Network error. Please try again.")
+    } finally {
+      // In a finally, not on each of the loop's several exits: a run that
+      // returns early still has to hand the next one its turn.
+      syncing.current = false
     }
   }, [])
 

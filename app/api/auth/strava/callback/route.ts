@@ -190,11 +190,16 @@ export async function GET(request: NextRequest) {
     return errorRedirect("Failed to save Strava connection.")
   }
 
-  // Success — clear state cookie and send the runner on. The destination
-  // carries ?strava_connected=1, which is what makes Today start the first
-  // sync instead of showing an empty screen to someone who just authorised a
-  // history.
-  const destination = withSyncOnArrival(state.next)
+  // Success — clear state cookie and send the runner on.
+  //
+  // ?strava_connected=1 makes Today pull the whole history on arrival, and it
+  // belongs only to a connection that did not exist a moment ago: a new
+  // account, or an athlete linking for the first time. Signing in with Strava
+  // is not that. Sending every sign-in through a full history sync would put
+  // a returning runner through their entire back catalogue — and Strava's
+  // rate limit — to fetch what the app already has.
+  const isNewConnection = created || !ownerUserId
+  const destination = isNewConnection ? withSyncOnArrival(state.next) : state.next
 
   // A brand-new account has no address anyone can reach. Ask for one now,
   // while it is obvious why — the screen hands over to `destination` either
