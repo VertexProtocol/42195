@@ -165,7 +165,14 @@ describe("SharedGoalScreen rows", () => {
 describe("handing over an invite link", () => {
   const withInvite = view([member({ isSelf: true })], {
     isOwner: true,
-    pendingInvites: [{ id: "i1", label: null, token: "tok_abcdefghijklmnop" }],
+    pendingInvites: [
+      {
+        id: "i1",
+        label: null,
+        token: "tok_abcdefghijklmnop",
+        expiresAt: new Date(NOW.getTime() + 7 * 86_400_000).toISOString(),
+      },
+    ],
   })
 
   it("shows the link itself, so it is reachable whatever the clipboard does", async () => {
@@ -199,5 +206,28 @@ describe("handing over an invite link", () => {
 
     await waitFor(() => expect(screen.getByText("Copied")).toBeTruthy())
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("?invite=tok_abcdefghijklmnop"))
+  })
+
+  it("copies from the button beside the link, without the share sheet", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const share = vi.fn()
+    vi.stubGlobal("navigator", { clipboard: { writeText }, share })
+    await renderScreen(withInvite)
+
+    fireEvent.click(screen.getByLabelText("Copy"))
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining("?invite=tok_abcdefghijklmnop"),
+      ),
+    )
+    // The point of this button: the share sheet takes over the screen, and
+    // sometimes the link is going somewhere the sheet has never heard of.
+    expect(share).not.toHaveBeenCalled()
+  })
+
+  it("says how long the link has left", async () => {
+    await renderScreen(withInvite)
+    expect(screen.getByText("Works for 7 more days")).toBeTruthy()
   })
 })

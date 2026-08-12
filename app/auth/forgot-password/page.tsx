@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
 import { useI18n } from "@/lib/i18n"
+import { sendPasswordResetAction } from "./actions"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -17,26 +17,14 @@ export default function ForgotPasswordPage() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const email = formData.get("email") as string
     setError(null)
 
     startTransition(async () => {
       try {
-        const supabase = createClient()
-        // The canonical site URL keeps the reset link pointing at the right
-        // host regardless of preview/staging context.
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${siteUrl}/auth/callback?next=/auth/reset-password`,
-        })
-
-        if (error) {
-          // Never relay the raw Supabase error: rate-limit messages are scoped
-          // to a specific address and would enable user enumeration.
-          setError(t("auth.errorDefault"))
-          return
-        }
-
+        // Sent from the server, on a client that is not in the PKCE flow —
+        // see the action. Asking from the browser client here is what made
+        // the reset link refuse to open anywhere but this exact browser.
+        await sendPasswordResetAction(formData)
         setSent(true)
       } catch {
         setError(t("auth.errorDefault"))

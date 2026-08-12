@@ -721,7 +721,8 @@ const translations = {
     "shared.loadFailedBody": "Check your connection and open it again.",
     "shared.inviteTitle": "Invite someone",
     "shared.inviteBody":
-      "A link you hand over yourself. It works once, and a new one replaces it.",
+      "One link for everyone you are inviting. It lasts a week, and a new one replaces it.",
+    "shared.inviteExpires": "Works for {days} more days",
     "shared.inviteAction": "New link",
     "shared.inviteLink": "Invite link",
     "shared.copyLink": "Copy",
@@ -1463,7 +1464,8 @@ const translations = {
     "shared.loadFailedBody": "Sjekk nettforbindelsen og åpne den på nytt.",
     "shared.inviteTitle": "Inviter noen",
     "shared.inviteBody":
-      "En lenke du sender selv. Den virker én gang, og en ny erstatter den.",
+      "Én lenke til alle du inviterer. Den varer en uke, og en ny erstatter den.",
+    "shared.inviteExpires": "Virker {days} dager til",
     "shared.inviteAction": "Ny lenke",
     "shared.inviteLink": "Invitasjonslenke",
     "shared.copyLink": "Kopier",

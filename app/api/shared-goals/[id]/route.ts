@@ -37,8 +37,16 @@ export interface SharedGoalView {
   metric: SharedGoalMetric
   isOwner: boolean
   members: SharedGoalMemberView[]
-  /** Unaccepted invite links. Owner only; empty for everyone else. */
-  pendingInvites: Array<{ id: string; label: string | null; token: string }>
+  /**
+   * The group's live invite link, if it has one. Owner only; empty for
+   * everyone else. At most one — making a new link revokes the last.
+   */
+  pendingInvites: Array<{
+    id: string
+    label: string | null
+    token: string
+    expiresAt: string
+  }>
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -106,12 +114,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const isOwner = goal.owner_id === user.id
   let pendingInvites: SharedGoalView["pendingInvites"] = []
   if (isOwner) {
+    // Live means unexpired. It used to mean unaccepted, which stopped being
+    // the question when one link started letting in more than one runner.
     const { data: invites } = await supabase
       .from("shared_goal_invites")
-      .select("id, label, token")
+      .select("id, label, token, expires_at")
       .eq("shared_goal_id", id)
-      .is("accepted_at", null)
-    pendingInvites = (invites ?? []) as SharedGoalView["pendingInvites"]
+      .gt("expires_at", new Date().toISOString())
+    pendingInvites = (invites ?? []).map((i) => ({
+      id: i.id as string,
+      label: (i.label as string | null) ?? null,
+      token: i.token as string,
+      expiresAt: i.expires_at as string,
+    }))
   }
 
   const view: SharedGoalView = {

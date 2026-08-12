@@ -8,13 +8,17 @@
  * own, and a link needs no address, so nothing here can be used to find out
  * whether someone has an account.
  *
- * A group has at most one open link. Making a new one revokes the last,
- * because a token that has not been used is a working key to the group and
- * nothing here expires: every link ever made would otherwise stay live
- * forever, in whatever message it was pasted into. The owner who presses
- * "New link" a second time has told us the first one is not the one they are
- * handing over.
+ * A group has at most one live link, and it lasts a week. Anyone holding it
+ * can join while it lasts, so inviting a running club is one message rather
+ * than one per runner, and a link that leaks stops mattering on its own.
+ *
+ * Making a new one revokes the last. The owner who presses "New link" a
+ * second time has told us the first one is not the link they are handing
+ * over — and until the clock runs out, that first one still works.
  */
+
+/** How long a new link lasts. Long enough to be answered, short enough to forget. */
+const INVITE_TTL_DAYS = 7
 
 import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
@@ -54,7 +58,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .from("shared_goal_invites")
     .delete()
     .eq("shared_goal_id", id)
-    .is("accepted_at", null)
 
   if (revokeError) {
     return NextResponse.json({ error: revokeError.message }, { status: 500 })
@@ -64,16 +67,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   // has to be long enough that guessing one is not a strategy.
   const token = randomBytes(32).toString("base64url")
 
+  const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
+
   const { error } = await supabase.from("shared_goal_invites").insert({
     shared_goal_id: id,
     token,
     label,
     invited_by: user.id,
+    // Written rather than left to the column default, so the window is
+    // decided by the app and reads in one place with the copy that states it.
+    expires_at: expiresAt.toISOString(),
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ token })
+  return NextResponse.json({ token, expiresAt: expiresAt.toISOString() })
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
