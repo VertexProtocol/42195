@@ -109,6 +109,13 @@ export function AppShell({ initialData }: AppShellProps) {
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
   const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
+  // An invite held aside while its recipient makes the goal to bring to it.
+  // Kept out of the URL for the duration so the sheet is not on screen behind
+  // the editor, and put back the moment there is a goal to offer it.
+  const [heldInvite, setHeldInvite] = useState<string | null>(null)
+  const [goalPrefill, setGoalPrefill] = useState<
+    { name: string; target_date: string; target_distance_km: number } | null
+  >(null)
 
   // First run is a checklist on Today, not a screen in front of it. What is
   // already done is read from the account, so the list is right on a second
@@ -168,6 +175,24 @@ export function AppShell({ initialData }: AppShellProps) {
     navigate({ invite: null })
   }, [navigate])
 
+  /** From the join sheet: make the goal this group hangs off, race filled in. */
+  const handleCreateGoalForRace = useCallback(
+    (race: { name: string; raceDate: string; distanceKm: number }) => {
+      if (inviteToken) setHeldInvite(inviteToken)
+      navigate({ invite: null })
+      setGoalPrefill({
+        name: race.name,
+        target_date: race.raceDate,
+        target_distance_km: race.distanceKm,
+      })
+      setEditingGoal(null)
+      setIsNewGoal(true)
+      setDefaultGoalCategory("event_training")
+      setIsEditorOpen(true)
+    },
+    [inviteToken, navigate],
+  )
+
   const handleSelectActivity = useCallback((activity: Activity) => {
     navigate({ activity: activity.id })
   }, [navigate])
@@ -192,8 +217,16 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleSaveGoal = useCallback(async (saved: Goal) => {
     const ok = await data.saveGoal(saved)
-    if (ok) setIsEditorOpen(false)
-  }, [data.saveGoal])
+    if (!ok) return
+    setIsEditorOpen(false)
+    setGoalPrefill(null)
+    // Back to the invite they came in on, now with something to bring to it.
+    if (heldInvite) {
+      const token = heldInvite
+      setHeldInvite(null)
+      navigate({ invite: token })
+    }
+  }, [data.saveGoal, heldInvite, navigate])
 
   const handleDeleteGoal = useCallback(async (goalId: string) => {
     await data.deleteGoal(goalId)
@@ -202,7 +235,13 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleCloseEditor = useCallback(() => {
     setIsEditorOpen(false)
-  }, [])
+    setGoalPrefill(null)
+    if (heldInvite) {
+      const token = heldInvite
+      setHeldInvite(null)
+      navigate({ invite: token })
+    }
+  }, [heldInvite, navigate])
 
   const handleEditWeeklyGoal = useCallback((goal: WeeklyGoal) => {
     setEditingWeeklyGoal(goal)
@@ -460,6 +499,7 @@ export function AppShell({ initialData }: AppShellProps) {
         goal={editingGoal}
         isNew={isNewGoal}
         defaultCategory={defaultGoalCategory}
+        prefill={goalPrefill ?? undefined}
         open={isEditorOpen}
         onSave={handleSaveGoal}
         onDelete={handleDeleteGoal}
@@ -492,6 +532,7 @@ export function AppShell({ initialData }: AppShellProps) {
             goals={data.goals}
             onClose={handleDismissInvite}
             onJoined={(id) => navigate({ invite: null, tab: "goals", group: id })}
+            onCreateGoal={handleCreateGoalForRace}
           />
         </Suspense>
       )}
