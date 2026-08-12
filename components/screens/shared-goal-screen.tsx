@@ -10,15 +10,30 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { ProgressLap, type LaneMarker } from "@/components/progress-lap"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { daysUntil, formatDateShort } from "@/lib/format"
 import type { SharedGoalView, SharedGoalMemberView } from "@/app/api/shared-goals/[id]/route"
 import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 
-/** Whole days until a link stops working, never below one while it still does. */
-function daysLeft(expiresAt: string): number {
-  const ms = new Date(expiresAt).getTime() - Date.now()
-  return Math.max(1, Math.ceil(ms / 86_400_000))
+/**
+ * How much longer the link works, in words.
+ *
+ * Read at render, so it is right every time the screen is opened and counts
+ * down as the week goes. It does not tick while you watch it, which for a
+ * number that changes once a day is the correct amount of machinery.
+ *
+ * The last day gets its own phrase rather than "1 days" — the count is a
+ * ceiling, so one means "less than a day", which is worth saying outright to
+ * an owner deciding whether the link they are about to send will still work
+ * when it is opened.
+ */
+function expiryLabel(
+  t: (key: TranslationKey, params?: TranslationParams) => string,
+  expiresAt: string,
+): string {
+  const days = Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000)
+  if (days <= 1) return t("shared.inviteExpiresSoon")
+  return t("shared.inviteExpires", { days })
 }
 
 /**
@@ -328,7 +343,7 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
                   <li key={invite.id} className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-micro text-muted-foreground">
-                        {invite.label ?? t("shared.inviteExpires", { days: daysLeft(invite.expiresAt) })}
+                        {invite.label ?? expiryLabel(t, invite.expiresAt)}
                       </span>
                       <button
                         type="button"

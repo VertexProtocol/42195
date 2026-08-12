@@ -723,6 +723,7 @@ const translations = {
     "shared.inviteBody":
       "One link for everyone you are inviting. It lasts a week, and a new one replaces it.",
     "shared.inviteExpires": "Works for {days} more days",
+    "shared.inviteExpiresSoon": "Stops working within a day",
     "shared.inviteAction": "New link",
     "shared.inviteLink": "Invite link",
     "shared.copyLink": "Copy",
@@ -1466,6 +1467,7 @@ const translations = {
     "shared.inviteBody":
       "Én lenke til alle du inviterer. Den varer en uke, og en ny erstatter den.",
     "shared.inviteExpires": "Virker {days} dager til",
+    "shared.inviteExpiresSoon": "Slutter å virke innen et døgn",
     "shared.inviteAction": "Ny lenke",
     "shared.inviteLink": "Invitasjonslenke",
     "shared.copyLink": "Kopier",

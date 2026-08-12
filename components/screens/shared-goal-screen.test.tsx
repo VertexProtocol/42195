@@ -230,4 +230,20 @@ describe("handing over an invite link", () => {
     await renderScreen(withInvite)
     expect(screen.getByText("Works for 7 more days")).toBeTruthy()
   })
+
+  it("does not say '1 days' on the last one", async () => {
+    const almostGone = view([member({ isSelf: true })], {
+      isOwner: true,
+      pendingInvites: [
+        {
+          id: "i1",
+          label: null,
+          token: "tok_abcdefghijklmnop",
+          expiresAt: new Date(NOW.getTime() + 5 * 3_600_000).toISOString(),
+        },
+      ],
+    })
+    await renderScreen(almostGone)
+    expect(screen.getByText("Stops working within a day")).toBeTruthy()
+  })
 })
