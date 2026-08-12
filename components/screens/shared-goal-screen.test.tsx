@@ -168,7 +168,6 @@ describe("handing over an invite link", () => {
     pendingInvites: [
       {
         id: "i1",
-        label: null,
         token: "tok_abcdefghijklmnop",
         expiresAt: new Date(NOW.getTime() + 7 * 86_400_000).toISOString(),
       },
@@ -237,7 +236,6 @@ describe("handing over an invite link", () => {
       pendingInvites: [
         {
           id: "i1",
-          label: null,
           token: "tok_abcdefghijklmnop",
           expiresAt: new Date(NOW.getTime() + 5 * 3_600_000).toISOString(),
         },

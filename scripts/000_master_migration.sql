@@ -728,6 +728,9 @@ end $$;
 
 -- ============================================================
 -- 026_add_shared_goals.sql
+--   · 027 folded in: the membership lookup lives in `private`.
+--   · 028 folded in: invite links expire, and one serves the whole group.
+--   · 029 folded in: no label on an invite.
 -- ============================================================
 
 -- Several runners against one race. The shared goal owns the race and the
@@ -794,24 +797,54 @@ alter table public.shared_goal_members enable row level security;
 -- with an address that has no account: nothing is looked up, so nothing can
 -- leak whether someone is registered.
 --
--- One use each. A link that can be forwarded is a link that will be, and a
--- token that dies on first use bounds how far a forwarded one travels. The
--- owner can always make another.
+-- One link per group, good for a week, and anyone holding it can join while
+-- it lasts (028). It was one use each to begin with; accepted_at and
+-- accepted_by are what is left of that and decide nothing now. Who is in the
+-- group is shared_goal_members.
 create table if not exists public.shared_goal_invites (
   id             uuid        primary key default gen_random_uuid(),
   shared_goal_id uuid        not null references public.shared_goals(id) on delete cascade,
   token          text        not null unique,
-  -- Optional note for the owner: who this link was meant for.
-  label          text,
   invited_by     uuid        references auth.users(id) on delete set null,
   created_at     timestamptz not null default now(),
+  expires_at     timestamptz not null default (now() + interval '7 days'),
   accepted_at    timestamptz,
   accepted_by    uuid        references auth.users(id) on delete set null
 );
 
+-- 028, for a database that already has the table: add the window, backfill it,
+-- then make it required. Mind the direction of the backfill — a link that was
+-- already spent under the one-use model must not come back to life for a week.
+alter table public.shared_goal_invites
+  add column if not exists expires_at timestamptz;
+
+update public.shared_goal_invites
+   set expires_at = case
+         when accepted_at is not null then now()
+         else now() + interval '7 days'
+       end
+ where expires_at is null;
+
+alter table public.shared_goal_invites
+  alter column expires_at set default (now() + interval '7 days');
+
+alter table public.shared_goal_invites
+  alter column expires_at set not null;
+
+-- 029: `label` said who a link was meant for, which stopped being a question
+-- once one link served the whole group.
+alter table public.shared_goal_invites
+  drop column if exists label;
+
+-- The lookup reads by token, and token is unique, so that index already
+-- exists. This one is for the owner's list. It was partial on
+-- `accepted_at is null` while that meant "open"; it does not any more.
+-- (A predicate on `expires_at > now()` is not available — now() is not
+-- immutable, so it cannot sit in one.)
+drop index if exists idx_shared_goal_invites_goal;
+
 create index if not exists idx_shared_goal_invites_goal
-  on public.shared_goal_invites(shared_goal_id)
-  where accepted_at is null;
+  on public.shared_goal_invites (shared_goal_id);
 
 alter table public.shared_goal_invites enable row level security;
 
