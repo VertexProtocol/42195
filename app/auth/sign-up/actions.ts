@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
-import { claimAllowlistEntry, isEmailAllowed } from "@/lib/allowlist"
 
 export async function signUpAction(formData: FormData) {
   const supabase = await createClient()
@@ -15,12 +14,6 @@ export async function signUpAction(formData: FormData) {
     ""
 
   const email = formData.get("email") as string
-
-  // The app runs on a Strava app with a fixed athlete limit, so accounts are by
-  // invitation. Addresses that are not on the allowlist never reach Supabase.
-  if (!(await isEmailAllowed(email))) {
-    redirect(`/auth/error?message=${encodeURIComponent("not_invited")}`)
-  }
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -46,9 +39,6 @@ export async function signUpAction(formData: FormData) {
       )}`
     )
   }
-
-  // The invite has been used. Bookkeeping only — never blocks the sign-up.
-  await claimAllowlistEntry(email, data.user?.id)
 
   // If email confirmation is disabled in Supabase, a session is returned
   // immediately — send the user straight into the app.
