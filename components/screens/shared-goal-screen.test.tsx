@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { SharedGoalScreen } from "./shared-goal-screen"
 import type { SharedGoalView, SharedGoalMemberView } from "@/app/api/shared-goals/[id]/route"
@@ -159,5 +159,45 @@ describe("SharedGoalScreen rows", () => {
     expect(lane.getAttribute("aria-label")).toContain("You 101%")
     expect(lane.getAttribute("aria-label")).toContain("Maria B. 87%")
     expect(lane.getAttribute("aria-label")).not.toContain("Tone R.")
+  })
+})
+
+describe("handing over an invite link", () => {
+  const withInvite = view([member({ isSelf: true })], {
+    isOwner: true,
+    pendingInvites: [{ id: "i1", label: null, token: "tok_abcdefghijklmnop" }],
+  })
+
+  it("shows the link itself, so it is reachable whatever the clipboard does", async () => {
+    await renderScreen(withInvite)
+    // The bug this replaces: the token lived only inside a button, so a
+    // refused clipboard write left no way at all to get the link.
+    expect(screen.getByText(/\/\?invite=tok_abcdefghijklmnop$/)).toBeTruthy()
+  })
+
+  it("says copied only when it copied", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("NotAllowedError"))
+    vi.stubGlobal("navigator", { clipboard: { writeText } })
+    await renderScreen(withInvite)
+
+    fireEvent.click(screen.getByText("Send"))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Could not copy it. Select the link above and copy it by hand."),
+      ).toBeTruthy(),
+    )
+    expect(screen.queryByText("Copied")).toBeNull()
+  })
+
+  it("confirms when it did copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { clipboard: { writeText } })
+    await renderScreen(withInvite)
+
+    fireEvent.click(screen.getByText("Send"))
+
+    await waitFor(() => expect(screen.getByText("Copied")).toBeTruthy())
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("?invite=tok_abcdefghijklmnop"))
   })
 })

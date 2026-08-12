@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, Copy, LogOut, UserPlus } from "lucide-react"
+import { Check, LogOut, Share2, UserPlus } from "lucide-react"
 import { AppBar } from "@/components/app-bar"
 import { AppCard } from "@/components/ui/app-card"
 import { Button } from "@/components/ui/button"
@@ -37,6 +37,12 @@ const MEMBER_COLORS = [
   "var(--chart-1)",
 ]
 
+/** The address an invite leads to. One definition, used by both. */
+function inviteUrl(token: string): string {
+  const origin = typeof window === "undefined" ? "" : window.location.origin
+  return `${origin}/?invite=${token}`
+}
+
 /** Days since a member's last sync after which the row says so. */
 const QUIET_DAYS = 7
 
@@ -68,10 +74,11 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [failedToken, setFailedToken] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
+    if (!quiet) setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/shared-goals/${groupId}`)
@@ -80,7 +87,7 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
     } catch {
       setError(t("shared.loadFailed"))
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }, [groupId, t])
 
@@ -88,28 +95,54 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
     void load()
   }, [load])
 
+  /**
+   * Make a link.
+   *
+   * It is not copied here. Safari only allows a clipboard write inside the
+   * gesture that asked for it, and by the time the server has answered that
+   * window has closed — the write rejects, and the button that claimed to have
+   * copied was telling the truth on no platform where it mattered. The link is
+   * shown instead, and copying it is its own press.
+   */
   const createInvite = useCallback(async () => {
     setBusy(true)
     try {
       const res = await fetch(`/api/shared-goals/${groupId}/invite`, { method: "POST" })
       if (!res.ok) return
-      const { token } = (await res.json()) as { token: string }
-      await copyInviteLink(token)
-      setCopiedToken(token)
-      void load()
+      await load({ quiet: true })
     } finally {
       setBusy(false)
     }
   }, [groupId, load])
 
-  const copyInviteLink = useCallback(async (token: string) => {
-    const url = `${window.location.origin}/?invite=${token}`
+  /**
+   * Hand a link over, from the press that asked for it.
+   *
+   * The share sheet first, because a link that exists to be sent to somebody
+   * should open the thing that sends it, and because on a phone that is one
+   * step rather than three. Clipboard where there is no share sheet. The row
+   * says what happened either way — the link is on screen regardless, so a
+   * refusal is a small disappointment rather than a dead end.
+   */
+  const shareInvite = useCallback(async (token: string) => {
+    const url = inviteUrl(token)
+    setFailedToken(null)
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ url })
+        return
+      } catch (err) {
+        // Dismissing the sheet is a decision, not a failure.
+        if ((err as { name?: string })?.name === "AbortError") return
+      }
+    }
+
     try {
       await navigator.clipboard.writeText(url)
       setCopiedToken(token)
     } catch {
-      // Clipboard refused — usually an insecure origin. The link is still on
-      // screen for the owner to copy by hand, so this is not worth an alert.
+      setFailedToken(token)
     }
   }, [])
 
@@ -265,29 +298,39 @@ export function SharedGoalScreen({ groupId, onBack, initial }: SharedGoalScreenP
             </div>
 
             {view.pendingInvites.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-2 border-t border-border/50 pt-3">
+              <ul className="mt-3 flex flex-col gap-3 border-t border-border/50 pt-3">
                 {view.pendingInvites.map((invite) => (
-                  <li key={invite.id} className="flex items-center justify-between gap-2">
-                    <span className="measure truncate text-micro text-muted-foreground">
-                      {invite.label ?? t("shared.inviteLink")}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => copyInviteLink(invite.token)}
-                      className="press inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold"
-                    >
-                      {copiedToken === invite.token ? (
-                        <>
-                          <Check className="size-3" />
-                          {t("shared.copied")}
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="size-3" />
-                          {t("shared.copyLink")}
-                        </>
-                      )}
-                    </button>
+                  <li key={invite.id} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-micro text-muted-foreground">
+                        {invite.label ?? t("shared.inviteLink")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => shareInvite(invite.token)}
+                        className="press inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-semibold"
+                      >
+                        {copiedToken === invite.token ? (
+                          <>
+                            <Check className="size-3" />
+                            {t("shared.copied")}
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="size-3" />
+                            {t("shared.sendLink")}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {/* On screen whatever the clipboard does, so the link is
+                        always reachable — select it by hand if nothing else. */}
+                    <p className="measure break-all rounded-md bg-surface-sunken px-2 py-1.5 text-micro leading-relaxed text-muted-foreground select-all">
+                      {inviteUrl(invite.token)}
+                    </p>
+                    {failedToken === invite.token && (
+                      <p className="text-micro text-warning">{t("shared.copyFailed")}</p>
+                    )}
                   </li>
                 ))}
               </ul>

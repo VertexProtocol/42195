@@ -688,11 +688,13 @@ const translations = {
     "shared.loadFailed": "Could not load the group",
     "shared.loadFailedBody": "Check your connection and open it again.",
     "shared.inviteTitle": "Invite someone",
-    "shared.inviteBody": "Creates a link you send yourself. It works once.",
+    "shared.inviteBody": "Creates a link you hand over yourself. Each one works once.",
     "shared.inviteAction": "New link",
     "shared.inviteLink": "Invite link",
     "shared.copyLink": "Copy",
+    "shared.sendLink": "Send",
     "shared.copied": "Copied",
+    "shared.copyFailed": "Could not copy it. Select the link above and copy it by hand.",
     "shared.leave": "Leave the group",
     "shared.disband": "Disband the group",
     // The row on a goal's detail screen
@@ -707,7 +709,8 @@ const translations = {
     "shared.joinTitle": "Join the group",
     "shared.joinBody": "Pick which of your goals to bring. Your target time and plan stay yours.",
     "shared.joinAction": "Join",
-    "shared.joinNoGoals": "You need a race goal on the same date before you can join.",
+    "shared.joinNoGoals": "A group hangs off one of your own goals, and you have none yet. Start one for this race and your target time stays yours.",
+    "shared.joinCreateGoal": "Create a goal for this race",
     "shared.joinFailed": "That invite has been used or is no longer valid.",
   },
   no: {
@@ -1394,11 +1397,13 @@ const translations = {
     "shared.loadFailed": "Fikk ikke lastet gruppa",
     "shared.loadFailedBody": "Sjekk nettforbindelsen og åpne den på nytt.",
     "shared.inviteTitle": "Inviter noen",
-    "shared.inviteBody": "Lager en lenke du sender selv. Den virker én gang.",
+    "shared.inviteBody": "Lager en lenke du sender selv. Hver av dem virker én gang.",
     "shared.inviteAction": "Ny lenke",
     "shared.inviteLink": "Invitasjonslenke",
     "shared.copyLink": "Kopier",
+    "shared.sendLink": "Send",
     "shared.copied": "Kopiert",
+    "shared.copyFailed": "Fikk ikke kopiert den. Merk lenka over og kopier den for hånd.",
     "shared.leave": "Forlat gruppa",
     "shared.disband": "Oppløs gruppa",
     // Raden på måldetaljen
@@ -1413,7 +1418,8 @@ const translations = {
     "shared.joinTitle": "Bli med i gruppa",
     "shared.joinBody": "Velg hvilket av målene dine du tar med. Måltid og plan forblir dine.",
     "shared.joinAction": "Bli med",
-    "shared.joinNoGoals": "Du trenger et løpsmål på samme dato før du kan bli med.",
+    "shared.joinNoGoals": "En gruppe henger på et av dine egne mål, og du har ingen ennå. Lag ett for dette løpet — måltiden er fortsatt din.",
+    "shared.joinCreateGoal": "Lag et mål for dette løpet",
     "shared.joinFailed": "Den invitasjonen er brukt eller ikke gyldig lenger.",
   },
 } as const
@@ -1440,8 +1446,12 @@ export type TranslationParams = Record<string, string | number>
  * browser's first stated preference is Norwegian — `no`, `nb` and `nn` are all
  * Bokmål here, since that is the only Norwegian the app has.
  */
-export function detectLocale(preferences: readonly string[]): Locale {
+export function detectLocale(preferences: readonly (string | undefined)[]): Locale {
   for (const tag of preferences) {
+    // Whatever the browser hands over, not what the spec says it will: a
+    // `navigator` with no language at all is a real thing in embedded
+    // webviews, and this runs on the first render of every signed-out screen.
+    if (typeof tag !== "string") continue
     const primary = tag.toLowerCase().split("-")[0]
     if (primary === "no" || primary === "nb" || primary === "nn") return "no"
     if (primary === "en") return "en"
@@ -1483,9 +1493,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     // Nobody has chosen yet, and on the auth screens nobody can: the switch
     // lives in Profile, behind the sign-in. So the first guess comes from the
     // browser, and the account's saved locale overrides it once there is one.
-    if (typeof navigator !== "undefined" && detectLocale(navigator.languages ?? [navigator.language]) === "no") {
-      setLocaleState("no")
-    }
+    if (typeof navigator === "undefined") return
+    const preferences = navigator.languages?.length ? navigator.languages : [navigator.language]
+    if (detectLocale(preferences) === "no") setLocaleState("no")
   }, [])
 
   const setLocale = useCallback((l: Locale) => {

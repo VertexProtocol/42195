@@ -14,6 +14,13 @@ describe("detectLocale", () => {
     expect(detectLocale([])).toBe("en")
   })
 
+  it("survives a navigator that states nothing", () => {
+    // Embedded webviews really do turn up with no language, and this runs on
+    // the first render of every signed-out screen.
+    expect(detectLocale([undefined])).toBe("en")
+    expect(detectLocale([undefined, "nb-NO"])).toBe("no")
+  })
+
   it("follows the order the browser states, not the list it happens to hold", () => {
     // An English-first browser that also accepts Norwegian stays English.
     expect(detectLocale(["en-GB", "nb-NO"])).toBe("en")

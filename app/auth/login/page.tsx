@@ -98,6 +98,16 @@ export default function LoginPage() {
         // without a session back here — so the cookie is the whole of it.
         // `replace`, not `push`: back from the app should not return to a
         // login form for an account that is already signed in.
+        //
+        // Where it goes is `next`, the destination the proxy attached when it
+        // sent this runner here — an invite link opened signed out survives
+        // the sign-in instead of landing them on Today with no idea what
+        // happened to it. This replaces carrying `window.location.search`
+        // onto "/" directly: the same invite case, but the whole path is
+        // carried rather than the query alone, and the same value goes
+        // through sign-up and the confirmation email. It is safe for the
+        // reason the query-only version was — `safeNext` has already reduced
+        // it to a relative path on this origin.
         if (await sessionCookieReady()) {
           router.replace(next)
         } else {
