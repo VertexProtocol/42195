@@ -75,6 +75,13 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- PostgREST turns a grant into an endpoint, and Supabase grants EXECUTE on new
+-- functions to anon and authenticated by default — so this trigger was also a
+-- public POST /rest/v1/rpc/handle_new_user. PostgreSQL checks EXECUTE when a
+-- trigger is created, not when it fires, so revoking afterwards takes the
+-- endpoint away and leaves sign-up working. [027]
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
 
 -- ACTIVITIES ----------------------------------------------
 -- The original type CHECK (Run/Trail Run/Race) was broadened to include
@@ -238,8 +245,11 @@ end $$;
 
 
 -- UPDATED_AT helper ---------------------------------------
+-- search_path is pinned so the caller cannot decide what the body resolves to.
+-- It needs nothing from a schema — `now()` is pg_catalog — so the empty path
+-- costs nothing and removes the question. [027]
 create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin
   new.updated_at = now();
   return new;
@@ -602,6 +612,13 @@ begin
 end;
 $$;
 
+-- The limiter takes the user id as an argument and never compares it to
+-- auth.uid(). That is fine for its one caller — the server, holding the
+-- service-role key — and not fine over PostgREST, where it let any signed-in
+-- runner spend somebody else's hourly quota by naming them. [027]
+revoke execute on function public.increment_ai_rate_limit(uuid, timestamptz)
+  from public, anon, authenticated;
+
 
 -- ============================================================
 -- supabase/migrations/add_notes_history.sql
@@ -621,6 +638,11 @@ alter table goal_preferences
 -- more thing to keep in step. 023 still creates the table for the record; an
 -- existing database can drop it by hand when convenient:
 --   drop table if exists public.allowed_signups;
+--
+-- Worth saying plainly, because the table still looks like it works and the
+-- linter reports it as a table with RLS and no policies: nothing reads it.
+-- `signUpAction` calls supabase.auth.signUp and never consults the list, so a
+-- row in `allowed_signups` invites nobody and removing one bars nobody. [027]
 
 -- Resumable sync: a long history is pulled in chunks, so a run records where
 -- to continue from and when the rate limit window reopens.
@@ -800,7 +822,15 @@ alter table public.shared_goal_invites enable row level security;
 -- decide, and Postgres stops with `infinite recursion detected in policy`.
 -- A security definer function answers the question outside RLS, so the policy
 -- can ask it without re-entering the table.
-create or replace function public.is_shared_goal_member(g uuid, u uuid)
+-- It lives in `private` rather than `public` because PostgREST publishes only
+-- the schemas it is configured with, and revoking role by role is a list you
+-- have to keep complete forever — a schema outside that list is closed by
+-- construction. A policy is evaluated as the querying role, so `authenticated`
+-- still reaches it from SQL; that is exactly the line we want drawn. [027]
+create schema if not exists private;
+grant usage on schema private to authenticated, service_role;
+
+create or replace function private.is_shared_goal_member(g uuid, u uuid)
 returns boolean
 language sql
 stable
@@ -813,14 +843,14 @@ as $$
   );
 $$;
 
-revoke all on function public.is_shared_goal_member(uuid, uuid) from public;
 -- Supabase hands `anon` and `authenticated` EXECUTE on public functions through
 -- schema default privileges, so revoking from PUBLIC leaves the direct grant to
--- `anon` standing. This one takes both ids as arguments and bypasses RLS by
--- design, so it would answer "is this person in that group" to anyone holding
--- two uuids and no session.
-revoke execute on function public.is_shared_goal_member(uuid, uuid) from anon;
-grant execute on function public.is_shared_goal_member(uuid, uuid) to authenticated;
+-- `anon` standing. Named explicitly here rather than relied on, even though the
+-- move to `private` already puts the function out of anon's reach: it takes
+-- both ids as arguments and bypasses RLS by design, so it would answer "is this
+-- person in that group" to anyone holding two uuids and no session.
+revoke all on function private.is_shared_goal_member(uuid, uuid) from public, anon;
+grant execute on function private.is_shared_goal_member(uuid, uuid) to authenticated, service_role;
 
 
 -- POLICIES ------------------------------------------------
@@ -828,7 +858,7 @@ do $$ begin
   -- The goal itself: any member reads it, only the owner changes or deletes it.
   if not exists (select 1 from pg_policies where tablename = 'shared_goals' and policyname = 'shared_goals_select_member') then
     create policy "shared_goals_select_member" on public.shared_goals for select
-      using (auth.uid() = owner_id or public.is_shared_goal_member(id, auth.uid()));
+      using (auth.uid() = owner_id or private.is_shared_goal_member(id, auth.uid()));
   end if;
   if not exists (select 1 from pg_policies where tablename = 'shared_goals' and policyname = 'shared_goals_insert_own') then
     create policy "shared_goals_insert_own" on public.shared_goals for insert
@@ -848,7 +878,7 @@ do $$ begin
   -- activities it was computed from is not, and no policy here grants that.
   if not exists (select 1 from pg_policies where tablename = 'shared_goal_members' and policyname = 'shared_goal_members_select_member') then
     create policy "shared_goal_members_select_member" on public.shared_goal_members for select
-      using (public.is_shared_goal_member(shared_goal_id, auth.uid()));
+      using (private.is_shared_goal_member(shared_goal_id, auth.uid()));
   end if;
   if not exists (select 1 from pg_policies where tablename = 'shared_goal_members' and policyname = 'shared_goal_members_insert_own') then
     create policy "shared_goal_members_insert_own" on public.shared_goal_members for insert
@@ -919,7 +949,7 @@ as $$
   from public.profiles p
   join public.shared_goal_members m on m.user_id = p.id
   where m.shared_goal_id = g
-    and public.is_shared_goal_member(g, auth.uid());
+    and private.is_shared_goal_member(g, auth.uid());
 $$;
 
 revoke all on function public.shared_goal_member_names(uuid) from public;
