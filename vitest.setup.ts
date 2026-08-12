@@ -26,6 +26,19 @@ if (typeof window !== "undefined" && !window.matchMedia) {
   })) as typeof window.matchMedia
 }
 
+// Nor does jsdom ship ResizeObserver, which every responsive chart container
+// constructs on mount. Without it the chart throws during the commit phase and
+// takes the whole render with it, so a screen that merely contains a chart
+// cannot be tested at all. It reports nothing, which is the same thing a real
+// container does before it has been measured.
+if (typeof window !== "undefined" && !window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof window.ResizeObserver
+}
+
 afterEach(async () => {
   if (typeof document === "undefined") return
   const { cleanup } = await import("@testing-library/react")
