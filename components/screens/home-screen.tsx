@@ -34,7 +34,6 @@ import type {
   Activity,
   SyncStatus,
   WeeklyGoal,
-  WeeklyGoalMetric,
 } from "@/lib/types"
 import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
@@ -60,62 +59,63 @@ import type { PlanBadge } from "@/lib/plan-badges"
  * reference; everything above it is decision.
  */
 
-/** Weekly-goal metrics that the "This week" stat row already reports. */
-const STAT_METRICS: WeeklyGoalMetric[] = ["distance_km", "duration_minutes", "sessions"]
-
 /**
- * A weekly target, set under the number that is already tracking it.
+ * A weekly goal, as a lane with its metric icon inside.
  *
- * The lane is the shape a pinned race already carries, and the metric icon
- * rides inside it the way the elapsed percentage does there. That makes the
- * icon part of the measurement rather than a label stuck beside it — which is
- * what a flat bar plus a separate icon amounted to, saying the same thing
- * twice and looking like neither.
+ * The lane is the shape a pinned race carries, and the icon rides in it the
+ * way the elapsed percentage does there — so the icon is the thing travelling
+ * the track rather than a label stuck beside it.
  *
- * Still deliberately quiet: a weekly goal is something the runner set once and
- * lets tick along, so the stat above stays the only thing at display weight,
- * and nothing here repeats the current figure.
+ * No text at all, deliberately. Today asks one question of a weekly goal —
+ * how far along is it — and the fill answers it; the figures live a tap away
+ * under Targets, and printing them here is what turned this card into a wall
+ * of small numbers. The accessible name still carries the lot, because a fill
+ * is not readable by ear.
+ *
+ * Nothing about it is bound to a column either. A runner adds and removes
+ * these, and a lane that has to belong to one of three fixed slots means the
+ * card changes shape every time they do.
  */
-function WeeklyTarget({
+function WeeklyGoalLap({
   goal,
   current,
+  onOpen,
   t,
 }: {
-  goal: WeeklyGoal | undefined
+  goal: WeeklyGoal
   current: number
+  onOpen: () => void
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
-  if (!goal) return null
   const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
-  const label = t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
-  const target = formatWeeklyMetric(goal.target, goal.metric)
+  const label = goal.label || t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
+  const valueText = `${formatWeeklyMetric(current, goal.metric)} / ${formatWeeklyMetric(
+    goal.target,
+    goal.metric,
+  )}`
   return (
-    <div className="flex flex-col items-start gap-1.5">
+    <button
+      onClick={onOpen}
+      // Padding rather than a bigger lane: the lane is sized to read at a
+      // glance, the tap target to be hit with a thumb.
+      className="press rounded-md p-1.5"
+      title={`${label} — ${valueText}`}
+    >
       <ProgressLap
         percentage={progressPercentage(current, goal.target)}
-        size={30}
+        size={34}
         strokeWidth={3}
         tone={isComplete ? "done" : "action"}
-        // The lane carries both figures for assistive technology: the current
-        // one belongs to the stat above and the target to the line below, so
-        // neither is inside the lane as text.
-        label={`${label} — ${formatWeeklyMetric(current, goal.metric)} / ${target}`}
+        label={`${label} — ${valueText}`}
       >
         <Icon
-          size={13}
+          size={15}
           className={isComplete ? "text-success" : "text-muted-foreground"}
           aria-hidden
         />
       </ProgressLap>
-      <p
-        className={`measure w-full truncate text-micro ${
-          isComplete ? "text-success" : "text-muted-foreground"
-        }`}
-      >
-        {t("home.ofTarget", { target })}
-      </p>
-    </div>
+    </button>
   )
 }
 
@@ -256,33 +256,33 @@ export function HomeScreen({
     setRailIndex(nearest)
   }, [])
 
-  // Each measurement appears once. The card used to print Distance, Duration
-  // and Runs as stats and then the same three again as weekly targets, so
-  // every number on it was stated twice — once bare, once with a target.
-  //
-  // A target now annotates the stat it belongs to, unless it measures
-  // something narrower: a sessions goal with a minimum length counts only
-  // qualifying sessions, and elevation has no stat at all.
-  const { statGoals, standaloneGoals } = useMemo(() => {
-    const byMetric: Partial<Record<WeeklyGoalMetric, WeeklyGoal>> = {}
-    const standalone: WeeklyGoal[] = []
-    for (const wg of currentWeekGoals) {
+  // Every weekly goal is one lane, in one row, in the order the runner put
+  // them in. There is no longer a split between goals that fit a stat column
+  // and goals that do not — that split was invisible to whoever set the goals
+  // and rearranged the card whenever they added or removed one.
+  const weeklyLaps = useMemo(() => {
+    // A goal counting only qualifying sessions has to be recounted; the rest
+    // read the same summary the stat row shows, so a lane and the number above
+    // it can never be measuring different things.
+    const currentFor = (wg: WeeklyGoal): number => {
       const isQualified =
         wg.metric === "sessions" &&
         Boolean(wg.session_min_duration_minutes || wg.session_min_distance_km)
-      const fitsAStat = STAT_METRICS.includes(wg.metric) && !isQualified
-      // Only the first goal per metric can annotate its stat; a second one for
-      // the same measurement still deserves to be visible.
-      if (fitsAStat && !byMetric[wg.metric]) byMetric[wg.metric] = wg
-      else standalone.push(wg)
+      if (!isQualified) {
+        if (wg.metric === "distance_km") return weeklySummary.total_distance_km
+        if (wg.metric === "duration_minutes") return weeklySummary.total_time_seconds / 60
+        if (wg.metric === "sessions") return weeklySummary.run_count
+      }
+      return computeWeeklyProgress(
+        activities,
+        wg.metric,
+        currentMondayStr,
+        wg.session_min_duration_minutes,
+        wg.session_min_distance_km,
+      )
     }
-    return { statGoals: byMetric, standaloneGoals: standalone.slice(0, 3) }
-  }, [currentWeekGoals])
-
-  // Read from the same summary the stat above shows, so an annotation can
-  // never disagree with the number it sits under.
-  const weeklyDistanceKm = weeklySummary.total_distance_km
-  const weeklyMinutes = weeklySummary.total_time_seconds / 60
+    return currentWeekGoals.map((goal) => ({ goal, current: currentFor(goal) }))
+  }, [currentWeekGoals, activities, currentMondayStr, weeklySummary])
 
   return (
     <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
@@ -483,85 +483,35 @@ export function HomeScreen({
           }
         />
         <AppCard>
-          <StatGroup>
+          {/* Unruled. A hairline between columns says the shape is settled,
+              and this card's other half is a set the runner edits. */}
+          <StatGroup dividers={false}>
             <Stat
               label={t("stats.distance")}
               value={weeklySummary.total_distance_km.toFixed(1)}
               unit="km"
-            >
-              <WeeklyTarget goal={statGoals.distance_km} current={weeklyDistanceKm} t={t} />
-            </Stat>
+            />
             <Stat
               label={t("activityDetail.duration")}
               value={formatDuration(weeklySummary.total_time_seconds)}
-            >
-              <WeeklyTarget goal={statGoals.duration_minutes} current={weeklyMinutes} t={t} />
-            </Stat>
-            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count}>
-              <WeeklyTarget goal={statGoals.sessions} current={weeklySummary.run_count} t={t} />
-            </Stat>
+            />
+            <Stat label={t("stats.runsLabel")} value={weeklySummary.run_count} />
           </StatGroup>
 
-          {/* Targets that measure something the row above does not: elevation,
-              which has no stat, and session goals with a minimum length, whose
-              qualifying count is narrower than the plain run count. Merging
-              either into a column would put two different numbers on one
-              measurement. */}
-          {standaloneGoals.length > 0 && (
-            <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
-              {standaloneGoals.map((wg) => {
-                const current = computeWeeklyProgress(
-                  activities,
-                  wg.metric,
-                  currentMondayStr,
-                  wg.session_min_duration_minutes,
-                  wg.session_min_distance_km,
-                )
-                const progress = progressPercentage(current, wg.target)
-                const isComplete = current >= wg.target
-                const label = wg.label || t(WEEKLY_METRIC_LABEL_KEYS[wg.metric])
-                const Icon = WEEKLY_METRIC_ICONS[wg.metric]
-                const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(
-                  wg.target,
-                  wg.metric,
-                )}`
-                return (
-                  <button
-                    key={wg.id}
-                    onClick={onViewGoals}
-                    className="press flex w-full items-center gap-3 rounded-sm text-left"
-                  >
-                    {/* The same lane the columns above use, one size up: this
-                        row has the width for it, and the goal it carries is
-                        one the stat row cannot show at all. */}
-                    <ProgressLap
-                      percentage={progress}
-                      size={34}
-                      strokeWidth={3}
-                      tone={isComplete ? "done" : "action"}
-                      label={`${label} — ${valueText}`}
-                    >
-                      <Icon
-                        size={15}
-                        className={isComplete ? "text-success" : "text-muted-foreground"}
-                        aria-hidden
-                      />
-                    </ProgressLap>
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-label font-medium text-card-foreground">
-                        {label}
-                      </span>
-                      <span
-                        className={`measure truncate text-micro ${
-                          isComplete ? "text-success" : "text-muted-foreground"
-                        }`}
-                      >
-                        {valueText}
-                      </span>
-                    </span>
-                  </button>
-                )
-              })}
+          {/* The goals: one lane each, wrapping. No rule above them either —
+              the space does the separating, and a rule would have to stretch
+              across a row whose length changes with the number of goals. */}
+          {weeklyLaps.length > 0 && (
+            <div className="-m-1.5 mt-2.5 flex flex-wrap">
+              {weeklyLaps.map(({ goal, current }) => (
+                <WeeklyGoalLap
+                  key={goal.id}
+                  goal={goal}
+                  current={current}
+                  onOpen={onViewGoals}
+                  t={t}
+                />
+              ))}
             </div>
           )}
         </AppCard>

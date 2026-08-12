@@ -9,12 +9,15 @@ import type { Activity, Goal, WeeklyGoal, WeeklySummary } from "@/lib/types"
 /**
  * The "This week" card.
  *
- * It used to print Distance, Duration and Runs as stats and then the same
- * three measurements again as weekly targets, so every number appeared twice.
- * A target now annotates the stat it belongs to — except where it measures
- * something narrower, which is the case worth pinning: merging a qualifying
- * session count into the plain run count would put two different numbers on
- * one measurement.
+ * Two halves that do not interfere: the week's own three numbers, and the
+ * goals the runner has set. The goals used to be bound to the numbers — each
+ * one annotating a stat column, unless it measured something narrower, in
+ * which case it was exiled to a differently-shaped row below a rule. That
+ * arrangement rearranged itself every time a goal was added or removed, and
+ * it printed a figure per goal on top of the three already there.
+ *
+ * A goal is now one lane, in one wrapping row, carrying nothing but its
+ * metric icon.
  */
 
 function mondayOfThisWeek(): string {
@@ -89,97 +92,40 @@ function renderHome(activities: Activity[], weeklyGoals: WeeklyGoal[]) {
 }
 
 /**
- * Weekly-target lanes, which is what a duplicated measurement would add.
+ * The lanes, one per weekly goal.
  *
  * A lane is a `role="img"` rather than a progressbar — it draws its value
- * instead of exposing a numeric range — so its accessible name carries both
- * figures, and these read the name for the value.
+ * instead of exposing a numeric range — so its accessible name is where both
+ * figures live, and these read the name for the value. Nothing on the card
+ * prints them.
  */
-function targetBars(): HTMLElement[] {
+function lanes(): HTMLElement[] {
+  // "current / target" is what makes a weekly lane; a pinned race's lane reads
+  // "<name> — elapsed: 40%" and would otherwise be counted here too.
   return screen
     .queryAllByRole("img")
-    .filter((el) => /Weekly distance|Active minutes|Training sessions|Elevation/i.test(
-      el.getAttribute("aria-label") ?? "",
-    ))
+    .filter((el) => / \/ /.test(el.getAttribute("aria-label") ?? ""))
 }
 
-describe("HomeScreen — this week", () => {
-  it("states each measurement once when every target has a matching stat", () => {
-    const activities = [makeActivity(), makeActivity()]
-    renderHome(activities, [
-      makeGoal({ metric: "distance_km", target: 10 }),
-      makeGoal({ metric: "duration_minutes", target: 60 }),
-      makeGoal({ metric: "sessions", target: 2 }),
-    ])
+const laneNames = () => lanes().map((el) => el.getAttribute("aria-label"))
 
-    // Three targets, three bars — and no separate rows repeating the labels
-    // that the stat row already carries.
-    expect(targetBars()).toHaveLength(3)
-    expect(screen.queryByText("Weekly distance")).toBeNull()
-    expect(screen.queryByText("Active minutes")).toBeNull()
-  })
-
-  it("annotates a stat with its target rather than restating the current value", () => {
-    renderHome([makeActivity({ distance_km: 4 })], [makeGoal({ metric: "distance_km", target: 10 })])
-    expect(screen.getByText("of 10 km")).toBeTruthy()
-    // The current figure belongs to the stat above, and appears once.
-    expect(screen.queryByText(/4 km \/ 10 km/)).toBeNull()
-  })
-
-  it("shows the stat row untouched when there are no weekly goals", () => {
-    renderHome([makeActivity()], [])
-    expect(targetBars()).toHaveLength(0)
-    expect(screen.getByText("Distance")).toBeTruthy()
-    expect(screen.getByText("Runs")).toBeTruthy()
-  })
-
-  it("measures the target against the same number the stat shows", () => {
-    // Two 5 km runs → 10 of 10 km, so the target reads as met.
+describe("HomeScreen — one lane per weekly goal", () => {
+  it("gives every goal a lane, whatever mix of metrics they are", () => {
     renderHome(
-      [makeActivity({ distance_km: 5 }), makeActivity({ distance_km: 5 })],
-      [makeGoal({ metric: "distance_km", target: 10 })],
+      [makeActivity(), makeActivity()],
+      [
+        makeGoal({ metric: "distance_km", target: 10 }),
+        makeGoal({ metric: "duration_minutes", target: 60 }),
+        makeGoal({ metric: "sessions", target: 2 }),
+        makeGoal({ metric: "elevation_m", target: 300 }),
+      ],
     )
-    // The lane is the only element carrying both figures — the stat above it
-    // has the current one and the caption below it the target.
-    expect(targetBars()[0].getAttribute("aria-label")).toBe(
-      "Weekly distance — 10 km / 10 km: 100%",
-    )
-  })
-})
-
-describe("HomeScreen — targets that measure something narrower", () => {
-  it("keeps a qualifying-session goal in its own row", () => {
-    // Three runs, only one of them 30 minutes or longer. Folding this into the
-    // Runs stat would show "3" above a target counting to 1.
-    const activities = [
-      makeActivity({ duration_seconds: 2400 }),
-      makeActivity({ duration_seconds: 600 }),
-      makeActivity({ duration_seconds: 600 }),
-    ]
-    renderHome(activities, [
-      makeGoal({ metric: "sessions", target: 2, session_min_duration_minutes: 30 }),
-    ])
-
-    expect(screen.getByText("1 / 2")).toBeTruthy()
-    expect(screen.getByText("Runs")).toBeTruthy()
+    expect(lanes()).toHaveLength(4)
   })
 
-  it("keeps an elevation goal, which no stat reports", () => {
-    renderHome(
-      [makeActivity({ elevation_gain_m: 120 })],
-      [makeGoal({ metric: "elevation_m", target: 300 })],
-    )
-    expect(screen.getByText("Elevation gain")).toBeTruthy()
-    expect(screen.getByText("120 m / 300 m")).toBeTruthy()
-  })
-
-  it("gives a plain session goal the stat instead of a row of its own", () => {
-    renderHome([makeActivity(), makeActivity()], [makeGoal({ metric: "sessions", target: 3 })])
-    expect(screen.getByText("of 3")).toBeTruthy()
-    expect(screen.queryByText("2 / 3")).toBeNull()
-  })
-
-  it("keeps a second goal for an already-annotated measurement visible", () => {
+  it("gives a second goal on the same metric its own lane", () => {
+    // These used to compete for one stat column, so the loser was exiled to a
+    // different-looking row below a rule.
     renderHome(
       [makeActivity({ distance_km: 4 })],
       [
@@ -187,8 +133,69 @@ describe("HomeScreen — targets that measure something narrower", () => {
         makeGoal({ metric: "distance_km", target: 25, label: "Stretch week" }),
       ],
     )
-    expect(screen.getByText("of 10 km")).toBeTruthy()
-    expect(screen.getByText("Stretch week")).toBeTruthy()
+    expect(laneNames()).toEqual([
+      "Weekly distance — 4 km / 10 km: 40%",
+      "Stretch week — 4 km / 25 km: 16%",
+    ])
+  })
+
+  it("prints no figures or labels of its own", () => {
+    // The whole point of the lane: Today asks how far along a goal is, and the
+    // fill answers it. The numbers are a tap away under Targets.
+    renderHome([makeActivity({ distance_km: 4 })], [makeGoal({ metric: "distance_km", target: 10 })])
+    expect(screen.queryByText(/of 10 km/)).toBeNull()
+    expect(screen.queryByText(/4 km \/ 10 km/)).toBeNull()
+    expect(screen.queryByText("Weekly distance")).toBeNull()
+  })
+
+  it("leaves the stat row the same shape whether or not there are goals", () => {
+    // Adding and removing goals is what the runner does to this card; the
+    // week's own three numbers should not move when they do.
+    const bare = renderHome([makeActivity()], [])
+    expect(lanes()).toHaveLength(0)
+    const withoutGoals = screen.getAllByText(/Distance|Duration|Runs/).map((el) => el.textContent)
+    bare.unmount()
+
+    renderHome([makeActivity()], [makeGoal({ metric: "elevation_m", target: 300 })])
+    expect(lanes()).toHaveLength(1)
+    expect(screen.getAllByText(/Distance|Duration|Runs/).map((el) => el.textContent)).toEqual(
+      withoutGoals,
+    )
+  })
+})
+
+describe("HomeScreen — what a lane is measuring", () => {
+  it("measures against the same number the stat row shows", () => {
+    // Two 5 km runs → 10 of 10 km, so the lane reads as full.
+    renderHome(
+      [makeActivity({ distance_km: 5 }), makeActivity({ distance_km: 5 })],
+      [makeGoal({ metric: "distance_km", target: 10 })],
+    )
+    expect(laneNames()).toEqual(["Weekly distance — 10 km / 10 km: 100%"])
+  })
+
+  it("counts only qualifying sessions when the goal asks for them", () => {
+    // Three runs, only one of them 30 minutes or longer. The Runs stat still
+    // says 3; this goal is counting something narrower and must say 1.
+    renderHome(
+      [
+        makeActivity({ duration_seconds: 2400 }),
+        makeActivity({ duration_seconds: 600 }),
+        makeActivity({ duration_seconds: 600 }),
+      ],
+      [makeGoal({ metric: "sessions", target: 2, session_min_duration_minutes: 30 })],
+    )
+    expect(laneNames()).toEqual(["Training sessions — 1 / 2: 50%"])
+    expect(screen.getByText("Runs")).toBeTruthy()
+    expect(screen.getByText("3")).toBeTruthy()
+  })
+
+  it("carries a metric no stat reports", () => {
+    renderHome(
+      [makeActivity({ elevation_gain_m: 120 })],
+      [makeGoal({ metric: "elevation_m", target: 300 })],
+    )
+    expect(laneNames()).toEqual(["Elevation gain — 120 m / 300 m: 40%"])
   })
 })
 
@@ -199,11 +206,10 @@ describe("HomeScreen — targets that measure something narrower", () => {
 /**
  * The metric icon rides inside the lane.
  *
- * Every weekly goal on Today is drawn as the same lane a pinned race carries,
- * with its metric icon where the elapsed percentage sits there — so the icon
- * is part of the measurement rather than a mark beside it. These hold the
- * pairing: a lane without its icon, or an icon outside a lane, is the shape
- * this replaced.
+ * With no text on the card, the icon is the only thing saying which goal a
+ * lane belongs to — so it has to be inside that lane and it has to differ per
+ * metric. An icon beside a lane, or one generic mark on all of them, is the
+ * shape this replaced.
  */
 const iconsIn = (scope: ParentNode, cls: string) =>
   scope.querySelectorAll(`svg.lucide-${cls}`).length
@@ -215,22 +221,12 @@ const laneFor = (name: RegExp) =>
     .find((el) => name.test(el.getAttribute("aria-label") ?? ""))!
 
 describe("HomeScreen — the metric icon rides inside the lane", () => {
-  it("puts a stat's target icon inside that target's lane", () => {
+  it("puts a goal's icon inside that goal's lane", () => {
     renderHome(
       [makeActivity({ distance_km: 4 })],
       [makeGoal({ metric: "distance_km", target: 10 })],
     )
-    expect(screen.getByText("of 10 km")).toBeTruthy()
     expect(iconsIn(laneFor(/Weekly distance/), "trending-up")).toBe(1)
-  })
-
-  it("puts a standalone goal's icon inside its lane too", () => {
-    renderHome(
-      [makeActivity({ elevation_gain_m: 120 })],
-      [makeGoal({ metric: "elevation_m", target: 300 })],
-    )
-    expect(screen.getByText("Elevation gain")).toBeTruthy()
-    expect(iconsIn(laneFor(/Elevation gain/), "mountain")).toBe(1)
   })
 
   it("uses a different icon per metric rather than one generic mark", () => {
@@ -240,16 +236,18 @@ describe("HomeScreen — the metric icon rides inside the lane", () => {
         makeGoal({ metric: "distance_km", target: 10 }),
         makeGoal({ metric: "duration_minutes", target: 60 }),
         makeGoal({ metric: "sessions", target: 3 }),
+        makeGoal({ metric: "elevation_m", target: 300 }),
       ],
     )
     expect(iconsIn(laneFor(/Weekly distance/), "trending-up")).toBe(1)
     expect(iconsIn(laneFor(/Active minutes/), "clock")).toBe(1)
     expect(iconsIn(laneFor(/Training sessions/), "flame")).toBe(1)
+    expect(iconsIn(laneFor(/Elevation gain/), "mountain")).toBe(1)
   })
 
   it("draws no lane and no icon when there is no goal", () => {
     const { container } = renderHome([makeActivity()], [])
-    expect(targetBars()).toHaveLength(0)
+    expect(lanes()).toHaveLength(0)
     expect(iconsIn(container, "trending-up")).toBe(0)
     expect(iconsIn(container, "mountain")).toBe(0)
   })

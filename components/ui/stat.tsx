@@ -64,23 +64,34 @@ export function Stat({
 export function StatGroup({
   className,
   children,
+  dividers = true,
   ...props
-}: React.ComponentProps<'div'>) {
+}: React.ComponentProps<'div'> & {
+  /**
+   * Hairlines between the columns.
+   *
+   * Off where the group shares a card with content that comes and goes: a
+   * ruled column is a promise that the shape is fixed, and a card the runner
+   * adds and removes things from cannot keep it. Spacing groups them instead.
+   */
+  dividers?: boolean
+}) {
   const items = React.Children.toArray(children).filter(Boolean)
   return (
     <div
-      className={cn('grid', className)}
+      className={cn('grid', !dividers && 'gap-4', className)}
       style={{ gridTemplateColumns: `repeat(${items.length || 1}, minmax(0, 1fr))` }}
       {...props}
     >
-      {items.map((child, i) => (
-        <div
-          key={i}
-          className={i > 0 ? 'border-l border-border pl-4' : 'pr-4'}
-        >
-          {child}
-        </div>
-      ))}
+      {items.map((child, i) =>
+        dividers ? (
+          <div key={i} className={i > 0 ? 'border-l border-border pl-4' : 'pr-4'}>
+            {child}
+          </div>
+        ) : (
+          <div key={i}>{child}</div>
+        ),
+      )}
     </div>
   )
 }
