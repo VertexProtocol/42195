@@ -105,6 +105,39 @@ describe("summarisePlanWeek", () => {
     ],
   }
 
+  it("hands a session back to the matcher when the runner cycles it to planned", () => {
+    // The bug this covers: the status control cycles
+    // planned -> completed -> skipped -> planned, and landing back on
+    // "planned" used to store it as an answer. From then on the session was
+    // pinned open — the 10.6 km run below matches the long run, and could
+    // never tick it off again, with no way back from the screen because the
+    // control cycles round to the value causing it.
+    const progress = summarisePlanWeek(
+      planWeek,
+      [{ distance_km: 10.6, pace_min_per_km: 6.1 }],
+      { "W2-0": "planned" },
+    )
+    expect(progress.done).toBe(1)
+    expect(progress.next?.type).toBe("Base run")
+  })
+
+  it("still lets the runner say a matched session was skipped", () => {
+    // "Skipped" is the real answer for "I did not do this", and it has to keep
+    // beating the matcher — otherwise clearing the pin would take that away.
+    const progress = summarisePlanWeek(
+      planWeek,
+      [{ distance_km: 10.6, pace_min_per_km: 6.1 }],
+      { "W2-0": "skipped" },
+    )
+    expect(progress.done).toBe(0)
+    expect(progress.skipped).toBe(1)
+  })
+
+  it("still lets the runner tick off a session nothing matches", () => {
+    const progress = summarisePlanWeek(planWeek, [], { "W2-1": "completed" })
+    expect(progress.done).toBe(1)
+  })
+
   it("names the first outstanding session as what is next", () => {
     const progress = summarisePlanWeek(planWeek, [{ distance_km: 10.6, pace_min_per_km: 6.1 }])
     expect(progress.done).toBe(1)

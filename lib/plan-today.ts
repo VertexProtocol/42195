@@ -123,11 +123,32 @@ export interface PlanWeekProgress {
 }
 
 /**
+ * "Planned" is not one of the runner's answers — it is the absence of one.
+ *
+ * The two real answers are "I did this" and "I am not doing this". Wanting a
+ * session back on automatic is the third thing the control can express, and it
+ * is spelled by having nothing stored. Treating a stored "planned" as an answer
+ * pins the session open: a run that genuinely matches it can never tick it off
+ * again, and the runner has no way to undo that from the screen, because the
+ * control cycles back to the very value causing it.
+ *
+ * Rows like that already exist, written by the cycle before it knew better, so
+ * this is read defensively rather than only fixed at the point of writing. The
+ * plan-regeneration migration has always taken this view — it skips "planned"
+ * when carrying completions across, calling it "default state".
+ */
+export function isManualAnswer(status: PlanSessionStatus | undefined): boolean {
+  return status === "completed" || status === "skipped"
+}
+
+/**
  * How far into its week a plan is, and what is left.
  *
- * @param manualStatuses  The runner's own answers, keyed `W3-1`. These win over
- *                        what the activities imply — a session they ticked off
- *                        is done even if nothing in Strava looks like it.
+ * @param manualStatuses  The runner's own answers, keyed `W3-1`. A "completed"
+ *                        or "skipped" here wins over what the activities imply
+ *                        — a session they ticked off is done even if nothing in
+ *                        Strava looks like it. A stored "planned" is ignored;
+ *                        see isManualAnswer.
  */
 export function summarisePlanWeek(
   week: CurrentPlanWeek,
@@ -138,7 +159,7 @@ export function summarisePlanWeek(
 
   const statuses = week.sessions.map<PlanSessionStatus>((_, i) => {
     const manual = manualStatuses[sessionKey(week.weekNumber, i)]
-    if (manual) return manual
+    if (isManualAnswer(manual)) return manual as PlanSessionStatus
     return matched[i] ? "completed" : "planned"
   })
 

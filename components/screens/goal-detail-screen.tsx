@@ -54,7 +54,7 @@ import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 // distances with the same parser the server allocates them with, so a session
 // is never one length here and another there.
 import { matchSessionsToActivities } from "@/lib/plan-session-match"
-import { startOfWeek as toMonday, sessionKey } from "@/lib/plan-today"
+import { startOfWeek as toMonday, sessionKey, isManualAnswer } from "@/lib/plan-today"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
@@ -1188,9 +1188,15 @@ export function GoalDetailScreen({
     return result
   }, [aiPlan, activities])
 
-  // Merge: manual overrides take priority over auto-matched
+  // Merge: the runner's own answers win over what the activities imply. A
+  // stored "planned" is not one of those answers — see isManualAnswer — and
+  // must not overwrite an auto-match, or the session stays open forever with
+  // no way to reopen it from here.
   const sessionStatuses = useMemo(() => {
-    return { ...autoStatuses, ...manualStatuses }
+    const answers = Object.fromEntries(
+      Object.entries(manualStatuses).filter(([, status]) => isManualAnswer(status)),
+    )
+    return { ...autoStatuses, ...answers }
   }, [autoStatuses, manualStatuses])
 
   const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
@@ -1201,7 +1207,15 @@ export function GoalDetailScreen({
       : effective === "completed" ? "skipped"
       : "planned"
 
-    setManualStatuses((prev) => ({ ...prev, [key]: next }))
+    // Cycling back to "planned" hands the session back to the matcher rather
+    // than storing "planned" as an answer, so a run that matches it can tick
+    // it off again. The server deletes the row on the same signal.
+    setManualStatuses((prev) => {
+      if (next !== "planned") return { ...prev, [key]: next }
+      const rest = { ...prev }
+      delete rest[key]
+      return rest
+    })
     onSessionStatusChange?.(goal.id, key, next)
 
     // Persist to database; fall back to localStorage on any failure (network error or non-2xx)

@@ -56,6 +56,28 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 })
   }
 
+  // "Planned" is the absence of an answer, not one of them — storing it pins
+  // the session open against a run that matches it, with no way back from the
+  // screen because the control cycles round to this very value. Clearing the
+  // row is what hands the session back to the matcher.
+  //
+  // Done here rather than only in the client because this is an installed PWA:
+  // a service worker can serve yesterday's bundle for a long time, and those
+  // clients go on sending PUT "planned". They get the right behaviour too.
+  if (status === "planned") {
+    const { error: deleteError } = await supabase
+      .from("session_completions")
+      .delete()
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .eq("session_key", sessionKey)
+
+    if (deleteError) {
+      return NextResponse.json({ error: "Failed to clear session status" }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, cleared: true })
+  }
+
   const { error } = await supabase.from("session_completions").upsert(
     {
       goal_id: goalId,
@@ -93,13 +115,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "goalId and statuses are required" }, { status: 400 })
   }
 
-  const rows = Object.entries(statuses).map(([sessionKey, status]) => ({
-    goal_id: goalId,
-    user_id: user.id,
-    session_key: sessionKey,
-    status,
-    updated_at: new Date().toISOString(),
-  }))
+  // Same rule as PUT: only real answers are stored. A localStorage backup
+  // written by an older build can carry "planned" entries, and importing them
+  // would recreate exactly the rows this release exists to stop making.
+  const rows = Object.entries(statuses)
+    .filter(([, status]) => status === "completed" || status === "skipped")
+    .map(([sessionKey, status]) => ({
+      goal_id: goalId,
+      user_id: user.id,
+      session_key: sessionKey,
+      status,
+      updated_at: new Date().toISOString(),
+    }))
 
   if (rows.length === 0) return NextResponse.json({ ok: true })
 
