@@ -1,5 +1,6 @@
 import type { Activity, WeeklyGoalMetric } from "@/lib/types"
 import { BEST_RELEVANT_RUN_WINDOW } from "@/lib/training-constants"
+import { weekRange } from "@/lib/week"
 
 export function formatDistance(km: number): string {
   return km.toFixed(1) + " km"
@@ -154,6 +155,12 @@ export function computeDistanceInRange(
  * array, using the goal's week_start as the Monday boundary.
  * This avoids relying on the stale `current` field stored in the DB.
  *
+ * The window is local, via `weekRange`. It used to be `new Date(weekStart)`,
+ * which reads a date-only string as UTC midnight — so for a runner at UTC+2 the
+ * week ran Monday 02:00 to Monday 02:00, and an early Monday run counted
+ * toward the week before. The `week_start` it was being compared against is
+ * built from local time, so the two never agreed.
+ *
  * For metric="sessions", optional thresholds filter which activities qualify:
  *   - sessionMinDurationMinutes: session must be >= this many minutes
  *   - sessionMinDistanceKm: session must be >= this many km
@@ -166,11 +173,10 @@ export function computeWeeklyProgress(
   sessionMinDurationMinutes?: number | null,
   sessionMinDistanceKm?: number | null,
 ): number {
-  const start = new Date(weekStart).getTime()
-  const end = start + 7 * 24 * 60 * 60 * 1000
+  const { start, end } = weekRange(weekStart)
   const weekActivities = activities.filter((a) => {
     const d = new Date(a.date).getTime()
-    return d >= start && d < end
+    return d >= start.getTime() && d < end.getTime()
   })
   switch (metric) {
     case "distance_km":

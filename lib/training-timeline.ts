@@ -1,4 +1,5 @@
 import type { Goal, AiTrainingPlan } from "@/lib/types"
+import { mondayOf } from "@/lib/week"
 
 export type TrainingPhaseType =
   | "base_building"
@@ -51,15 +52,6 @@ const PHASE_ORDER: TrainingPhaseType[] = [
   "taper",
   "race_week",
 ]
-
-function toMonday(d: Date): Date {
-  const out = new Date(d)
-  const day = out.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  out.setDate(out.getDate() + diff)
-  out.setHours(0, 0, 0, 0)
-  return out
-}
 
 function weeksBetween(a: Date, b: Date): number {
   return Math.max(1, Math.round((b.getTime() - a.getTime()) / (7 * 24 * 60 * 60 * 1000)))
@@ -161,8 +153,8 @@ export function computeTrainingTimeline(
     ? parseDate(goal.start_date)
     : new Date(goal.created_at)
 
-  const raceMonday = toMonday(raceDate)
-  const startMonday = toMonday(startDate)
+  const raceMonday = mondayOf(raceDate)
+  const startMonday = mondayOf(startDate)
   const now = new Date()
 
   // Don't show timeline if race is in the past

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { bestRelevantRun, goalOutcome, longestRun, timeAgoParts } from "./format"
+import {
+  bestRelevantRun,
+  computeWeeklyProgress,
+  goalOutcome,
+  longestRun,
+  timeAgoParts,
+} from "./format"
 import type { Activity } from "./types"
 
 const REF = new Date("2026-04-19T12:00:00Z")
@@ -144,5 +150,69 @@ describe("goalOutcome", () => {
 
   it("ends a goal nobody ran for", () => {
     expect(goalOutcome("performance", [], 10, 50 * 60)).toBe("ended")
+  })
+})
+
+describe("computeWeeklyProgress", () => {
+  function runAt(local: Date, km: number, durationMin = 30): Activity {
+    return {
+      id: `r-${local.getTime()}`,
+      user_id: "u1",
+      strava_id: null,
+      type: "Run",
+      name: "Run",
+      date: local.toISOString(),
+      distance_km: km,
+      duration_seconds: durationMin * 60,
+      pace_min_per_km: durationMin / km,
+      elevation_gain_m: 10,
+      avg_heart_rate: 150,
+      avg_cadence: null,
+      calories: null,
+      created_at: local.toISOString(),
+    }
+  }
+
+  // Monday 2026-08-10, in the runner's own time. The window used to be parsed
+  // as UTC midnight, so east of Greenwich it opened hours into Monday and an
+  // early run fell into the week before.
+  const weekStart = "2026-08-10"
+
+  it("counts a run in the first hour of Monday", () => {
+    const acts = [runAt(new Date(2026, 7, 10, 0, 30), 8)]
+    expect(computeWeeklyProgress(acts, "distance_km", weekStart)).toBe(8)
+  })
+
+  it("counts a run in the last hour of Sunday", () => {
+    const acts = [runAt(new Date(2026, 7, 16, 23, 30), 6)]
+    expect(computeWeeklyProgress(acts, "distance_km", weekStart)).toBe(6)
+  })
+
+  it("excludes the Sunday before the week", () => {
+    const acts = [runAt(new Date(2026, 7, 9, 23, 30), 12)]
+    expect(computeWeeklyProgress(acts, "distance_km", weekStart)).toBe(0)
+  })
+
+  it("excludes the Monday that starts the next week", () => {
+    const acts = [runAt(new Date(2026, 7, 17, 0, 30), 12)]
+    expect(computeWeeklyProgress(acts, "distance_km", weekStart)).toBe(0)
+  })
+
+  it("counts sessions that clear both thresholds and no others", () => {
+    const acts = [
+      runAt(new Date(2026, 7, 11, 7, 0), 12, 60),  // clears both
+      runAt(new Date(2026, 7, 12, 7, 0), 12, 20),  // too short
+      runAt(new Date(2026, 7, 13, 7, 0), 4, 60),   // too far under distance
+    ]
+    expect(computeWeeklyProgress(acts, "sessions", weekStart, 30, 10)).toBe(1)
+  })
+
+  it("sums duration and elevation over the week", () => {
+    const acts = [
+      runAt(new Date(2026, 7, 11, 7, 0), 10, 50),
+      runAt(new Date(2026, 7, 14, 7, 0), 5, 25),
+    ]
+    expect(computeWeeklyProgress(acts, "duration_minutes", weekStart)).toBe(75)
+    expect(computeWeeklyProgress(acts, "elevation_m", weekStart)).toBe(20)
   })
 })

@@ -17,6 +17,12 @@ import { deriveCurrentPlanWeeks, type CurrentPlanWeek, type PlanWeekRow } from "
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
 import type { Warning } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
+import {
+  derivePlanDigests,
+  type GoalPlanningPrefs,
+  type PlanDigest,
+  type PlanDigestRow,
+} from "@/lib/weekly-suggestions"
 import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 import { logError } from "@/lib/log"
 
@@ -39,6 +45,10 @@ export interface InitialData {
   warnings: Warning[]
   /** Plan badges keyed by goal id, derived during the page render. */
   planBadges: Record<string, PlanBadge>
+  /** Stripped block weeks per goal, for the weekly targets Plan suggests. */
+  planDigests: PlanDigest[]
+  /** Planning settings by goal id, for the same. */
+  goalPrefs: Record<string, GoalPlanningPrefs>
   /** The week each goal's plan is in, trimmed during the page render. */
   currentPlanWeeks: Record<string, CurrentPlanWeek>
   /** Manual session statuses per goal, keyed `W3-1`. */
@@ -81,6 +91,15 @@ export function useAppData(initialData?: InitialData | null) {
   )
   const [planBadges, setPlanBadges] = useState<Record<string, PlanBadge>>(
     initialData?.planBadges ?? {},
+  )
+  // Seeded and refreshed alongside the badges — both are read from the same
+  // plan rows, and a suggestion built on a block the runner has just
+  // regenerated has to describe the new block, not the one it replaced.
+  const [planDigests, setPlanDigests] = useState<PlanDigest[]>(
+    initialData?.planDigests ?? [],
+  )
+  const [goalPrefs] = useState<Record<string, GoalPlanningPrefs>>(
+    initialData?.goalPrefs ?? {},
   )
   // Today shows the plan's current week, so both of these are seeded by the
   // page render for the same reason the badges are.
@@ -128,10 +147,11 @@ export function useAppData(initialData?: InitialData | null) {
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
       // Matches the server read in app/page.tsx: only the live block feeds the
-      // badges and Today's week.
+      // badges, Today's week and the weekly suggestions.
       .is("archived_at", null)
     if (!data) return
     setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+    setPlanDigests(derivePlanDigests(data as PlanDigestRow[]))
     // The week Today shows comes out of the same rows, so a regenerated block
     // must not leave last block's session on the screen a runner is about to
     // go out on.
@@ -932,6 +952,8 @@ export function useAppData(initialData?: InitialData | null) {
     setTestRunTag,
     warnings,
     planBadges,
+    planDigests,
+    goalPrefs,
     refreshPlanBadges,
     currentPlanWeeks,
     planSessionStatuses,

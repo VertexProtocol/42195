@@ -4,27 +4,42 @@ import { useState, useEffect } from "react"
 import { Trash2, Repeat, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
+import { weekStartStr } from "@/lib/week"
+import type { WeeklySuggestion } from "@/lib/weekly-suggestions"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
-const METRIC_OPTIONS: { value: WeeklyGoalMetric; labelKey: "weeklyGoalEditor.distance" | "weeklyGoalEditor.sessions" | "weeklyGoalEditor.duration" | "weeklyGoalEditor.elevation"; placeholder: string; unit: string }[] = [
-  { value: "distance_km", labelKey: "weeklyGoalEditor.distance", placeholder: "40", unit: "km" },
-  { value: "sessions", labelKey: "weeklyGoalEditor.sessions", placeholder: "5", unit: "runs" },
-  { value: "duration_minutes", labelKey: "weeklyGoalEditor.duration", placeholder: "300", unit: "min" },
-  { value: "elevation_m", labelKey: "weeklyGoalEditor.elevation", placeholder: "500", unit: "m" },
+/**
+ * `label` is the canonical English name stored on the row, not something the
+ * runner reads — every screen renders `WEEKLY_METRIC_LABEL_KEYS` instead. It
+ * used to be recovered by translating `labelKey` and comparing the result
+ * against those same translations to work out which metric it was, a
+ * round-trip that only held while no two metric labels ever translated alike.
+ */
+const METRIC_OPTIONS: { value: WeeklyGoalMetric; labelKey: "weeklyGoalEditor.distance" | "weeklyGoalEditor.sessions" | "weeklyGoalEditor.duration" | "weeklyGoalEditor.elevation"; label: string; placeholder: string; unit: string }[] = [
+  { value: "distance_km", labelKey: "weeklyGoalEditor.distance", label: "Weekly Distance", placeholder: "40", unit: "km" },
+  { value: "sessions", labelKey: "weeklyGoalEditor.sessions", label: "Training Sessions", placeholder: "5", unit: "runs" },
+  { value: "duration_minutes", labelKey: "weeklyGoalEditor.duration", label: "Active Minutes", placeholder: "300", unit: "min" },
+  { value: "elevation_m", labelKey: "weeklyGoalEditor.elevation", label: "Elevation Gain", placeholder: "500", unit: "m" },
 ]
 
 interface WeeklyGoalEditorProps {
   goal: WeeklyGoal | null
   isNew: boolean
   open: boolean
+  /**
+   * The suggestion this editor was opened from, if any. It seeds the metric
+   * and the number, and says where they came from — a prefilled figure with
+   * no provenance is just a different guess.
+   */
+  suggestion?: WeeklySuggestion | null
   onSave: (goal: WeeklyGoal) => void
   onDelete?: (goalId: string) => void
   onClose: () => void
 }
 
-export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose }: WeeklyGoalEditorProps) {
+export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDelete, onClose }: WeeklyGoalEditorProps) {
   const [metric, setMetric] = useState<WeeklyGoalMetric>("distance_km")
   const [target, setTarget] = useState("")
   const [isRecurring, setIsRecurring] = useState(false)
@@ -42,14 +57,18 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
       setSessionMinDuration(goal.session_min_duration_minutes?.toString() ?? "")
       setSessionMinDistance(goal.session_min_distance_km?.toString() ?? "")
     } else if (open && isNew) {
-      setMetric("distance_km")
-      setTarget("")
+      setMetric(suggestion?.metric ?? "distance_km")
+      setTarget(suggestion ? String(suggestion.target) : "")
+      // A suggestion is derived for one week from that week's plan and load;
+      // next week's number is a different number. Making it recurring would
+      // freeze one week's answer and keep showing it as though it were still
+      // being worked out.
       setIsRecurring(false)
       setShowConfirmDelete(false)
       setSessionMinDuration("")
       setSessionMinDistance("")
     }
-  }, [open, goal, isNew])
+  }, [open, goal, isNew, suggestion])
 
   const selectedOption = METRIC_OPTIONS.find((o) => o.value === metric)!
   const canSave = parseFloat(target) > 0
@@ -57,24 +76,12 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
   const handleSave = () => {
     if (!canSave) return
 
-    const now = new Date()
-    const dayOfWeek = now.getDay()
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-    const monday = new Date(now)
-    monday.setDate(now.getDate() + mondayOffset)
-    // Build a local YYYY-MM-DD string — toISOString() converts to UTC and can
-    // shift the date by a day for users east of UTC (e.g. Norway UTC+1).
-    const pad = (n: number) => String(n).padStart(2, "0")
-    const mondayStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
+    const mondayStr = weekStartStr()
 
-    const translatedLabel = t(selectedOption.labelKey)
     const saved: WeeklyGoal = {
       id: isNew ? crypto.randomUUID() : goal!.id,
       metric,
-      label: translatedLabel === t("weeklyGoalEditor.distance") ? "Weekly Distance" :
-             translatedLabel === t("weeklyGoalEditor.sessions") ? "Training Sessions" :
-             translatedLabel === t("weeklyGoalEditor.duration") ? "Active Minutes" :
-             "Elevation Gain",
+      label: selectedOption.label,
       target: parseFloat(target),
       current: isNew ? 0 : goal!.current,
       week_start: isNew ? mondayStr : goal!.week_start,
@@ -116,6 +123,12 @@ export function WeeklyGoalEditor({ goal, isNew, open, onSave, onDelete, onClose 
         }}
         className="flex flex-col gap-5"
       >
+        {isNew && suggestion && (
+          <p className="measure text-micro leading-relaxed text-muted-foreground">
+            {t(suggestion.reasonKey, suggestion.reasonValues)}
+          </p>
+        )}
+
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1.5 text-label font-medium text-foreground">
             {t("weeklyGoalEditor.frequency")}

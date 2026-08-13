@@ -6,6 +6,8 @@
  * goal and was previously shipped to the browser for the sake of two booleans.
  */
 
+import { mondayOf } from "@/lib/week"
+
 export interface PlanBadge {
   /** A mid-block checkpoint has adjusted the remaining weeks. */
   checkpoint: boolean
@@ -18,15 +20,6 @@ export interface PlanBadgeRow {
   block_start_date: string
   plan: unknown
   mid_block_checkpoint: unknown
-}
-
-/** Monday of the week `date` falls in, at local midnight. */
-function startOfWeek(date: Date): Date {
-  const monday = new Date(date)
-  monday.setHours(0, 0, 0, 0)
-  const day = monday.getDay()
-  monday.setDate(monday.getDate() + (day === 0 ? -6 : 1 - day))
-  return monday
 }
 
 /**
@@ -45,7 +38,7 @@ export function derivePlanBadges(
     const weeks = (row.plan as { weeks?: unknown })?.weeks
     const weekCount = Array.isArray(weeks) ? weeks.length : 0
 
-    const blockEnd = startOfWeek(new Date(row.block_start_date))
+    const blockEnd = mondayOf(new Date(row.block_start_date))
     blockEnd.setDate(blockEnd.getDate() + weekCount * 7)
 
     badges[row.goal_id] = {
