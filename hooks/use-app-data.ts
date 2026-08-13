@@ -127,6 +127,9 @@ export function useAppData(initialData?: InitialData | null) {
     const { data } = await supabase
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
+      // Matches the server read in app/page.tsx: only the live block feeds the
+      // badges and Today's week.
+      .is("archived_at", null)
     if (!data) return
     setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
     // The week Today shows comes out of the same rows, so a regenerated block

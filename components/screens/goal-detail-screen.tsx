@@ -17,6 +17,7 @@ import {
   Lightbulb,
   Pencil,
   Flag,
+  Archive,
   CheckCircle2,
 } from "lucide-react"
 import {
@@ -58,6 +59,7 @@ import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
 import { Button } from '@/components/ui/button'
+import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { Pill } from '@/components/ui/pill'
 
 /**
@@ -1046,6 +1048,13 @@ export function GoalDetailScreen({
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
+  // Set when generating would put away a block that is still running on another
+  // race. Holds the note alongside it so confirming resumes the same request
+  // rather than dropping what the runner typed.
+  const [supersedeConflict, setSupersedeConflict] = useState<{
+    blocks: Array<{ goalId: string; name: string; weeksLeft: number }>
+    note: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Until the lookup answers, "no plan" is unknown rather than false. The
   // empty state it used to render carries a live Generate button, so a goal
@@ -1075,6 +1084,7 @@ export function GoalDetailScreen({
             generated_at: data.generated_at,
             previous_plans: data.previous_plans ?? [],
             mid_block_checkpoint: data.mid_block_checkpoint ?? null,
+            archived_at: data.archived_at ?? null,
           })
           if (data.pace_source) setPaceSource(data.pace_source)
           // Surface any previously applied checkpoint
@@ -1236,7 +1246,7 @@ export function GoalDetailScreen({
   }, [goal.id, onPlanChange])
 
   const handleGenerate = useCallback(
-    async (note?: string) => {
+    async (note?: string, supersede = false) => {
       // Guard: target_date in the past would produce a degenerate empty plan
       // and waste a Claude call. The server rejects it too, but we short-circuit
       // here so the UI shows a clear error instead of a spinner that dies.
@@ -1263,11 +1273,17 @@ export function GoalDetailScreen({
         const res = await fetch("/api/ai/training-plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goalId: goal.id, adjustNote: note || null }),
+          body: JSON.stringify({ goalId: goal.id, adjustNote: note || null, supersede }),
         })
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
+          // Another race still has a live block. Not an error — a question, and
+          // one the runner has to answer before anything is put away.
+          if (res.status === 409 && data.conflict?.blocks?.length) {
+            setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
+            return
+          }
           setError(data.error ?? "Failed to generate plan")
           return
         }
@@ -1652,6 +1668,29 @@ export function GoalDetailScreen({
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
+            {/*
+              Put away when the runner generated a block for another race. The
+              plan stays on screen — it is what they did — but it is stated up
+              front, because a block that silently stopped counting is worse
+              than one that says it has.
+            */}
+            {aiPlan.archived_at && (
+              <div className="flex gap-2.5 rounded-lg bg-surface-sunken px-4 py-3.5 ring-1 ring-border">
+                <Archive size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-label font-medium text-foreground">{t("plan.archivedTitle")}</p>
+                  <p className="text-micro text-muted-foreground">
+                    {t("plan.archivedBody", {
+                      date: new Date(aiPlan.archived_at).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "long",
+                      }),
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Block completion summary */}
             {isBlockExpired && blockCompletionStats && (
               <div className="flex gap-2.5 rounded-lg bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
@@ -1903,6 +1942,51 @@ export function GoalDetailScreen({
         )}
       </section>
       </div>
+
+      {/*
+        One block at a time. The runner is told what generating would put away
+        and decides — rather than being refused and asked to go and tidy up a
+        state the app let them reach, or finding out afterwards that a block
+        they were mid-way through had quietly stopped counting.
+      */}
+      <PromptDialog
+        open={supersedeConflict !== null}
+        onClose={() => setSupersedeConflict(null)}
+        title={t("plan.supersedeTitle")}
+        closeLabel={t("plan.supersedeCancel")}
+        footer={
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={() => {
+                const pending = supersedeConflict
+                setSupersedeConflict(null)
+                if (pending) void handleGenerate(pending.note, true)
+              }}
+            >
+              {t("plan.supersedeConfirm")}
+            </Button>
+            <Button variant="ghost" onClick={() => setSupersedeConflict(null)}>
+              {t("plan.supersedeCancel")}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-body text-muted-foreground">
+          {supersedeConflict && supersedeConflict.blocks.length === 1
+            ? t("plan.supersedeBody", {
+                names: supersedeConflict.blocks[0].name,
+                weeks: t(
+                  supersedeConflict.blocks[0].weeksLeft === 1
+                    ? "plan.supersedeWeeks"
+                    : "plan.supersedeWeeksPlural",
+                  { count: supersedeConflict.blocks[0].weeksLeft },
+                ),
+              })
+            : t("plan.supersedeBodyPlural", {
+                names: (supersedeConflict?.blocks ?? []).map((b) => b.name).join(", "),
+              })}
+        </p>
+      </PromptDialog>
     </>
   )
 }

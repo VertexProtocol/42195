@@ -117,6 +117,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
       .select("goal_id, plan, block_start_date")
       .eq("user_id", userId)
       .in("goal_id", goalIds)
+      .is("archived_at", null)
 
     const goals = new Map((goalRows ?? []).map((g) => [g.id as string, g]))
     const plans = new Map((planRows ?? []).map((p) => [p.goal_id as string, p]))
