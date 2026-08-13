@@ -176,7 +176,37 @@ function useSnapRail() {
   return { ref, index, onScroll }
 }
 
-/** The position dots under a rail. */
+/**
+ * Which page of a vertical snap rail is at the top edge.
+ *
+ * The same measurement as useSnapRail, on the other axis. Kept as its own
+ * function rather than a parameterised one: two lines differ, and a rail hook
+ * that takes an axis reads worse than two that each say what they do.
+ */
+function useVerticalSnapRail() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [index, setIndex] = useState(0)
+
+  const onScroll = useCallback(() => {
+    const rail = ref.current
+    if (!rail) return
+    const top = rail.getBoundingClientRect().top
+    let nearest = 0
+    let best = Infinity
+    Array.from(rail.children).forEach((child, i) => {
+      const distance = Math.abs(child.getBoundingClientRect().top - top)
+      if (distance < best) {
+        best = distance
+        nearest = i
+      }
+    })
+    setIndex(nearest)
+  }, [])
+
+  return { ref, index, onScroll }
+}
+
+/** The position dots under a horizontal rail. */
 function RailDots({ count, index }: { count: number; index: number }) {
   return (
     // Position, not navigation: the cards peek past the edge, and tapping a
@@ -193,8 +223,36 @@ function RailDots({ count, index }: { count: number; index: number }) {
   )
 }
 
+/** The same dots stacked, for a rail that runs down instead of across. */
+function RailDotsVertical({ count, index }: { count: number; index: number }) {
+  return (
+    <div
+      className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col gap-1.5"
+      aria-hidden
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <span
+          key={i}
+          className={`size-1.5 rounded-full ${i === index ? "bg-primary" : "bg-border"}`}
+          style={{ transition: "background-color var(--dur-state) var(--ease-out)" }}
+        />
+      ))}
+    </div>
+  )
+}
+
 /**
- * This week of the training plan, as the runs still left in it.
+ * How tall one race's page is inside the vertical rail.
+ *
+ * Fixed, because snapping needs pages of a known height, and because a rail
+ * whose pages are each as tall as their own content would jump the section's
+ * height around as the runner swipes between races. Sized to hold the week
+ * line, the progress line and one session card with a two-line effort.
+ */
+const PLAN_PAGE_HEIGHT = "10.5rem"
+
+/**
+ * One race's training week: the runs still left in it, side by side.
  *
  * The plan lives on the goal's screen and always will. What belongs here is
  * the decision the countdown leads to: of the runs this week is made of, which
@@ -212,7 +270,7 @@ function RailDots({ count, index }: { count: number; index: number }) {
  * ticking a session off belongs after the run, on the screen that holds the
  * week — a tap-to-complete on a surface you swipe would fire on the drag.
  */
-function PlanWeekRail({
+function PlanWeekPage({
   week,
   activities,
   statuses,
@@ -225,6 +283,7 @@ function PlanWeekRail({
   activities: Activity[]
   statuses: Record<string, PlanSessionStatus>
   goalName: string
+  /** With more than one race in the rail, each page has to say which it is. */
   showGoalName: boolean
   onOpen: () => void
   t: (key: TranslationKey, params?: TranslationParams) => string
@@ -248,19 +307,14 @@ function PlanWeekRail({
   const filled = progress.total > 0 ? Math.round((settled / progress.total) * 100) : 0
 
   return (
-    <Section>
-      <SectionHeader
-        title={t("home.planThisWeek")}
-        hint={showGoalName ? goalName : undefined}
-        action={<SectionAction onClick={onOpen}>{t("home.planSeeWeek")}</SectionAction>}
-      />
-
-      {/* The week's own line: which week of the block, and how much of it is
-          behind them. Not in a card — the cards below are the content, and a
-          card around the lot would be a card holding cards. */}
+    <div className="flex h-full flex-col gap-2">
+      {/* The week's own line: which race, which week of its block, and how
+          much of it is behind them. Not in a card — the cards below are the
+          content, and a card around the lot would be a card holding cards. */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-micro font-semibold text-primary">
+            {showGoalName ? `${goalName} · ` : ""}
             {t("home.planWeek", { week: week.weekNumber })}
             {week.theme ? ` · ${week.theme}` : ""}
           </span>
@@ -274,7 +328,10 @@ function PlanWeekRail({
         <div
           className="h-1 overflow-hidden rounded-full bg-surface-sunken"
           role="img"
-          aria-label={t("home.planSessionsDone", { done: progress.done, total: progress.total })}
+          aria-label={`${goalName} — ${t("home.planSessionsDone", {
+            done: progress.done,
+            total: progress.total,
+          })}`}
         >
           <div
             className={`h-full rounded-full ${outstanding.length > 0 ? "bg-primary" : "bg-success"}`}
@@ -284,7 +341,7 @@ function PlanWeekRail({
       </div>
 
       {outstanding.length === 0 ? (
-        <AppCard>
+        <AppCard className="flex-1">
           <p className="text-label font-semibold text-card-foreground">
             {t("home.planWeekSettled")}
           </p>
@@ -298,11 +355,15 @@ function PlanWeekRail({
             ref={railRef}
             onScroll={isRail ? onRailScroll : undefined}
             role={isRail ? "group" : undefined}
-            aria-label={isRail ? t("home.planOutstanding") : undefined}
+            aria-label={isRail ? `${goalName} — ${t("home.planOutstanding")}` : undefined}
             className={
               isRail
-                ? "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1"
-                : "flex flex-col"
+                ? // No bleed past the screen edge here, unlike the goal rail:
+                  // this one sits inside a vertical scroller, and a container
+                  // that scrolls on one axis clips the other. The cards are
+                  // narrow enough that the next one peeks anyway.
+                  "flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-1"
+                : "flex min-h-0 flex-1 flex-col"
             }
           >
             {outstanding.map((session, i) => (
@@ -331,7 +392,7 @@ function PlanWeekRail({
                     </span>
                   )}
 
-                  <p className="mt-1.5 line-clamp-3 text-micro leading-relaxed text-muted-foreground">
+                  <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
                     {session.effort}
                   </p>
                 </button>
@@ -342,6 +403,109 @@ function PlanWeekRail({
           {isRail && <RailDots count={outstanding.length} index={railIndex} />}
         </>
       )}
+    </div>
+  )
+}
+
+/**
+ * The training plan on Today, when there is more than one race pinned.
+ *
+ * Two axes, because there are two questions and they are not the same one:
+ * down moves between races, across moves between the runs left in that race's
+ * week. A runner training for two events is choosing a race first and a
+ * session second, and flattening that into one rail would put a Berlin session
+ * next to an Oslo one with nothing but a label between them.
+ *
+ * The vertical rail only becomes a scroller when there is a second race to
+ * reach. Today is itself a vertically scrolling page, and a vertical scroller
+ * inside one is a trap: a thumb that lands here moves the section instead of
+ * the page. Three things keep that survivable — it is off entirely for a
+ * single race, a page is exactly one card tall so there is little of it to
+ * catch, and scroll chaining is left on, so reaching the end of the rail hands
+ * the gesture back to the page rather than swallowing it.
+ *
+ * A race with no plan is not a page. There is nothing to choose between under
+ * one, and the goal's own card already carries the prompt to generate a block.
+ * This is also what fixes the case where a pinned race without a plan, sorted
+ * first, hid the plan of the race behind it.
+ */
+function PlanSection({
+  plans,
+  activities,
+  planSessionStatuses,
+  nameGoals,
+  onViewGoal,
+  t,
+}: {
+  plans: { goal: Goal; week: CurrentPlanWeek }[]
+  activities: Activity[]
+  planSessionStatuses: Record<string, Record<string, PlanSessionStatus>>
+  /**
+   * Name the race on the page even when there is only one page. True as soon
+   * as more than one race is pinned: with two on the screen above and one
+   * plan below, an unnamed week is a week the runner has to guess the owner
+   * of.
+   */
+  nameGoals: boolean
+  onViewGoal: (goal: Goal) => void
+  t: (key: TranslationKey, params?: TranslationParams) => string
+}) {
+  const { ref: pageRef, index: pageIndex, onScroll: onPageScroll } = useVerticalSnapRail()
+  const isPaged = plans.length > 1
+
+  // Which race "See the week" opens: the one the runner has scrolled to, not
+  // the first one. Clamped, because a plan can drop out of the list — a block
+  // ending, a goal unpinned — while the rail is sitting on it.
+  const current = plans[Math.min(pageIndex, plans.length - 1)] ?? plans[0]
+
+  return (
+    <Section>
+      <SectionHeader
+        title={t("home.planThisWeek")}
+        action={
+          <SectionAction onClick={() => onViewGoal(current.goal)}>
+            {t("home.planSeeWeek")}
+          </SectionAction>
+        }
+      />
+
+      <div className="relative">
+        <div
+          ref={pageRef}
+          onScroll={isPaged ? onPageScroll : undefined}
+          // Focusable so the rail is reachable by keyboard, where a scroll
+          // container with no tab stop is not.
+          tabIndex={isPaged ? 0 : undefined}
+          role={isPaged ? "group" : undefined}
+          aria-label={isPaged ? t("home.planRaces", { count: plans.length }) : undefined}
+          className={
+            isPaged
+              ? "snap-y snap-mandatory overflow-y-auto rounded-sm pr-5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              : undefined
+          }
+          style={isPaged ? { height: PLAN_PAGE_HEIGHT } : undefined}
+        >
+          {plans.map(({ goal, week }) => (
+            <div
+              key={goal.id}
+              className={isPaged ? "snap-start" : undefined}
+              style={isPaged ? { height: PLAN_PAGE_HEIGHT } : undefined}
+            >
+              <PlanWeekPage
+                week={week}
+                activities={activities}
+                statuses={planSessionStatuses[goal.id] ?? {}}
+                goalName={goal.name}
+                showGoalName={isPaged || nameGoals}
+                onOpen={() => onViewGoal(goal)}
+                t={t}
+              />
+            </div>
+          ))}
+        </div>
+
+        {isPaged && <RailDotsVertical count={plans.length} index={pageIndex} />}
+      </div>
     </Section>
   )
 }
@@ -512,12 +676,18 @@ export function HomeScreen({
     return currentWeekGoals.map((goal) => ({ goal, current: currentFor(goal) }))
   }, [currentWeekGoals, activities, currentMondayStr, weeklySummary])
 
-  // The plan belongs to the race that is next, which is the card leading the
-  // rail. A finished race sorts behind, and its block is over anyway — so if
-  // the lead goal is in the past there is no week to show.
-  const leadGoal = orderedGoals[0] ?? null
-  const leadPlanWeek =
-    leadGoal && !goalMetrics[0]?.past ? currentPlanWeeks?.[leadGoal.id] ?? null : null
+  // Every pinned race that has a plan running this week, nearest race first —
+  // the same order the goal cards are in. A race already run is left out: its
+  // block ended with it, and what is left to say about it is on its own card.
+  const planPages = useMemo(
+    () =>
+      orderedGoals.flatMap((goal, i) => {
+        if (goalMetrics[i]?.past) return []
+        const week = currentPlanWeeks?.[goal.id]
+        return week ? [{ goal, week }] : []
+      }),
+    [orderedGoals, goalMetrics, currentPlanWeeks],
+  )
 
   return (
     <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
@@ -682,14 +852,13 @@ export function HomeScreen({
       {/* Directly under the countdown, because it is the decision the
           countdown leads to. Everything below this point is a report on what
           has already happened. */}
-      {leadGoal && leadPlanWeek && (
-        <PlanWeekRail
-          week={leadPlanWeek}
+      {planPages.length > 0 && (
+        <PlanSection
+          plans={planPages}
           activities={activities}
-          statuses={planSessionStatuses?.[leadGoal.id] ?? {}}
-          goalName={leadGoal.name}
-          showGoalName={starredGoals.length > 1}
-          onOpen={() => onViewGoal(leadGoal)}
+          planSessionStatuses={planSessionStatuses ?? {}}
+          nameGoals={starredGoals.length > 1}
+          onViewGoal={onViewGoal}
           t={t}
         />
       )}

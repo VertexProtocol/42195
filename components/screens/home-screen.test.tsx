@@ -595,7 +595,7 @@ describe("HomeScreen — this week of the training plan", () => {
   it("swipes rather than stacks when there is more than one run left", () => {
     const goal = makeRaceGoal({ id: "goal-1" })
     renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() } })
-    expect(screen.getByRole("group", { name: "Left this week" })).toBeTruthy()
+    expect(screen.getByRole("group", { name: /Left this week/ })).toBeTruthy()
   })
 
   it("does not make a carousel out of a single remaining run", () => {
@@ -606,7 +606,7 @@ describe("HomeScreen — this week of the training plan", () => {
       planWeeks: { "goal-1": makePlanWeek() },
       statuses: { "goal-1": { "W2-1": "skipped" } },
     })
-    expect(screen.queryByRole("group", { name: "Left this week" })).toBeNull()
+    expect(screen.queryByRole("group", { name: /Left this week/ })).toBeNull()
   })
 
   it("changes nothing when a session card is tapped", () => {
@@ -661,9 +661,9 @@ describe("HomeScreen — this week of the training plan", () => {
 
     expect(screen.getByText("Long run")).toBeTruthy()
     expect(screen.queryByText("Ghost session")).toBeNull()
-    // With more than one race pinned, the card says which one it is about —
-    // so the name is on screen twice: on the goal card and on this one.
-    expect(screen.getAllByText("Still ahead")).toHaveLength(2)
+    // With more than one race pinned, the plan page says which race its week
+    // belongs to, on the same line as the week number.
+    expect(screen.getByText(/^Still ahead · Week 2/)).toBeTruthy()
   })
 
   it("says nothing at all when the goal has no plan", () => {
@@ -676,5 +676,82 @@ describe("HomeScreen — this week of the training plan", () => {
     const past = makeRaceGoal({ id: "goal-1", target_date: daysFromNow(-10) })
     renderWithPlan({ goals: [past], planWeeks: { "goal-1": makePlanWeek() } })
     expect(screen.queryByText("Training plan")).toBeNull()
+  })
+})
+
+/**
+ * More than one race pinned, each with a block running.
+ *
+ * Two axes, because there are two questions: down picks the race, across picks
+ * the run. Flattening them into one rail would put a Berlin session next to an
+ * Oslo one with nothing but a label between them.
+ */
+describe("HomeScreen — several races, several plans", () => {
+  const oslo = () => makeRaceGoal({ id: "oslo", name: "Oslo", display_order: 0, target_date: daysFromNow(40) })
+  const berlin = () => makeRaceGoal({ id: "berlin", name: "Berlin", display_order: 1, target_date: daysFromNow(120) })
+
+  const weekFor = (goalId: string, type: string) =>
+    makePlanWeek({
+      goalId,
+      sessions: [{ type, distance: "10 km", effort: "Easy", purpose: "Base" }],
+    })
+
+  it("carries a page for every race with a plan, not only the nearest", () => {
+    // Both weeks are in the DOM: the second is a swipe down, not a trip to
+    // the goal screen.
+    renderWithPlan({
+      goals: [oslo(), berlin()],
+      planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
+    })
+    expect(screen.getByText("OSLO LONG RUN")).toBeTruthy()
+    expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
+    expect(screen.getAllByRole("heading", { name: "Training plan" })).toHaveLength(1)
+  })
+
+  it("names the race on each page, so a week is never orphaned", () => {
+    renderWithPlan({
+      goals: [oslo(), berlin()],
+      planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
+    })
+    expect(screen.getByText(/^Oslo · Week 2/)).toBeTruthy()
+    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
+  })
+
+  it("makes the races swipeable down", () => {
+    renderWithPlan({
+      goals: [oslo(), berlin()],
+      planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
+    })
+    expect(screen.getByRole("group", { name: "Training plans for 2 races" })).toBeTruthy()
+  })
+
+  it("does not make a scroller out of a single race", () => {
+    // Today scrolls vertically itself, so a nested vertical scroller is a
+    // trap. It is only worth the cost when there is a second race to reach.
+    renderWithPlan({ goals: [oslo()], planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN") } })
+    expect(screen.queryByRole("group", { name: /Training plans for/ })).toBeNull()
+  })
+
+  it("shows a plan on a race that is not the first one pinned", () => {
+    // This used to show nothing at all: the section only ever looked at the
+    // nearest race, so a pinned parkrun with no block hid the marathon's.
+    renderWithPlan({
+      goals: [makeRaceGoal({ id: "parkrun", name: "Parkrun", display_order: 0, target_date: daysFromNow(20) }), berlin()],
+      planWeeks: { berlin: weekFor("berlin", "BERLIN TEMPO") },
+    })
+    expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
+    // One race has a plan, so there is nothing to swipe between — but the page
+    // still says whose week it is, because two races are pinned.
+    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
+    expect(screen.queryByRole("group", { name: /Training plans for/ })).toBeNull()
+  })
+
+  it("leaves out a race whose block is behind it", () => {
+    renderWithPlan({
+      goals: [berlin(), makeRaceGoal({ id: "last", name: "Last spring", target_date: daysFromNow(-120) })],
+      planWeeks: { berlin: weekFor("berlin", "BERLIN TEMPO"), last: weekFor("last", "GHOST SESSION") },
+    })
+    expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
+    expect(screen.queryByText("GHOST SESSION")).toBeNull()
   })
 })
