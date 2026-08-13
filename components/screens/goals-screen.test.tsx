@@ -150,7 +150,6 @@ function makeWeeklyGoal(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
     metric: "distance_km",
     label: "",
     target: 40,
-    current: 0,
     week_start: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
     is_recurring: true,
     ...overrides,
@@ -313,8 +312,7 @@ describe("GoalsScreen — suggested weekly targets", () => {
           metric: "distance_km",
           label: "Weekly Distance",
           target: 45,
-          current: 0,
-          week_start: weekStart,
+                week_start: weekStart,
           is_recurring: false,
           display_order: 1,
         } as WeeklyGoal,
@@ -327,7 +325,7 @@ describe("GoalsScreen — suggested weekly targets", () => {
 
   it("says nothing at all once every metric is covered", () => {
     const weekStart = mondayThisWeek()
-    const base = { current: 0, week_start: weekStart, is_recurring: false }
+    const base = { week_start: weekStart, is_recurring: false }
     renderSuggestions({
       weeklyGoals: [
         { id: "a", metric: "distance_km", label: "Weekly Distance", target: 45, display_order: 1, ...base },
@@ -369,7 +367,7 @@ describe("GoalsScreen — suggested weekly targets", () => {
 
 describe("GoalsScreen — accepting, adjusting and refusing", () => {
   const weekStart = mondayThisWeek()
-  const base = { current: 0, week_start: weekStart, display_order: 1 }
+  const base = { week_start: weekStart, display_order: 1 }
 
   it("turns an offer down by metric and source, not by week", () => {
     const seen: unknown[] = []

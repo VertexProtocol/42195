@@ -291,7 +291,7 @@ export function useAppData(initialData?: InitialData | null) {
           supabase
             .from("weekly_goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
-            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+            .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target")
             .order("display_order", { ascending: true }),
           supabase.from("profiles").select("id, display_name, email, avatar_url, onboarding_dismissed_at").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
@@ -325,12 +325,17 @@ export function useAppData(initialData?: InitialData | null) {
             metric: wg.metric,
             label: wg.label,
             target: Number(wg.target),
-            current: Number(wg.current),
             week_start: wg.week_start,
             is_recurring: wg.is_recurring ?? false,
             session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
             session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
             display_order: wg.display_order ?? 0, // [DND]
+            // Selected here as well as in the page render: without them a
+            // client-side reload would drop "adjusted from" off every card and
+            // silence a plan that had moved, until the next full page load.
+            source: wg.source ?? "manual",
+            source_goal_id: wg.source_goal_id ?? null,
+            suggested_target: wg.suggested_target != null ? Number(wg.suggested_target) : null,
           }))
         )
       }
@@ -591,7 +596,6 @@ export function useAppData(initialData?: InitialData | null) {
             metric: saved.metric,
             label: saved.label,
             target: saved.target,
-            current: saved.current,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
             session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
@@ -628,7 +632,6 @@ export function useAppData(initialData?: InitialData | null) {
             metric: saved.metric,
             label: saved.label,
             target: saved.target,
-            current: 0,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
             session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
@@ -654,7 +657,6 @@ export function useAppData(initialData?: InitialData | null) {
               metric: data.metric,
               label: data.label,
               target: Number(data.target),
-              current: Number(data.current),
               week_start: data.week_start,
               is_recurring: data.is_recurring ?? false,
               session_min_duration_minutes: data.session_min_duration_minutes ?? null,

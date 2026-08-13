@@ -56,7 +56,6 @@ export interface WeeklyGoal {
   metric: WeeklyGoalMetric
   label: string
   target: number
-  current: number
   week_start: string
   /** Recurring goals appear in every week; one-off goals are tied to week_start */
   is_recurring: boolean

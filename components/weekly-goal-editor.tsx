@@ -123,7 +123,6 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
       metric,
       label: selectedOption.label,
       target: parseFloat(target),
-      current: isNew ? 0 : goal!.current,
       week_start: isNew ? mondayStr : goal!.week_start,
       is_recurring: isRecurring,
       session_min_duration_minutes: metric === "sessions" && sessionMinDuration

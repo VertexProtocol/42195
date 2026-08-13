@@ -256,63 +256,26 @@ export async function recalculateGoals(userId: string) {
     errors.push(`lifetime goals: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // Recalculate weekly goals for the current week
-  // Use UTC-based week boundaries for consistency regardless of server timezone
-  try {
-    const now = new Date()
-    // Compute Monday of the current week in UTC
-    const utcDay = now.getUTCDay() // 0=Sun, 1=Mon, ..., 6=Sat
-    const daysSinceMonday = utcDay === 0 ? 6 : utcDay - 1
-    const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday))
-    const weekEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday + 6, 23, 59, 59, 999))
-    const weekStartStr = weekStart.toISOString().split("T")[0]
-
-    const { data: weeklyGoals } = await service
-      .from("weekly_goals")
-      .select("id, metric, is_recurring, session_min_duration_minutes, session_min_distance_km")
-      .eq("user_id", userId)
-      .or(`week_start.eq.${weekStartStr},is_recurring.eq.true`)
-
-    if (weeklyGoals && weeklyGoals.length > 0) {
-      const { data: weekActivities } = await service
-        .from("activities")
-        .select("distance_km, duration_seconds, elevation_gain_m")
-        .eq("user_id", userId)
-        .gte("date", weekStart.toISOString())
-        .lte("date", weekEnd.toISOString())
-
-      const acts = weekActivities ?? []
-
-      await Promise.all(
-        weeklyGoals.map(async (wg) => {
-          let current = 0
-
-          if (wg.metric === "sessions") {
-            current = acts.filter((a) => {
-              if (wg.session_min_duration_minutes && a.duration_seconds / 60 < wg.session_min_duration_minutes) return false
-              if (wg.session_min_distance_km && Number(a.distance_km) < Number(wg.session_min_distance_km)) return false
-              return true
-            }).length
-          } else if (wg.metric === "distance_km") {
-            current = acts.reduce((sum: number, a) => sum + Number(a.distance_km), 0)
-          } else if (wg.metric === "duration_minutes") {
-            current = acts.reduce((sum: number, a) => sum + a.duration_seconds / 60, 0)
-          } else if (wg.metric === "elevation_m") {
-            current = acts.reduce((sum: number, a) => sum + Number(a.elevation_gain_m ?? 0), 0)
-          }
-
-          const { error } = await service.from("weekly_goals").update({ current }).eq("id", wg.id)
-          if (error) {
-            console.error(`[recalcGoals] Failed to update weekly goal ${wg.id}:`, error)
-            errors.push(`weekly goal ${wg.id}: ${error.message}`)
-          }
-        })
-      )
-    }
-  } catch (err) {
-    console.error("[recalcGoals] Weekly goal recalculation failed:", err)
-    errors.push(`weekly goals: ${err instanceof Error ? err.message : String(err)}`)
-  }
+  // Weekly goals are not recalculated here, and `weekly_goals.current` is no
+  // longer written by anything.
+  //
+  // This used to sum the week's activities into that column on every sync,
+  // working out the week in UTC because the server has no other clock. Every
+  // reader computes its own figure from the activity list instead — the Plan
+  // screen and Today both call `computeWeeklyProgress`, in local time, against
+  // a `week_start` that was written in local time. So the column was a second
+  // answer that nothing asked for, and on UTC+1/+2 it was a different one: a
+  // run at 00:30 on Monday is 23:30 Sunday in UTC, filed by the server in the
+  // week before the one the runner sees it in.
+  //
+  // Storing a timezone on `profiles` would have made the server agree. It is
+  // the larger change of the two and it buys nothing here — the disagreement
+  // only ever mattered because this write existed. Deleting the write removes
+  // the second answer instead of teaching it the first one's rules, and the
+  // activities stay the single source of truth they already were in practice.
+  //
+  // The column stays. It is inert, and dropping it is a migration whose only
+  // benefit is tidiness, on a table every screen reads.
 
   // Shared goals: the runner's own position in every group they belong to.
   // It has to be written here, by the account that owns the activities, since
