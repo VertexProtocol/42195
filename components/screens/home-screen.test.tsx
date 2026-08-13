@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
 import type {
@@ -708,13 +708,38 @@ describe("HomeScreen — several races, several plans", () => {
     expect(screen.getAllByRole("heading", { name: "Training plan" })).toHaveLength(1)
   })
 
-  it("names the race on each page, so a week is never orphaned", () => {
+  it("names the race in one heading that stays put, not once per page", () => {
+    // The heading is the still part: it names the race the rail is settled on
+    // and nothing else. Sliding a name per page up and out with its runs made
+    // the section re-draw itself top to bottom on every swipe.
     renderWithPlan({
       goals: [oslo(), berlin()],
       planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
     })
     expect(screen.getByText(/^Oslo · Week 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Berlin · Week 2/)).toBeNull()
+  })
+
+  it("changes the name over to the race the runner has swiped to", async () => {
+    renderWithPlan({
+      goals: [oslo(), berlin()],
+      planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
+    })
+
+    const rail = screen.getByRole("group", { name: /^Training plans/ })
+    // jsdom lays nothing out, so the page height the fade divides by has to be
+    // supplied. Any positive number will do — the maths is a ratio.
+    Object.defineProperty(rail, "clientHeight", { value: 124, configurable: true })
+    rail.scrollTop = 124
+    fireEvent.scroll(rail)
+
+    // The fade and the swap are both written on the next frame.
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    })
+
     expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Oslo · Week 2/)).toBeNull()
   })
 
   it("makes the races swipeable down", () => {
