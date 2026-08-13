@@ -44,6 +44,10 @@ export async function DELETE() {
       // fails on a foreign-key violation and the account survives.
       "ai_training_plans",
       "goal_preferences",
+      // Cascades from both goals and the auth user, so it would go anyway.
+      // Named for the same reason the rest are: the delete order is the
+      // record of what an account is made of.
+      "weekly_suggestion_dismissals",
       "goals",
       "weekly_goals",
       "sync_status",

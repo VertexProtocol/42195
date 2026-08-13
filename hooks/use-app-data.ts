@@ -9,9 +9,11 @@ import type {
   Goal,
   GoalCategory,
   WeeklyGoal,
+  WeeklyGoalMetric,
   SyncStatus,
   UserProfile,
   PlanSessionStatus,
+  WeeklySuggestionDismissal,
 } from "@/lib/types"
 import { deriveCurrentPlanWeeks, type CurrentPlanWeek, type PlanWeekRow } from "@/lib/plan-today"
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
@@ -53,6 +55,8 @@ export interface InitialData {
   currentPlanWeeks: Record<string, CurrentPlanWeek>
   /** Manual session statuses per goal, keyed `W3-1`. */
   planSessionStatuses: Record<string, Record<string, PlanSessionStatus>>
+  /** Weekly suggestions the runner has turned down. */
+  dismissals: WeeklySuggestionDismissal[]
   /** The group each goal belongs to, keyed by goal id. */
   sharedGoals: Record<string, SharedGoalSummary>
   stravaConnected: boolean
@@ -113,6 +117,12 @@ export function useAppData(initialData?: InitialData | null) {
     Record<string, Record<string, PlanSessionStatus>>
   >(initialData?.planSessionStatuses ?? {})
 
+  // A dismissal outlives the week it was made in, so it is held here with the
+  // rest of the account's state rather than on the screen that shows the card.
+  const [dismissals, setDismissals] = useState<WeeklySuggestionDismissal[]>(
+    initialData?.dismissals ?? [],
+  )
+
   const setPlanSessionStatus = useCallback(
     (goalId: string, key: string, status: PlanSessionStatus) => {
       setPlanSessionStatuses((prev) => ({
@@ -134,6 +144,8 @@ export function useAppData(initialData?: InitialData | null) {
   goalsRef.current = goals
   const weeklyGoalsRef = useRef(weeklyGoals)
   weeklyGoalsRef.current = weeklyGoals
+  const dismissalsRef = useRef(dismissals)
+  dismissalsRef.current = dismissals
 
   const [, startTransition] = useTransition()
 
@@ -279,7 +291,7 @@ export function useAppData(initialData?: InitialData | null) {
           supabase
             .from("weekly_goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
-            .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+            .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target")
             .order("display_order", { ascending: true }),
           supabase.from("profiles").select("id, display_name, email, avatar_url, onboarding_dismissed_at").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
@@ -313,12 +325,17 @@ export function useAppData(initialData?: InitialData | null) {
             metric: wg.metric,
             label: wg.label,
             target: Number(wg.target),
-            current: Number(wg.current),
             week_start: wg.week_start,
             is_recurring: wg.is_recurring ?? false,
             session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
             session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
             display_order: wg.display_order ?? 0, // [DND]
+            // Selected here as well as in the page render: without them a
+            // client-side reload would drop "adjusted from" off every card and
+            // silence a plan that had moved, until the next full page load.
+            source: wg.source ?? "manual",
+            source_goal_id: wg.source_goal_id ?? null,
+            suggested_target: wg.suggested_target != null ? Number(wg.suggested_target) : null,
           }))
         )
       }
@@ -579,11 +596,16 @@ export function useAppData(initialData?: InitialData | null) {
             metric: saved.metric,
             label: saved.label,
             target: saved.target,
-            current: saved.current,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
             session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
             session_min_distance_km: saved.session_min_distance_km ?? null,
+            source: saved.source ?? "manual",
+            source_goal_id: saved.source_goal_id ?? null,
+            // Carried through an edit rather than cleared. A runner who takes
+            // the plan's 42 km and sets 45 has adjusted the suggestion, not
+            // replaced it, and the card says so.
+            suggested_target: saved.suggested_target ?? null,
           })
           .eq("id", saved.id)
         if (error) {
@@ -610,11 +632,13 @@ export function useAppData(initialData?: InitialData | null) {
             metric: saved.metric,
             label: saved.label,
             target: saved.target,
-            current: 0,
             week_start: saved.week_start,
             is_recurring: saved.is_recurring,
             session_min_duration_minutes: saved.session_min_duration_minutes ?? null,
             session_min_distance_km: saved.session_min_distance_km ?? null,
+            source: saved.source ?? "manual",
+            source_goal_id: saved.source_goal_id ?? null,
+            suggested_target: saved.suggested_target ?? null,
           })
           .select()
           .single()
@@ -633,11 +657,13 @@ export function useAppData(initialData?: InitialData | null) {
               metric: data.metric,
               label: data.label,
               target: Number(data.target),
-              current: Number(data.current),
               week_start: data.week_start,
               is_recurring: data.is_recurring ?? false,
               session_min_duration_minutes: data.session_min_duration_minutes ?? null,
               session_min_distance_km: data.session_min_distance_km ? Number(data.session_min_distance_km) : null,
+              source: data.source ?? "manual",
+              source_goal_id: data.source_goal_id ?? null,
+              suggested_target: data.suggested_target != null ? Number(data.suggested_target) : null,
             },
             ...prev,
           ])
@@ -647,6 +673,49 @@ export function useAppData(initialData?: InitialData | null) {
       return true
     },
     []
+  )
+
+  /**
+   * Turn down a suggested weekly target for good.
+   *
+   * Stored against the metric and the race it came from, never the week, so
+   * the same offer does not reappear next Monday. Applied to local state
+   * first: a card that lingers while the write goes out reads as a dismissal
+   * that did not take, and the runner taps it again.
+   */
+  const dismissSuggestion = useCallback(
+    async (metric: WeeklyGoalMetric, sourceGoalId: string | null) => {
+      const already = dismissalsRef.current.some(
+        (d) => d.metric === metric && d.source_goal_id === sourceGoalId,
+      )
+      if (already) return
+
+      setDismissals((prev) => [...prev, { metric, source_goal_id: sourceGoalId }])
+
+      const { data: authData } = await supabase.auth.getUser()
+      const userId = authData.user?.id
+      if (!userId) {
+        logError("No authenticated user found — cannot dismiss suggestion")
+        setDismissals((prev) =>
+          prev.filter((d) => !(d.metric === metric && d.source_goal_id === sourceGoalId)),
+        )
+        return
+      }
+
+      const { error } = await supabase.from("weekly_suggestion_dismissals").insert({
+        user_id: userId,
+        metric,
+        source_goal_id: sourceGoalId,
+      })
+
+      if (error) {
+        logError("Failed to dismiss weekly suggestion", error)
+        setDismissals((prev) =>
+          prev.filter((d) => !(d.metric === metric && d.source_goal_id === sourceGoalId)),
+        )
+      }
+    },
+    [],
   )
 
   const deleteWeeklyGoal = useCallback(async (goalId: string) => {
@@ -972,6 +1041,7 @@ export function useAppData(initialData?: InitialData | null) {
     setPlanSessionStatus,
     sharedGoals,
     refreshSharedGoals,
+    dismissals,
 
     // Derived
     starredGoals, // [STAR]
@@ -990,6 +1060,7 @@ export function useAppData(initialData?: InitialData | null) {
     saveWeeklyGoal,
     deleteWeeklyGoal,
     reorderWeeklyGoals, // [DND]
+    dismissSuggestion,
 
     // Activities
     addActivity,

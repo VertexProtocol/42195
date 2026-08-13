@@ -2,7 +2,13 @@ import { Suspense } from "react"
 import { AppShell } from "@/components/app-shell"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import type { GoalCategory, SharedGoalMetric, SyncStatus } from "@/lib/types"
+import type {
+  GoalCategory,
+  SharedGoalMetric,
+  SyncStatus,
+  WeeklyGoalMetric,
+  WeeklyGoalSource,
+} from "@/lib/types"
 import { fetchAllActivities } from "@/lib/activities-query"
 import {
   deriveWarningContext,
@@ -37,7 +43,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sessionStatusRes, goalPrefsRes, sharedRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sessionStatusRes, goalPrefsRes, dismissalsRes, sharedRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -46,7 +52,7 @@ export default async function Page() {
         .order("display_order", { ascending: true }),
       supabase
         .from("weekly_goals")
-        .select("id, metric, label, target, current, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order")
+        .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target")
         .order("display_order", { ascending: true }),
       supabase.from("profiles").select("id, display_name, email, avatar_url, locale, max_hr, resting_hr, hr_analysis_cache, warning_state, onboarding_dismissed_at").eq("id", authUser.id).single(),
       // Which activities are test runs. Fetched here rather than from the
@@ -81,6 +87,14 @@ export default async function Page() {
       supabase
         .from("goal_preferences")
         .select("goal_id, sessions_per_week, weekly_increase_pct, block_weeks")
+        .eq("user_id", authUser.id),
+      // Suggestions the runner has turned down. Read alongside the settings
+      // above because it decides whether a card appears at all: fetched a
+      // round trip later, a dismissed suggestion would flash back onto the
+      // screen on every visit, which is the nagging the dismissal was for.
+      supabase
+        .from("weekly_suggestion_dismissals")
+        .select("metric, source_goal_id")
         .eq("user_id", authUser.id),
       // The group a goal belongs to, so its row on the goal's detail screen is
       // there on first paint. Fetched here for the same reason the plan badges
@@ -173,13 +187,22 @@ export default async function Page() {
       metric: wg.metric,
       label: wg.label,
       target: Number(wg.target),
-      current: Number(wg.current),
       week_start: wg.week_start,
       is_recurring: wg.is_recurring ?? false,
       session_min_duration_minutes: wg.session_min_duration_minutes ?? null,
       session_min_distance_km: wg.session_min_distance_km ? Number(wg.session_min_distance_km) : null,
       display_order: (wg as any).display_order ?? 0, // [DND]
+      source: ((wg as any).source ?? "manual") as WeeklyGoalSource,
+      source_goal_id: (wg as any).source_goal_id ?? null,
+      suggested_target:
+        (wg as any).suggested_target != null ? Number((wg as any).suggested_target) : null,
     })),
+    dismissals: ((dismissalsRes.data ?? []) as { metric: string; source_goal_id: string | null }[]).map(
+      (d) => ({
+        metric: d.metric as WeeklyGoalMetric,
+        source_goal_id: d.source_goal_id ?? null,
+      }),
+    ),
     user: profileRes.data
       ? {
           id: profileRes.data.id,

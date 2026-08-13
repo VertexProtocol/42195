@@ -24,7 +24,13 @@
  * WEEKLY_GOALS_PLAN.md for why, and for what that costs.
  */
 
-import type { Activity, Goal, WeeklyGoalMetric } from "@/lib/types"
+import type {
+  Activity,
+  Goal,
+  WeeklyGoal,
+  WeeklyGoalMetric,
+  WeeklySuggestionDismissal,
+} from "@/lib/types"
 import type { SafetyActivity } from "@/lib/training-safety-client"
 import {
   classifyAthleteLevel,
@@ -161,6 +167,12 @@ export interface WeeklySuggestion {
   metric: SuggestableMetric
   /** Rounded, ready to show and to store. */
   target: number
+  /**
+   * The Monday this is for. Carried on the suggestion because it can now be
+   * next week's: whatever accepts it has to write the row against the week it
+   * was derived for, not against whatever week it happens to be opened in.
+   */
+  weekStart: string
   source: WeeklySuggestionSource
   /** The race this came from, or null for a history-based suggestion. */
   sourceGoalId: string | null
@@ -177,6 +189,15 @@ export interface WeeklySuggestion {
   lowConfidence?: boolean
 }
 
+/**
+ * A suggestion before the week it belongs to is stamped on it.
+ *
+ * The derivation works in one week at a time and has no reason to repeat which
+ * one on every object it builds; `suggestWeeklyGoals` stamps them all on the
+ * way out.
+ */
+type DerivedSuggestion = Omit<WeeklySuggestion, "weekStart">
+
 export interface WeeklySuggestionInput {
   goals: Goal[]
   /** Digests for whichever goals have a stored block. Order does not matter. */
@@ -187,6 +208,8 @@ export interface WeeklySuggestionInput {
   activities: Activity[]
   /** The Monday being suggested for, as `YYYY-MM-DD`. */
   weekStart: string
+  /** Offers the runner has turned down. Not week-scoped; see the type. */
+  dismissals?: WeeklySuggestionDismissal[]
   /** Evaluation time. Passed in so the result is testable. */
   now?: Date
 }
@@ -219,7 +242,141 @@ export function suggestWeeklyGoals(input: WeeklySuggestionInput): WeeklySuggesti
     ? fromGoal(pacesetter, planByGoal.get(pacesetter.id), preferences[pacesetter.id], runs, weekStart, now)
     : fromHistory(runs, now)
 
-  return applyRaceProximity(base, candidates, planByGoal, weekStart, runs, now)
+  const withSessions = applyPerformanceSessions(base, candidates, preferences)
+  const clamped = applyRaceProximity(withSessions, candidates, planByGoal, weekStart, runs, now)
+
+  return clamped
+    .filter((s) => !isDismissed(s, input.dismissals))
+    .map((s) => ({ ...s, weekStart }))
+}
+
+/**
+ * The goal whose volume sets the week, for this week.
+ *
+ * Exported so the Targets list can mark it. The drag order has quietly meant
+ * priority since step 1; a marker the engine and the screen work out
+ * separately would eventually disagree, and the disagreement would be the app
+ * pointing at the wrong race.
+ */
+export function selectPacesetter(goals: Goal[], weekStart: string): Goal | null {
+  return (
+    eligibleGoals(goals, weekRange(weekStart)).find(
+      (g) => g.goal_category === "event_training",
+    ) ?? null
+  )
+}
+
+/**
+ * A performance goal's claim on the week: how often, never how far.
+ *
+ * "10 km under 50 minutes" says nothing about weekly mileage — it is a
+ * requirement for one session, so these goals stay out of the volume decision
+ * entirely. What they do have is a training frequency, and it was going
+ * unused.
+ *
+ * Only raises a number that came from history, and only raises it. A block
+ * prescribes its own session count and a race being built toward already sets
+ * one; overruling either with a side goal's setting would be the smaller
+ * ambition rewriting the larger. Leaving a history figure that is already
+ * higher alone matters for the same reason in the other direction — a runner
+ * out four times a week should not be asked for three.
+ */
+function applyPerformanceSessions(
+  suggestions: DerivedSuggestion[],
+  candidates: Goal[],
+  preferences: Record<string, GoalPlanningPrefs>,
+): DerivedSuggestion[] {
+  const current = suggestions.find((s) => s.metric === "sessions")
+  if (!current || current.source !== "history") return suggestions
+
+  for (const goal of candidates) {
+    if (goal.goal_category !== "performance") continue
+    const wanted = preferences[goal.id]?.sessionsPerWeek
+    if (!wanted || wanted <= current.target) continue
+
+    return suggestions.map((s) =>
+      s.metric === "sessions"
+        ? {
+            ...s,
+            target: wanted,
+            source: "target" as const,
+            sourceGoalId: goal.id,
+            reasonKey: "weeklySuggestion.reason.targetSessions" as const,
+            reasonValues: { goal: goal.name },
+            lowConfidence: undefined,
+          }
+        : s,
+    )
+  }
+
+  return suggestions
+}
+
+/**
+ * Whether this offer has already been turned down.
+ *
+ * Matched on the metric and the race it came from, never on the week — a
+ * dismissal that expired every Sunday night would be the app asking the same
+ * question every Monday and calling it a fresh suggestion. The clamp is not
+ * part of the identity: an easier number for the same race, for the same
+ * metric, is the same offer.
+ */
+function isDismissed(
+  suggestion: DerivedSuggestion,
+  dismissals: WeeklySuggestionDismissal[] | undefined,
+): boolean {
+  if (!dismissals?.length) return false
+  return dismissals.some(
+    (d) => d.metric === suggestion.metric && (d.source_goal_id ?? null) === suggestion.sourceGoalId,
+  )
+}
+
+// ── Drift against an accepted target ──────────────────────────────────────────
+
+/** An accepted target whose plan has since said something else. */
+export interface SuggestionDrift {
+  /** The saved weekly goal, as the runner accepted or adjusted it. */
+  goal: WeeklyGoal
+  /** What the same source proposes now. */
+  suggestion: WeeklySuggestion
+}
+
+/**
+ * Accepted targets the plan has moved away from.
+ *
+ * A regenerated block, or an applied mid-block checkpoint, changes what this
+ * week should hold. Writing that straight onto a target the runner has already
+ * committed to would move the week under their feet — they would go out on
+ * Wednesday against a number nobody showed them. So the change is detected and
+ * offered, never applied.
+ *
+ * Compared against `suggested_target` rather than `target`: what matters is
+ * whether the *offer* has changed. A runner who took 42 km and set 45 has not
+ * drifted from a plan that still says 42 — they have adjusted it, which is
+ * theirs to do, and asking again would be arguing.
+ */
+export function detectSuggestionDrift(
+  weeklyGoals: WeeklyGoal[],
+  suggestions: WeeklySuggestion[],
+): SuggestionDrift[] {
+  const drifts: SuggestionDrift[] = []
+
+  for (const goal of weeklyGoals) {
+    // Only a target that came from a suggestion can drift from one. A typed
+    // number has no source to disagree with.
+    if (!goal.source || goal.source === "manual") continue
+    if (goal.suggested_target == null) continue
+
+    const suggestion = suggestions.find(
+      (s) => s.metric === goal.metric && s.sourceGoalId === (goal.source_goal_id ?? null),
+    )
+    if (!suggestion) continue
+    if (suggestion.target === Number(goal.suggested_target)) continue
+
+    drifts.push({ goal, suggestion })
+  }
+
+  return drifts
 }
 
 // ── Goal selection ────────────────────────────────────────────────────────────
@@ -258,10 +415,10 @@ function fromGoal(
   runs: SafetyActivity[],
   weekStart: string,
   now: Date,
-): WeeklySuggestion[] {
+): DerivedSuggestion[] {
   const planned = digest ? planWeekFor(digest, weekStart) : null
   if (planned) {
-    const fromPlan: WeeklySuggestion[] = [
+    const fromPlan: DerivedSuggestion[] = [
       {
         metric: "distance_km",
         target: Math.round(planned.week.targetKm),
@@ -350,7 +507,7 @@ function planWeekFor(
  * should not decide what the app asks for next. Weeks without a run are
  * excluded for the same reason — they are absences, not light weeks.
  */
-function fromHistory(runs: SafetyActivity[], now: Date): WeeklySuggestion[] {
+function fromHistory(runs: SafetyActivity[], now: Date): DerivedSuggestion[] {
   const weeks = computeRecentWeeklyVolumes(runs, FITNESS_ANALYSIS_WEEKS, now)
   const activeWeeks = weeks.filter((km) => km > 0)
 
@@ -449,13 +606,13 @@ function median(values: number[]): number {
  * of being cut a second time.
  */
 function applyRaceProximity(
-  suggestions: WeeklySuggestion[],
+  suggestions: DerivedSuggestion[],
   candidates: Goal[],
   planByGoal: Map<string, PlanDigest>,
   weekStart: string,
   runs: SafetyActivity[],
   now: Date,
-): WeeklySuggestion[] {
+): DerivedSuggestion[] {
   const distance = suggestions.find((s) => s.metric === "distance_km")
   if (!distance) return suggestions
 

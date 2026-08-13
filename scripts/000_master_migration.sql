@@ -1022,3 +1022,60 @@ alter table ai_training_plans
 create index if not exists idx_ai_training_plans_user_active
   on ai_training_plans(user_id)
   where archived_at is null;
+
+
+-- ============================================================
+-- 034 · Weekly target provenance, and what was turned down
+-- ============================================================
+-- Weekly targets are offered as well as typed. The suggestion itself is never
+-- stored — it is recomputed from the goals, the plans and the activities — so
+-- what is kept here is only what that computation cannot recover: which offer
+-- a saved row came from, and which offers were refused.
+alter table public.weekly_goals
+  add column if not exists source           text not null default 'manual',
+  add column if not exists source_goal_id   uuid references public.goals(id) on delete set null,
+  add column if not exists suggested_target numeric(10,2);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'weekly_goals_source_check'
+  ) then
+    alter table public.weekly_goals
+      add constraint weekly_goals_source_check
+      check (source in ('manual', 'plan', 'target', 'history'));
+  end if;
+end $$;
+
+-- Keyed by what was offered, never by the week it was offered in: a suggestion
+-- that comes back every Monday after being turned down is nagging.
+create table if not exists public.weekly_suggestion_dismissals (
+  id             uuid        primary key default gen_random_uuid(),
+  user_id        uuid        not null references auth.users(id) on delete cascade,
+  metric         text        not null check (metric in ('distance_km', 'sessions')),
+  source_goal_id uuid        references public.goals(id) on delete cascade,
+  dismissed_at   timestamptz not null default now()
+);
+
+-- Two indexes, not one constraint: a unique constraint treats nulls as
+-- distinct, which would let the history suggestion be dismissed repeatedly.
+create unique index if not exists idx_weekly_dismissal_goal
+  on public.weekly_suggestion_dismissals(user_id, metric, source_goal_id)
+  where source_goal_id is not null;
+
+create unique index if not exists idx_weekly_dismissal_history
+  on public.weekly_suggestion_dismissals(user_id, metric)
+  where source_goal_id is null;
+
+alter table public.weekly_suggestion_dismissals enable row level security;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'weekly_suggestion_dismissals' and policyname = 'weekly_dismissals_select_own') then
+    create policy "weekly_dismissals_select_own" on public.weekly_suggestion_dismissals for select using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'weekly_suggestion_dismissals' and policyname = 'weekly_dismissals_insert_own') then
+    create policy "weekly_dismissals_insert_own" on public.weekly_suggestion_dismissals for insert with check (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'weekly_suggestion_dismissals' and policyname = 'weekly_dismissals_delete_own') then
+    create policy "weekly_dismissals_delete_own" on public.weekly_suggestion_dismissals for delete using (auth.uid() = user_id);
+  end if;
+end $$;

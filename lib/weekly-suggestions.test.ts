@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest"
 import {
+  detectSuggestionDrift,
+  selectPacesetter,
   suggestWeeklyGoals,
   type PlanDigest,
   type WeeklySuggestion,
 } from "./weekly-suggestions"
-import type { Activity, Goal } from "./types"
+import type { Activity, Goal, WeeklyGoal } from "./types"
 
 // Monday 2026-08-10 is "this week" throughout; NOW is the Wednesday inside it.
 const WEEK_START = "2026-08-10"
@@ -628,5 +630,237 @@ describe("suggestWeeklyGoals — shape of the result", () => {
       now: NOW,
     })
     expect(km(out)).toMatchObject({ target: 40, source: "plan" })
+  })
+})
+
+describe("suggestWeeklyGoals — dismissals", () => {
+  const args = {
+    goals: [goal()],
+    plans: [digest()],
+    activities: history(8, 4, 10),
+    weekStart: WEEK_START,
+    now: NOW,
+  }
+
+  it("drops an offer the runner has turned down", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: "g1" }],
+    })
+    expect(km(out)).toBeUndefined()
+    expect(sessions(out)).toBeDefined()
+  })
+
+  it("leaves the same metric from a different race alone", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: "other-goal" }],
+    })
+    expect(km(out)).toBeDefined()
+  })
+
+  it("dismisses the history suggestion by its null goal", () => {
+    const out = suggestWeeklyGoals({
+      goals: [],
+      activities: history(8, 4, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+      dismissals: [{ metric: "distance_km", source_goal_id: null }],
+    })
+    expect(km(out)).toBeUndefined()
+    // A dismissal names one metric; the other is still on offer.
+    expect(sessions(out)).toMatchObject({ source: "history" })
+  })
+
+  it("does not let a null dismissal silence a race-backed offer", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: null }],
+    })
+    expect(km(out)).toMatchObject({ sourceGoalId: "g1" })
+  })
+
+  it("stays dismissed in a different week", () => {
+    // The dismissal is keyed by what was offered, not by when. A suggestion
+    // that comes back every Monday is the app not listening.
+    const out = suggestWeeklyGoals({
+      ...args,
+      weekStart: "2026-08-17",
+      dismissals: [{ metric: "distance_km", source_goal_id: "g1" }],
+    })
+    expect(km(out)).toBeUndefined()
+  })
+})
+
+describe("detectSuggestionDrift", () => {
+  const suggestion: WeeklySuggestion = {
+    metric: "distance_km",
+    target: 48,
+    weekStart: WEEK_START,
+    source: "plan",
+    sourceGoalId: "g1",
+    reasonKey: "weeklySuggestion.reason.planDistance",
+    reasonValues: {},
+  }
+
+  function accepted(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
+    return {
+      id: "w1",
+      metric: "distance_km",
+      label: "Weekly Distance",
+      target: 44,
+        week_start: WEEK_START,
+      is_recurring: false,
+      source: "plan",
+      source_goal_id: "g1",
+      suggested_target: 44,
+      ...overrides,
+    }
+  }
+
+  it("reports a target whose plan has moved", () => {
+    const out = detectSuggestionDrift([accepted()], [suggestion])
+    expect(out).toHaveLength(1)
+    expect(out[0].suggestion.target).toBe(48)
+  })
+
+  it("says nothing when the offer is unchanged", () => {
+    const out = detectSuggestionDrift([accepted({ suggested_target: 48 })], [suggestion])
+    expect(out).toEqual([])
+  })
+
+  it("ignores a number the runner typed", () => {
+    const manual = accepted({ source: "manual", source_goal_id: null, suggested_target: null })
+    expect(detectSuggestionDrift([manual], [suggestion])).toEqual([])
+  })
+
+  it("compares against what was offered, not what was set", () => {
+    // Took the plan's 48 and decided on 52. The plan still says 48, so there
+    // is nothing to raise — adjusting a suggestion is the runner's to do.
+    const adjusted = accepted({ target: 52, suggested_target: 48 })
+    expect(detectSuggestionDrift([adjusted], [suggestion])).toEqual([])
+  })
+
+  it("does not match an offer from another race", () => {
+    const other = accepted({ source_goal_id: "g2" })
+    expect(detectSuggestionDrift([other], [suggestion])).toEqual([])
+  })
+})
+
+describe("suggestWeeklyGoals — a performance goal's sessions", () => {
+  const perf = goal({
+    id: "p1",
+    name: "Sub-50 10k",
+    goal_category: "performance",
+    target_date: "2026-10-01",
+    display_order: 2,
+  })
+
+  it("raises a history session count to what the goal asks for", () => {
+    // Two runs a week by history; the goal's settings want four.
+    const out = suggestWeeklyGoals({
+      goals: [perf],
+      preferences: { p1: { sessionsPerWeek: 4, weeklyIncreasePct: 10, blockWeeks: 4 } },
+      activities: history(8, 2, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(sessions(out)).toMatchObject({ target: 4, source: "target", sourceGoalId: "p1" })
+  })
+
+  it("leaves a higher history count alone", () => {
+    // Out five times a week already; a goal set to three must not ask for less.
+    const out = suggestWeeklyGoals({
+      goals: [perf],
+      preferences: { p1: { sessionsPerWeek: 3, weeklyIncreasePct: 10, blockWeeks: 4 } },
+      activities: history(8, 5, 8),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(sessions(out)).toMatchObject({ target: 5, source: "history" })
+  })
+
+  it("claims no volume of its own", () => {
+    // "10 km under 50 minutes" says nothing about weekly mileage, so the
+    // distance suggestion stays the runner's own history.
+    const out = suggestWeeklyGoals({
+      goals: [perf],
+      preferences: { p1: { sessionsPerWeek: 6, weeklyIncreasePct: 10, blockWeeks: 4 } },
+      activities: history(8, 2, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(km(out)).toMatchObject({ source: "history", sourceGoalId: null })
+  })
+
+  it("does not overrule a block's own session count", () => {
+    const out = suggestWeeklyGoals({
+      goals: [goal(), perf],
+      plans: [digest()],
+      preferences: { p1: { sessionsPerWeek: 6, weeklyIncreasePct: 10, blockWeeks: 4 } },
+      activities: history(8, 4, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(sessions(out)).toMatchObject({ target: 5, source: "plan" })
+  })
+})
+
+describe("selectPacesetter", () => {
+  it("is the first event goal in the drag order", () => {
+    const first = goal({ id: "a", display_order: 2 })
+    const second = goal({ id: "b", display_order: 1 })
+    expect(selectPacesetter([first, second], WEEK_START)?.id).toBe("b")
+  })
+
+  it("skips a performance goal however high it is dragged", () => {
+    const perf = goal({ id: "p", goal_category: "performance", display_order: 1 })
+    const race = goal({ id: "r", display_order: 5 })
+    expect(selectPacesetter([perf, race], WEEK_START)?.id).toBe("r")
+  })
+
+  it("is nobody when every race has been run", () => {
+    const past = goal({ target_date: "2026-01-01" })
+    expect(selectPacesetter([past], WEEK_START)).toBeNull()
+  })
+
+  it("agrees with the goal the suggestion cites", () => {
+    const a = goal({ id: "a", name: "Oslo", display_order: 1 })
+    const b = goal({ id: "b", name: "Berlin", display_order: 2 })
+    const out = suggestWeeklyGoals({
+      goals: [a, b],
+      plans: [digest({ goalId: "a" })],
+      activities: history(8, 4, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(km(out)?.sourceGoalId).toBe(selectPacesetter([a, b], WEEK_START)?.id)
+  })
+})
+
+describe("suggestWeeklyGoals — the week it is for", () => {
+  it("stamps the week on every suggestion", () => {
+    const out = suggestWeeklyGoals({
+      goals: [goal()],
+      plans: [digest()],
+      activities: history(8, 4, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+    })
+    expect(out.length).toBeGreaterThan(0)
+    expect(out.every((s) => s.weekStart === WEEK_START)).toBe(true)
+  })
+
+  it("carries next week's Monday when asked for next week", () => {
+    // What the editor writes the row against. Without it, accepting next
+    // week's number sets a target on days already run.
+    const out = suggestWeeklyGoals({
+      goals: [goal()],
+      plans: [digest()],
+      activities: history(8, 4, 10),
+      weekStart: "2026-08-17",
+      now: NOW,
+    })
+    expect(km(out)).toMatchObject({ weekStart: "2026-08-17", target: 38 })
   })
 })

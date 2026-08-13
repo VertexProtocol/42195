@@ -39,6 +39,42 @@ interface WeeklyGoalEditorProps {
   onClose: () => void
 }
 
+/**
+ * Where the saved number came from.
+ *
+ * A suggestion the runner accepts keeps what was offered alongside what they
+ * settled on, so a target they adjusted can say "adjusted from 42 km" instead
+ * of looking like a figure they invented.
+ *
+ * Changing the metric drops the provenance. A distance suggestion edited into
+ * a session target is not that suggestion any more, and leaving the source on
+ * it would have the app claim a plan prescribed a number it never mentioned.
+ */
+function provenanceFor(
+  isNew: boolean,
+  goal: WeeklyGoal | null,
+  suggestion: WeeklySuggestion | null | undefined,
+  metric: WeeklyGoalMetric,
+): Pick<WeeklyGoal, "source" | "source_goal_id" | "suggested_target"> {
+  const manual = { source: "manual", source_goal_id: null, suggested_target: null } as const
+
+  if (isNew) {
+    if (!suggestion || suggestion.metric !== metric) return manual
+    return {
+      source: suggestion.source,
+      source_goal_id: suggestion.sourceGoalId,
+      suggested_target: suggestion.target,
+    }
+  }
+
+  if (!goal || goal.metric !== metric) return manual
+  return {
+    source: goal.source ?? "manual",
+    source_goal_id: goal.source_goal_id ?? null,
+    suggested_target: goal.suggested_target ?? null,
+  }
+}
+
 export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDelete, onClose }: WeeklyGoalEditorProps) {
   const [metric, setMetric] = useState<WeeklyGoalMetric>("distance_km")
   const [target, setTarget] = useState("")
@@ -76,14 +112,17 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
   const handleSave = () => {
     if (!canSave) return
 
-    const mondayStr = weekStartStr()
+    // The week the suggestion was derived for, which is not always the week
+    // the app is standing in: a plan that covers next week can be accepted
+    // from there, and writing that target onto this week would set a number
+    // for days the runner has already run.
+    const mondayStr = suggestion?.weekStart ?? weekStartStr()
 
     const saved: WeeklyGoal = {
       id: isNew ? crypto.randomUUID() : goal!.id,
       metric,
       label: selectedOption.label,
       target: parseFloat(target),
-      current: isNew ? 0 : goal!.current,
       week_start: isNew ? mondayStr : goal!.week_start,
       is_recurring: isRecurring,
       session_min_duration_minutes: metric === "sessions" && sessionMinDuration
@@ -95,6 +134,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
       // Ordering belongs to the Plan screen, not this editor; carrying it
       // through stops an edit from jumping the goal to the top of the list.
       display_order: isNew ? undefined : goal!.display_order,
+      ...provenanceFor(isNew, goal, suggestion, metric),
     }
     onSave(saved)
   }

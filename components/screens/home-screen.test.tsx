@@ -62,7 +62,6 @@ function makeGoal(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
     metric: "distance_km",
     label: "",
     target: 10,
-    current: 0,
     week_start: mondayOfThisWeek(),
     is_recurring: true,
     ...overrides,

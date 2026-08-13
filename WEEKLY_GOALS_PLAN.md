@@ -110,7 +110,7 @@ step 2.
 
 ## Steps
 
-### Step 1 — the engine, plus the date fixes it stands on
+### Step 1 — the engine, plus the date fixes it stands on — **done**
 
 No schema change. Full value for a new runner, no migration risk.
 
@@ -134,9 +134,16 @@ No schema change. Full value for a new runner, no migration risk.
    Saturday's race for two more steps is not a defensible gap. What stays in
    step 3 is the visible half — making the drag order legible as priority.
 
-### Step 2 — suggestions as first-class objects
+### Step 2 — suggestions as first-class objects — **done**
 
-Migration `scripts/031_add_weekly_goal_source.sql`:
+Landed as `scripts/034_weekly_goal_provenance.sql` — 031 through 033 were taken
+by other work in the meantime. It differs from the sketch below in one place:
+`dismissed_at` is not a column on `weekly_goals` but its own table,
+`weekly_suggestion_dismissals`. A dismissal is keyed by the metric and the
+source goal and deliberately *not* by the week, so a row in a week-scoped table
+would have carried a `week_start` that had to be ignored and a `target` that
+meant nothing — in the one table every screen reads to find what the runner is
+working to.
 
 ```sql
 alter table public.weekly_goals
@@ -157,7 +164,7 @@ alter table public.weekly_goals
 - A regenerated plan or an applied `MidBlockCheckpoint` must not move an
   accepted target under the runner's feet — ask, don't rewrite.
 
-### Step 3 — priority and multi-goal resolution
+### Step 3 — priority and multi-goal resolution — **done**
 
 - Plan → Targets: the existing drag order becomes priority, labelled, with an
   "A" marker on the pacesetter. The engine already reads the order; nothing on
@@ -169,22 +176,37 @@ alter table public.weekly_goals
   capped at the current week today (`canGoForward`), which is right for
   history but wrong once the app can say what next week should hold.
 
-### Step 4 — the server-side week boundary
+### Step 4 — the server-side week boundary — **done**
 
-Split out because it needs a decision the other steps do not.
+Split out because it needed a decision the other steps did not.
 
-`lib/strava-sync.ts` computes the current week in **UTC** while every client
+`lib/strava-sync.ts` computed the current week in **UTC** while every client
 path computes it in **local** time. For UTC+1/+2 that is a real disagreement: a
-run at 00:30 Monday local is Sunday 23:30 UTC, so the server files it in the
-previous week and the client in the current one. It writes
-`weekly_goals.current`, which the client then overwrites with its own
-`computeWeeklyProgress`, so today it is mostly invisible — but suggestions read
-weekly volume on both sides, which makes it visible.
+run at 00:30 Monday local is Sunday 23:30 UTC, so the server filed it in the
+previous week and the client in the current one. It wrote
+`weekly_goals.current`, which the client then overwrote with its own
+`computeWeeklyProgress`.
 
-Options: store a timezone on `profiles` and use it server-side; or stop writing
-`current` from sync and treat activities as the single source of truth, which
-is what the client already does. The second is smaller and removes a redundant
-write path. Decide when the step is picked up, not before.
+The two options were: store a timezone on `profiles` and use it server-side, or
+stop writing `current` from sync and treat activities as the single source of
+truth. **The second was taken.**
+
+What decided it was reading the readers. Nothing reads the column: `app/page.tsx`
+and `use-app-data.ts` loaded it into state, and every screen that renders a
+weekly figure — Plan, Today — recomputes from the activity list instead. So the
+write was a second answer nobody asked for, and the disagreement only mattered
+*because* the write existed. Storing a timezone would have made the server agree
+with the client about a number the client never uses.
+
+The write is gone, and `current` is gone from `WeeklyGoal` and from every query
+that selected it, so the column cannot quietly come back into use. The column
+itself stays: dropping it is a migration whose only benefit is tidiness, on a
+table every screen reads.
+
+Fixes 4 and 5 below are untouched by this, and stay open. The AI plan route
+still groups activities into UTC calendar weeks; that is a server-side
+calculation with no client counterpart to disagree with, and changing it changes
+what the generator produces.
 
 ## Fixes folded in
 
