@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { syncSingleActivity, deleteSyncedActivity } from "@/lib/strava-sync"
 
@@ -44,9 +44,10 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 // POST — Incoming webhook events
 //
-// Strava sends a POST for every activity create/update/delete.
-// We respond 200 immediately — Strava requires a response within 2 seconds.
-// Actual processing happens in the background.
+// Strava sends a POST for every activity create/update/delete, and wants the
+// 200 within two seconds. The lookups needed to decide *whether* an event is
+// ours are quick and happen inline; fetching the activity is not, and runs
+// after the response via after().
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -121,17 +122,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  try {
-    if (event.aspect_type === "create" || event.aspect_type === "update") {
-      await syncSingleActivity(userId, event.object_id)
-    } else if (event.aspect_type === "delete") {
-      await deleteSyncedActivity(userId, event.object_id)
+  // Strava wants the 200 within two seconds and retries when it does not get
+  // one. This work does not fit in two seconds: syncSingleActivity refreshes
+  // the token if needed, fetches the activity, upserts it, and then recalcs
+  // every goal and shared-goal position the runner has. Awaiting it before
+  // answering — which is what this did, under a comment claiming the opposite
+  // — put the response behind all of it, and a subscription whose deliveries
+  // keep timing out is one Strava eventually deletes.
+  //
+  // after() runs it once the response is on the wire, and keeps the serverless
+  // invocation alive while it does, which returning an unawaited promise does
+  // not.
+  after(async () => {
+    try {
+      if (event.aspect_type === "create" || event.aspect_type === "update") {
+        await syncSingleActivity(userId, event.object_id)
+      } else if (event.aspect_type === "delete") {
+        await deleteSyncedActivity(userId, event.object_id)
+      }
+    } catch (err) {
+      // Logged and swallowed. The 200 has already gone, so throwing here would
+      // not reach Strava — and a retry is not wanted anyway: the next ordinary
+      // sync picks up whatever this missed.
+      console.error(
+        `Strava webhook processing error (athlete=${event.owner_id}, activity=${event.object_id}):`,
+        err,
+      )
     }
-  } catch (err) {
-    // Log but still return 200 — Strava will retry on non-2xx and we don't
-    // want retries piling up for transient errors.
-    console.error(`Strava webhook processing error (athlete=${event.owner_id}, activity=${event.object_id}):`, err)
-  }
+  })
 
   return NextResponse.json({ ok: true })
 }
