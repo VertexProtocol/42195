@@ -553,17 +553,21 @@ function renderWithPlan({
 }
 
 describe("HomeScreen — this week of the training plan", () => {
-  it("names the next session outstanding, with its distance and pace", () => {
+  it("puts every run still left in the week up to be chosen between", () => {
     const goal = makeRaceGoal({ id: "goal-1" })
     renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() } })
 
     expect(screen.getByText("Long run")).toBeTruthy()
     expect(screen.getByText("10.5 km")).toBeTruthy()
     expect(screen.getByText("6:00–6:15 /km")).toBeTruthy()
+    expect(screen.getByText("Fartlek")).toBeTruthy()
+    expect(screen.getByText("4:24–4:32 /km")).toBeTruthy()
     expect(screen.getByText("0/2 done")).toBeTruthy()
   })
 
-  it("moves on to the next session once one has been run", () => {
+  it("takes a run out of the rail once it has been done", () => {
+    // A card for a run already behind them is not something to choose
+    // between, and the count above says how many there have been.
     const goal = makeRaceGoal({ id: "goal-1" })
     renderWithPlan({
       goals: [goal],
@@ -572,7 +576,51 @@ describe("HomeScreen — this week of the training plan", () => {
     })
 
     expect(screen.getByText("Fartlek")).toBeTruthy()
+    expect(screen.queryByText("Long run")).toBeNull()
     expect(screen.getByText("1/2 done")).toBeTruthy()
+  })
+
+  it("takes a skipped run out of the rail too", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({
+      goals: [goal],
+      planWeeks: { "goal-1": makePlanWeek() },
+      statuses: { "goal-1": { "W2-1": "skipped" } },
+    })
+
+    expect(screen.getByText("Long run")).toBeTruthy()
+    expect(screen.queryByText("Fartlek")).toBeNull()
+  })
+
+  it("swipes rather than stacks when there is more than one run left", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() } })
+    expect(screen.getByRole("group", { name: "Left this week" })).toBeTruthy()
+  })
+
+  it("does not make a carousel out of a single remaining run", () => {
+    // A rail of one is a lie, the same as it is for the pinned goals.
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({
+      goals: [goal],
+      planWeeks: { "goal-1": makePlanWeek() },
+      statuses: { "goal-1": { "W2-1": "skipped" } },
+    })
+    expect(screen.queryByRole("group", { name: "Left this week" })).toBeNull()
+  })
+
+  it("changes nothing when a session card is tapped", () => {
+    // Choosing is done with your legs. Ticking off belongs after the run, on
+    // the screen that holds the week — a tap-to-complete on a surface you
+    // swipe would fire on the drag.
+    const goal = makeRaceGoal({ id: "goal-1" })
+    const onViewGoal = vi.fn()
+    renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() }, onViewGoal })
+
+    fireEvent.click(screen.getByText("Long run"))
+    expect(onViewGoal).toHaveBeenCalledWith(goal)
+    // Still there, still outstanding.
+    expect(screen.getByText("0/2 done")).toBeTruthy()
   })
 
   it("counts a skipped session as answered for", () => {

@@ -10,7 +10,7 @@ import { GoalsScreen, type GoalTab } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
-import { GetStartedSheet } from "@/components/get-started"
+import { GetStartedDialog } from "@/components/get-started"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import { useGetStarted } from "@/hooks/use-get-started"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
@@ -523,10 +523,11 @@ export function AppShell({ initialData }: AppShellProps) {
         onClose={handleCloseWeeklyEditor}
       />
 
-      {/* First run. A sheet over the app rather than a section inside Today,
-          so the screen the runner opens before a run is the app from the
-          first load rather than a setup list with the app underneath. */}
-      <GetStartedSheet
+      {/* First run. Small prompts over the app rather than a section inside
+          Today, so the screen the runner opens before a run is the app from
+          the first load rather than a setup list with the app underneath —
+          and one question at a time rather than everything the app wants. */}
+      <GetStartedDialog
         open={getStarted.visible && !guideClosed}
         steps={getStarted.steps}
         progress={getStarted.progress}

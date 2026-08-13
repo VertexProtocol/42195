@@ -146,20 +146,73 @@ function WeeklyGoalLap({
 }
 
 /**
- * This week of the training plan, as one line.
+ * Which card of a horizontal snap rail is under the left edge.
  *
- * The plan lives on the goal's screen and always will — this is the smallest
- * true thing that answers "what am I doing today" without going there. One
- * session, its distance and its pace target, over a line showing how much of
- * the week is behind them.
- *
- * The session shown is the next one outstanding, not "today's". A plan week is
- * a set of sessions and a volume; it does not name days, because the runner
- * arranges them around their own life. Dealing them out across the week to
- * produce a "today" would be the app inventing a commitment the plan never
- * made.
+ * Two rails on this screen now — the pinned goals and the week's sessions —
+ * and the position dots under each need the same answer. Measured from the
+ * DOM rather than tracked as scroll maths, because the cards are sized in
+ * percentages and the gap is in rems.
  */
-function PlanWeekCard({
+function useSnapRail() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [index, setIndex] = useState(0)
+
+  const onScroll = useCallback(() => {
+    const rail = ref.current
+    if (!rail) return
+    const left = rail.getBoundingClientRect().left
+    let nearest = 0
+    let best = Infinity
+    Array.from(rail.children).forEach((child, i) => {
+      const distance = Math.abs(child.getBoundingClientRect().left - left)
+      if (distance < best) {
+        best = distance
+        nearest = i
+      }
+    })
+    setIndex(nearest)
+  }, [])
+
+  return { ref, index, onScroll }
+}
+
+/** The position dots under a rail. */
+function RailDots({ count, index }: { count: number; index: number }) {
+  return (
+    // Position, not navigation: the cards peek past the edge, and tapping a
+    // dot would be a second way to do what the swipe already does.
+    <div className="flex justify-center gap-1.5 pt-1" aria-hidden>
+      {Array.from({ length: count }, (_, i) => (
+        <span
+          key={i}
+          className={`size-1.5 rounded-full ${i === index ? "bg-primary" : "bg-border"}`}
+          style={{ transition: "background-color var(--dur-state) var(--ease-out)" }}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * This week of the training plan, as the runs still left in it.
+ *
+ * The plan lives on the goal's screen and always will. What belongs here is
+ * the decision the countdown leads to: of the runs this week is made of, which
+ * one am I going out for now. So they are a rail — one card each, swiped
+ * through — rather than a single "next up", which answered a question the plan
+ * had not been asked. A plan week is a set of sessions and a volume; it names
+ * no days, because the runner arranges them around their own life, and picking
+ * one for them would be the app inventing a commitment the plan never made.
+ *
+ * Only the outstanding ones are in the rail. A card for a run already done is
+ * not something to choose between, and the count above says how many there
+ * have been.
+ *
+ * Nothing in the rail changes anything. Choosing is done with your legs, and
+ * ticking a session off belongs after the run, on the screen that holds the
+ * week — a tap-to-complete on a surface you swipe would fire on the drag.
+ */
+function PlanWeekRail({
   week,
   activities,
   statuses,
@@ -181,6 +234,14 @@ function PlanWeekCard({
     [week, activities, statuses],
   )
 
+  const outstanding = useMemo(
+    () => week.sessions.filter((_, i) => progress.statuses[i] === "planned"),
+    [week.sessions, progress.statuses],
+  )
+
+  const { ref: railRef, index: railIndex, onScroll: onRailScroll } = useSnapRail()
+  const isRail = outstanding.length > 1
+
   // Skipped counts as settled, the same as it does in the plan's own week
   // header: the runner has answered for it, so it is not still ahead of them.
   const settled = progress.done + progress.skipped
@@ -193,72 +254,94 @@ function PlanWeekCard({
         hint={showGoalName ? goalName : undefined}
         action={<SectionAction onClick={onOpen}>{t("home.planSeeWeek")}</SectionAction>}
       />
-      <AppCard variant="rows">
-        <button onClick={onOpen} className="press flex w-full flex-col gap-3 p-4 text-left">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-micro font-semibold text-primary">
-              {t("home.planWeek", { week: week.weekNumber })}
-              {week.theme ? ` · ${week.theme}` : ""}
-            </span>
-            <span className="measure shrink-0 text-micro text-muted-foreground">
-              {t("home.planSessionsDone", { done: progress.done, total: progress.total })}
-              {progress.skipped > 0
-                ? ` · ${t("home.planSessionsSkipped", { skipped: progress.skipped })}`
-                : ""}
-            </span>
-          </div>
 
-          {progress.next ? (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-micro text-muted-foreground">{t("home.planNextUp")}</span>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-lead font-semibold text-card-foreground">
-                  {progress.next.type}
-                </span>
-                <span className="measure shrink-0 text-label font-semibold text-primary">
-                  {progress.next.distance}
-                </span>
-              </div>
-              {/* The pace target when there is one — hill repeats have none,
-                  because uphill pace is set by the hill and not by fitness. */}
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="line-clamp-1 text-micro text-muted-foreground">
-                  {progress.next.effort}
-                </p>
-                {progress.next.suggestedPace && (
-                  <span className="measure shrink-0 text-micro text-primary/70">
-                    {progress.next.suggestedPace}
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-label font-semibold text-card-foreground">
-                {t("home.planWeekSettled")}
-              </span>
-              <p className="text-micro text-muted-foreground">{t("home.planWeekSettledBody")}</p>
-            </div>
-          )}
-
-          {/* The week as one line. A lane would say the same thing, but the
-              lanes on this screen belong to the weekly targets, and two round
-              marks measuring different weeks would read as one pair. */}
+      {/* The week's own line: which week of the block, and how much of it is
+          behind them. Not in a card — the cards below are the content, and a
+          card around the lot would be a card holding cards. */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-micro font-semibold text-primary">
+            {t("home.planWeek", { week: week.weekNumber })}
+            {week.theme ? ` · ${week.theme}` : ""}
+          </span>
+          <span className="measure shrink-0 text-micro text-muted-foreground">
+            {t("home.planSessionsDone", { done: progress.done, total: progress.total })}
+            {progress.skipped > 0
+              ? ` · ${t("home.planSessionsSkipped", { skipped: progress.skipped })}`
+              : ""}
+          </span>
+        </div>
+        <div
+          className="h-1 overflow-hidden rounded-full bg-surface-sunken"
+          role="img"
+          aria-label={t("home.planSessionsDone", { done: progress.done, total: progress.total })}
+        >
           <div
-            className="h-1 overflow-hidden rounded-full bg-surface-sunken"
-            role="img"
-            aria-label={t("home.planSessionsDone", {
-              done: progress.done,
-              total: progress.total,
-            })}
+            className={`h-full rounded-full ${outstanding.length > 0 ? "bg-primary" : "bg-success"}`}
+            style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
+          />
+        </div>
+      </div>
+
+      {outstanding.length === 0 ? (
+        <AppCard>
+          <p className="text-label font-semibold text-card-foreground">
+            {t("home.planWeekSettled")}
+          </p>
+          <p className="mt-0.5 text-micro text-muted-foreground">
+            {t("home.planWeekSettledBody")}
+          </p>
+        </AppCard>
+      ) : (
+        <>
+          <div
+            ref={railRef}
+            onScroll={isRail ? onRailScroll : undefined}
+            role={isRail ? "group" : undefined}
+            aria-label={isRail ? t("home.planOutstanding") : undefined}
+            className={
+              isRail
+                ? "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1"
+                : "flex flex-col"
+            }
           >
-            <div
-              className={`h-full rounded-full ${progress.next ? "bg-primary" : "bg-success"}`}
-              style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
-            />
+            {outstanding.map((session, i) => (
+              <div key={i} className={isRail ? "w-[78%] shrink-0 snap-start" : undefined}>
+                <button
+                  onClick={onOpen}
+                  // `h-full` so two cards side by side end level even when one
+                  // has a longer effort line than the other.
+                  className="press surface flex h-full w-full flex-col p-4 text-left"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-lead font-semibold text-card-foreground">
+                      {session.type}
+                    </span>
+                    <span className="measure shrink-0 text-label font-semibold text-primary">
+                      {session.distance}
+                    </span>
+                  </div>
+
+                  {/* The pace target when there is one — hill repeats have
+                      none, because uphill pace is set by the hill and not by
+                      fitness. */}
+                  {session.suggestedPace && (
+                    <span className="measure mt-1 text-micro text-primary/70">
+                      {session.suggestedPace}
+                    </span>
+                  )}
+
+                  <p className="mt-1.5 line-clamp-3 text-micro leading-relaxed text-muted-foreground">
+                    {session.effort}
+                  </p>
+                </button>
+              </div>
+            ))}
           </div>
-        </button>
-      </AppCard>
+
+          {isRail && <RailDots count={outstanding.length} index={railIndex} />}
+        </>
+      )}
     </Section>
   )
 }
@@ -395,24 +478,11 @@ export function HomeScreen({
   // runner pins a second goal to compare it with the first, not to scroll past
   // it. One goal keeps the plain card — a carousel of one is a lie.
   const isGoalRail = starredGoals.length > 1
-  const railRef = useRef<HTMLDivElement>(null)
-  const [railIndex, setRailIndex] = useState(0)
-
-  const handleRailScroll = useCallback(() => {
-    const rail = railRef.current
-    if (!rail) return
-    const left = rail.getBoundingClientRect().left
-    let nearest = 0
-    let best = Infinity
-    Array.from(rail.children).forEach((child, i) => {
-      const distance = Math.abs(child.getBoundingClientRect().left - left)
-      if (distance < best) {
-        best = distance
-        nearest = i
-      }
-    })
-    setRailIndex(nearest)
-  }, [])
+  const {
+    ref: goalRailRef,
+    index: goalRailIndex,
+    onScroll: onGoalRailScroll,
+  } = useSnapRail()
 
   // Every weekly goal is one lane, in one row, in the order the runner put
   // them in. There is no longer a split between goals that fit a stat column
@@ -465,8 +535,8 @@ export function HomeScreen({
             }
           />
           <div
-            ref={railRef}
-            onScroll={isGoalRail ? handleRailScroll : undefined}
+            ref={goalRailRef}
+            onScroll={isGoalRail ? onGoalRailScroll : undefined}
             role={isGoalRail ? "group" : undefined}
             aria-label={isGoalRail ? t("home.activeGoals") : undefined}
             className={
@@ -594,22 +664,7 @@ export function HomeScreen({
             })}
           </div>
 
-          {isGoalRail && (
-            // Position, not navigation: the cards peek past the edge, and the
-            // count is already in the section header. Tapping a dot would be a
-            // second way to do what the swipe already does.
-            <div className="flex justify-center gap-1.5 pt-1" aria-hidden>
-              {orderedGoals.map((goal, i) => (
-                <span
-                  key={goal.id}
-                  className={`size-1.5 rounded-full ${
-                    i === railIndex ? "bg-primary" : "bg-border"
-                  }`}
-                  style={{ transition: "background-color var(--dur-state) var(--ease-out)" }}
-                />
-              ))}
-            </div>
-          )}
+          {isGoalRail && <RailDots count={orderedGoals.length} index={goalRailIndex} />}
         </Section>
       ) : (
         <EmptyState
@@ -628,7 +683,7 @@ export function HomeScreen({
           countdown leads to. Everything below this point is a report on what
           has already happened. */}
       {leadGoal && leadPlanWeek && (
-        <PlanWeekCard
+        <PlanWeekRail
           week={leadPlanWeek}
           activities={activities}
           statuses={planSessionStatuses?.[leadGoal.id] ?? {}}

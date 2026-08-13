@@ -142,6 +142,7 @@ hand-rolls a button, an input or a card.
 | `Button` | one shape, one press response, every state incl. `loading` |
 | `Input` | a sunken well, 16px text, accent caret |
 | `BottomSheet` | the one editing surface, on the dialog primitive |
+| `PromptDialog` | a small centred window that asks one thing and leaves |
 | `ProgressLap` | the mark filled to a value; the single authored motion moment |
 | `AppBar` / `TabBar` | the persistent chrome |
 | `AuthShell` / `AuthError` / `Field` | the signed-out frame |
@@ -225,7 +226,10 @@ Category defaults this world does not use:
 - Cream or beige as the page ground.
 - Cards nested inside cards; a stack of one-card-per-row lists.
 - A hairline border under a wide diffuse shadow (the ghost card).
-- Glass or backdrop blur as decoration.
+- Glass or backdrop blur as decoration. A modal scrim is the exception and the
+  only one: the page behind a prompt has stopped being content, and putting it
+  out of focus is what says so. It sits on top of the dark scrim rather than
+  instead of it, so contrast never rests on the blur.
 - Icon tiles stacked above headings.
 - Coloured side stripes on cards, callouts or alerts.
 - Gradient text; glow shadows; radial background halos.
