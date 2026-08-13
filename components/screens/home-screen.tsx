@@ -305,6 +305,27 @@ function RailDotsVertical({ count, index }: { count: number; index: number }) {
 const PLAN_PAGE_HEIGHT = "7.75rem"
 
 /**
+ * The clear air above and below the settled page.
+ *
+ * A scroller with no gutter cuts its content on a hard line: the card's shadow
+ * is sheared off at the boundary, and the page arriving behind it appears from
+ * a straight edge with nothing to soften it. The gutter is where that edge
+ * goes instead — the card sits inside it at rest, and the mask below dissolves
+ * exactly this band, so a page leaves by fading out rather than by being
+ * sliced.
+ *
+ * `scroll-padding` matches it, so snapping still lands the page against the
+ * top of the clear air rather than the top of the box.
+ */
+const PLAN_RAIL_GUTTER = "0.625rem"
+
+/** Fades the gutter at each end, leaving the settled page untouched. */
+const PLAN_RAIL_MASK = `linear-gradient(to bottom, transparent 0, #000 ${PLAN_RAIL_GUTTER}, #000 calc(100% - ${PLAN_RAIL_GUTTER}), transparent 100%)`
+
+/** The same, across, for the rail of sessions inside a page. */
+const PLAN_RAIL_MASK_X = `linear-gradient(to right, transparent 0, #000 ${PLAN_RAIL_GUTTER}, #000 calc(100% - ${PLAN_RAIL_GUTTER}), transparent 100%)`
+
+/**
  * One race's training week: the runs still left in it, side by side.
  *
  * The plan lives on the goal's screen and always will. What belongs here is
@@ -390,6 +411,20 @@ function PlanSessionRail({
               // enough that the next one peeks anyway.
               "flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto"
             : "flex min-h-0 flex-1 flex-col"
+        }
+        // Same clear air as the vertical rail, on the other axis: a card
+        // leaving the right-hand edge fades into the gutter rather than being
+        // cut down its side.
+        style={
+          isRail
+            ? {
+                paddingInline: PLAN_RAIL_GUTTER,
+                marginInline: `calc(${PLAN_RAIL_GUTTER} * -1)`,
+                scrollPaddingInline: PLAN_RAIL_GUTTER,
+                maskImage: PLAN_RAIL_MASK_X,
+                WebkitMaskImage: PLAN_RAIL_MASK_X,
+              }
+            : undefined
         }
       >
         {page.outstanding.map((session, i) => (
@@ -567,7 +602,11 @@ function PlanSection({
         </div>
       </div>
 
-      <div className="relative">
+      {/* The focus ring belongs out here rather than on the scroller: the mask
+          that softens the scroller's ends would fade the ring along with the
+          content, and a focus indicator that dissolves at both ends is not
+          one. `-m-1 p-1` is the room it needs to sit outside the rail. */}
+      <div className="relative -m-1 rounded-md p-1 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
         <div
           ref={railRef}
           onScroll={isPaged ? onRailScroll : undefined}
@@ -576,12 +615,19 @@ function PlanSection({
           tabIndex={isPaged ? 0 : undefined}
           role={isPaged ? "group" : undefined}
           aria-label={isPaged ? t("home.planRaces", { count: pages.length }) : undefined}
-          className={
+          className={isPaged ? "snap-y snap-mandatory overflow-y-auto pr-5 outline-none" : undefined}
+          style={
             isPaged
-              ? "snap-y snap-mandatory overflow-y-auto rounded-sm pr-5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              ? {
+                  // The window is a page plus its clear air at each end.
+                  height: `calc(${PLAN_PAGE_HEIGHT} + ${PLAN_RAIL_GUTTER} * 2)`,
+                  paddingBlock: PLAN_RAIL_GUTTER,
+                  scrollPaddingBlock: PLAN_RAIL_GUTTER,
+                  maskImage: PLAN_RAIL_MASK,
+                  WebkitMaskImage: PLAN_RAIL_MASK,
+                }
               : undefined
           }
-          style={isPaged ? { height: PLAN_PAGE_HEIGHT } : undefined}
         >
           {pages.map((page) => (
             <div
