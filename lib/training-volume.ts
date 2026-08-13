@@ -16,11 +16,19 @@
 
 import {
   checkCumulativeProgression,
+  computeRecentWeeklyVolumes,
   type AcwrSafety,
   type ProlongedFatigueResult,
 } from "@/lib/training-safety"
-import { MAX_WEEKLY_INCREASE, type AthleteLevel } from "@/lib/training-safety-client"
-import { RECOVERY_WEEK_THRESHOLD } from "@/lib/training-constants"
+import {
+  MAX_WEEKLY_INCREASE,
+  type AthleteLevel,
+  type SafetyActivity,
+} from "@/lib/training-safety-client"
+import {
+  FITNESS_ANALYSIS_WEEKS,
+  RECOVERY_WEEK_THRESHOLD,
+} from "@/lib/training-constants"
 import type { ComebackRecommendation } from "@/lib/training-comeback"
 
 /** Fraction of the previous week's volume that the closing recovery week gets. */
@@ -37,6 +45,72 @@ const DEFAULT_BASELINE_KM = 15
 
 /** Ceiling on the baseline, as a multiple of the runner's current average. */
 const MAX_WEEK_MULTIPLE_OF_BASELINE = 1.5
+
+/** Weeks of history the peak-volume floor looks back over. */
+const PEAK_LOOKBACK_WEEKS = 12
+
+/**
+ * Fraction of the runner's peak four-week average that acts as a floor under
+ * the recent average. Without it, each regeneration starts from the taper the
+ * last one ended in, and the plan ratchets down while the runner's fitness
+ * does not.
+ */
+const PEAK_FLOOR_FRACTION = 0.85
+
+export interface VolumeBaseline {
+  /** The weekly volume a new block should build from (km). */
+  avgWeeklyKm: number
+  /** Longest single run in the lookback window (km). */
+  longestRecentRun: number
+  /** Weeks in the lookback window that contained at least one run. */
+  activeWeeks: number
+}
+
+/**
+ * What the runner has actually been doing, as the two numbers
+ * `computeWeeklyTargets` needs to start from.
+ *
+ * Measured in rolling seven-day windows back from `now`, not calendar weeks.
+ * A calendar-week version counts the current partial week as a whole one, so
+ * the same runner gets a lower baseline on Tuesday than on Sunday — and
+ * regenerating a plan mid-week quietly asks for less than the week before.
+ *
+ * `app/api/ai/training-plan/route.ts` still computes its own baseline from
+ * UTC calendar weeks. The two agree within a kilometre or so for a runner with
+ * steady volume and diverge mid-week; unifying them changes what the AI plan
+ * generator produces, so it is deliberately not done here. See
+ * WEEKLY_GOALS_PLAN.md.
+ */
+export function computeVolumeBaseline(
+  activities: SafetyActivity[],
+  now: Date = new Date(),
+): VolumeBaseline {
+  const weeks = computeRecentWeeklyVolumes(activities, PEAK_LOOKBACK_WEEKS, now)
+  const recent = weeks.slice(-FITNESS_ANALYSIS_WEEKS)
+  const recentAvg =
+    recent.length > 0 ? recent.reduce((s, km) => s + km, 0) / recent.length : 0
+
+  let peakFourWeekAvg = recentAvg
+  for (let i = 0; i + FITNESS_ANALYSIS_WEEKS <= weeks.length; i++) {
+    const window = weeks.slice(i, i + FITNESS_ANALYSIS_WEEKS)
+    const avg = window.reduce((s, km) => s + km, 0) / FITNESS_ANALYSIS_WEEKS
+    if (avg > peakFourWeekAvg) peakFourWeekAvg = avg
+  }
+
+  const lookbackStart =
+    now.getTime() - PEAK_LOOKBACK_WEEKS * 7 * 24 * 60 * 60 * 1000
+  const longestRecentRun = activities.reduce((max, a) => {
+    const t = new Date(a.date).getTime()
+    if (t < lookbackStart || t > now.getTime()) return max
+    return Math.max(max, a.distance_km)
+  }, 0)
+
+  return {
+    avgWeeklyKm: Math.max(recentAvg, peakFourWeekAvg * PEAK_FLOOR_FRACTION),
+    longestRecentRun,
+    activeWeeks: weeks.filter((km) => km > 0).length,
+  }
+}
 
 export interface WeeklyTargetInputs {
   /** The runner's current rolling weekly average (km) */

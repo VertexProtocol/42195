@@ -8,6 +8,12 @@ import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile 
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
 import type { Warning } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
+import {
+  derivePlanDigests,
+  type GoalPlanningPrefs,
+  type PlanDigest,
+  type PlanDigestRow,
+} from "@/lib/weekly-suggestions"
 import type { SharedGoalSummary } from "@/app/api/shared-goals/route"
 import { logError } from "@/lib/log"
 
@@ -30,6 +36,10 @@ export interface InitialData {
   warnings: Warning[]
   /** Plan badges keyed by goal id, derived during the page render. */
   planBadges: Record<string, PlanBadge>
+  /** Stripped block weeks per goal, for the weekly targets Plan suggests. */
+  planDigests: PlanDigest[]
+  /** Planning settings by goal id, for the same. */
+  goalPrefs: Record<string, GoalPlanningPrefs>
   /** The group each goal belongs to, keyed by goal id. */
   sharedGoals: Record<string, SharedGoalSummary>
   stravaConnected: boolean
@@ -69,6 +79,15 @@ export function useAppData(initialData?: InitialData | null) {
   const [planBadges, setPlanBadges] = useState<Record<string, PlanBadge>>(
     initialData?.planBadges ?? {},
   )
+  // Seeded and refreshed alongside the badges — both are read from the same
+  // plan rows, and a suggestion built on a block the runner has just
+  // regenerated has to describe the new block, not the one it replaced.
+  const [planDigests, setPlanDigests] = useState<PlanDigest[]>(
+    initialData?.planDigests ?? [],
+  )
+  const [goalPrefs] = useState<Record<string, GoalPlanningPrefs>>(
+    initialData?.goalPrefs ?? {},
+  )
 
   // "Get started" checklist: dismissal belongs to the account, not the tab.
   const [onboardingDismissed, setOnboardingDismissedState] = useState(
@@ -93,7 +112,9 @@ export function useAppData(initialData?: InitialData | null) {
     const { data } = await supabase
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-    if (data) setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+    if (!data) return
+    setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+    setPlanDigests(derivePlanDigests(data as PlanDigestRow[]))
   }, [])
 
   /** Called when a group is created, joined or left — not on every visit. */
@@ -890,6 +911,8 @@ export function useAppData(initialData?: InitialData | null) {
     setTestRunTag,
     warnings,
     planBadges,
+    planDigests,
+    goalPrefs,
     refreshPlanBadges,
     sharedGoals,
     refreshSharedGoals,

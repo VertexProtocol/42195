@@ -208,3 +208,161 @@ describe("GoalsScreen — weekly cards keep their metric icon", () => {
     }
   })
 })
+
+/**
+ * The suggested weekly targets on Plan → Weekly.
+ *
+ * The screen derives them itself from the goals, the plan digests and the
+ * activities it is already holding, so these tests drive the real engine
+ * rather than a stub of it.
+ */
+
+function makeRun(daysAgo: number, km: number): Activity {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  return {
+    id: crypto.randomUUID(),
+    user_id: "user-1",
+    strava_id: null,
+    type: "Run",
+    name: "Run",
+    date: d.toISOString(),
+    distance_km: km,
+    duration_seconds: Math.round(km * 330),
+    pace_min_per_km: 5.5,
+    elevation_gain_m: 20,
+    avg_heart_rate: 150,
+    avg_cadence: null,
+    calories: null,
+    created_at: d.toISOString(),
+  }
+}
+
+/** Four runs a week for the last six weeks. */
+function steadyHistory(kmEach = 10): Activity[] {
+  const out: Activity[] = []
+  for (let w = 0; w < 6; w++) {
+    for (let r = 1; r <= 4; r++) out.push(makeRun(w * 7 + r, kmEach))
+  }
+  return out
+}
+
+function mondayThisWeek(): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -6 : 1 - d.getDay()))
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function renderSuggestions(props: Partial<React.ComponentProps<typeof GoalsScreen>> = {}) {
+  const result = render(
+    <I18nProvider>
+      <GoalsScreen
+        goals={[]}
+        activities={steadyHistory()}
+        weeklyGoals={[]}
+        onToggleActive={() => {}}
+        onToggleStar={() => {}}
+        onEditGoal={() => {}}
+        onAddGoal={() => {}}
+        onEditWeeklyGoal={() => {}}
+        onAddWeeklyGoal={() => {}}
+        onSelectGoal={() => {}}
+        onReorderGoals={async () => {}}
+        onReorderWeeklyGoals={async () => {}}
+        initialTab="weekly"
+        {...props}
+      />
+    </I18nProvider>,
+  )
+  return result
+}
+
+describe("GoalsScreen — suggested weekly targets", () => {
+  it("offers a target to a runner who has set none", () => {
+    renderSuggestions()
+    expect(screen.getAllByRole("button", { name: "Use this" }).length).toBeGreaterThan(0)
+  })
+
+  it("explains where the number came from", () => {
+    renderSuggestions()
+    expect(screen.getByText(/last 4 weeks averaged/i)).toBeTruthy()
+  })
+
+  it("passes the suggestion to the editor when it is taken up", () => {
+    let received: unknown = "not called"
+    renderSuggestions({ onAddWeeklyGoal: (s) => { received = s } })
+    fireEvent.click(screen.getAllByRole("button", { name: "Use this" })[0])
+    expect(received).toMatchObject({ metric: "distance_km", source: "history" })
+  })
+
+  it("opens the editor with nothing prefilled from the plain add button", () => {
+    let received: unknown = "not called"
+    renderSuggestions({ onAddWeeklyGoal: (s) => { received = s } })
+    fireEvent.click(screen.getByRole("button", { name: /add weekly goal/i }))
+    expect(received).toBeUndefined()
+  })
+
+  it("stops offering a metric the runner has already set", () => {
+    const weekStart = mondayThisWeek()
+    renderSuggestions({
+      weeklyGoals: [
+        {
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 45,
+          current: 0,
+          week_start: weekStart,
+          is_recurring: false,
+          display_order: 1,
+        } as WeeklyGoal,
+      ],
+    })
+    const offered = screen.getAllByRole("button", { name: "Use this" })
+    expect(offered).toHaveLength(1) // sessions only
+    expect(screen.getByText("Suggested for this week")).toBeTruthy()
+  })
+
+  it("says nothing at all once every metric is covered", () => {
+    const weekStart = mondayThisWeek()
+    const base = { current: 0, week_start: weekStart, is_recurring: false }
+    renderSuggestions({
+      weeklyGoals: [
+        { id: "a", metric: "distance_km", label: "Weekly Distance", target: 45, display_order: 1, ...base },
+        { id: "b", metric: "sessions", label: "Training Sessions", target: 4, display_order: 2, ...base },
+      ] as WeeklyGoal[],
+    })
+    expect(screen.queryByRole("button", { name: "Use this" })).toBeNull()
+    expect(screen.queryByText("Suggested for this week")).toBeNull()
+  })
+
+  it("prefers a race's plan over the runner's history", () => {
+    const race = makeGoal({
+      goal_category: "event_training",
+      name: "Oslo Marathon",
+      target_date: daysFromNow(120),
+      start_date: daysFromNow(-30),
+    })
+    renderSuggestions({
+      goals: [race],
+      planDigests: [
+        {
+          goalId: race.id,
+          blockStartDate: mondayThisWeek(),
+          weeks: [{ targetKm: 52, sessionCount: 5 }],
+        },
+      ],
+    })
+    expect(screen.getByText("52 km")).toBeTruthy()
+    // Distance and sessions both come from the same block week, so both cite it.
+    expect(screen.getAllByText(/Week 1 of your plan for Oslo Marathon/)).toHaveLength(2)
+  })
+
+  it("does not suggest for a week that has already gone", () => {
+    renderSuggestions()
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.queryByRole("button", { name: "Use this" })).toBeNull()
+  })
+})

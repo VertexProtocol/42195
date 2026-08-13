@@ -45,6 +45,7 @@ import type {
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
+import { mondayOf } from "@/lib/week"
 import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 // Shared with the server so a session reads as the same distance on both sides.
 // The client used to take the midpoint of a range where the server took the
@@ -632,16 +633,6 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 // ---- Session status type ----
 type SessionStatus = "planned" | "completed" | "skipped"
 
-/** Snap a date to the Monday of its ISO week (Mon=start of week) */
-function toMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
-  const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
-  const diff = day === 0 ? -6 : 1 - day // shift Sun→prev Mon, others→current Mon
-  d.setDate(d.getDate() + diff)
-  return d
-}
-
 /**
  * Auto-match activities to planned sessions for a given week.
  * Builds all valid (session, activity) pairs sorted by distance delta,
@@ -1184,7 +1175,7 @@ export function GoalDetailScreen({
     if (!aiPlan) return {} as Record<string, SessionStatus>
     const result: Record<string, SessionStatus> = {}
     // Snap block start to Monday so weeks align with calendar weeks
-    const blockMonday = toMonday(new Date(aiPlan.block_start_date))
+    const blockMonday = mondayOf(new Date(aiPlan.block_start_date))
     for (let i = 0; i < aiPlan.plan.weeks.length; i++) {
       const week = aiPlan.plan.weeks[i]
       const weekStart = new Date(blockMonday)
@@ -1376,7 +1367,7 @@ export function GoalDetailScreen({
   // Which week of the plan are we currently in? (Monday-aligned)
   const currentWeekIndex = aiPlan
     ? Math.floor(
-        (Date.now() - toMonday(new Date(aiPlan.block_start_date)).getTime()) / (7 * 24 * 60 * 60 * 1000)
+        (Date.now() - mondayOf(new Date(aiPlan.block_start_date)).getTime()) / (7 * 24 * 60 * 60 * 1000)
       )
     : -1
 
@@ -1436,7 +1427,7 @@ export function GoalDetailScreen({
   // Pre-compute actual km per plan week for skip-load detection
   const weeklyActualKm = useMemo(() => {
     if (!aiPlan) return []
-    const blockMonday = toMonday(new Date(aiPlan.block_start_date))
+    const blockMonday = mondayOf(new Date(aiPlan.block_start_date))
     return aiPlan.plan.weeks.map((_, i) => {
       const weekStart = new Date(blockMonday)
       weekStart.setDate(weekStart.getDate() + i * 7)
@@ -1731,7 +1722,7 @@ export function GoalDetailScreen({
 
             {/* Weekly blocks */}
             {aiPlan.plan.weeks.map((week, i) => {
-              const weekStart = toMonday(new Date(aiPlan.block_start_date))
+              const weekStart = mondayOf(new Date(aiPlan.block_start_date))
               weekStart.setDate(weekStart.getDate() + i * 7)
               const weekEnd = new Date(weekStart)
               weekEnd.setDate(weekEnd.getDate() + 7)

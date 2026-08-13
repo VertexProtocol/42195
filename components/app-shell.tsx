@@ -14,6 +14,7 @@ import { GetStarted } from "@/components/get-started"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import { useGetStarted } from "@/hooks/use-get-started"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
+import type { WeeklySuggestion } from "@/lib/weekly-suggestions"
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
 
@@ -115,6 +116,9 @@ export function AppShell({ initialData }: AppShellProps) {
   const [editingWeeklyGoal, setEditingWeeklyGoal] = useState<WeeklyGoal | null>(null)
   const [isWeeklyEditorOpen, setIsWeeklyEditorOpen] = useState(false)
   const [isNewWeeklyGoal, setIsNewWeeklyGoal] = useState(false)
+  // The suggestion the editor was opened from, so it can prefill and say
+  // where the number came from. Cleared whenever an existing goal is edited.
+  const [pendingSuggestion, setPendingSuggestion] = useState<WeeklySuggestion | null>(null)
   const [isManualActivityOpen, setIsManualActivityOpen] = useState(false)
   // An invite held aside while its recipient makes the goal to bring to it.
   // Kept out of the URL for the duration so the sheet is not on screen behind
@@ -250,12 +254,14 @@ export function AppShell({ initialData }: AppShellProps) {
 
   const handleEditWeeklyGoal = useCallback((goal: WeeklyGoal) => {
     setEditingWeeklyGoal(goal)
+    setPendingSuggestion(null)
     setIsNewWeeklyGoal(false)
     setIsWeeklyEditorOpen(true)
   }, [])
 
-  const handleAddWeeklyGoal = useCallback(() => {
+  const handleAddWeeklyGoal = useCallback((suggestion?: WeeklySuggestion) => {
     setEditingWeeklyGoal(null)
+    setPendingSuggestion(suggestion ?? null)
     setIsNewWeeklyGoal(true)
     setIsWeeklyEditorOpen(true)
   }, [])
@@ -441,6 +447,8 @@ export function AppShell({ initialData }: AppShellProps) {
             onSelectGoal={handleSelectGoal}
             onReorderGoals={data.reorderGoals}
             onReorderWeeklyGoals={data.reorderWeeklyGoals}
+            planDigests={data.planDigests}
+            goalPrefs={data.goalPrefs}
             initialTab={planTab}
           />
         )}
@@ -523,6 +531,7 @@ export function AppShell({ initialData }: AppShellProps) {
         goal={editingWeeklyGoal}
         isNew={isNewWeeklyGoal}
         open={isWeeklyEditorOpen}
+        suggestion={pendingSuggestion}
         onSave={handleSaveWeeklyGoal}
         onDelete={handleDeleteWeeklyGoal}
         onClose={handleCloseWeeklyEditor}

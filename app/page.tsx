@@ -11,6 +11,11 @@ import {
   type WarningState,
 } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadgeRow } from "@/lib/plan-badges"
+import {
+  derivePlanDigests,
+  type GoalPlanningPrefs,
+  type PlanDigestRow,
+} from "@/lib/weekly-suggestions"
 import { RUN_TYPES } from "@/lib/training-constants"
 import { initialOf, type SharedGoalSummary } from "@/app/api/shared-goals/route"
 
@@ -30,7 +35,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sharedRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, goalPrefsRes, sharedRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -54,6 +59,14 @@ export default async function Page() {
       supabase
         .from("ai_training_plans")
         .select("goal_id, block_start_date, plan, mid_block_checkpoint")
+        .eq("user_id", authUser.id),
+      // Planning settings, for the weekly targets suggested on Plan. Read here
+      // because a suggestion has to be right on first paint — a target that
+      // arrives a round trip after the screen does is a number that changes
+      // under the runner while they are reading it.
+      supabase
+        .from("goal_preferences")
+        .select("goal_id, sessions_per_week, weekly_increase_pct, block_weeks")
         .eq("user_id", authUser.id),
       // The group a goal belongs to, so its row on the goal's detail screen is
       // there on first paint. Fetched here for the same reason the plan badges
@@ -103,6 +116,17 @@ export default async function Page() {
     activities: activitiesRes,
     warnings: newWarnings,
     planBadges: derivePlanBadges((planRowsRes.data ?? []) as PlanBadgeRow[]),
+    planDigests: derivePlanDigests((planRowsRes.data ?? []) as PlanDigestRow[]),
+    goalPrefs: Object.fromEntries(
+      (goalPrefsRes.data ?? []).map((p) => [
+        p.goal_id as string,
+        {
+          sessionsPerWeek: Number(p.sessions_per_week ?? 3),
+          weeklyIncreasePct: Number(p.weekly_increase_pct ?? 10),
+          blockWeeks: Number(p.block_weeks ?? 4),
+        } satisfies GoalPlanningPrefs,
+      ]),
+    ),
     goals: (goalsRes.data ?? []).map((g) => ({
       id: g.id,
       goal_category: (g.goal_category ?? "performance") as GoalCategory,

@@ -15,6 +15,7 @@ import {
   ChevronDown,
   GripVertical,
   Star,
+  Sparkles,
 } from "lucide-react"
 import {
   DndContext,
@@ -51,6 +52,13 @@ import {
 import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
+import { parseWeekStart, shiftWeekStr, weekStartStr } from "@/lib/week"
+import {
+  suggestWeeklyGoals,
+  type GoalPlanningPrefs,
+  type PlanDigest,
+  type WeeklySuggestion,
+} from "@/lib/weekly-suggestions"
 import { AppCard } from "@/components/ui/app-card"
 import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
@@ -75,10 +83,15 @@ interface GoalsScreenProps {
   onEditGoal: (goal: Goal) => void
   onAddGoal: () => void
   onEditWeeklyGoal: (goal: WeeklyGoal) => void
-  onAddWeeklyGoal: () => void
+  /** Opens the editor, prefilled when a suggestion is being taken up. */
+  onAddWeeklyGoal: (suggestion?: WeeklySuggestion) => void
   onSelectGoal: (goal: Goal) => void
   onReorderGoals: (orderedIds: string[]) => Promise<void>
   onReorderWeeklyGoals: (orderedIds: string[]) => Promise<void>
+  /** Stripped block weeks per goal, for the suggested weekly targets. */
+  planDigests?: PlanDigest[]
+  /** Planning settings by goal id, for the same. */
+  goalPrefs?: Record<string, GoalPlanningPrefs>
   /**
    * Which horizon to open on. Races unless the caller says otherwise — coming
    * here from a weekly goal on Today and landing on the race list is landing
@@ -112,25 +125,10 @@ function SortableGoalItem({
 
 // ---- date helpers ----
 
-function localMondayStr(date: Date): string {
-  const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(date)
-  mon.setDate(date.getDate() + diff)
-  const p = (n: number) => String(n).padStart(2, "0")
-  return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
-}
-
-function shiftWeek(weekStr: string, delta: number): string {
-  const d = new Date(weekStr + "T12:00:00")
-  d.setDate(d.getDate() + delta * 7)
-  return localMondayStr(d)
-}
-
 function weekLabel(weekStr: string, currentStr: string, thisWeekLabel: string): string {
   if (weekStr === currentStr) return thisWeekLabel
-  const start = new Date(weekStr + "T12:00:00")
-  const end = new Date(weekStr + "T12:00:00")
+  const start = parseWeekStart(weekStr)
+  const end = parseWeekStart(weekStr)
   end.setDate(end.getDate() + 6)
   const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: "numeric", month: "short" })
   return `${fmt(start)} – ${fmt(end)}`
@@ -150,6 +148,61 @@ function trainingPhaseKey(
   return { labelKey: "plan.buildingBase", tone: "positive" }
 }
 
+/**
+ * A weekly target the app is offering rather than one the runner has set.
+ *
+ * Deliberately quieter than a real weekly goal card: a sunken well instead of
+ * an elevated surface, no meter, no drag handle. It is a proposal, and a
+ * proposal that looks identical to a commitment reads as one the runner has
+ * forgotten making.
+ */
+function SuggestionCard({
+  suggestion,
+  goalName,
+  onUse,
+}: {
+  suggestion: WeeklySuggestion
+  goalName: string | null
+  onUse: () => void
+}) {
+  const { t } = useI18n()
+  const Icon = WEEKLY_METRIC_ICONS[suggestion.metric]
+  const label = t(WEEKLY_METRIC_LABEL_KEYS[suggestion.metric])
+
+  return (
+    <AppCard variant="quiet" padding="sm">
+      <div className="flex items-start gap-2.5">
+        <Icon size={15} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-label font-semibold text-foreground">
+              {label}
+            </h3>
+            <span className="measure shrink-0 text-body font-semibold text-foreground">
+              {formatWeeklyMetric(suggestion.target, suggestion.metric)}
+            </span>
+          </div>
+
+          <p className="measure mt-1 text-micro leading-relaxed text-muted-foreground">
+            {t(suggestion.reasonKey, suggestion.reasonValues)}
+          </p>
+
+          {goalName && (
+            <p className="mt-1 text-micro text-muted-foreground">
+              {t("weeklySuggestion.easedFor", { goal: goalName })}
+            </p>
+          )}
+        </div>
+
+        <Button size="sm" variant="secondary" onClick={onUse} className="shrink-0">
+          {t("weeklySuggestion.use")}
+        </Button>
+      </div>
+    </AppCard>
+  )
+}
+
 // ---- component ----
 
 export function GoalsScreen({
@@ -165,6 +218,8 @@ export function GoalsScreen({
   onSelectGoal,
   onReorderGoals,
   onReorderWeeklyGoals,
+  planDigests,
+  goalPrefs,
   initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
@@ -179,7 +234,7 @@ export function GoalsScreen({
     })
   }
 
-  const todayMondayStr = localMondayStr(new Date())
+  const todayMondayStr = weekStartStr()
   const [selectedWeekStart, setSelectedWeekStart] = useState(todayMondayStr)
 
   const isCurrentWeek = selectedWeekStart === todayMondayStr
@@ -236,6 +291,32 @@ export function GoalsScreen({
     onReorderWeeklyGoals(reordered.map((g) => g.id))
   }
 
+  /**
+   * What the app would set for this week, minus whatever the runner already
+   * has. Recomputed here rather than fetched, so it follows a Strava sync and
+   * a regenerated block without a round trip.
+   *
+   * Only the current week is offered a suggestion. Backfilling a week that has
+   * been and gone with a target nobody was working to would turn the week
+   * navigator from a record into a hypothetical.
+   */
+  const suggestions = useMemo(() => {
+    if (!isCurrentWeek) return []
+    const alreadySet = new Set(selectedWeekGoals.map((wg) => wg.metric))
+    return suggestWeeklyGoals({
+      goals,
+      plans: planDigests,
+      preferences: goalPrefs,
+      activities,
+      weekStart: selectedWeekStart,
+    }).filter((s) => !alreadySet.has(s.metric))
+  }, [isCurrentWeek, selectedWeekGoals, goals, planDigests, goalPrefs, activities, selectedWeekStart])
+
+  const goalNameById = useMemo(
+    () => new Map(goals.map((g) => [g.id, g.name])),
+    [goals],
+  )
+
   const perfGoalStatuses = useMemo(
     () =>
       new Map(
@@ -284,7 +365,7 @@ export function GoalsScreen({
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={() => setSelectedWeekStart(shiftWeek(selectedWeekStart, -1))}
+              onClick={() => setSelectedWeekStart(shiftWeekStr(selectedWeekStart, -1))}
               aria-label={t("goals.previousWeek")}
             >
               <ChevronLeft size={18} />
@@ -295,7 +376,7 @@ export function GoalsScreen({
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={() => setSelectedWeekStart(shiftWeek(selectedWeekStart, 1))}
+              onClick={() => setSelectedWeekStart(shiftWeekStr(selectedWeekStart, 1))}
               disabled={!canGoForward}
               aria-label={t("goals.nextWeek")}
             >
@@ -306,11 +387,23 @@ export function GoalsScreen({
           {orderedWeeklyGoals.length === 0 ? (
             <EmptyState
               icon={<Flame size={18} />}
-              title={isCurrentWeek ? t("goals.noWeeklyGoals") : t("goals.noGoalsThisWeek")}
-              body={isCurrentWeek ? t("goals.setTargets") : t("goals.noGoalsSetThisWeek")}
+              title={
+                !isCurrentWeek
+                  ? t("goals.noGoalsThisWeek")
+                  : suggestions.length > 0
+                    ? t("weeklySuggestion.emptyTitle")
+                    : t("goals.noWeeklyGoals")
+              }
+              body={
+                !isCurrentWeek
+                  ? t("goals.noGoalsSetThisWeek")
+                  : suggestions.length > 0
+                    ? t("weeklySuggestion.emptyBody")
+                    : t("goals.setTargets")
+              }
               action={
                 isCurrentWeek ? (
-                  <Button size="sm" onClick={onAddWeeklyGoal}>
+                  <Button size="sm" variant={suggestions.length > 0 ? "outline" : "default"} onClick={() => onAddWeeklyGoal()}>
                     <Plus size={16} />
                     {t("goals.addWeeklyGoal")}
                   </Button>
@@ -435,8 +528,35 @@ export function GoalsScreen({
             </DndContext>
           )}
 
+          {suggestions.length > 0 && (
+            <section className="flex flex-col gap-2.5" aria-label={t("weeklySuggestion.heading")}>
+              {/* The heading only appears once there is something above it to
+                  distinguish these from. On an empty week the cards are the
+                  only thing on screen and the empty state has already said
+                  what they are. */}
+              {orderedWeeklyGoals.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+                  <h2 className="text-label font-semibold text-muted-foreground">
+                    {t("weeklySuggestion.heading")}
+                  </h2>
+                </div>
+              )}
+              {suggestions.map((s) => (
+                <SuggestionCard
+                  key={s.metric}
+                  suggestion={s}
+                  goalName={
+                    s.clampedByGoalId ? (goalNameById.get(s.clampedByGoalId) ?? null) : null
+                  }
+                  onUse={() => onAddWeeklyGoal(s)}
+                />
+              ))}
+            </section>
+          )}
+
           {isCurrentWeek && orderedWeeklyGoals.length > 0 && (
-            <Button variant="outline" block onClick={onAddWeeklyGoal}>
+            <Button variant="outline" block onClick={() => onAddWeeklyGoal()}>
               <Plus size={16} />
               {t("goals.addWeeklyGoal")}
             </Button>
