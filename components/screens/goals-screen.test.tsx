@@ -366,3 +366,184 @@ describe("GoalsScreen — suggested weekly targets", () => {
     expect(screen.queryByRole("button", { name: "Use this" })).toBeNull()
   })
 })
+
+describe("GoalsScreen — accepting, adjusting and refusing", () => {
+  const weekStart = mondayThisWeek()
+  const base = { current: 0, week_start: weekStart, display_order: 1 }
+
+  it("turns an offer down by metric and source, not by week", () => {
+    const seen: unknown[] = []
+    renderSuggestions({ onDismissSuggestion: (m, g) => seen.push([m, g]) })
+    fireEvent.click(screen.getAllByRole("button", { name: "Not this" })[0])
+    // History-based, so no race behind it — the null is what makes the
+    // dismissal stick to the right offer.
+    expect(seen).toEqual([["distance_km", null]])
+  })
+
+  it("stops offering what has already been turned down", () => {
+    renderSuggestions({ dismissals: [{ metric: "distance_km", source_goal_id: null }] })
+    expect(screen.queryByText(/km$/)).toBeNull()
+    expect(screen.getAllByRole("button", { name: "Use this" })).toHaveLength(1)
+  })
+
+  it("says a target was adjusted from what was offered", () => {
+    renderSuggestions({
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 45,
+          is_recurring: false,
+          source: "history",
+          source_goal_id: null,
+          suggested_target: 40,
+        } as WeeklyGoal,
+      ],
+    })
+    expect(screen.getByText(/Adjusted from 40 km/)).toBeTruthy()
+  })
+
+  it("stays quiet about a target taken exactly as offered", () => {
+    renderSuggestions({
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 40,
+          is_recurring: false,
+          source: "history",
+          source_goal_id: null,
+          suggested_target: 40,
+        } as WeeklyGoal,
+      ],
+    })
+    expect(screen.queryByText(/Adjusted from/)).toBeNull()
+  })
+
+  it("keeps offering the plan's number beside a standing manual target", () => {
+    // A recurring goal is in every week there will ever be, so suppressing the
+    // metric outright would silence the suggestion permanently.
+    renderSuggestions({
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 30,
+          is_recurring: true,
+          source: "manual",
+        } as WeeklyGoal,
+      ],
+    })
+    expect(screen.getByText(/Your plan says/)).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Use that" })).toBeTruthy()
+  })
+
+  it("says nothing under a one-off target the runner set this week", () => {
+    renderSuggestions({
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 30,
+          is_recurring: false,
+          source: "manual",
+        } as WeeklyGoal,
+      ],
+    })
+    expect(screen.queryByText(/Your plan says/)).toBeNull()
+  })
+
+  it("takes the plan's number in one tap, recording where it came from", () => {
+    let saved: WeeklyGoal | null = null
+    renderSuggestions({
+      onSaveWeeklyGoal: (g) => { saved = g },
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 30,
+          is_recurring: true,
+          source: "manual",
+        } as WeeklyGoal,
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Use that" }))
+    expect(saved).toMatchObject({ id: "wg1", source: "history", source_goal_id: null })
+    expect(saved!.target).toBe(saved!.suggested_target)
+  })
+
+  it("asks rather than rewrites when the plan has moved", () => {
+    const race = makeGoal({
+      goal_category: "event_training",
+      name: "Oslo Marathon",
+      target_date: daysFromNow(120),
+      start_date: daysFromNow(-30),
+    })
+    renderSuggestions({
+      goals: [race],
+      planDigests: [
+        { goalId: race.id, blockStartDate: weekStart, weeks: [{ targetKm: 52, sessionCount: 5 }] },
+      ],
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 44,
+          is_recurring: false,
+          source: "plan",
+          source_goal_id: race.id,
+          suggested_target: 44,
+        } as WeeklyGoal,
+      ],
+    })
+    // The card still shows what the runner committed to.
+    expect(screen.getByText(/Your plan now says 52 km/)).toBeTruthy()
+    expect(screen.getByText(/44 km/)).toBeTruthy()
+  })
+
+  it("settles a moved plan without touching the target", () => {
+    const race = makeGoal({
+      goal_category: "event_training",
+      name: "Oslo Marathon",
+      target_date: daysFromNow(120),
+      start_date: daysFromNow(-30),
+    })
+    let saved: WeeklyGoal | null = null
+    renderSuggestions({
+      onSaveWeeklyGoal: (g) => { saved = g },
+      goals: [race],
+      planDigests: [
+        { goalId: race.id, blockStartDate: weekStart, weeks: [{ targetKm: 52, sessionCount: 5 }] },
+      ],
+      weeklyGoals: [
+        {
+          ...base,
+          id: "wg1",
+          metric: "distance_km",
+          label: "Weekly Distance",
+          target: 44,
+          is_recurring: false,
+          source: "plan",
+          source_goal_id: race.id,
+          suggested_target: 44,
+        } as WeeklyGoal,
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }))
+    // Their number stands; only the record of what they have seen moves, so
+    // the question is not asked again on the next visit.
+    expect(saved).toMatchObject({ target: 44, suggested_target: 52 })
+  })
+})

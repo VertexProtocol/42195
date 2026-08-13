@@ -66,6 +66,30 @@ export interface WeeklyGoal {
   session_min_distance_km?: number | null
   // [DND] drag-and-drop display order
   display_order?: number
+  /** Where the number came from. "manual" is a target the runner typed. */
+  source?: WeeklyGoalSource
+  /** The race a suggested target was derived from; null for history or manual. */
+  source_goal_id?: string | null
+  /**
+   * What was offered, kept across an edit so the card can say "adjusted from".
+   * Null once the runner has typed a number with no suggestion behind it.
+   */
+  suggested_target?: number | null
+}
+
+/** @see scripts/034_weekly_goal_provenance.sql */
+export type WeeklyGoalSource = "manual" | "plan" | "target" | "history"
+
+/**
+ * A suggestion the runner turned down.
+ *
+ * Keyed by what was offered rather than by the week it was offered in: the
+ * same target arriving again every Monday is the app not listening.
+ */
+export interface WeeklySuggestionDismissal {
+  metric: WeeklyGoalMetric
+  /** Null dismisses the history-based suggestion, which belongs to no race. */
+  source_goal_id: string | null
 }
 
 export interface WeeklySummary {

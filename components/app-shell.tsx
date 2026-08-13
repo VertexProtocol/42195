@@ -442,6 +442,9 @@ export function AppShell({ initialData }: AppShellProps) {
             onReorderWeeklyGoals={data.reorderWeeklyGoals}
             planDigests={data.planDigests}
             goalPrefs={data.goalPrefs}
+            dismissals={data.dismissals}
+            onDismissSuggestion={data.dismissSuggestion}
+            onSaveWeeklyGoal={data.saveWeeklyGoal}
             initialTab={planTab}
           />
         )}

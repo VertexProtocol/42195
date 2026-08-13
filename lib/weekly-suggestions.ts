@@ -24,7 +24,13 @@
  * WEEKLY_GOALS_PLAN.md for why, and for what that costs.
  */
 
-import type { Activity, Goal, WeeklyGoalMetric } from "@/lib/types"
+import type {
+  Activity,
+  Goal,
+  WeeklyGoal,
+  WeeklyGoalMetric,
+  WeeklySuggestionDismissal,
+} from "@/lib/types"
 import type { SafetyActivity } from "@/lib/training-safety-client"
 import {
   classifyAthleteLevel,
@@ -187,6 +193,8 @@ export interface WeeklySuggestionInput {
   activities: Activity[]
   /** The Monday being suggested for, as `YYYY-MM-DD`. */
   weekStart: string
+  /** Offers the runner has turned down. Not week-scoped; see the type. */
+  dismissals?: WeeklySuggestionDismissal[]
   /** Evaluation time. Passed in so the result is testable. */
   now?: Date
 }
@@ -219,7 +227,76 @@ export function suggestWeeklyGoals(input: WeeklySuggestionInput): WeeklySuggesti
     ? fromGoal(pacesetter, planByGoal.get(pacesetter.id), preferences[pacesetter.id], runs, weekStart, now)
     : fromHistory(runs, now)
 
-  return applyRaceProximity(base, candidates, planByGoal, weekStart, runs, now)
+  const clamped = applyRaceProximity(base, candidates, planByGoal, weekStart, runs, now)
+
+  return clamped.filter((s) => !isDismissed(s, input.dismissals))
+}
+
+/**
+ * Whether this offer has already been turned down.
+ *
+ * Matched on the metric and the race it came from, never on the week — a
+ * dismissal that expired every Sunday night would be the app asking the same
+ * question every Monday and calling it a fresh suggestion. The clamp is not
+ * part of the identity: an easier number for the same race, for the same
+ * metric, is the same offer.
+ */
+function isDismissed(
+  suggestion: WeeklySuggestion,
+  dismissals: WeeklySuggestionDismissal[] | undefined,
+): boolean {
+  if (!dismissals?.length) return false
+  return dismissals.some(
+    (d) => d.metric === suggestion.metric && (d.source_goal_id ?? null) === suggestion.sourceGoalId,
+  )
+}
+
+// ── Drift against an accepted target ──────────────────────────────────────────
+
+/** An accepted target whose plan has since said something else. */
+export interface SuggestionDrift {
+  /** The saved weekly goal, as the runner accepted or adjusted it. */
+  goal: WeeklyGoal
+  /** What the same source proposes now. */
+  suggestion: WeeklySuggestion
+}
+
+/**
+ * Accepted targets the plan has moved away from.
+ *
+ * A regenerated block, or an applied mid-block checkpoint, changes what this
+ * week should hold. Writing that straight onto a target the runner has already
+ * committed to would move the week under their feet — they would go out on
+ * Wednesday against a number nobody showed them. So the change is detected and
+ * offered, never applied.
+ *
+ * Compared against `suggested_target` rather than `target`: what matters is
+ * whether the *offer* has changed. A runner who took 42 km and set 45 has not
+ * drifted from a plan that still says 42 — they have adjusted it, which is
+ * theirs to do, and asking again would be arguing.
+ */
+export function detectSuggestionDrift(
+  weeklyGoals: WeeklyGoal[],
+  suggestions: WeeklySuggestion[],
+): SuggestionDrift[] {
+  const drifts: SuggestionDrift[] = []
+
+  for (const goal of weeklyGoals) {
+    // Only a target that came from a suggestion can drift from one. A typed
+    // number has no source to disagree with.
+    if (!goal.source || goal.source === "manual") continue
+    if (goal.suggested_target == null) continue
+
+    const suggestion = suggestions.find(
+      (s) => s.metric === goal.metric && s.sourceGoalId === (goal.source_goal_id ?? null),
+    )
+    if (!suggestion) continue
+    if (suggestion.target === Number(goal.suggested_target)) continue
+
+    drifts.push({ goal, suggestion })
+  }
+
+  return drifts
 }
 
 // ── Goal selection ────────────────────────────────────────────────────────────

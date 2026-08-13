@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest"
 import {
+  detectSuggestionDrift,
   suggestWeeklyGoals,
   type PlanDigest,
   type WeeklySuggestion,
 } from "./weekly-suggestions"
-import type { Activity, Goal } from "./types"
+import type { Activity, Goal, WeeklyGoal } from "./types"
 
 // Monday 2026-08-10 is "this week" throughout; NOW is the Wednesday inside it.
 const WEEK_START = "2026-08-10"
@@ -628,5 +629,119 @@ describe("suggestWeeklyGoals — shape of the result", () => {
       now: NOW,
     })
     expect(km(out)).toMatchObject({ target: 40, source: "plan" })
+  })
+})
+
+describe("suggestWeeklyGoals — dismissals", () => {
+  const args = {
+    goals: [goal()],
+    plans: [digest()],
+    activities: history(8, 4, 10),
+    weekStart: WEEK_START,
+    now: NOW,
+  }
+
+  it("drops an offer the runner has turned down", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: "g1" }],
+    })
+    expect(km(out)).toBeUndefined()
+    expect(sessions(out)).toBeDefined()
+  })
+
+  it("leaves the same metric from a different race alone", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: "other-goal" }],
+    })
+    expect(km(out)).toBeDefined()
+  })
+
+  it("dismisses the history suggestion by its null goal", () => {
+    const out = suggestWeeklyGoals({
+      goals: [],
+      activities: history(8, 4, 10),
+      weekStart: WEEK_START,
+      now: NOW,
+      dismissals: [{ metric: "distance_km", source_goal_id: null }],
+    })
+    expect(km(out)).toBeUndefined()
+    // A dismissal names one metric; the other is still on offer.
+    expect(sessions(out)).toMatchObject({ source: "history" })
+  })
+
+  it("does not let a null dismissal silence a race-backed offer", () => {
+    const out = suggestWeeklyGoals({
+      ...args,
+      dismissals: [{ metric: "distance_km", source_goal_id: null }],
+    })
+    expect(km(out)).toMatchObject({ sourceGoalId: "g1" })
+  })
+
+  it("stays dismissed in a different week", () => {
+    // The dismissal is keyed by what was offered, not by when. A suggestion
+    // that comes back every Monday is the app not listening.
+    const out = suggestWeeklyGoals({
+      ...args,
+      weekStart: "2026-08-17",
+      dismissals: [{ metric: "distance_km", source_goal_id: "g1" }],
+    })
+    expect(km(out)).toBeUndefined()
+  })
+})
+
+describe("detectSuggestionDrift", () => {
+  const suggestion: WeeklySuggestion = {
+    metric: "distance_km",
+    target: 48,
+    source: "plan",
+    sourceGoalId: "g1",
+    reasonKey: "weeklySuggestion.reason.planDistance",
+    reasonValues: {},
+  }
+
+  function accepted(overrides: Partial<WeeklyGoal> = {}): WeeklyGoal {
+    return {
+      id: "w1",
+      metric: "distance_km",
+      label: "Weekly Distance",
+      target: 44,
+      current: 0,
+      week_start: WEEK_START,
+      is_recurring: false,
+      source: "plan",
+      source_goal_id: "g1",
+      suggested_target: 44,
+      ...overrides,
+    }
+  }
+
+  it("reports a target whose plan has moved", () => {
+    const out = detectSuggestionDrift([accepted()], [suggestion])
+    expect(out).toHaveLength(1)
+    expect(out[0].suggestion.target).toBe(48)
+  })
+
+  it("says nothing when the offer is unchanged", () => {
+    const out = detectSuggestionDrift([accepted({ suggested_target: 48 })], [suggestion])
+    expect(out).toEqual([])
+  })
+
+  it("ignores a number the runner typed", () => {
+    const manual = accepted({ source: "manual", source_goal_id: null, suggested_target: null })
+    expect(detectSuggestionDrift([manual], [suggestion])).toEqual([])
+  })
+
+  it("compares against what was offered, not what was set", () => {
+    // Took the plan's 48 and decided on 52. The plan still says 48, so there
+    // is nothing to raise — adjusting a suggestion is the runner's to do.
+    const adjusted = accepted({ target: 52, suggested_target: 48 })
+    expect(detectSuggestionDrift([adjusted], [suggestion])).toEqual([])
+  })
+
+  it("does not match an offer from another race", () => {
+    const other = accepted({ source_goal_id: "g2" })
+    expect(detectSuggestionDrift([other], [suggestion])).toEqual([])
   })
 })

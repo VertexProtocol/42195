@@ -49,11 +49,18 @@ import {
   bestRelevantRun,
   longestRun,
 } from "@/lib/format"
-import type { Activity, Goal, WeeklyGoal } from "@/lib/types"
+import type {
+  Activity,
+  Goal,
+  WeeklyGoal,
+  WeeklyGoalMetric,
+  WeeklySuggestionDismissal,
+} from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { parseWeekStart, shiftWeekStr, weekStartStr } from "@/lib/week"
 import {
+  detectSuggestionDrift,
   suggestWeeklyGoals,
   type GoalPlanningPrefs,
   type PlanDigest,
@@ -92,6 +99,16 @@ interface GoalsScreenProps {
   planDigests?: PlanDigest[]
   /** Planning settings by goal id, for the same. */
   goalPrefs?: Record<string, GoalPlanningPrefs>
+  /** Suggestions already turned down; they are not offered again. */
+  dismissals?: WeeklySuggestionDismissal[]
+  /** Turn one down for good — by metric and source race, not by week. */
+  onDismissSuggestion?: (metric: WeeklyGoalMetric, sourceGoalId: string | null) => void
+  /**
+   * Save an existing weekly target in place. Used by the one-tap actions on a
+   * card — taking the plan's number, or settling a plan that has moved — which
+   * change one field and have no reason to open the editor over the list.
+   */
+  onSaveWeeklyGoal?: (goal: WeeklyGoal) => void
   /**
    * Which horizon to open on. Races unless the caller says otherwise — coming
    * here from a weekly goal on Today and landing on the race list is landing
@@ -149,6 +166,50 @@ function trainingPhaseKey(
 }
 
 /**
+ * A line of the app's own voice inside a card the runner owns.
+ *
+ * Used where a suggestion has something to say about a target that already
+ * exists — the plan's number beside a standing one, or a plan that has moved
+ * since a target was accepted. It is a note, not a card: nesting a surface
+ * inside a surface would read as a second goal rather than a remark about
+ * this one.
+ */
+function SuggestionNote({
+  text,
+  actions,
+  tone = "quiet",
+}: {
+  text: string
+  actions: ({ label: string; onClick: () => void } | null)[]
+  tone?: "quiet" | "attention"
+}) {
+  return (
+    <div
+      className={`mt-2 rounded-sm px-2 py-1.5 ${
+        tone === "attention" ? "bg-caution/10" : "bg-surface-sunken"
+      }`}
+    >
+      <p className="measure text-micro leading-relaxed text-muted-foreground">{text}</p>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-3">
+        {actions.filter(Boolean).map((action) => (
+          <button
+            key={action!.label}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              action!.onClick()
+            }}
+            className="press -ml-1 min-h-[32px] rounded-sm px-1 text-micro font-semibold text-foreground hover:underline"
+          >
+            {action!.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
  * A weekly target the app is offering rather than one the runner has set.
  *
  * Deliberately quieter than a real weekly goal card: a sunken well instead of
@@ -160,10 +221,12 @@ function SuggestionCard({
   suggestion,
   goalName,
   onUse,
+  onDismiss,
 }: {
   suggestion: WeeklySuggestion
   goalName: string | null
   onUse: () => void
+  onDismiss?: () => void
 }) {
   const { t } = useI18n()
   const Icon = WEEKLY_METRIC_ICONS[suggestion.metric]
@@ -193,6 +256,20 @@ function SuggestionCard({
               {t("weeklySuggestion.easedFor", { goal: goalName })}
             </p>
           )}
+
+          {/* Accepting and refusing are not the same weight of decision, so
+              they are not the same weight of control. Dismissal is quiet and
+              sits under the reason it is refusing, rather than beside the
+              button it would otherwise compete with. */}
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="press mt-1.5 -ml-1 min-h-[32px] rounded-sm px-1 text-micro text-muted-foreground/70 hover:text-foreground"
+            >
+              {t("weeklySuggestion.dismiss")}
+            </button>
+          )}
         </div>
 
         <Button size="sm" variant="secondary" onClick={onUse} className="shrink-0">
@@ -220,6 +297,9 @@ export function GoalsScreen({
   onReorderWeeklyGoals,
   planDigests,
   goalPrefs,
+  dismissals,
+  onDismissSuggestion,
+  onSaveWeeklyGoal,
   initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
@@ -300,22 +380,86 @@ export function GoalsScreen({
    * been and gone with a target nobody was working to would turn the week
    * navigator from a record into a hypothetical.
    */
-  const suggestions = useMemo(() => {
+  const allSuggestions = useMemo(() => {
     if (!isCurrentWeek) return []
-    const alreadySet = new Set(selectedWeekGoals.map((wg) => wg.metric))
     return suggestWeeklyGoals({
       goals,
       plans: planDigests,
       preferences: goalPrefs,
       activities,
       weekStart: selectedWeekStart,
-    }).filter((s) => !alreadySet.has(s.metric))
-  }, [isCurrentWeek, selectedWeekGoals, goals, planDigests, goalPrefs, activities, selectedWeekStart])
+      dismissals,
+    })
+  }, [isCurrentWeek, goals, planDigests, goalPrefs, activities, selectedWeekStart, dismissals])
+
+  /**
+   * The same set of suggestions in the two roles they can play: an offer for a
+   * metric with nothing set, or a hint against a target that already exists.
+   *
+   * A recurring goal the runner wrote by hand is a standing instruction, and
+   * it wins — but it would otherwise silence this metric permanently, since a
+   * recurring goal is in every week there will ever be. So the suggestion
+   * stays, quietly, on that goal's own card with one tap to take it.
+   *
+   * A one-off target for this week silences the metric outright. The runner
+   * answered this week's question this week; asking again underneath their
+   * answer is not offering, it is arguing.
+   */
+  const { offers, hintByGoalId } = useMemo(() => {
+    const existingByMetric = new Map(selectedWeekGoals.map((wg) => [wg.metric, wg]))
+    const offers: WeeklySuggestion[] = []
+    const hintByGoalId = new Map<string, WeeklySuggestion>()
+
+    for (const suggestion of allSuggestions) {
+      const existing = existingByMetric.get(suggestion.metric)
+      if (!existing) {
+        offers.push(suggestion)
+      } else if ((existing.source ?? "manual") === "manual" && existing.is_recurring) {
+        hintByGoalId.set(existing.id, suggestion)
+      }
+    }
+
+    return { offers, hintByGoalId }
+  }, [allSuggestions, selectedWeekGoals])
+
+  /**
+   * Accepted targets whose plan has since changed its mind. Shown on the card,
+   * never applied to it — see `detectSuggestionDrift`.
+   */
+  const driftByGoalId = useMemo(
+    () =>
+      new Map(
+        detectSuggestionDrift(selectedWeekGoals, allSuggestions).map((d) => [d.goal.id, d.suggestion]),
+      ),
+    [selectedWeekGoals, allSuggestions],
+  )
 
   const goalNameById = useMemo(
     () => new Map(goals.map((g) => [g.id, g.name])),
     [goals],
   )
+
+  /** Take the offered number, and record that it was offered. */
+  function takeSuggestion(goal: WeeklyGoal, suggestion: WeeklySuggestion) {
+    onSaveWeeklyGoal?.({
+      ...goal,
+      target: suggestion.target,
+      source: suggestion.source,
+      source_goal_id: suggestion.sourceGoalId,
+      suggested_target: suggestion.target,
+    })
+  }
+
+  /**
+   * Settle a plan that has moved without changing the target.
+   *
+   * The runner's number stays; what is recorded is that they have seen the new
+   * one. Without this the disagreement would be raised on every visit, which
+   * is the app declining to accept an answer it asked for.
+   */
+  function keepTarget(goal: WeeklyGoal, suggestion: WeeklySuggestion) {
+    onSaveWeeklyGoal?.({ ...goal, suggested_target: suggestion.target })
+  }
 
   const perfGoalStatuses = useMemo(
     () =>
@@ -390,20 +534,20 @@ export function GoalsScreen({
               title={
                 !isCurrentWeek
                   ? t("goals.noGoalsThisWeek")
-                  : suggestions.length > 0
+                  : offers.length > 0
                     ? t("weeklySuggestion.emptyTitle")
                     : t("goals.noWeeklyGoals")
               }
               body={
                 !isCurrentWeek
                   ? t("goals.noGoalsSetThisWeek")
-                  : suggestions.length > 0
+                  : offers.length > 0
                     ? t("weeklySuggestion.emptyBody")
                     : t("goals.setTargets")
               }
               action={
                 isCurrentWeek ? (
-                  <Button size="sm" variant={suggestions.length > 0 ? "outline" : "default"} onClick={() => onAddWeeklyGoal()}>
+                  <Button size="sm" variant={offers.length > 0 ? "outline" : "default"} onClick={() => onAddWeeklyGoal()}>
                     <Plus size={16} />
                     {t("goals.addWeeklyGoal")}
                   </Button>
@@ -434,6 +578,14 @@ export function GoalsScreen({
                     const isComplete = current >= wg.target
                     const label = t(WEEKLY_METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
                     const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(wg.target, wg.metric)}`
+                    const hint = hintByGoalId.get(wg.id)
+                    const drift = driftByGoalId.get(wg.id)
+                    // Only worth saying when the two differ. A target taken as
+                    // offered has nothing to have been adjusted from.
+                    const adjustedFrom =
+                      wg.suggested_target != null && Number(wg.suggested_target) !== wg.target
+                        ? Number(wg.suggested_target)
+                        : null
 
                     return (
                       <SortableGoalItem key={wg.id} id={wg.id}>
@@ -505,6 +657,51 @@ export function GoalsScreen({
                                       {t("goals.perSession")}
                                     </p>
                                   )}
+
+                                {adjustedFrom !== null && (
+                                  <p className="mt-1.5 text-micro text-muted-foreground">
+                                    {t("weeklySuggestion.adjustedFrom", {
+                                      value: formatWeeklyMetric(adjustedFrom, wg.metric),
+                                    })}
+                                  </p>
+                                )}
+
+                                {/* A standing manual target keeps its number;
+                                    the plan's is offered beside it rather than
+                                    being suppressed for every week to come. */}
+                                {hint && (
+                                  <SuggestionNote
+                                    text={t("weeklySuggestion.planSays", {
+                                      value: formatWeeklyMetric(hint.target, hint.metric),
+                                    })}
+                                    actions={[
+                                      { label: t("weeklySuggestion.useNumber"), onClick: () => takeSuggestion(wg, hint) },
+                                      onDismissSuggestion
+                                        ? {
+                                            label: t("weeklySuggestion.dismiss"),
+                                            onClick: () => onDismissSuggestion(hint.metric, hint.sourceGoalId),
+                                          }
+                                        : null,
+                                    ]}
+                                  />
+                                )}
+
+                                {/* The plan changed after this target was
+                                    accepted. Asked, never applied: a number
+                                    that moves on its own is one the runner
+                                    goes out against without being told. */}
+                                {drift && (
+                                  <SuggestionNote
+                                    tone="attention"
+                                    text={t("weeklySuggestion.planMoved", {
+                                      value: formatWeeklyMetric(drift.target, drift.metric),
+                                    })}
+                                    actions={[
+                                      { label: t("weeklySuggestion.update"), onClick: () => takeSuggestion(wg, drift) },
+                                      { label: t("weeklySuggestion.keepMine"), onClick: () => keepTarget(wg, drift) },
+                                    ]}
+                                  />
+                                )}
                               </div>
 
                               <button
@@ -528,7 +725,7 @@ export function GoalsScreen({
             </DndContext>
           )}
 
-          {suggestions.length > 0 && (
+          {offers.length > 0 && (
             <section className="flex flex-col gap-2.5" aria-label={t("weeklySuggestion.heading")}>
               {/* The heading only appears once there is something above it to
                   distinguish these from. On an empty week the cards are the
@@ -542,7 +739,7 @@ export function GoalsScreen({
                   </h2>
                 </div>
               )}
-              {suggestions.map((s) => (
+              {offers.map((s) => (
                 <SuggestionCard
                   key={s.metric}
                   suggestion={s}
@@ -550,6 +747,11 @@ export function GoalsScreen({
                     s.clampedByGoalId ? (goalNameById.get(s.clampedByGoalId) ?? null) : null
                   }
                   onUse={() => onAddWeeklyGoal(s)}
+                  onDismiss={
+                    onDismissSuggestion
+                      ? () => onDismissSuggestion(s.metric, s.sourceGoalId)
+                      : undefined
+                  }
                 />
               ))}
             </section>
