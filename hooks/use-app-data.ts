@@ -887,6 +887,18 @@ export function useAppData(initialData?: InitialData | null) {
             setSyncStatus((prev) => ({ ...prev, state: "syncing", error_message: null }))
             return
           }
+          // The last sync finished less than the cooldown ago. Nothing failed
+          // and nothing is missing — there has been no time for anything new to
+          // appear. Report it as the state it is: synced, just now.
+          if (data.code === "SYNC_TOO_SOON") {
+            setSyncStatus((prev) => ({
+              ...prev,
+              state: "success",
+              last_sync_at: (data.last_sync_at as string) ?? prev.last_sync_at,
+              error_message: null,
+            }))
+            return
+          }
           if (data.code === "STRAVA_RATE_LIMITED") {
             setSyncStatus((prev) => ({
               ...prev,
