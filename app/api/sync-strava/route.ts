@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { syncUserActivities } from "@/lib/strava-sync"
+import { recordSyncFailure, recordSyncResult, syncUserActivities } from "@/lib/strava-sync"
 import { StravaAppInactiveError, StravaAuthError } from "@/lib/strava"
 
 // A history sync is chunked (see syncUserActivities), but one chunk still needs
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   // 2. Rate limit & concurrency checks
   const { data: prevSync } = await service
     .from("sync_status")
-    .select("last_sync_at, state, updated_at, cursor_before, resume_at")
+    .select("last_sync_at, state, updated_at, cursor_before, resume_at, resume_full")
     .eq("user_id", userId)
     .maybeSingle()
 
@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
   // picks up where the previous chunk stopped.
   const isContinuation = !!prevSync && RESUMABLE_STATES.has(prevSync.state)
   const resumeCursor = isContinuation ? (prevSync.cursor_before as number | null) : null
+
+  // Whether this run is walking the whole history. A continuation inherits it
+  // from the run it is continuing: the `full=1` on the first chunk is what the
+  // remaining chunks are still finishing, and dropping it mid-history would
+  // stop the walk at the previous successful sync.
+  const isFullRun = isContinuation ? !!prevSync.resume_full : fullSync
 
   if (isContinuation && prevSync.resume_at) {
     const resumeAt = new Date(prevSync.resume_at as string)
@@ -86,29 +92,9 @@ export async function POST(request: NextRequest) {
   )
 
   try {
-    const result = await syncUserActivities(userId, { fullSync, resumeCursor })
+    const result = await syncUserActivities(userId, { fullSync: isFullRun, resumeCursor })
 
-    // A run that stopped early must not move last_sync_at — the next
-    // incremental sync would then skip everything it has not fetched yet.
-    const state = result.done ? "success" : result.resumeAt ? "rate_limited" : "partial"
-
-    await service.from("sync_status").upsert(
-      {
-        user_id: userId,
-        state,
-        ...(result.done ? { last_sync_at: new Date().toISOString() } : {}),
-        cursor_before: result.resumeCursor,
-        resume_at: result.resumeAt,
-        error_message: null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    )
-
-    // Invalidate HR analysis cache so the profile page recomputes it with fresh data
-    if (result.synced > 0) {
-      await service.from("profiles").update({ hr_analysis_cache: null }).eq("id", userId)
-    }
+    await recordSyncResult(userId, result, isFullRun)
 
     return NextResponse.json({ ok: true, ...result })
   } catch (err: unknown) {
@@ -123,15 +109,7 @@ export async function POST(request: NextRequest) {
             ? String((err as { message: unknown }).message)
             : "Unknown sync error"
 
-    await service.from("sync_status").upsert(
-      {
-        user_id: userId,
-        state: "error",
-        error_message: message,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    )
+    await recordSyncFailure(userId, message)
 
     // The app's own API access is off. Nothing the athlete does — reconnecting
     // included — changes that, so it gets its own code rather than looking like

@@ -38,10 +38,16 @@ const client = new Anthropic({
 /**
  * Minimum cacheable prefix per model. Anything shorter silently caches nothing.
  * These are model-dependent and NOT monotonic across generations, which is why
- * the same 600-token prompt caches on Opus 5 and does not on Haiku 4.5.
+ * the same 1500-token prompt caches on Sonnet 5 and does not on Haiku 4.5.
+ *
+ * Opus 5 is kept in the table though no route uses it: the two structured
+ * routes moved off it, and its 512 is the number that made race-strategy's
+ * 1098-token prefix look comfortable rather than the 74 tokens of headroom it
+ * actually has on Sonnet 5.
  */
 const CACHE_MINIMUM = {
   "claude-opus-5": 512,
+  "claude-sonnet-5": 1024,
   "claude-haiku-4-5": 4096,
 }
 
@@ -180,7 +186,7 @@ const coachSystem = [
 const ROUTES = [
   {
     name: "training-plan",
-    model: "claude-opus-5",
+    model: "claude-sonnet-5",
     system: planSystem,
     tools: undefined,
     // A structured-output schema is part of the cacheable prefix too, and on the
@@ -195,7 +201,7 @@ const ROUTES = [
     structured: true,
     async run() {
       const stream = client.messages.stream({
-        model: "claude-opus-5",
+        model: "claude-sonnet-5",
         max_tokens: 32000,
         thinking: { type: "adaptive" },
         output_config: {
@@ -210,7 +216,7 @@ const ROUTES = [
   },
   {
     name: "race-strategy",
-    model: "claude-opus-5",
+    model: "claude-sonnet-5",
     system: strategySystem,
     tools: undefined,
     outputConfig: {
@@ -221,7 +227,7 @@ const ROUTES = [
     structured: true,
     async run() {
       const stream = client.messages.stream({
-        model: "claude-opus-5",
+        model: "claude-sonnet-5",
         max_tokens: 16000,
         thinking: { type: "adaptive" },
         output_config: {

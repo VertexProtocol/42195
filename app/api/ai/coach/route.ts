@@ -389,6 +389,7 @@ async function executeToolCall(
           .select("plan, block_start_date, generated_at")
           .eq("goal_id", goalId)
           .eq("user_id", userId)
+          .is("archived_at", null)
           .maybeSingle()
 
         if (!data) return "No training plan found for this goal."
@@ -411,6 +412,7 @@ async function executeToolCall(
           .select("plan, block_start_date, generated_at")
           .eq("goal_id", g.id)
           .eq("user_id", userId)
+          .is("archived_at", null)
           .maybeSingle()
 
         if (data) plans.push({ goalName: g.name, goalId: g.id, ...data })

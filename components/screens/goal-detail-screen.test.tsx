@@ -141,3 +141,74 @@ describe("GoalDetailScreen — the unpin offer", () => {
     expect(onToggleStar).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * The week header, once a week has been lived through.
+ *
+ * Skipping was already something the runner could record, but the only trace
+ * of it was inside the expanded week — so a collapsed week reading "1/4 done"
+ * looked like three sessions still ahead when two had been written off.
+ */
+function mondayOfThisWeek(): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -6 : 1 - d.getDay()))
+  return d.toISOString().split("T")[0]
+}
+
+const FOUR_SESSION_WEEK = {
+  summary: "A block.",
+  keyPrinciples: [],
+  watchOut: null,
+  weeks: [
+    {
+      weekNumber: 1,
+      theme: "the tendon",
+      targetKm: 31,
+      coachNote: null,
+      sessions: [
+        { type: "Long run", distance: "10.5 km", effort: "Easy Z2", purpose: "Base" },
+        { type: "Base run", distance: "7 km", effort: "Steady easy", purpose: "Base" },
+        { type: "Fartlek", distance: "7 km", effort: "Relaxed surges", purpose: "Turnover" },
+        { type: "Recovery run", distance: "6.5 km", effort: "Very easy Z1", purpose: "Recovery" },
+      ],
+    },
+  ],
+}
+
+function stubPlanFetch(statuses: Record<string, string>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      const body = url.includes("/sessions")
+        ? { statuses }
+        : url.includes("/training-plan?")
+          ? {
+              plan: FOUR_SESSION_WEEK,
+              block_start_date: mondayOfThisWeek(),
+              generated_at: new Date().toISOString(),
+              previous_plans: [],
+            }
+          : {}
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+    }),
+  )
+}
+
+describe("GoalDetailScreen — how a week reports itself", () => {
+  it("counts the skipped sessions alongside the completed ones", async () => {
+    stubPlanFetch({ "W1-0": "completed", "W1-1": "skipped" })
+    renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
+
+    expect(await screen.findByText("1/4 done")).toBeTruthy()
+    expect(await screen.findByText("1/4 skipped")).toBeTruthy()
+  })
+
+  it("says nothing about skipping in a week where nothing was skipped", async () => {
+    stubPlanFetch({ "W1-0": "completed" })
+    renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
+
+    expect(await screen.findByText("1/4 done")).toBeTruthy()
+    expect(screen.queryByText(/skipped/)).toBeNull()
+  })
+})

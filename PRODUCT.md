@@ -47,7 +47,7 @@ the runner and the number they came for.
 
 | Surface | Job |
 |---|---|
-| Today | The race countdown, training load, the week so far, the last runs. |
+| Today | The race countdown, the next session of the plan, training load, the week so far, the last runs. |
 | Activities | The log. Search, filter, open one. |
 | Plan | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
 | Insights | Records, race predictions, benchmarks, calendar, and the AI coach. |

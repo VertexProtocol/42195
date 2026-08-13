@@ -17,6 +17,7 @@ import {
   Lightbulb,
   Pencil,
   Flag,
+  Archive,
   CheckCircle2,
 } from "lucide-react"
 import {
@@ -41,21 +42,25 @@ import type {
   TrainingWeek,
   PlanSnapshot,
   MidBlockCheckpoint,
+  PlanSessionStatus,
 } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
 import { mondayOf } from "@/lib/week"
 import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
-// Shared with the server so a session reads as the same distance on both sides.
-// The client used to take the midpoint of a range where the server took the
-// high end, so weekly totals in the app never matched the stored targetKm.
-import { parseSessionDistanceKm } from "@/lib/training-sessions"
+// Which run finished which session. Shared with the server so the count on
+// Today and the ticks on this screen can never disagree — and it reads session
+// distances with the same parser the server allocates them with, so a session
+// is never one length here and another there.
+import { matchSessionsToActivities } from "@/lib/plan-session-match"
+import { startOfWeek as toMonday, sessionKey } from "@/lib/plan-today"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
 import { Button } from '@/components/ui/button'
+import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { Pill } from '@/components/ui/pill'
 
 /**
@@ -209,6 +214,18 @@ interface GoalDetailScreenProps {
   onPlanChange?: () => void
   /** Unpins the goal from Today. Offered once its date has gone. */
   onToggleStar?: (goalId: string) => void
+  /**
+   * The runner's own session statuses, seeded by the page render. Without them
+   * the ticks arrive a round trip after the plan does, so a week the runner
+   * has been through renders empty and then fills in under them.
+   */
+  initialSessionStatuses?: Record<string, PlanSessionStatus>
+  /**
+   * A session was ticked off, skipped or put back. Today shows the same week's
+   * count, and this screen unmounts on every tab change — so the answer has to
+   * go somewhere that outlives it.
+   */
+  onSessionStatusChange?: (goalId: string, key: string, status: PlanSessionStatus) => void
 }
 
 // ---- Collapsible Section ----
@@ -631,59 +648,7 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 }
 
 // ---- Session status type ----
-type SessionStatus = "planned" | "completed" | "skipped"
-
-/**
- * Auto-match activities to planned sessions for a given week.
- * Builds all valid (session, activity) pairs sorted by distance delta,
- * then greedily assigns the closest pair first.
- * Each activity matches at most one session.
- *
- * Matching rule: activity distance must be ≥ 80% of planned distance
- * (i.e. you must run at least 80% of the planned distance to count as
- * completed). Running further than planned always counts.
- */
-function autoMatchSessions(
-  sessions: { type: string; distance: string }[],
-  weekActivities: { distance_km: number }[],
-): boolean[] {
-  const matched = new Array<boolean>(sessions.length).fill(false)
-  if (weekActivities.length === 0) return matched
-
-  // Parse each session's target distance
-  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionDistanceKm(s.distance) }))
-    .filter((s) => s.km > 0)
-
-  // Build all valid (session, activity) candidate pairs
-  const candidates: { si: number; ai: number; delta: number }[] = []
-  for (const session of sessionKms) {
-    const minRequired = session.km * 0.80 // must run at least 80% of planned
-    for (let ai = 0; ai < weekActivities.length; ai++) {
-      const actKm = Number(weekActivities[ai].distance_km)
-      if (actKm >= minRequired) {
-        // Delta = how far the activity is from planned (for ranking closeness)
-        const delta = Math.abs(actKm - session.km)
-        candidates.push({ si: session.i, ai, delta })
-      }
-    }
-  }
-
-  // Sort by delta ascending — closest matches first
-  candidates.sort((a, b) => a.delta - b.delta)
-
-  // Greedily assign closest pairs, each session and activity used at most once
-  const usedActivities = new Set<number>()
-  const usedSessions = new Set<number>()
-
-  for (const { si, ai } of candidates) {
-    if (usedSessions.has(si) || usedActivities.has(ai)) continue
-    matched[si] = true
-    usedSessions.add(si)
-    usedActivities.add(ai)
-  }
-
-  return matched
-}
+type SessionStatus = PlanSessionStatus
 
 // ---- Training week card ----
 function WeekCard({
@@ -714,6 +679,11 @@ function WeekCard({
     : null
 
   const completedCount = sessionStatuses.filter((s) => s === "completed").length
+  // Counted and shown the same way as the completed sessions. Skipping was
+  // already a state the runner could set, but the only trace of it was inside
+  // the expanded week — so a collapsed week that read "2/4 done" looked like
+  // two sessions still to come when in fact two had been written off.
+  const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
   const totalSessions = week.sessions.length
 
   // Format date range like "3. mar – 9. mar"
@@ -765,6 +735,11 @@ function WeekCard({
               {(isPast || isCurrent) && completedCount > 0 && (
                 <span className="text-micro font-medium text-success">
                   {completedCount}/{totalSessions} done
+                </span>
+              )}
+              {(isPast || isCurrent) && skippedCount > 0 && (
+                <span className="text-micro font-medium text-muted-foreground">
+                  {skippedCount}/{totalSessions} skipped
                 </span>
               )}
             </div>
@@ -1051,6 +1026,8 @@ export function GoalDetailScreen({
   onOpenGroup,
   sharedGoal,
   onSharedGoalChange,
+  initialSessionStatuses,
+  onSessionStatusChange,
 }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
@@ -1072,6 +1049,13 @@ export function GoalDetailScreen({
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<string | null>(null)
+  // Set when generating would put away a block that is still running on another
+  // race. Holds the note alongside it so confirming resumes the same request
+  // rather than dropping what the runner typed.
+  const [supersedeConflict, setSupersedeConflict] = useState<{
+    blocks: Array<{ goalId: string; name: string; weeksLeft: number }>
+    note: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Until the lookup answers, "no plan" is unknown rather than false. The
   // empty state it used to render carries a live Generate button, so a goal
@@ -1101,6 +1085,7 @@ export function GoalDetailScreen({
             generated_at: data.generated_at,
             previous_plans: data.previous_plans ?? [],
             mid_block_checkpoint: data.mid_block_checkpoint ?? null,
+            archived_at: data.archived_at ?? null,
           })
           if (data.pace_source) setPaceSource(data.pace_source)
           // Surface any previously applied checkpoint
@@ -1134,8 +1119,13 @@ export function GoalDetailScreen({
     load().finally(() => setPlanResolved(true))
   }, [goal.id])
 
-  // Manual overrides persisted to database (with localStorage fallback)
-  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>({})
+  // Manual overrides persisted to database (with localStorage fallback).
+  // Seeded from the page render so the ticks are there with the plan rather
+  // than a round trip behind it; the fetch below still runs and wins, because
+  // the seed is as old as the page load.
+  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>(
+    initialSessionStatuses ?? {},
+  )
 
   useEffect(() => {
     // Load from database first, fall back to localStorage
@@ -1190,9 +1180,9 @@ export function GoalDetailScreen({
         const d = new Date(a.date)
         return d >= weekStart && d < weekEnd
       })
-      const matched = autoMatchSessions(week.sessions, weekActs)
+      const matched = matchSessionsToActivities(week.sessions, weekActs)
       matched.forEach((m, si) => {
-        if (m) result[`W${week.weekNumber}-${si}`] = "completed"
+        if (m) result[sessionKey(week.weekNumber, si)] = "completed"
       })
     }
     return result
@@ -1204,7 +1194,7 @@ export function GoalDetailScreen({
   }, [autoStatuses, manualStatuses])
 
   const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
-    const key = `W${weekNumber}-${sessionIndex}`
+    const key = sessionKey(weekNumber, sessionIndex)
     const effective = sessionStatuses[key] ?? "planned"
     const next: SessionStatus =
       effective === "planned" ? "completed"
@@ -1212,6 +1202,7 @@ export function GoalDetailScreen({
       : "planned"
 
     setManualStatuses((prev) => ({ ...prev, [key]: next }))
+    onSessionStatusChange?.(goal.id, key, next)
 
     // Persist to database; fall back to localStorage on any failure (network error or non-2xx)
     fetch("/api/ai/training-plan/sessions", {
@@ -1227,7 +1218,7 @@ export function GoalDetailScreen({
       const stored = JSON.parse(localStorage.getItem(`session-statuses-${goal.id}`) ?? "{}")
       localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify({ ...stored, [key]: next }))
     } catch {}
-  }, [goal.id, sessionStatuses])
+  }, [goal.id, sessionStatuses, onSessionStatusChange])
 
   const handleApplyCheckpoint = useCallback(async () => {
     setIsApplyingCheckpoint(true)
@@ -1256,7 +1247,7 @@ export function GoalDetailScreen({
   }, [goal.id, onPlanChange])
 
   const handleGenerate = useCallback(
-    async (note?: string) => {
+    async (note?: string, supersede = false) => {
       // Guard: target_date in the past would produce a degenerate empty plan
       // and waste a Claude call. The server rejects it too, but we short-circuit
       // here so the UI shows a clear error instead of a spinner that dies.
@@ -1283,11 +1274,17 @@ export function GoalDetailScreen({
         const res = await fetch("/api/ai/training-plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goalId: goal.id, adjustNote: note || null }),
+          body: JSON.stringify({ goalId: goal.id, adjustNote: note || null, supersede }),
         })
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
+          // Another race still has a live block. Not an error — a question, and
+          // one the runner has to answer before anything is put away.
+          if (res.status === 409 && data.conflict?.blocks?.length) {
+            setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
+            return
+          }
           setError(data.error ?? "Failed to generate plan")
           return
         }
@@ -1672,6 +1669,29 @@ export function GoalDetailScreen({
         {/* Plan exists */}
         {aiPlan && !isGenerating && (
           <div className="flex flex-col gap-3">
+            {/*
+              Put away when the runner generated a block for another race. The
+              plan stays on screen — it is what they did — but it is stated up
+              front, because a block that silently stopped counting is worse
+              than one that says it has.
+            */}
+            {aiPlan.archived_at && (
+              <div className="flex gap-2.5 rounded-lg bg-surface-sunken px-4 py-3.5 ring-1 ring-border">
+                <Archive size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-label font-medium text-foreground">{t("plan.archivedTitle")}</p>
+                  <p className="text-micro text-muted-foreground">
+                    {t("plan.archivedBody", {
+                      date: new Date(aiPlan.archived_at).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "long",
+                      }),
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Block completion summary */}
             {isBlockExpired && blockCompletionStats && (
               <div className="flex gap-2.5 rounded-lg bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
@@ -1923,6 +1943,51 @@ export function GoalDetailScreen({
         )}
       </section>
       </div>
+
+      {/*
+        One block at a time. The runner is told what generating would put away
+        and decides — rather than being refused and asked to go and tidy up a
+        state the app let them reach, or finding out afterwards that a block
+        they were mid-way through had quietly stopped counting.
+      */}
+      <PromptDialog
+        open={supersedeConflict !== null}
+        onClose={() => setSupersedeConflict(null)}
+        title={t("plan.supersedeTitle")}
+        closeLabel={t("plan.supersedeCancel")}
+        footer={
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={() => {
+                const pending = supersedeConflict
+                setSupersedeConflict(null)
+                if (pending) void handleGenerate(pending.note, true)
+              }}
+            >
+              {t("plan.supersedeConfirm")}
+            </Button>
+            <Button variant="ghost" onClick={() => setSupersedeConflict(null)}>
+              {t("plan.supersedeCancel")}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-body text-muted-foreground">
+          {supersedeConflict && supersedeConflict.blocks.length === 1
+            ? t("plan.supersedeBody", {
+                names: supersedeConflict.blocks[0].name,
+                weeks: t(
+                  supersedeConflict.blocks[0].weeksLeft === 1
+                    ? "plan.supersedeWeeks"
+                    : "plan.supersedeWeeksPlural",
+                  { count: supersedeConflict.blocks[0].weeksLeft },
+                ),
+              })
+            : t("plan.supersedeBodyPlural", {
+                names: (supersedeConflict?.blocks ?? []).map((b) => b.name).join(", "),
+              })}
+        </p>
+      </PromptDialog>
     </>
   )
 }

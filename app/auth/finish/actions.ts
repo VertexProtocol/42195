@@ -5,14 +5,8 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { safeNext } from "@/lib/auth-redirect"
 import { isPlaceholderEmail } from "@/lib/strava-account"
-import { logError } from "@/lib/log"
-
-export type SaveEmailStatus = "idle" | "invalid" | "taken" | "failed"
-export interface SaveEmailState {
-  status: SaveEmailStatus
-}
-
-export const SAVE_EMAIL_IDLE: SaveEmailState = { status: "idle" }
+import { recordServerError } from "@/lib/error-sink"
+import type { SaveEmailState } from "./state"
 
 /**
  * Put a real address on an account that arrived through Strava.
@@ -36,6 +30,38 @@ export async function saveEmailAction(
   // The browser has already checked the shape; this is the copy that counts.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: "invalid" }
 
+  let outcome: StoreResult
+  try {
+    outcome = await storeEmail(email)
+  } catch (err) {
+    // Whatever else went wrong, this screen is the only way an account that
+    // arrived through Strava can ever be given a real address — Profile's
+    // "add email" link comes back here. Letting the throw reach the error
+    // boundary turns the one route to an address into a dead end, and the
+    // runner cannot tell a broken screen from a broken app.
+    //
+    // Recorded rather than logged: this is the failure that had no readable
+    // trace, and the next one deserves a stack somebody can open.
+    await recordServerError("auth.finish.unexpected", err)
+    outcome = { status: "failed" }
+  }
+
+  if (outcome.status !== "saved") return outcome
+
+  // Outside the try, and it belongs there: redirect() reports itself by
+  // throwing, so catching around it would swallow the success and show the
+  // runner a failure after the address was saved.
+  //
+  // Straight on to wherever they were going. There is nothing to confirm and
+  // nothing more to fill in, so a "saved" screen would be a step for its own
+  // sake.
+  redirect(safeNext(formData.get("next") as string | null))
+}
+
+/** Saved, or the reason it was not. Separate so the redirect stays outside the try. */
+type StoreResult = SaveEmailState | { status: "saved" }
+
+async function storeEmail(email: string): Promise<StoreResult> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -55,7 +81,7 @@ export async function saveEmailAction(
     if (message.includes("already been registered") || message.includes("already exists")) {
       return { status: "taken" }
     }
-    logError("auth.finish.email", error.message)
+    await recordServerError("auth.finish.email", error, { userId: user.id })
     return { status: "failed" }
   }
 
@@ -66,10 +92,11 @@ export async function saveEmailAction(
     .update({ email })
     .eq("id", user.id)
 
-  if (profileError) logError("auth.finish.profile", profileError.message)
+  if (profileError) {
+    // The address is already on the account by this point, so this is a
+    // mismatch to repair rather than a failure to report to the runner.
+    await recordServerError("auth.finish.profile", profileError, { userId: user.id })
+  }
 
-  // Straight on to wherever they were going. There is nothing to confirm and
-  // nothing more to fill in, so a "saved" screen would be a step for its own
-  // sake.
-  redirect(safeNext(formData.get("next") as string | null))
+  return { status: "saved" }
 }

@@ -6,7 +6,8 @@ import { useI18n } from "@/lib/i18n"
 import { AuthShell, AuthError, Field } from "@/components/auth-shell"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { SAVE_EMAIL_IDLE, saveEmailAction, type SaveEmailStatus } from "./actions"
+import { saveEmailAction } from "./actions"
+import { SAVE_EMAIL_IDLE, type SaveEmailStatus } from "./state"
 
 const ERROR_COPY: Partial<Record<SaveEmailStatus, "auth.finishInvalid" | "auth.finishTaken" | "auth.finishFailed">> = {
   invalid: "auth.finishInvalid",

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { logError } from "@/lib/log"
+import { recordServerError } from "@/lib/error-sink"
 import { athleteDisplayName, placeholderEmailFor, type StravaAthlete } from "@/lib/strava-account"
 
 /**
@@ -36,7 +36,7 @@ export async function findUserIdForAthlete(athleteId: number): Promise<string | 
     .maybeSingle()
 
   if (error) {
-    logError("strava.identity.lookup", error.message)
+    await recordServerError("strava.identity.lookup", error)
     return null
   }
 
@@ -72,7 +72,7 @@ export async function createAccountForAthlete(
   })
 
   if (error || !data.user) {
-    logError("strava.identity.create", error?.message ?? "no user returned")
+    await recordServerError("strava.identity.create", error ?? "no user returned")
     return null
   }
 
@@ -97,7 +97,7 @@ export async function startSessionForEmail(email: string): Promise<boolean> {
 
   const hashedToken = data?.properties?.hashed_token
   if (error || !hashedToken) {
-    logError("strava.identity.link", error?.message ?? "no hashed_token returned")
+    await recordServerError("strava.identity.link", error ?? "no hashed_token returned")
     return false
   }
 
@@ -108,7 +108,7 @@ export async function startSessionForEmail(email: string): Promise<boolean> {
   })
 
   if (verifyError) {
-    logError("strava.identity.verify", verifyError.message)
+    await recordServerError("strava.identity.verify", verifyError)
     return false
   }
 

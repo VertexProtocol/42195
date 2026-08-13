@@ -158,6 +158,13 @@ export interface TrainingSession {
   suggestedPace?: string    // e.g. "5:20–5:30 /km" — computed deterministically post-AI
 }
 
+/**
+ * Where a planned session stands. Derived from the runner's activities unless
+ * they have said otherwise by hand, in which case the manual answer wins and
+ * is stored in `session_completions`.
+ */
+export type PlanSessionStatus = "planned" | "completed" | "skipped"
+
 export interface TrainingWeek {
   weekNumber: number
   theme: string
@@ -179,6 +186,12 @@ export interface TrainingPlan {
    * calculation the plan never used.
    */
   paceSource?: PaceSource
+  /**
+   * Which revision of the pace rules produced this plan's session paces. See
+   * PACE_ASSIGNMENT_VERSION. Absent on every plan written before the field
+   * existed, which is exactly what marks them as needing a re-pace.
+   */
+  paceVersion?: number
 }
 
 export type PaceSource = "test_run" | "prediction" | "historical" | "none"
@@ -270,6 +283,12 @@ export interface AiTrainingPlan {
   generated_at: string
   previous_plans: PlanSnapshot[]
   mid_block_checkpoint?: MidBlockCheckpoint | null
+  /**
+   * When this block stopped being the runner's training, because they
+   * generated one for another race. Null while it is the live block. The plan
+   * is still readable — it is their history — but nothing counts against it.
+   */
+  archived_at?: string | null
 }
 
 // ---- Mid-block checkpoint types ----

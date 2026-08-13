@@ -1,10 +1,9 @@
 "use client"
 
-import { Check } from "lucide-react"
+import { useState } from "react"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import type { GetStartedProgress, GetStartedStep, GetStartedStepId } from "@/lib/onboarding"
-import { AppCard, CardRow } from "@/components/ui/app-card"
-import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
+import { PromptDialog } from "@/components/ui/prompt-dialog"
 import { Button } from "@/components/ui/button"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 
@@ -13,12 +12,20 @@ import { ConnectWithStravaButton } from "@/components/strava-brand"
  *
  * First run is not a tour. A carousel over the top of the app teaches the
  * menus in the one moment the runner has no data to see in them, and it can
- * only be taken once. This is a checklist that sits at the top of Today,
- * inside the app rather than over it: three things worth doing, each with the
- * control that does it and the surface it belongs to named in the copy. The
- * app underneath stays usable throughout, a finished step collapses to a
- * marked line instead of vanishing, and hiding it is remembered on the
- * account — Profile brings it back.
+ * only be taken once. What is already done is read from the account rather
+ * than remembered, so the list is right on a second device and after data is
+ * deleted.
+ *
+ * It is asked one thing at a time. As a checklist it was three tasks, three
+ * paragraphs and four controls in a single surface — everything the app wanted
+ * from a new account, all at once, on the screen they had come to look at. As
+ * a sequence of small prompts each one is a single question with the single
+ * control that answers it, and the app behind stays visible through the scrim.
+ *
+ * Only the outstanding steps are walked through: a runner who already has
+ * Strava connected should not have to press Next past a tick to reach the
+ * thing they have not done. Closing puts it away until the next session.
+ * Hiding it is remembered on the account, and Profile brings it back.
  */
 
 const STEP_COPY: Record<
@@ -30,7 +37,8 @@ const STEP_COPY: Record<
   week: { title: "getStarted.weekTitle", body: "getStarted.weekBody" },
 }
 
-interface GetStartedProps {
+interface GetStartedDialogProps {
+  open: boolean
   steps: GetStartedStep[]
   progress: GetStartedProgress
   stravaConnected: boolean
@@ -39,10 +47,14 @@ interface GetStartedProps {
   onAddGoal: () => void
   onAddWeeklyGoal: () => void
   onViewInsights: () => void
-  onDismiss: () => void
+  /** Put it away for now. It returns next session while there is work left. */
+  onClose: () => void
+  /** Stop offering it. Remembered on the account; Profile brings it back. */
+  onHide: () => void
 }
 
-export function GetStarted({
+export function GetStartedDialog({
+  open,
   steps,
   progress,
   stravaConnected,
@@ -51,112 +63,114 @@ export function GetStarted({
   onAddGoal,
   onAddWeeklyGoal,
   onViewInsights,
-  onDismiss,
-}: GetStartedProps) {
+  onClose,
+  onHide,
+}: GetStartedDialogProps) {
   const { t } = useI18n()
 
-  const progressText = `${progress.done} ${t("getStarted.of")} ${progress.total} ${t(
-    "getStarted.completed",
-  )}`
+  const outstanding = steps.filter((step) => !step.done)
+  // A runner who finished everything and then asked for the list from Profile
+  // still gets an answer: the one page the checklist always ended on.
+  const pages: (GetStartedStep | null)[] = outstanding.length > 0 ? outstanding : [null]
+
+  const [rawIndex, setRawIndex] = useState(0)
+  // Clamped rather than stored clamped: finishing a step shortens the list
+  // under us, and an index past the end would render nothing at all.
+  const index = Math.min(rawIndex, pages.length - 1)
+  const page = pages[index]
+
+  const isLast = index === pages.length - 1
+
+  // Every step's control opens an editor, and an editor is a sheet. Two
+  // stacked modals is one modal the runner cannot see the top of, so this one
+  // gets out of the way first.
+  const andClose = (action: () => void) => () => {
+    onClose()
+    action()
+  }
+
+  const title = page ? t(STEP_COPY[page.id].title) : t("getStarted.readyTitle")
+  const body = page ? t(STEP_COPY[page.id].body) : t("getStarted.readyBody")
 
   return (
-    <Section>
-      <SectionHeader
-        title={t("getStarted.title")}
-        hint={progressText}
-        action={<SectionAction onClick={onDismiss}>{t("getStarted.hide")}</SectionAction>}
-      />
-
-      <AppCard variant="rows">
-        {steps.map((step, i) => (
-          <CardRow key={step.id} className="flex items-start gap-3">
-            <span
-              aria-hidden
-              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${
-                step.done ? "bg-success/14 text-success" : "bg-surface-sunken text-muted-foreground"
-              }`}
-            >
-              {step.done ? (
-                <Check size={12} />
-              ) : (
-                <span className="measure text-micro font-semibold leading-none">{i + 1}</span>
-              )}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <p
-                className={`text-label font-semibold ${
-                  step.done ? "text-muted-foreground" : "text-card-foreground"
-                }`}
-              >
-                {/* The marker is decorative, so the state is spelled out here
-                    for anyone who cannot see the tick. */}
-                <span className="sr-only">
-                  {step.done ? t("getStarted.stepDone") : t("getStarted.stepTodo")}:{" "}
-                </span>
-                {t(STEP_COPY[step.id].title)}
-              </p>
-
-              {/* A finished step collapses to its title: the list gets shorter
-                  as the runner works through it, and the remaining work stays
-                  the largest thing on the card. */}
-              {!step.done && (
-                <>
-                  <p className="mt-1 max-w-[42ch] text-micro leading-relaxed text-muted-foreground">
-                    {t(STEP_COPY[step.id].body)}
-                  </p>
-
-                  <div className="mt-3 flex flex-col gap-2">
-                    {step.id === "runs" && (
-                      <>
-                        {!stravaConnected && (
-                          <ConnectWithStravaButton onClick={onConnectStrava} />
-                        )}
-                        <Button variant="secondary" block onClick={onAddActivity}>
-                          {t("getStarted.addRun")}
-                        </Button>
-                      </>
-                    )}
-                    {step.id === "race" && (
-                      <Button className="self-start" onClick={onAddGoal}>
-                        {t("getStarted.addRace")}
-                      </Button>
-                    )}
-                    {step.id === "week" && (
-                      <Button className="self-start" onClick={onAddWeeklyGoal}>
-                        {t("getStarted.addWeek")}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
+    <PromptDialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      description={body}
+      closeLabel={t("getStarted.closeForNow")}
+      footer={
+        <div className="flex flex-col gap-3">
+          {/* Position, not navigation — the same reading as the goal rail on
+              Today. Hidden from screen readers, which get the count in words
+              on the button beside it. */}
+          {pages.length > 1 && (
+            <div className="flex justify-center gap-1.5" aria-hidden>
+              {pages.map((_, i) => (
+                <span
+                  key={i}
+                  className={`size-1.5 rounded-full ${i === index ? "bg-primary" : "bg-border"}`}
+                  style={{ transition: "background-color var(--dur-state) var(--ease-out)" }}
+                />
+              ))}
             </div>
-          </CardRow>
-        ))}
+          )}
 
-        {/* The last thing the checklist does is name the surface it never had
-            a step for, and then get out of the way. */}
-        {progress.complete && (
-          <CardRow className="flex flex-col gap-2">
-            <p className="text-label font-semibold text-card-foreground">
-              {t("getStarted.readyTitle")}
-            </p>
-            <p className="max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
-              {t("getStarted.readyBody")}
-            </p>
-            <div className="mt-1 flex flex-wrap gap-2">
-              <Button onClick={onViewInsights}>{t("getStarted.openInsights")}</Button>
-              <Button variant="ghost" onClick={onDismiss}>
+          {/* Both full-height controls: a dialog's own navigation is not a
+              control inside a row with a hit area of its own, so neither drops
+              under the 44px floor. The step count is left to the dots rather
+              than printed on the button, which is what keeps the two of them
+              side by side on a 320px screen. */}
+          <div className="flex items-center justify-between gap-2">
+            {index > 0 ? (
+              <Button variant="ghost" onClick={() => setRawIndex(index - 1)}>
+                {t("common.back")}
+              </Button>
+            ) : (
+              <Button variant="ghost" onClick={onHide}>
                 {t("getStarted.hide")}
               </Button>
-            </div>
-          </CardRow>
-        )}
-      </AppCard>
+            )}
 
-      {!progress.complete && (
-        <p className="text-micro text-muted-foreground">{t("getStarted.hideHint")}</p>
-      )}
-    </Section>
+            <Button onClick={isLast ? onClose : () => setRawIndex(index + 1)}>
+              {isLast ? t("getStarted.done") : t("getStarted.next")}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        {page?.id === "runs" && (
+          <>
+            {!stravaConnected && <ConnectWithStravaButton onClick={andClose(onConnectStrava)} />}
+            <Button variant="secondary" block onClick={andClose(onAddActivity)}>
+              {t("getStarted.addRun")}
+            </Button>
+          </>
+        )}
+        {page?.id === "race" && (
+          <Button block onClick={andClose(onAddGoal)}>
+            {t("getStarted.addRace")}
+          </Button>
+        )}
+        {page?.id === "week" && (
+          <Button block onClick={andClose(onAddWeeklyGoal)}>
+            {t("getStarted.addWeek")}
+          </Button>
+        )}
+        {page === null && (
+          <Button block onClick={andClose(onViewInsights)}>
+            {t("getStarted.openInsights")}
+          </Button>
+        )}
+
+        {/* Said once, on the page that offers to hide it. */}
+        {index === 0 && progress.done > 0 && outstanding.length > 0 && (
+          <p className="pt-1 text-micro text-muted-foreground">
+            {t("getStarted.alreadyDone", { done: progress.done, total: progress.total })}
+          </p>
+        )}
+      </div>
+    </PromptDialog>
   )
 }
