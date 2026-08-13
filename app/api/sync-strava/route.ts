@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { recordSyncFailure, recordSyncResult, syncUserActivities } from "@/lib/strava-sync"
 import { StravaAppInactiveError, StravaAuthError } from "@/lib/strava"
+import { syncCooldownRemainingMs } from "@/lib/sync-constants"
 
 // A history sync is chunked (see syncUserActivities), but one chunk still needs
 // room for up to eight Strava reads plus the upserts.
@@ -61,12 +62,25 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (!isContinuation && prevSync?.last_sync_at) {
-    const lastSync = new Date(prevSync.last_sync_at).getTime()
-    if (Date.now() - lastSync < 30_000) {
+  // A deliberate full re-read of the history is exempt. The cooldown is there
+  // to absorb repeated presses of an ordinary sync, which would find nothing;
+  // a full re-sync is asked for once, behind a confirmation, and does have
+  // something to do. Strava's own rate limit still bounds it.
+  if (!isContinuation && !fullSync && prevSync?.last_sync_at) {
+    const remainingMs = syncCooldownRemainingMs(prevSync.last_sync_at as string)
+    if (remainingMs > 0) {
+      // Not a failure. The previous sync finished, and finished recently — this
+      // one is turned away because there is nothing new for it to fetch yet.
+      // The code is what stops the client painting a red line over a sync that
+      // worked, the same reason SYNC_IN_PROGRESS below carries one.
       return NextResponse.json(
-        { error: "Please wait at least 30 seconds before syncing again" },
-        { status: 429 },
+        {
+          error: "Just synced. Give Strava a moment before asking again.",
+          code: "SYNC_TOO_SOON",
+          retry_after_seconds: Math.ceil(remainingMs / 1000),
+          last_sync_at: prevSync.last_sync_at,
+        },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(remainingMs / 1000)) } },
       )
     }
   }

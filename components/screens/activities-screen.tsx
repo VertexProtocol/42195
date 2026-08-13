@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useReducer,
   useSyncExternalStore,
 } from "react"
 import {
@@ -22,6 +23,7 @@ import {
 } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import type { Activity, SyncStatus } from "@/lib/types"
+import { syncCooldownRemainingMs } from "@/lib/sync-constants"
 import { useI18n } from "@/lib/i18n"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { AppCard, CardRow } from "@/components/ui/app-card"
@@ -107,20 +109,25 @@ export function ActivitiesScreen({
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
-  const [syncSuccess, setSyncSuccess] = useState(false)
-  // Brief confirmation when a sync lands, so the button reports its own result.
-  const prevSyncStateRef = useRef(syncStatus.state)
+  // A sync asked for inside the cooldown is turned away by the server, so for
+  // exactly that long the button says "Synced" and does not invite the press.
+  // This replaced a three-second confirmation that expired while the sync was
+  // still being declined, leaving a live-looking button that could only fail.
+  //
+  // Derived during render rather than held in state: the clock is the source,
+  // and the effect's only job is to ask for one more render at the moment the
+  // cooldown lapses.
+  const [, tick] = useReducer((n: number) => n + 1, 0)
+  const coolingDown = syncCooldownRemainingMs(syncStatus.last_sync_at) > 0
   useEffect(() => {
-    const prev = prevSyncStateRef.current
-    prevSyncStateRef.current = syncStatus.state
-    if (prev === "syncing" && syncStatus.state === "success") {
-      setSyncSuccess(true)
-      const timer = setTimeout(() => setSyncSuccess(false), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [syncStatus.state])
+    const remaining = syncCooldownRemainingMs(syncStatus.last_sync_at)
+    if (remaining <= 0) return
+    const timer = setTimeout(tick, remaining)
+    return () => clearTimeout(timer)
+  }, [syncStatus.last_sync_at])
 
   const isSyncing = syncStatus.state === "syncing"
+  const syncSuccess = coolingDown && syncStatus.state === "success"
 
   // ---- Pull to refresh -----------------------------------------------------
   // The page scrolls on the document, so the gesture arms off window scroll
@@ -131,11 +138,11 @@ export function ActivitiesScreen({
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (window.scrollY > 0 || isSyncing || !stravaConnected) return
+      if (window.scrollY > 0 || isSyncing || coolingDown || !stravaConnected) return
       touchStartY.current = e.touches[0].clientY
       isPulling.current = true
     },
-    [isSyncing, stravaConnected],
+    [isSyncing, coolingDown, stravaConnected],
   )
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -147,12 +154,11 @@ export function ActivitiesScreen({
   const onTouchEnd = useCallback(() => {
     if (!isPulling.current) return
     isPulling.current = false
-    if (pullDistance >= PULL_THRESHOLD && stravaConnected && !isSyncing) {
-      setSyncSuccess(false)
+    if (pullDistance >= PULL_THRESHOLD && stravaConnected && !isSyncing && !coolingDown) {
       onSync()
     }
     setPullDistance(0)
-  }, [pullDistance, stravaConnected, isSyncing, onSync])
+  }, [pullDistance, stravaConnected, isSyncing, coolingDown, onSync])
 
   // Only offer filters for types that actually exist, most frequent first.
   const activityTypes = useMemo(() => {
@@ -260,12 +266,9 @@ export function ActivitiesScreen({
             variant={syncSuccess ? "ghost" : "secondary"}
             size="sm"
             className={`flex-1 ${syncSuccess ? "text-success" : ""}`}
-            onClick={() => {
-              setSyncSuccess(false)
-              onSync()
-            }}
+            onClick={onSync}
             loading={isSyncing}
-            disabled={isSyncing}
+            disabled={isSyncing || coolingDown}
           >
             {!isSyncing && (syncSuccess ? <Check size={14} /> : <RefreshCw size={14} />)}
             {isSyncing
@@ -368,11 +371,9 @@ export function ActivitiesScreen({
           action={
             stravaConnected ? (
               <Button
-                onClick={() => {
-                  setSyncSuccess(false)
-                  onSync()
-                }}
+                onClick={onSync}
                 loading={isSyncing}
+                disabled={isSyncing || coolingDown}
               >
                 {!isSyncing && <RefreshCw size={16} />}
                 {isSyncing ? t("profile.syncing") : t("activities.syncStrava")}
