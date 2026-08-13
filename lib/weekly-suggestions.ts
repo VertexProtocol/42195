@@ -167,6 +167,12 @@ export interface WeeklySuggestion {
   metric: SuggestableMetric
   /** Rounded, ready to show and to store. */
   target: number
+  /**
+   * The Monday this is for. Carried on the suggestion because it can now be
+   * next week's: whatever accepts it has to write the row against the week it
+   * was derived for, not against whatever week it happens to be opened in.
+   */
+  weekStart: string
   source: WeeklySuggestionSource
   /** The race this came from, or null for a history-based suggestion. */
   sourceGoalId: string | null
@@ -182,6 +188,15 @@ export interface WeeklySuggestion {
   /** True when the number is a holding pattern rather than a projection. */
   lowConfidence?: boolean
 }
+
+/**
+ * A suggestion before the week it belongs to is stamped on it.
+ *
+ * The derivation works in one week at a time and has no reason to repeat which
+ * one on every object it builds; `suggestWeeklyGoals` stamps them all on the
+ * way out.
+ */
+type DerivedSuggestion = Omit<WeeklySuggestion, "weekStart">
 
 export interface WeeklySuggestionInput {
   goals: Goal[]
@@ -227,9 +242,74 @@ export function suggestWeeklyGoals(input: WeeklySuggestionInput): WeeklySuggesti
     ? fromGoal(pacesetter, planByGoal.get(pacesetter.id), preferences[pacesetter.id], runs, weekStart, now)
     : fromHistory(runs, now)
 
-  const clamped = applyRaceProximity(base, candidates, planByGoal, weekStart, runs, now)
+  const withSessions = applyPerformanceSessions(base, candidates, preferences)
+  const clamped = applyRaceProximity(withSessions, candidates, planByGoal, weekStart, runs, now)
 
-  return clamped.filter((s) => !isDismissed(s, input.dismissals))
+  return clamped
+    .filter((s) => !isDismissed(s, input.dismissals))
+    .map((s) => ({ ...s, weekStart }))
+}
+
+/**
+ * The goal whose volume sets the week, for this week.
+ *
+ * Exported so the Targets list can mark it. The drag order has quietly meant
+ * priority since step 1; a marker the engine and the screen work out
+ * separately would eventually disagree, and the disagreement would be the app
+ * pointing at the wrong race.
+ */
+export function selectPacesetter(goals: Goal[], weekStart: string): Goal | null {
+  return (
+    eligibleGoals(goals, weekRange(weekStart)).find(
+      (g) => g.goal_category === "event_training",
+    ) ?? null
+  )
+}
+
+/**
+ * A performance goal's claim on the week: how often, never how far.
+ *
+ * "10 km under 50 minutes" says nothing about weekly mileage — it is a
+ * requirement for one session, so these goals stay out of the volume decision
+ * entirely. What they do have is a training frequency, and it was going
+ * unused.
+ *
+ * Only raises a number that came from history, and only raises it. A block
+ * prescribes its own session count and a race being built toward already sets
+ * one; overruling either with a side goal's setting would be the smaller
+ * ambition rewriting the larger. Leaving a history figure that is already
+ * higher alone matters for the same reason in the other direction — a runner
+ * out four times a week should not be asked for three.
+ */
+function applyPerformanceSessions(
+  suggestions: DerivedSuggestion[],
+  candidates: Goal[],
+  preferences: Record<string, GoalPlanningPrefs>,
+): DerivedSuggestion[] {
+  const current = suggestions.find((s) => s.metric === "sessions")
+  if (!current || current.source !== "history") return suggestions
+
+  for (const goal of candidates) {
+    if (goal.goal_category !== "performance") continue
+    const wanted = preferences[goal.id]?.sessionsPerWeek
+    if (!wanted || wanted <= current.target) continue
+
+    return suggestions.map((s) =>
+      s.metric === "sessions"
+        ? {
+            ...s,
+            target: wanted,
+            source: "target" as const,
+            sourceGoalId: goal.id,
+            reasonKey: "weeklySuggestion.reason.targetSessions" as const,
+            reasonValues: { goal: goal.name },
+            lowConfidence: undefined,
+          }
+        : s,
+    )
+  }
+
+  return suggestions
 }
 
 /**
@@ -242,7 +322,7 @@ export function suggestWeeklyGoals(input: WeeklySuggestionInput): WeeklySuggesti
  * metric, is the same offer.
  */
 function isDismissed(
-  suggestion: WeeklySuggestion,
+  suggestion: DerivedSuggestion,
   dismissals: WeeklySuggestionDismissal[] | undefined,
 ): boolean {
   if (!dismissals?.length) return false
@@ -335,10 +415,10 @@ function fromGoal(
   runs: SafetyActivity[],
   weekStart: string,
   now: Date,
-): WeeklySuggestion[] {
+): DerivedSuggestion[] {
   const planned = digest ? planWeekFor(digest, weekStart) : null
   if (planned) {
-    const fromPlan: WeeklySuggestion[] = [
+    const fromPlan: DerivedSuggestion[] = [
       {
         metric: "distance_km",
         target: Math.round(planned.week.targetKm),
@@ -427,7 +507,7 @@ function planWeekFor(
  * should not decide what the app asks for next. Weeks without a run are
  * excluded for the same reason — they are absences, not light weeks.
  */
-function fromHistory(runs: SafetyActivity[], now: Date): WeeklySuggestion[] {
+function fromHistory(runs: SafetyActivity[], now: Date): DerivedSuggestion[] {
   const weeks = computeRecentWeeklyVolumes(runs, FITNESS_ANALYSIS_WEEKS, now)
   const activeWeeks = weeks.filter((km) => km > 0)
 
@@ -526,13 +606,13 @@ function median(values: number[]): number {
  * of being cut a second time.
  */
 function applyRaceProximity(
-  suggestions: WeeklySuggestion[],
+  suggestions: DerivedSuggestion[],
   candidates: Goal[],
   planByGoal: Map<string, PlanDigest>,
   weekStart: string,
   runs: SafetyActivity[],
   now: Date,
-): WeeklySuggestion[] {
+): DerivedSuggestion[] {
   const distance = suggestions.find((s) => s.metric === "distance_km")
   if (!distance) return suggestions
 

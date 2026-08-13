@@ -112,7 +112,11 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
   const handleSave = () => {
     if (!canSave) return
 
-    const mondayStr = weekStartStr()
+    // The week the suggestion was derived for, which is not always the week
+    // the app is standing in: a plan that covers next week can be accepted
+    // from there, and writing that target onto this week would set a number
+    // for days the runner has already run.
+    const mondayStr = suggestion?.weekStart ?? weekStartStr()
 
     const saved: WeeklyGoal = {
       id: isNew ? crypto.randomUUID() : goal!.id,

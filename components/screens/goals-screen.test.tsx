@@ -547,3 +547,114 @@ describe("GoalsScreen — accepting, adjusting and refusing", () => {
     expect(saved).toMatchObject({ target: 44, suggested_target: 52 })
   })
 })
+
+describe("GoalsScreen — the drag order as priority", () => {
+  const future = { target_date: daysFromNow(120), start_date: daysFromNow(-30) }
+
+  it("marks the race that sets the week", () => {
+    renderSuggestions({
+      initialTab: "race",
+      goals: [
+        makeGoal({ ...future, goal_category: "event_training", name: "Berlin", display_order: 2 }),
+        makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 1 }),
+      ],
+    })
+    expect(screen.getByText("A")).toBeTruthy()
+    expect(screen.getByText(/The order sets priority/)).toBeTruthy()
+  })
+
+  it("marks the race, never the performance goal above it", () => {
+    const perf = makeGoal({ ...future, goal_category: "performance", name: "Sub-50", display_order: 1 })
+    const race = makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 2 })
+    const { container } = renderSuggestions({ initialTab: "race", goals: [perf, race] })
+    const marked = container.querySelectorAll("span")
+    const pill = Array.from(marked).find((el) => el.textContent?.startsWith("A —"))
+    expect(pill).toBeTruthy()
+    // The pill sits inside Oslo's card, not the performance goal's.
+    expect(pill!.closest("div")!.textContent).toContain("Oslo")
+  })
+
+  it("stays quiet about an order of one", () => {
+    renderSuggestions({
+      initialTab: "race",
+      goals: [makeGoal({ ...future, goal_category: "event_training", name: "Oslo" })],
+    })
+    expect(screen.queryByText(/The order sets priority/)).toBeNull()
+  })
+})
+
+describe("GoalsScreen — stepping into next week", () => {
+  const weekStart = mondayThisWeek()
+
+  function nextMonday(): string {
+    const d = new Date(`${weekStart}T00:00:00`)
+    d.setDate(d.getDate() + 7)
+    const p = (n: number) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+
+  const race = makeGoal({
+    goal_category: "event_training",
+    name: "Oslo Marathon",
+    target_date: daysFromNow(120),
+    start_date: daysFromNow(-30),
+  })
+
+  it("will not go forward without a plan to go forward into", () => {
+    renderSuggestions()
+    expect(screen.getByRole("button", { name: /next week/i }).hasAttribute("disabled")).toBe(true)
+  })
+
+  it("goes forward one week when the block covers it", () => {
+    renderSuggestions({
+      goals: [race],
+      planDigests: [
+        {
+          goalId: race.id,
+          blockStartDate: weekStart,
+          weeks: [{ targetKm: 52, sessionCount: 5 }, { targetKm: 58, sessionCount: 5 }],
+        },
+      ],
+    })
+    const forward = screen.getByRole("button", { name: /next week/i })
+    expect(forward.hasAttribute("disabled")).toBe(false)
+    fireEvent.click(forward)
+    expect(screen.getByText("58 km")).toBeTruthy()
+    // And stops there — one week ahead is what the block can answer for.
+    expect(screen.getByRole("button", { name: /next week/i }).hasAttribute("disabled")).toBe(true)
+  })
+
+  it("accepts next week's target against next week", () => {
+    let received: { weekStart?: string } | undefined
+    renderSuggestions({
+      onAddWeeklyGoal: (s) => { received = s },
+      goals: [race],
+      planDigests: [
+        {
+          goalId: race.id,
+          blockStartDate: weekStart,
+          weeks: [{ targetKm: 52, sessionCount: 5 }, { targetKm: 58, sessionCount: 5 }],
+        },
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: /next week/i }))
+    fireEvent.click(screen.getAllByRole("button", { name: "Use this" })[0])
+    // Not this Monday — the row has to land on the week it was derived for.
+    expect(received?.weekStart).toBe(nextMonday())
+  })
+
+  it("offers no blank add button for a week that is not here yet", () => {
+    renderSuggestions({
+      goals: [race],
+      planDigests: [
+        {
+          goalId: race.id,
+          blockStartDate: weekStart,
+          weeks: [{ targetKm: 52, sessionCount: 5 }, { targetKm: 58, sessionCount: 5 }],
+        },
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: /next week/i }))
+    expect(screen.queryByRole("button", { name: /add weekly goal/i })).toBeNull()
+  })
+})

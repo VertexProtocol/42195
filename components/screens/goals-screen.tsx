@@ -58,9 +58,10 @@ import type {
 } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
-import { parseWeekStart, shiftWeekStr, weekStartStr } from "@/lib/week"
+import { parseWeekStart, shiftWeekStr, weekStartStr, weeksBetweenStarts } from "@/lib/week"
 import {
   detectSuggestionDrift,
+  selectPacesetter,
   suggestWeeklyGoals,
   type GoalPlanningPrefs,
   type PlanDigest,
@@ -318,7 +319,35 @@ export function GoalsScreen({
   const [selectedWeekStart, setSelectedWeekStart] = useState(todayMondayStr)
 
   const isCurrentWeek = selectedWeekStart === todayMondayStr
-  const canGoForward = selectedWeekStart < todayMondayStr
+  const nextMondayStr = shiftWeekStr(todayMondayStr, 1)
+
+  /**
+   * Next week is reachable only when a block actually prescribes it.
+   *
+   * The navigator was capped at today, which is right for a record of what has
+   * been run and wrong the moment the app can say what is coming. It is not
+   * opened up any further than that: without a plan, next week's number would
+   * be this week's arithmetic run a second time, and a forward arrow that
+   * leads to a guess is worse than no forward arrow.
+   */
+  const planCoversNextWeek = useMemo(
+    () =>
+      (planDigests ?? []).some((d) => {
+        const index = weeksBetweenStarts(
+          parseWeekStart(d.blockStartDate),
+          parseWeekStart(nextMondayStr),
+        )
+        return index >= 0 && index < d.weeks.length
+      }),
+    [planDigests, nextMondayStr],
+  )
+
+  const isNextWeek = selectedWeekStart === nextMondayStr
+  const canGoForward =
+    selectedWeekStart < todayMondayStr || (isCurrentWeek && planCoversNextWeek)
+
+  /** The weeks a suggestion is worth deriving for: this one, and a planned next. */
+  const isSuggestibleWeek = isCurrentWeek || (isNextWeek && planCoversNextWeek)
 
   // Recurring goals apply to every week; one-off goals only to their own.
   const selectedWeekGoals = useMemo(
@@ -381,7 +410,7 @@ export function GoalsScreen({
    * navigator from a record into a hypothetical.
    */
   const allSuggestions = useMemo(() => {
-    if (!isCurrentWeek) return []
+    if (!isSuggestibleWeek) return []
     return suggestWeeklyGoals({
       goals,
       plans: planDigests,
@@ -390,7 +419,7 @@ export function GoalsScreen({
       weekStart: selectedWeekStart,
       dismissals,
     })
-  }, [isCurrentWeek, goals, planDigests, goalPrefs, activities, selectedWeekStart, dismissals])
+  }, [isSuggestibleWeek, goals, planDigests, goalPrefs, activities, selectedWeekStart, dismissals])
 
   /**
    * The same set of suggestions in the two roles they can play: an offer for a
@@ -437,6 +466,17 @@ export function GoalsScreen({
   const goalNameById = useMemo(
     () => new Map(goals.map((g) => [g.id, g.name])),
     [goals],
+  )
+
+  /**
+   * The race whose volume sets this week, asked of the engine rather than
+   * worked out again here — two answers to "which race is the A race" would
+   * eventually differ, and the difference would be a marker pointing at the
+   * wrong card.
+   */
+  const pacesetterId = useMemo(
+    () => selectPacesetter(goals, todayMondayStr)?.id ?? null,
+    [goals, todayMondayStr],
   )
 
   /** Take the offered number, and record that it was offered. */
@@ -532,18 +572,22 @@ export function GoalsScreen({
             <EmptyState
               icon={<Flame size={18} />}
               title={
-                !isCurrentWeek
-                  ? t("goals.noGoalsThisWeek")
-                  : offers.length > 0
-                    ? t("weeklySuggestion.emptyTitle")
-                    : t("goals.noWeeklyGoals")
+                isNextWeek && offers.length > 0
+                  ? t("weeklySuggestion.nextWeekTitle")
+                  : !isCurrentWeek
+                    ? t("goals.noGoalsThisWeek")
+                    : offers.length > 0
+                      ? t("weeklySuggestion.emptyTitle")
+                      : t("goals.noWeeklyGoals")
               }
               body={
-                !isCurrentWeek
-                  ? t("goals.noGoalsSetThisWeek")
-                  : offers.length > 0
-                    ? t("weeklySuggestion.emptyBody")
-                    : t("goals.setTargets")
+                isNextWeek && offers.length > 0
+                  ? t("weeklySuggestion.nextWeekBody")
+                  : !isCurrentWeek
+                    ? t("goals.noGoalsSetThisWeek")
+                    : offers.length > 0
+                      ? t("weeklySuggestion.emptyBody")
+                      : t("goals.setTargets")
               }
               action={
                 isCurrentWeek ? (
@@ -868,6 +912,24 @@ export function GoalsScreen({
                                       {status?.reached && (
                                         <Trophy size={13} className="shrink-0 text-success" aria-hidden />
                                       )}
+                                      {/* The order has driven which race sets
+                                          the week since the engine landed; only
+                                          this says so. Without it the runner
+                                          who ordered the list by taste has been
+                                          setting a priority without being told
+                                          the list had one. */}
+                                      {goal.id === pacesetterId && (
+                                        <Pill tone="action" title={t("goals.pacesetterHint")}>
+                                          {t("goals.pacesetter")}
+                                          {/* "A" on its own is a letter. The
+                                              line under the list explains it
+                                              for everyone; this is so the
+                                              badge is not read out as one. */}
+                                          <span className="sr-only">
+                                            {` — ${t("goals.pacesetterHint")}`}
+                                          </span>
+                                        </Pill>
+                                      )}
                                     </span>
                                     <span className="mt-0.5 block truncate text-micro text-muted-foreground">
                                       {formatDistance(goal.target_distance_km)}
@@ -1083,6 +1145,18 @@ export function GoalsScreen({
                   </div>
                 </SortableContext>
               </DndContext>
+
+              {/* Says out loud what the drag order has been doing. The order
+                  was reused as priority rather than adding a fourth flag to a
+                  row that already carries is_active, is_starred and
+                  display_order — but that redefinition has to be seen, or a
+                  runner who ordered the list by taste has set an A race
+                  without knowing there was one to set. */}
+              {pacesetterId !== null && orderedRaceGoals.length > 1 && (
+                <p className="measure text-micro leading-relaxed text-muted-foreground">
+                  {t("goals.orderIsPriority")}
+                </p>
+              )}
 
               {/* One entry point, not one per category. The sheet opens on its
                   own goal-type selector, so a pair of buttons here asked the
