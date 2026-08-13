@@ -16,18 +16,6 @@ export interface StravaAthlete {
 }
 
 /**
- * Creating accounts from this path is off unless it is switched on.
- *
- * Registration is closed at the Supabase project level, and the admin call
- * that creates a user is not subject to that setting — so without a gate of
- * its own, this route would quietly reopen sign-up to anyone with a Strava
- * account. Existing runners can still sign in while it is off.
- */
-export function stravaSignupEnabled(): boolean {
-  return process.env.STRAVA_SIGNUP_ENABLED === "true"
-}
-
-/**
  * The address an account is created with before the runner gives us a real
  * one. `.invalid` is reserved by RFC 2606 and can never resolve, so this can
  * never accidentally deliver mail to a stranger.
