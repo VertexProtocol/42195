@@ -655,6 +655,13 @@ alter table public.sync_status
   add constraint sync_status_state_check
   check (state in ('success', 'error', 'syncing', 'never', 'partial', 'rate_limited'));
 
+-- Whether the unfinished run was walking the whole history, so the chunk that
+-- picks it up walks the whole history too. Only the browser used to know this,
+-- from the `full=1` it repeated on each continuation; the cron that finishes
+-- unwatched runs has no request to read it from. [031]
+alter table public.sync_status
+  add column if not exists resume_full boolean not null default false;
+
 
 -- ============================================================
 -- 024_add_onboarding_state.sql

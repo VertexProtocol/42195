@@ -346,6 +346,80 @@ export interface SyncOptions {
   resumeCursor?: number | null
 }
 
+/** The states a finished run can leave behind. */
+export type SyncState = "success" | "partial" | "rate_limited"
+
+/**
+ * What a run's outcome means for the row in `sync_status`.
+ *
+ * Three outcomes, and the difference between the last two matters: a run that
+ * stopped on Strava's app-wide limit cannot be retried until the window
+ * reopens, while one that merely ran out of pages or time can continue
+ * immediately.
+ */
+export function syncStateFor(result: SyncResult): SyncState {
+  if (result.done) return "success"
+  return result.resumeAt ? "rate_limited" : "partial"
+}
+
+/**
+ * Records what a run left behind: its state, where to resume, and when.
+ *
+ * A run that stopped early must not move `last_sync_at` — the next incremental
+ * sync would then skip everything it has not fetched yet.
+ *
+ * `resumeFull` is carried across chunks because it cannot be inferred later. A
+ * full backfill resumed as an incremental one stops at the previous successful
+ * sync and silently abandons the history before it.
+ *
+ * Shared by the route a runner triggers and the cron that finishes what those
+ * runs could not, so an unfinished sync is recorded the same way either way.
+ */
+export async function recordSyncResult(
+  userId: string,
+  result: SyncResult,
+  resumeFull: boolean,
+): Promise<SyncState> {
+  const service = createServiceClient()
+  const state = syncStateFor(result)
+
+  await service.from("sync_status").upsert(
+    {
+      user_id: userId,
+      state,
+      ...(result.done ? { last_sync_at: new Date().toISOString() } : {}),
+      cursor_before: result.resumeCursor,
+      resume_at: result.resumeAt,
+      resume_full: result.done ? false : resumeFull,
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  )
+
+  // Invalidate the HR analysis cache so the profile screen recomputes it
+  // against the runs that just landed.
+  if (result.synced > 0) {
+    await service.from("profiles").update({ hr_analysis_cache: null }).eq("id", userId)
+  }
+
+  return state
+}
+
+/** Records a run that threw, so the next caller sees why rather than a stale state. */
+export async function recordSyncFailure(userId: string, message: string): Promise<void> {
+  const service = createServiceClient()
+  await service.from("sync_status").upsert(
+    {
+      user_id: userId,
+      state: "error",
+      error_message: message,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  )
+}
+
 /**
  * How much of the athlete's history one request is allowed to pull.
  *

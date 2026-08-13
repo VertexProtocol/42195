@@ -855,7 +855,7 @@ export async function POST(req: NextRequest) {
         send({ status: "thinking" })
 
         const stream = anthropic.messages.stream({
-          model: "claude-opus-5",
+          model: "claude-sonnet-5",
           // Thinking counts against max_tokens. The old pairing — a budget of up
           // to 8000 inside a 10000 ceiling — left ~2000 tokens for the plan
           // itself, which truncated longer blocks and surfaced as a JSON parse
@@ -870,9 +870,9 @@ export async function POST(req: NextRequest) {
             },
           },
           // Measured at 1528 tokens (system prompt plus the output schema, which
-          // shares the cacheable prefix) against Opus 5's 512-token minimum, and
-          // confirmed against the API: repeat generations report a 1530-token
-          // cache read. See scripts/smoke/smoke.mjs tokens.
+          // shares the cacheable prefix), against Sonnet 5's 1024-token minimum,
+          // and confirmed against the API: repeat generations report a
+          // 1530-token cache read. See scripts/smoke/smoke.mjs tokens.
           system: [
             {
               type: "text" as const,
