@@ -41,15 +41,18 @@ import type {
   TrainingWeek,
   PlanSnapshot,
   MidBlockCheckpoint,
+  PlanSessionStatus,
 } from "@/lib/types"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import { computeTrainingTimeline, type TrainingPhaseType, type TrainingTimeline as TTimeline } from "@/lib/training-timeline"
 import { checkSkipLoadSpike, classifyAthleteLevel, type SkipLoadWarning } from "@/lib/training-safety-client"
 import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
-// Shared with the server so a session reads as the same distance on both sides.
-// The client used to take the midpoint of a range where the server took the
-// high end, so weekly totals in the app never matched the stored targetKm.
-import { parseSessionDistanceKm } from "@/lib/training-sessions"
+// Which run finished which session. Shared with the server so the count on
+// Today and the ticks on this screen can never disagree — and it reads session
+// distances with the same parser the server allocates them with, so a session
+// is never one length here and another there.
+import { matchSessionsToActivities } from "@/lib/plan-session-match"
+import { startOfWeek as toMonday, sessionKey } from "@/lib/plan-today"
 import { AppCard } from '@/components/ui/app-card'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
@@ -208,6 +211,18 @@ interface GoalDetailScreenProps {
   onPlanChange?: () => void
   /** Unpins the goal from Today. Offered once its date has gone. */
   onToggleStar?: (goalId: string) => void
+  /**
+   * The runner's own session statuses, seeded by the page render. Without them
+   * the ticks arrive a round trip after the plan does, so a week the runner
+   * has been through renders empty and then fills in under them.
+   */
+  initialSessionStatuses?: Record<string, PlanSessionStatus>
+  /**
+   * A session was ticked off, skipped or put back. Today shows the same week's
+   * count, and this screen unmounts on every tab change — so the answer has to
+   * go somewhere that outlives it.
+   */
+  onSessionStatusChange?: (goalId: string, key: string, status: PlanSessionStatus) => void
 }
 
 // ---- Collapsible Section ----
@@ -630,69 +645,7 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 }
 
 // ---- Session status type ----
-type SessionStatus = "planned" | "completed" | "skipped"
-
-/** Snap a date to the Monday of its ISO week (Mon=start of week) */
-function toMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
-  const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
-  const diff = day === 0 ? -6 : 1 - day // shift Sun→prev Mon, others→current Mon
-  d.setDate(d.getDate() + diff)
-  return d
-}
-
-/**
- * Auto-match activities to planned sessions for a given week.
- * Builds all valid (session, activity) pairs sorted by distance delta,
- * then greedily assigns the closest pair first.
- * Each activity matches at most one session.
- *
- * Matching rule: activity distance must be ≥ 80% of planned distance
- * (i.e. you must run at least 80% of the planned distance to count as
- * completed). Running further than planned always counts.
- */
-function autoMatchSessions(
-  sessions: { type: string; distance: string }[],
-  weekActivities: { distance_km: number }[],
-): boolean[] {
-  const matched = new Array<boolean>(sessions.length).fill(false)
-  if (weekActivities.length === 0) return matched
-
-  // Parse each session's target distance
-  const sessionKms = sessions.map((s, i) => ({ i, km: parseSessionDistanceKm(s.distance) }))
-    .filter((s) => s.km > 0)
-
-  // Build all valid (session, activity) candidate pairs
-  const candidates: { si: number; ai: number; delta: number }[] = []
-  for (const session of sessionKms) {
-    const minRequired = session.km * 0.80 // must run at least 80% of planned
-    for (let ai = 0; ai < weekActivities.length; ai++) {
-      const actKm = Number(weekActivities[ai].distance_km)
-      if (actKm >= minRequired) {
-        // Delta = how far the activity is from planned (for ranking closeness)
-        const delta = Math.abs(actKm - session.km)
-        candidates.push({ si: session.i, ai, delta })
-      }
-    }
-  }
-
-  // Sort by delta ascending — closest matches first
-  candidates.sort((a, b) => a.delta - b.delta)
-
-  // Greedily assign closest pairs, each session and activity used at most once
-  const usedActivities = new Set<number>()
-  const usedSessions = new Set<number>()
-
-  for (const { si, ai } of candidates) {
-    if (usedSessions.has(si) || usedActivities.has(ai)) continue
-    matched[si] = true
-    usedSessions.add(si)
-    usedActivities.add(ai)
-  }
-
-  return matched
-}
+type SessionStatus = PlanSessionStatus
 
 // ---- Training week card ----
 function WeekCard({
@@ -723,6 +676,11 @@ function WeekCard({
     : null
 
   const completedCount = sessionStatuses.filter((s) => s === "completed").length
+  // Counted and shown the same way as the completed sessions. Skipping was
+  // already a state the runner could set, but the only trace of it was inside
+  // the expanded week — so a collapsed week that read "2/4 done" looked like
+  // two sessions still to come when in fact two had been written off.
+  const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
   const totalSessions = week.sessions.length
 
   // Format date range like "3. mar – 9. mar"
@@ -774,6 +732,11 @@ function WeekCard({
               {(isPast || isCurrent) && completedCount > 0 && (
                 <span className="text-micro font-medium text-success">
                   {completedCount}/{totalSessions} done
+                </span>
+              )}
+              {(isPast || isCurrent) && skippedCount > 0 && (
+                <span className="text-micro font-medium text-muted-foreground">
+                  {skippedCount}/{totalSessions} skipped
                 </span>
               )}
             </div>
@@ -1060,6 +1023,8 @@ export function GoalDetailScreen({
   onOpenGroup,
   sharedGoal,
   onSharedGoalChange,
+  initialSessionStatuses,
+  onSessionStatusChange,
 }: GoalDetailScreenProps) {
   const { t } = useI18n()
   const [prefs, setPrefs] = useState<GoalPreferences>({
@@ -1143,8 +1108,13 @@ export function GoalDetailScreen({
     load().finally(() => setPlanResolved(true))
   }, [goal.id])
 
-  // Manual overrides persisted to database (with localStorage fallback)
-  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>({})
+  // Manual overrides persisted to database (with localStorage fallback).
+  // Seeded from the page render so the ticks are there with the plan rather
+  // than a round trip behind it; the fetch below still runs and wins, because
+  // the seed is as old as the page load.
+  const [manualStatuses, setManualStatuses] = useState<Record<string, SessionStatus>>(
+    initialSessionStatuses ?? {},
+  )
 
   useEffect(() => {
     // Load from database first, fall back to localStorage
@@ -1199,9 +1169,9 @@ export function GoalDetailScreen({
         const d = new Date(a.date)
         return d >= weekStart && d < weekEnd
       })
-      const matched = autoMatchSessions(week.sessions, weekActs)
+      const matched = matchSessionsToActivities(week.sessions, weekActs)
       matched.forEach((m, si) => {
-        if (m) result[`W${week.weekNumber}-${si}`] = "completed"
+        if (m) result[sessionKey(week.weekNumber, si)] = "completed"
       })
     }
     return result
@@ -1213,7 +1183,7 @@ export function GoalDetailScreen({
   }, [autoStatuses, manualStatuses])
 
   const handleToggleSession = useCallback((weekNumber: number, sessionIndex: number) => {
-    const key = `W${weekNumber}-${sessionIndex}`
+    const key = sessionKey(weekNumber, sessionIndex)
     const effective = sessionStatuses[key] ?? "planned"
     const next: SessionStatus =
       effective === "planned" ? "completed"
@@ -1221,6 +1191,7 @@ export function GoalDetailScreen({
       : "planned"
 
     setManualStatuses((prev) => ({ ...prev, [key]: next }))
+    onSessionStatusChange?.(goal.id, key, next)
 
     // Persist to database; fall back to localStorage on any failure (network error or non-2xx)
     fetch("/api/ai/training-plan/sessions", {
@@ -1236,7 +1207,7 @@ export function GoalDetailScreen({
       const stored = JSON.parse(localStorage.getItem(`session-statuses-${goal.id}`) ?? "{}")
       localStorage.setItem(`session-statuses-${goal.id}`, JSON.stringify({ ...stored, [key]: next }))
     } catch {}
-  }, [goal.id, sessionStatuses])
+  }, [goal.id, sessionStatuses, onSessionStatusChange])
 
   const handleApplyCheckpoint = useCallback(async () => {
     setIsApplyingCheckpoint(true)

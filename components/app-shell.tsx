@@ -10,7 +10,7 @@ import { GoalsScreen, type GoalTab } from "@/components/screens/goals-screen"
 import { GoalEditor } from "@/components/goal-editor"
 import { WeeklyGoalEditor } from "@/components/weekly-goal-editor"
 import { ManualActivityForm } from "@/components/manual-activity-form"
-import { GetStarted } from "@/components/get-started"
+import { GetStartedDialog } from "@/components/get-started"
 import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import { useGetStarted } from "@/hooks/use-get-started"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
@@ -124,9 +124,9 @@ export function AppShell({ initialData }: AppShellProps) {
     { name: string; target_date: string; target_distance_km: number } | null
   >(null)
 
-  // First run is a checklist on Today, not a screen in front of it. What is
-  // already done is read from the account, so the list is right on a second
-  // device and after data is deleted.
+  // First run is a checklist, asked once per session, over whichever screen
+  // the runner is on. What is already done is read from the account, so the
+  // list is right on a second device and after data is deleted.
   const getStarted = useGetStarted({
     ready: !data.isLoading && Boolean(data.user?.id),
     dismissed: data.onboardingDismissed,
@@ -135,6 +135,12 @@ export function AppShell({ initialData }: AppShellProps) {
     goalCount: data.goals.length,
     weeklyGoalCount: data.weeklyGoals.length,
   })
+
+  // Closing the sheet and hiding it for good are different answers. Closing is
+  // this state — it comes back next session while there is work left. Hiding
+  // is written to the account. Without the distinction, an accidental tap on
+  // the X would be the last the runner ever saw of the setup list.
+  const [guideClosed, setGuideClosed] = useState(false)
 
 // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -288,16 +294,16 @@ export function AppShell({ initialData }: AppShellProps) {
     navigate({ ...STACKED_VIEWS, tab: "profile" })
   }, [navigate])
 
-  // Profile → Get started. The checklist lives on Today, so asking for it from
-  // Profile means going there: reveal it, clear the stored dismissal, and land
-  // the runner on the screen it is on.
+  // Profile → Get started. The sheet sits over whatever screen is underneath,
+  // so asking for it there opens it there — no trip back to Today first, which
+  // is what it took when the checklist was a section on that screen.
   const { reveal: revealGetStarted } = getStarted
   const { resumeOnboarding } = data
   const handleResumeGetStarted = useCallback(() => {
     revealGetStarted()
     resumeOnboarding()
-    navigate({ ...STACKED_VIEWS, tab: null })
-  }, [revealGetStarted, resumeOnboarding, navigate])
+    setGuideClosed(false)
+  }, [revealGetStarted, resumeOnboarding])
 
   // ----- Loading state -----
   // The chrome is already correct while the data arrives, so the shell renders
@@ -366,21 +372,6 @@ export function AppShell({ initialData }: AppShellProps) {
       <main className="relative pb-24">
         {activeTab === "home" && (
           <HomeScreen
-            guide={
-              getStarted.visible ? (
-                <GetStarted
-                  steps={getStarted.steps}
-                  progress={getStarted.progress}
-                  stravaConnected={data.stravaConnected}
-                  onConnectStrava={handleConnectStrava}
-                  onAddActivity={() => setIsManualActivityOpen(true)}
-                  onAddGoal={() => handleAddGoal("event_training")}
-                  onAddWeeklyGoal={handleAddWeeklyGoal}
-                  onViewInsights={() => handleTabChange("insights")}
-                  onDismiss={data.dismissOnboarding}
-                />
-              ) : null
-            }
             starredGoals={data.starredGoals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
@@ -388,6 +379,8 @@ export function AppShell({ initialData }: AppShellProps) {
             recentActivities={data.activities.slice(0, 5)}
             warnings={data.warnings}
             planBadges={data.planBadges}
+            currentPlanWeeks={data.currentPlanWeeks}
+            planSessionStatuses={data.planSessionStatuses}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
             onViewActivities={() => handleTabChange("activities")}
@@ -457,6 +450,8 @@ export function AppShell({ initialData }: AppShellProps) {
               sharedGoal={data.sharedGoals[selectedGoal.id] ?? null}
               onSharedGoalChange={data.refreshSharedGoals}
               onToggleStar={data.toggleStarGoal}
+              initialSessionStatuses={data.planSessionStatuses[selectedGoal.id]}
+              onSessionStatusChange={data.setPlanSessionStatus}
             />
           </Suspense>
         )}
@@ -526,6 +521,27 @@ export function AppShell({ initialData }: AppShellProps) {
         onSave={handleSaveWeeklyGoal}
         onDelete={handleDeleteWeeklyGoal}
         onClose={handleCloseWeeklyEditor}
+      />
+
+      {/* First run. Small prompts over the app rather than a section inside
+          Today, so the screen the runner opens before a run is the app from
+          the first load rather than a setup list with the app underneath —
+          and one question at a time rather than everything the app wants. */}
+      <GetStartedDialog
+        open={getStarted.visible && !guideClosed}
+        steps={getStarted.steps}
+        progress={getStarted.progress}
+        stravaConnected={data.stravaConnected}
+        onConnectStrava={handleConnectStrava}
+        onAddActivity={() => setIsManualActivityOpen(true)}
+        onAddGoal={() => handleAddGoal("event_training")}
+        onAddWeeklyGoal={handleAddWeeklyGoal}
+        onViewInsights={() => handleTabChange("insights")}
+        onClose={() => setGuideClosed(true)}
+        onHide={() => {
+          setGuideClosed(true)
+          data.dismissOnboarding()
+        }}
       />
 
       {/* Manual Activity Form */}

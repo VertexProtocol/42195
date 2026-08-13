@@ -24,15 +24,14 @@ import {
 import { analyzeHeartRateZones } from "@/lib/hr-analysis-engine"
 import { computeTrainingTimeline } from "@/lib/training-timeline"
 import { predictRaceTimes } from "@/lib/training-utils"
-import { buildPaceGuide, assignSessionPace, planNeedsPaces } from "@/lib/pace-guide"
+import { buildPaceGuide, planNeedsPaces, planPacesStale } from "@/lib/pace-guide"
+import { applySessionPaces, type FatigueSignal } from "@/lib/plan-pacing"
 import {
-  PACE_PROGRESSION_RATES,
-  PACE_PROGRESSION_MAX_WEEKS,
   RUN_TYPES,
   PLAN_REGENERATE_COOLDOWN_MS,
-  RECOVERY_WEEK_THRESHOLD,
   FITNESS_ANALYSIS_WEEKS,
 } from "@/lib/training-constants"
+import { logError } from "@/lib/log"
 import { type NoteHistoryEntry, formatNotesHistoryForPrompt, hasActiveInjury } from "@/lib/notes-history"
 import { racePhase, daysUntil } from "@/lib/training-phase"
 import { assessComeback, type ComebackRecommendation } from "@/lib/training-comeback"
@@ -222,7 +221,12 @@ Roughly 80% of weekly volume belongs at easy, conversational effort and 20% at m
 ## Your Output
 Weekly volume and session distances are already fixed and will be given to you — you do not choose them and should not restate them as numbers. Your job is the shape and the coaching: which session types make up each week, how each should feel, what it is for, and what this runner in particular should know.
 
-The "effort" field is how the session should feel, in the runner's language. The "purpose" field is what it is for. Write the summary and coach notes to match the volumes you are given.`
+The "effort" field is how the session should feel, in the runner's language. The "purpose" field is what it is for. Write the summary and coach notes to match the volumes you are given.
+
+## Never write a pace figure
+Do not put min/km figures in any field — not "5:30/km", not "roughly 7:15-7:45/km", not "around 6 min per km". Each session is printed with a pace target computed from this runner's own test runs, race predictions and training history, which you cannot see. Any figure you write appears next to that one and contradicts it.
+
+Describe intensity the ways that do carry: the feel ("conversational", "comfortably hard", "you could not hold a sentence"), the heart-rate zone, and the bpm range when you have been given one. Durations in minutes are fine — it is pace specifically that is already spoken for.`
 
 function buildPrompt(
   goal: {
@@ -924,7 +928,7 @@ export async function POST(req: NextRequest) {
         // Assemble the plan: Claude's weekly shape, the volume computed before
         // the prompt, and distances allocated to fit. Weeks beyond the computed
         // targets are dropped rather than given an invented volume.
-        const safePlan: TrainingPlan = {
+        let safePlan: TrainingPlan = {
           ...draft,
           weeks: draft.weeks.slice(0, weekTargets.length).map((week, wi) => {
             const targetKm = weekTargets[wi]
@@ -956,41 +960,13 @@ export async function POST(req: NextRequest) {
         const { predictions: racePredictions } = predictRaceTimes(runActs as unknown as Activity[])
         const paceGuide = buildPaceGuide(racePredictions, testRuns ?? [], goal.target_distance_km, recentEasyPace)
 
-        // Fatigue modifier: when the safety signals detect fatigue, pull back hard-session paces
-        const fatigueSignal = fatigue.signal
-        const hardFatigueModifier =
-          fatigueSignal === "both"         ? 1.12 :  // HR + pace both declining → 12% slower
-          fatigueSignal === "hr_elevated"  ? 1.05 :  // HR elevated only → 5% slower
-          fatigueSignal === "pace_declining"? 1.08 :  // pace declining only → 8% slower
-          1.0
-
-        for (const week of safePlan.weeks) {
-          // Recovery weeks: all zones run 10% slower to reinforce the lower-stimulus purpose
-          const prevWeek = safePlan.weeks[safePlan.weeks.indexOf(week) - 1] ?? null
-          const isRecovery = prevWeek != null && week.targetKm < prevWeek.targetKm * RECOVERY_WEEK_THRESHOLD
-
-          // Intra-block progression for quality sessions: rate scaled by athlete level,
-          // capped at 6 weeks so tempo targets stay safely below 10K race pace.
-          const progressionRate = PACE_PROGRESSION_RATES[athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
-          const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
-          const progressionModifier = 1.0 - weekIndex * progressionRate
-
-          for (const session of week.sessions) {
-            const zone = session.type.toLowerCase()
-            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
-            const modifier = isRecovery
-              ? 1.10
-              : isHardSession
-                ? (fatigueSignal !== "none" ? hardFatigueModifier : progressionModifier)
-                : 1.0
-            const pace = assignSessionPace(session.type, paceGuide, modifier)
-            if (pace) session.suggestedPace = pace
-          }
-        }
-
         // Paces are settled here along with everything else, so the confidence
-        // tier travels with the plan rather than being re-derived on every read.
-        safePlan.paceSource = paceGuide.source
+        // tier and the rule revision travel with the plan rather than being
+        // re-derived on every read.
+        safePlan = applySessionPaces(safePlan, paceGuide, {
+          fatigueSignal: fatigue.signal as FatigueSignal,
+          athleteLevel,
+        })
 
         // Signals worth surfacing, none of which change the plan's volume — that
         // was already settled before the prompt.
@@ -1276,11 +1252,13 @@ export async function GET(req: NextRequest) {
   // read meant the plan a runner looked at on Monday could show different
   // targets on Wednesday without them having regenerated anything.
   //
-  // So this only fills in what is missing, which is plans generated before
-  // paces were assigned at all. When every session already has one, no pace
-  // guide is built and the whole block is skipped.
+  // Two cases get past that rule. A plan generated before paces existed has
+  // blanks to fill, and a plan paced by rules the app has since corrected is
+  // showing numbers those rules would never produce again. Both are re-paced
+  // once and written back, so the plan settles at the new numbers rather than
+  // being recomputed against a moving history on every read.
   const storedPlan = planRow.plan as TrainingPlan | null
-  const needsPaces = planNeedsPaces(storedPlan)
+  const needsPaces = planNeedsPaces(storedPlan) || planPacesStale(storedPlan)
 
   const runActs = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
   const paceGuide = (() => {
@@ -1299,47 +1277,25 @@ export async function GET(req: NextRequest) {
 
   let enrichedPlan = planRow.plan
   if (storedPlan && paceGuide) {
-    const fatigue = detectFatigue(runActs as unknown as SafetyActivity[])
-    const athleteLevel = classifyAthleteLevel(runActs as unknown as SafetyActivity[])
-    const hardFatigueModifier =
-      fatigue.signal === "both"          ? 1.12 :
-      fatigue.signal === "hr_elevated"   ? 1.05 :
-      fatigue.signal === "pace_declining" ? 1.08 :
-      1.0
+    enrichedPlan = applySessionPaces(storedPlan, paceGuide, {
+      fatigueSignal: detectFatigue(runActs as unknown as SafetyActivity[]).signal as FatigueSignal,
+      athleteLevel: classifyAthleteLevel(runActs as unknown as SafetyActivity[]),
+    })
 
-    enrichedPlan = {
-      ...storedPlan,
-      paceSource: storedPlan.paceSource ?? paceGuide.source,
-      weeks: storedPlan.weeks.map((week, weekIdx) => {
-        const prevWeek = storedPlan.weeks[weekIdx - 1] ?? null
-        const isRecovery =
-          prevWeek != null && week.targetKm < prevWeek.targetKm * RECOVERY_WEEK_THRESHOLD
-
-        const progressionRate = PACE_PROGRESSION_RATES[athleteLevel] ?? PACE_PROGRESSION_RATES.intermediate
-        const weekIndex = Math.min(week.weekNumber - 1, PACE_PROGRESSION_MAX_WEEKS - 1)
-        const progressionModifier = 1.0 - weekIndex * progressionRate
-
-        return {
-          ...week,
-          sessions: week.sessions.map((session) => {
-            // A session that already has a pace keeps it.
-            if (session.suggestedPace) return session
-
-            const zone = session.type.toLowerCase()
-            const isHardSession = /tempo|threshold|interval|track|speed|fartlek|repeat|vo2/.test(zone)
-            const modifier = isRecovery
-              ? 1.10
-              : isHardSession
-                ? (fatigue.signal !== "none" ? hardFatigueModifier : progressionModifier)
-                : 1.0
-            return {
-              ...session,
-              suggestedPace: assignSessionPace(session.type, paceGuide, modifier) ?? session.suggestedPace,
-            }
-          }),
-        }
-      }),
-    }
+    // Written back so the plan settles here. Without this the re-pace would run
+    // against a history that grows every day, and the runner would find
+    // different targets each time they opened the same block — the very thing
+    // storing the paces was meant to prevent. Fire and forget: a failed write
+    // costs one repeated computation on the next read, and must not fail a
+    // request whose job is to show the plan.
+    void supabase
+      .from("ai_training_plans")
+      .update({ plan: enrichedPlan })
+      .eq("goal_id", goalId)
+      .eq("user_id", user.id)
+      .then(({ error }) => {
+        if (error) logError("Failed to persist re-paced training plan", error)
+      })
   }
 
   // Compute whether a checkpoint is due so the UI can prompt the user

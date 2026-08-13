@@ -4,7 +4,16 @@ import { useState, useCallback, useEffect, useTransition, useMemo, useRef } from
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
 // import { toast } from "sonner" // Temporarily disabled
-import type { Activity, Goal, GoalCategory, WeeklyGoal, SyncStatus, UserProfile } from "@/lib/types"
+import type {
+  Activity,
+  Goal,
+  GoalCategory,
+  WeeklyGoal,
+  SyncStatus,
+  UserProfile,
+  PlanSessionStatus,
+} from "@/lib/types"
+import { deriveCurrentPlanWeeks, type CurrentPlanWeek, type PlanWeekRow } from "@/lib/plan-today"
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
 import type { Warning } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
@@ -30,6 +39,10 @@ export interface InitialData {
   warnings: Warning[]
   /** Plan badges keyed by goal id, derived during the page render. */
   planBadges: Record<string, PlanBadge>
+  /** The week each goal's plan is in, trimmed during the page render. */
+  currentPlanWeeks: Record<string, CurrentPlanWeek>
+  /** Manual session statuses per goal, keyed `W3-1`. */
+  planSessionStatuses: Record<string, Record<string, PlanSessionStatus>>
   /** The group each goal belongs to, keyed by goal id. */
   sharedGoals: Record<string, SharedGoalSummary>
   stravaConnected: boolean
@@ -69,6 +82,27 @@ export function useAppData(initialData?: InitialData | null) {
   const [planBadges, setPlanBadges] = useState<Record<string, PlanBadge>>(
     initialData?.planBadges ?? {},
   )
+  // Today shows the plan's current week, so both of these are seeded by the
+  // page render for the same reason the badges are.
+  const [currentPlanWeeks, setCurrentPlanWeeks] = useState<Record<string, CurrentPlanWeek>>(
+    initialData?.currentPlanWeeks ?? {},
+  )
+  // Held at the shell rather than on the plan screen, which unmounts on every
+  // tab change: ticking a session off in Plan has to be true on Today the
+  // moment the runner gets there, not on the next page load.
+  const [planSessionStatuses, setPlanSessionStatuses] = useState<
+    Record<string, Record<string, PlanSessionStatus>>
+  >(initialData?.planSessionStatuses ?? {})
+
+  const setPlanSessionStatus = useCallback(
+    (goalId: string, key: string, status: PlanSessionStatus) => {
+      setPlanSessionStatuses((prev) => ({
+        ...prev,
+        [goalId]: { ...(prev[goalId] ?? {}), [key]: status },
+      }))
+    },
+    [],
+  )
 
   // "Get started" checklist: dismissal belongs to the account, not the tab.
   const [onboardingDismissed, setOnboardingDismissedState] = useState(
@@ -93,7 +127,12 @@ export function useAppData(initialData?: InitialData | null) {
     const { data } = await supabase
       .from("ai_training_plans")
       .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-    if (data) setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+    if (!data) return
+    setPlanBadges(derivePlanBadges(data as PlanBadgeRow[]))
+    // The week Today shows comes out of the same rows, so a regenerated block
+    // must not leave last block's session on the screen a runner is about to
+    // go out on.
+    setCurrentPlanWeeks(deriveCurrentPlanWeeks(data as PlanWeekRow[]))
   }, [])
 
   /** Called when a group is created, joined or left — not on every visit. */
@@ -891,6 +930,9 @@ export function useAppData(initialData?: InitialData | null) {
     warnings,
     planBadges,
     refreshPlanBadges,
+    currentPlanWeeks,
+    planSessionStatuses,
+    setPlanSessionStatus,
     sharedGoals,
     refreshSharedGoals,
 
