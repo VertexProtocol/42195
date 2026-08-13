@@ -172,6 +172,7 @@ export async function POST(req: NextRequest) {
     .select("plan")
     .eq("goal_id", goalId)
     .eq("user_id", user.id)
+    .is("archived_at", null)
     .maybeSingle()
 
   // Runner-state context — active injury + comeback status. Without this,

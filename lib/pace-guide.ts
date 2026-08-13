@@ -224,6 +224,13 @@ export type SessionZone = "recovery" | "easy" | "long" | "tempo" | "interval" | 
 export function detectZone(sessionType: string): SessionZone | null {
   const t = sessionType.toLowerCase()
   if (/hill/.test(t)) return null
+  // An actual race the runner has entered, written into the block as `Race: name`.
+  // Also pace-less, for a different reason than the hills: how hard a runner
+  // takes a B race is a decision they make — goal-pace rehearsal, hard tempo,
+  // or all out — and printing one target presumes the answer. Tested before
+  // the race-pace zone below, which is a training session run *at* race pace
+  // and does get a number.
+  if (/^race:/.test(t)) return null
   if (/recovery|shake.?out|shakeout/.test(t)) return "recovery"
   if (/long/.test(t)) return "long"
   if (/race.?pace|goal.?pace|specific|marathon.?pace|half.?marathon.?pace/.test(t)) return "race"

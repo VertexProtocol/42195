@@ -28,6 +28,21 @@ function paceOf(sessionType: string, guide: PaceGuide): number {
 }
 
 describe("detectZone", () => {
+  it("prints no pace for a race the runner has entered", () => {
+    // How hard you take a B race is your decision — goal-pace rehearsal, hard
+    // tempo, or all out — and one printed target presumes the answer. Without
+    // this the entry fell through to "easy" and the race was priced as a jog.
+    expect(detectZone("Race: Sentrumsløpet")).toBeNull()
+    expect(detectZone("Race: Oslo Maraton")).toBeNull()
+  })
+
+  it("still paces a training session run at race pace", () => {
+    // The zone above is for an actual entry; this is a workout, and it keeps
+    // its number.
+    expect(detectZone("Race pace run")).toBe("race")
+    expect(detectZone("Marathon pace miles")).toBe("race")
+  })
+
   it("gives a recovery run its own zone rather than the easy one", () => {
     // It used to fall through to "easy", which is what put a Z1 recovery run
     // at the same pace as the Z2 base run beside it.

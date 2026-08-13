@@ -283,6 +283,12 @@ export interface AiTrainingPlan {
   generated_at: string
   previous_plans: PlanSnapshot[]
   mid_block_checkpoint?: MidBlockCheckpoint | null
+  /**
+   * When this block stopped being the runner's training, because they
+   * generated one for another race. Null while it is the live block. The plan
+   * is still readable — it is their history — but nothing counts against it.
+   */
+  archived_at?: string | null
 }
 
 // ---- Mid-block checkpoint types ----

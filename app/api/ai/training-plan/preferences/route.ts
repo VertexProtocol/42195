@@ -138,6 +138,7 @@ export async function PUT(req: NextRequest) {
       .select("plan, block_start_date, generated_at")
       .eq("goal_id", goalId)
       .eq("user_id", user.id)
+      .is("archived_at", null)
       .maybeSingle(),
     supabase
       .from("goals")

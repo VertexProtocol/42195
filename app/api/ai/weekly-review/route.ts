@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     .select("plan, block_start_date")
     .eq("goal_id", goalId)
     .eq("user_id", user.id)
+    .is("archived_at", null)
     .maybeSingle()
 
   if (!planRow?.plan) {

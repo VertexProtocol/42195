@@ -56,7 +56,11 @@ export default async function Page() {
       supabase
         .from("ai_training_plans")
         .select("goal_id, block_start_date, plan, mid_block_checkpoint")
-        .eq("user_id", authUser.id),
+        .eq("user_id", authUser.id)
+        // A block put away when the runner generated one for another race is
+        // history, not what they are training on. It must not put a session on
+        // Today or a badge on a goal card.
+        .is("archived_at", null),
       // What the runner has said by hand about their planned sessions. Read
       // here so Today can show the plan's current week on first paint: the
       // week is a function of the plan, the activities and these, and the

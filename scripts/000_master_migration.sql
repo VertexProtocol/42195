@@ -1006,3 +1006,19 @@ revoke all on function public.shared_goal_member_names(uuid) from public;
 -- than left resting on that.
 revoke execute on function public.shared_goal_member_names(uuid) from anon;
 grant execute on function public.shared_goal_member_names(uuid) to authenticated;
+
+
+-- ============================================================
+-- 033 · One active training block at a time
+-- ============================================================
+-- Nothing stopped two goals each holding a live block, and both ramped their
+-- weekly volume from the same training history — so a runner on 40 km/week got
+-- two plans each asking for ~44, and one Strava run ticked off a session in
+-- both. A superseded plan stays on its goal's row, readable as history, but is
+-- no longer the training.
+alter table ai_training_plans
+  add column if not exists archived_at timestamptz default null;
+
+create index if not exists idx_ai_training_plans_user_active
+  on ai_training_plans(user_id)
+  where archived_at is null;
