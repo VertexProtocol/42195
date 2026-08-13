@@ -255,7 +255,7 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
         send({ status: "thinking" })
 
         const stream = anthropic.messages.stream({
-          model: "claude-opus-5",
+          model: "claude-sonnet-5",
           // Thinking counts against max_tokens, so this ceiling covers reasoning
           // plus the strategy itself. 3000 was sized for the strategy alone.
           max_tokens: 16000,
@@ -269,9 +269,14 @@ ${planRow?.plan ? `CURRENT PLAN SUMMARY: ${(planRow.plan as { summary: string })
           },
           // Caches, though not on the strength of the prompt: the system block
           // is only 156 tokens, and it is the 942-token output schema sitting
-          // in the same prefix that carries the total to 1098, over Opus 5's
-          // 512-token minimum. Measured, not assumed.
-          // See scripts/smoke/smoke.mjs tokens.
+          // in the same prefix that carries the total to 1098. Measured, not
+          // assumed. See scripts/smoke/smoke.mjs tokens.
+          //
+          // The margin here is 74 tokens, not the 586 it was on Opus 5:
+          // Sonnet 5's minimum cacheable prefix is 1024. Trimming the system
+          // prompt or the schema is what would drop this under it, and nothing
+          // would report that — a prefix below the minimum caches silently,
+          // with no error. Re-run the smoke check after touching either.
           system: [
             {
               type: "text" as const,

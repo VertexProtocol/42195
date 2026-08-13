@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { withNext } from "@/lib/auth-redirect"
 import { decodeStravaState, withSyncOnArrival } from "@/lib/strava-oauth-state"
-import { stravaSignupEnabled, type StravaAthlete } from "@/lib/strava-account"
+import { type StravaAthlete } from "@/lib/strava-account"
+import { signupsAllowed } from "@/lib/supabase/auth-settings"
 import {
   createAccountForAthlete,
   findUserIdForAthlete,
@@ -149,9 +150,11 @@ export async function GET(request: NextRequest) {
       }
       userId = ownerUserId
     } else {
-      // New here. The gate, not the Supabase project setting — the admin call
-      // below is not subject to that one.
-      if (!stravaSignupEnabled()) {
+      // New here. The admin call below is not subject to the project's
+      // "allow new users to sign up" setting, so ask the project directly and
+      // honour the answer — otherwise closing registration in the dashboard
+      // would leave this door open, which is exactly what it once did.
+      if (!(await signupsAllowed())) {
         return errorRedirect("strava_signup_closed")
       }
 
