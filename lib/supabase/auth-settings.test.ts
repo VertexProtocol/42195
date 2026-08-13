@@ -7,7 +7,28 @@ import { parseSignupsAllowed } from "./auth-settings"
  * has to come back closed. The open answer is the narrow case, not the
  * default.
  */
+/**
+ * The settings document as this project actually served it, trimmed of the
+ * provider list. Kept verbatim rather than paraphrased: the whole gate rests
+ * on `disable_signup` being present and boolean, and that was an assumption
+ * until it was fetched.
+ */
+const OBSERVED_SETTINGS = {
+  external: { email: true, phone: false, anonymous_users: false },
+  disable_signup: true,
+  mailer_autoconfirm: true,
+  phone_autoconfirm: false,
+  sms_provider: "twilio",
+  saml_enabled: false,
+  passkeys_enabled: true,
+}
+
 describe("parseSignupsAllowed", () => {
+  it("reads the real settings document", () => {
+    expect(parseSignupsAllowed(OBSERVED_SETTINGS)).toBe(false)
+    expect(parseSignupsAllowed({ ...OBSERVED_SETTINGS, disable_signup: false })).toBe(true)
+  })
+
   it("is open only when the project says signup is not disabled", () => {
     expect(parseSignupsAllowed({ disable_signup: false })).toBe(true)
   })

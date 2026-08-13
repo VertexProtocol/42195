@@ -13,11 +13,19 @@ import { logError } from "@/lib/log"
  * the Strava door stayed open, and an athlete who had never been invited
  * signed themselves in. The variable is gone: this asks the project.
  *
- * `/auth/v1/settings` is GoTrue's public settings document — the same one the
- * browser client reads to decide which providers to offer. `disable_signup`
+ * `/auth/v1/settings` is GoTrue's public settings document. `disable_signup`
  * mirrors "Allow new users to sign up" in the dashboard, so the dashboard
  * toggle is now the only thing that decides, for both ways in, and it takes
  * effect the moment it is flipped rather than on the next deployment.
+ *
+ * The route is served but undocumented — it is absent from Supabase's docs,
+ * and the current `@supabase/auth-js` no longer calls it, though older
+ * releases did. It was confirmed by fetching it against this project; the
+ * response is pinned as a fixture in the test beside this file. Should a
+ * future GoTrue drop it, the fetch stops returning `disable_signup` and this
+ * reads closed, which is the safe direction — but it would read closed
+ * permanently, so the fixture is what tells whoever investigates what the
+ * document used to look like.
  */
 
 /**

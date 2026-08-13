@@ -36,6 +36,35 @@ export async function saveEmailAction(
   // The browser has already checked the shape; this is the copy that counts.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: "invalid" }
 
+  let outcome: StoreResult
+  try {
+    outcome = await storeEmail(email)
+  } catch (err) {
+    // Whatever else went wrong, this screen is the only way an account that
+    // arrived through Strava can ever be given a real address — Profile's
+    // "add email" link comes back here. Letting the throw reach the error
+    // boundary turns the one route to an address into a dead end, and the
+    // runner cannot tell a broken screen from a broken app.
+    logError("auth.finish.unexpected", err instanceof Error ? err.message : String(err))
+    outcome = { status: "failed" }
+  }
+
+  if (outcome.status !== "saved") return outcome
+
+  // Outside the try, and it belongs there: redirect() reports itself by
+  // throwing, so catching around it would swallow the success and show the
+  // runner a failure after the address was saved.
+  //
+  // Straight on to wherever they were going. There is nothing to confirm and
+  // nothing more to fill in, so a "saved" screen would be a step for its own
+  // sake.
+  redirect(safeNext(formData.get("next") as string | null))
+}
+
+/** Saved, or the reason it was not. Separate so the redirect stays outside the try. */
+type StoreResult = SaveEmailState | { status: "saved" }
+
+async function storeEmail(email: string): Promise<StoreResult> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -68,8 +97,5 @@ export async function saveEmailAction(
 
   if (profileError) logError("auth.finish.profile", profileError.message)
 
-  // Straight on to wherever they were going. There is nothing to confirm and
-  // nothing more to fill in, so a "saved" screen would be a step for its own
-  // sake.
-  redirect(safeNext(formData.get("next") as string | null))
+  return { status: "saved" }
 }
