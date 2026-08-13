@@ -1,10 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/resume-sync",
-      "schedule": "*/15 * * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/sw.js",

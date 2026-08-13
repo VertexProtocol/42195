@@ -45,10 +45,14 @@ const MAX_RUNNERS_PER_TICK = 3
 const RESUMABLE_STATES = ["partial", "rate_limited"]
 
 /**
- * Vercel Cron sends `Authorization: Bearer $CRON_SECRET`. Absent the secret
- * this route refuses everyone rather than defaulting open — it moves other
- * people's data with the service-role key, and an open endpoint that does that
- * is worse than a cron that never runs.
+ * The caller sends `Authorization: Bearer $CRON_SECRET` — see
+ * scripts/032_schedule_resume_sync.sql, which schedules this from Postgres
+ * rather than vercel.json (a Hobby account refuses to deploy any cron that
+ * runs more than once a day).
+ *
+ * Absent the secret this route refuses everyone rather than defaulting open:
+ * it moves other people's data with the service-role key, and an open endpoint
+ * that does that is worse than a cron that never runs.
  */
 function authorised(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
