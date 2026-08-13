@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 import { safeNext } from "@/lib/auth-redirect"
 import { isPlaceholderEmail } from "@/lib/strava-account"
-import { logError } from "@/lib/log"
+import { recordServerError } from "@/lib/error-sink"
 
 export type SaveEmailStatus = "idle" | "invalid" | "taken" | "failed"
 export interface SaveEmailState {
@@ -45,7 +45,10 @@ export async function saveEmailAction(
     // "add email" link comes back here. Letting the throw reach the error
     // boundary turns the one route to an address into a dead end, and the
     // runner cannot tell a broken screen from a broken app.
-    logError("auth.finish.unexpected", err instanceof Error ? err.message : String(err))
+    //
+    // Recorded rather than logged: this is the failure that had no readable
+    // trace, and the next one deserves a stack somebody can open.
+    await recordServerError("auth.finish.unexpected", err)
     outcome = { status: "failed" }
   }
 
@@ -84,7 +87,7 @@ async function storeEmail(email: string): Promise<StoreResult> {
     if (message.includes("already been registered") || message.includes("already exists")) {
       return { status: "taken" }
     }
-    logError("auth.finish.email", error.message)
+    await recordServerError("auth.finish.email", error, { userId: user.id })
     return { status: "failed" }
   }
 
@@ -95,7 +98,11 @@ async function storeEmail(email: string): Promise<StoreResult> {
     .update({ email })
     .eq("id", user.id)
 
-  if (profileError) logError("auth.finish.profile", profileError.message)
+  if (profileError) {
+    // The address is already on the account by this point, so this is a
+    // mismatch to repair rather than a failure to report to the runner.
+    await recordServerError("auth.finish.profile", profileError, { userId: user.id })
+  }
 
   return { status: "saved" }
 }
