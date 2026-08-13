@@ -4,13 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { safeNext } from "@/lib/auth-redirect"
 import { resolveSiteUrl } from "@/lib/site-url"
 import { logError } from "@/lib/log"
-
-export type ResendStatus = "idle" | "sent" | "throttled" | "failed"
-export interface ResendState {
-  status: ResendStatus
-}
-
-export const RESEND_IDLE: ResendState = { status: "idle" }
+import type { ResendState } from "./state"
 
 /**
  * Send the confirmation email again.

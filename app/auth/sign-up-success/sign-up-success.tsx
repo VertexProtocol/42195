@@ -6,7 +6,8 @@ import { withNext } from "@/lib/auth-redirect"
 import { useI18n } from "@/lib/i18n"
 import { AuthShell, AuthError } from "@/components/auth-shell"
 import { Button } from "@/components/ui/button"
-import { RESEND_IDLE, resendConfirmationAction } from "./actions"
+import { resendConfirmationAction } from "./actions"
+import { RESEND_IDLE } from "./state"
 
 export function SignUpSuccess({ email, next }: { email: string | null; next: string }) {
   const { t } = useI18n()

@@ -6,13 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service"
 import { safeNext } from "@/lib/auth-redirect"
 import { isPlaceholderEmail } from "@/lib/strava-account"
 import { recordServerError } from "@/lib/error-sink"
-
-export type SaveEmailStatus = "idle" | "invalid" | "taken" | "failed"
-export interface SaveEmailState {
-  status: SaveEmailStatus
-}
-
-export const SAVE_EMAIL_IDLE: SaveEmailState = { status: "idle" }
+import type { SaveEmailState } from "./state"
 
 /**
  * Put a real address on an account that arrived through Strava.
