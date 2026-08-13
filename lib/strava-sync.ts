@@ -352,10 +352,10 @@ export type SyncState = "success" | "partial" | "rate_limited"
 /**
  * What a run's outcome means for the row in `sync_status`.
  *
- * Three outcomes, and the difference between the last two matters: a run that
- * stopped on Strava's app-wide limit cannot be retried until the window
- * reopens, while one that merely ran out of pages or time can continue
- * immediately.
+ * Three outcomes, and the difference between the last two is what the screen
+ * tells the runner: one that stopped on Strava's app-wide limit has to wait for
+ * the window to reopen, while one that merely ran out of pages or time can
+ * continue straight away.
  */
 export function syncStateFor(result: SyncResult): SyncState {
   if (result.done) return "success"
@@ -370,10 +370,7 @@ export function syncStateFor(result: SyncResult): SyncState {
  *
  * `resumeFull` is carried across chunks because it cannot be inferred later. A
  * full backfill resumed as an incremental one stops at the previous successful
- * sync and silently abandons the history before it.
- *
- * Shared by the route a runner triggers and the cron that finishes what those
- * runs could not, so an unfinished sync is recorded the same way either way.
+ * sync and silently abandons the history before it — see migration 031.
  */
 export async function recordSyncResult(
   userId: string,

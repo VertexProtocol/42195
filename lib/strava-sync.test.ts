@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { syncStateFor, type SyncResult } from "./strava-sync"
 
 /**
- * The difference between "partial" and "rate_limited" is what the cron reads to
- * decide whether a run can be picked up now or has to wait for Strava's window,
+ * The difference between "partial" and "rate_limited" is what decides whether
+ * the runner is told to carry on or to come back once Strava's window reopens,
  * so it is worth pinning rather than inferring from the one call site.
  */
 function result(over: Partial<SyncResult> = {}): SyncResult {

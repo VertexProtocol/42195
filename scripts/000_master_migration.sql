@@ -657,8 +657,9 @@ alter table public.sync_status
 
 -- Whether the unfinished run was walking the whole history, so the chunk that
 -- picks it up walks the whole history too. Only the browser used to know this,
--- from the `full=1` it repeated on each continuation; the cron that finishes
--- unwatched runs has no request to read it from. [031]
+-- from the `full=1` it repeated on each continuation — so a full resync that
+-- stopped short and was resumed from a fresh visit stopped at the previous
+-- successful sync and abandoned the history it was for. [031]
 alter table public.sync_status
   add column if not exists resume_full boolean not null default false;
 
