@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, useTransition } from "react"
+import { useState, useEffect, useCallback, useReducer, useTransition } from "react"
 import { useTheme } from "next-themes"
 import {
   RefreshCw,
@@ -29,6 +29,7 @@ import { isPlaceholderEmail } from "@/lib/strava-account"
 import { TrackLoader } from "@/components/ui/track-mark"
 import { createClient } from "@/lib/supabase/client"
 import { timeAgoParts } from "@/lib/format"
+import { syncCooldownRemainingMs } from "@/lib/sync-constants"
 import { useI18n, type Locale, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 import type { HrAnalysisResult } from "@/lib/hr-analysis-engine"
@@ -110,7 +111,6 @@ export function ProfileScreen({
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
-  const [syncSuccess, setSyncSuccess] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -286,20 +286,23 @@ export function ProfileScreen({
     })
   }
 
-  const prevSyncStateRef = useRef(syncStatus.state)
+  // Held for as long as the server will decline another sync, rather than for
+  // a fixed three seconds. The button and the rule it is subject to now expire
+  // together, so it never looks pressable while the press cannot work. Derived
+  // during render; the effect only asks for a re-render when the cooldown ends.
+  const [, tick] = useReducer((n: number) => n + 1, 0)
+  const coolingDown = syncCooldownRemainingMs(syncStatus.last_sync_at) > 0
   useEffect(() => {
-    const prev = prevSyncStateRef.current
-    prevSyncStateRef.current = syncStatus.state
-    if (prev === "syncing" && syncStatus.state === "success") {
-      setSyncSuccess(true)
-      const timer = setTimeout(() => setSyncSuccess(false), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [syncStatus.state])
+    const remaining = syncCooldownRemainingMs(syncStatus.last_sync_at)
+    if (remaining <= 0) return
+    const timer = setTimeout(tick, remaining)
+    return () => clearTimeout(timer)
+  }, [syncStatus.last_sync_at])
 
   // A partial sync is still in flight from the runner's point of view — the
   // client is fetching the next chunk of history.
   const isSyncing = syncStatus.state === "syncing" || syncStatus.state === "partial"
+  const syncSuccess = coolingDown && syncStatus.state === "success"
 
   function handleConnect() {
     setConnecting(true)
@@ -472,11 +475,9 @@ export function ProfileScreen({
                 variant={syncSuccess ? "outline" : "secondary"}
                 size="sm"
                 className="shrink-0"
-                onClick={() => {
-                  setSyncSuccess(false)
-                  onSync()
-                }}
+                onClick={onSync}
                 loading={isSyncing}
+                disabled={isSyncing || coolingDown}
               >
                 {!isSyncing && (syncSuccess ? <Check size={14} /> : <RefreshCw size={14} />)}
                 {isSyncing
@@ -595,7 +596,6 @@ export function ProfileScreen({
                         loading={isSyncing}
                         onClick={() => {
                           setShowResyncConfirm(false)
-                          setSyncSuccess(false)
                           onFullSync()
                         }}
                       >
