@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse, after } from "next/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { syncSingleActivity, deleteSyncedActivity } from "@/lib/strava-sync"
+import { syncSingleActivity, deleteSyncedActivity, recordSyncFailure } from "@/lib/strava-sync"
+import { StravaAppInactiveError, StravaAuthError } from "@/lib/strava"
+import { recordServerError } from "@/lib/error-sink"
 
 // ---------------------------------------------------------------------------
 // Strava Webhook Event types
@@ -31,7 +33,17 @@ export async function GET(request: NextRequest) {
   if (mode === "subscribe" && challenge) {
     // Verify the token matches what we set when creating the subscription
     if (verifyToken !== process.env.STRAVA_WEBHOOK_VERIFY_TOKEN) {
-      console.error("Strava webhook verification failed: token mismatch")
+      // The documented way creating a subscription fails, and it fails from
+      // Strava's side where nobody sees it. Recorded rather than logged: the
+      // person running the script needs to be able to find out why.
+      await recordServerError(
+        "webhook.strava.verify",
+        new Error(
+          process.env.STRAVA_WEBHOOK_VERIFY_TOKEN
+            ? "hub.verify_token did not match STRAVA_WEBHOOK_VERIFY_TOKEN"
+            : "STRAVA_WEBHOOK_VERIFY_TOKEN is not set on this deployment",
+        ),
+      )
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -62,7 +74,16 @@ export async function POST(request: NextRequest) {
   // Strava assigns a subscription_id when you create the webhook subscription.
   const expectedSubId = process.env.STRAVA_WEBHOOK_SUBSCRIPTION_ID
   if (expectedSubId && String(event.subscription_id) !== expectedSubId) {
-    console.warn(`Strava webhook: subscription_id mismatch (got ${event.subscription_id}, expected ${expectedSubId})`)
+    // Not a forged call so much as a misconfiguration: this rejects *every*
+    // event for as long as it stands, and from inside the app it looks exactly
+    // like Strava having gone quiet. Recorded so it is findable.
+    await recordServerError(
+      "webhook.strava.subscription",
+      new Error(
+        `subscription_id mismatch: Strava sent ${event.subscription_id}, ` +
+          `STRAVA_WEBHOOK_SUBSCRIPTION_ID is ${expectedSubId}`,
+      ),
+    )
     return NextResponse.json({ error: "Invalid subscription" }, { status: 403 })
   }
 
@@ -141,13 +162,21 @@ export async function POST(request: NextRequest) {
         await deleteSyncedActivity(userId, event.object_id)
       }
     } catch (err) {
-      // Logged and swallowed. The 200 has already gone, so throwing here would
-      // not reach Strava — and a retry is not wanted anyway: the next ordinary
-      // sync picks up whatever this missed.
-      console.error(
-        `Strava webhook processing error (athlete=${event.owner_id}, activity=${event.object_id}):`,
-        err,
-      )
+      // The 200 has already gone, so throwing here would not reach Strava, and
+      // a retry is not wanted anyway. But swallowing it into console.error is
+      // how a delivery path can stop working for months and look exactly like
+      // a runner who stopped running: nothing arrives, and nothing says why.
+      await recordServerError(`webhook.strava.${event.aspect_type}`, err, { userId })
+
+      // Two failures are the runner's to act on and will not fix themselves:
+      // their Strava authorization is gone, or the app's API access is off.
+      // Those are surfaced the same way the manual sync surfaces them, so the
+      // app says what is wrong instead of going quiet. Anything else is left
+      // alone — a transient blip should not paint an error over a working app,
+      // and the next sync picks up what this missed.
+      if (err instanceof StravaAuthError || err instanceof StravaAppInactiveError) {
+        await recordSyncFailure(userId, err.message)
+      }
     }
   })
 
