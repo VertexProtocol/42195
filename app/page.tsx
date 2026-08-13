@@ -11,6 +11,8 @@ import {
   type WarningState,
 } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadgeRow } from "@/lib/plan-badges"
+import { deriveCurrentPlanWeeks, type PlanWeekRow } from "@/lib/plan-today"
+import type { PlanSessionStatus } from "@/lib/types"
 import { RUN_TYPES } from "@/lib/training-constants"
 import { initialOf, type SharedGoalSummary } from "@/app/api/shared-goals/route"
 
@@ -30,7 +32,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sharedRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sessionStatusRes, sharedRes, stravaTokenRes, syncStatusRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -54,6 +56,14 @@ export default async function Page() {
       supabase
         .from("ai_training_plans")
         .select("goal_id, block_start_date, plan, mid_block_checkpoint")
+        .eq("user_id", authUser.id),
+      // What the runner has said by hand about their planned sessions. Read
+      // here so Today can show the plan's current week on first paint: the
+      // week is a function of the plan, the activities and these, and the
+      // other two are already on this page.
+      supabase
+        .from("session_completions")
+        .select("goal_id, session_key, status")
         .eq("user_id", authUser.id),
       // The group a goal belongs to, so its row on the goal's detail screen is
       // there on first paint. Fetched here for the same reason the plan badges
@@ -99,10 +109,23 @@ export default async function Page() {
   const metadata = authUser.user_metadata ?? {}
   const needsPassword = metadata.auth_source === "strava" && metadata.has_password !== true
 
+  // Keyed by goal so Today can pick out the one it is showing, and so a runner
+  // with two races pinned does not have the second one's ticks counted against
+  // the first one's week.
+  const planSessionStatuses: Record<string, Record<string, PlanSessionStatus>> = {}
+  for (const row of sessionStatusRes.data ?? []) {
+    const forGoal = (planSessionStatuses[row.goal_id] ??= {})
+    forGoal[row.session_key] = row.status as PlanSessionStatus
+  }
+
   const initialData = {
     activities: activitiesRes,
     warnings: newWarnings,
     planBadges: derivePlanBadges((planRowsRes.data ?? []) as PlanBadgeRow[]),
+    // Trimmed to the current week here rather than shipped whole: the plan JSON
+    // is kilobytes per goal, and Today shows one session out of it.
+    currentPlanWeeks: deriveCurrentPlanWeeks((planRowsRes.data ?? []) as PlanWeekRow[]),
+    planSessionStatuses,
     goals: (goalsRes.data ?? []).map((g) => ({
       id: g.id,
       goal_category: (g.goal_category ?? "performance") as GoalCategory,

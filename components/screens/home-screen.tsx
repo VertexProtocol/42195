@@ -7,7 +7,6 @@ import {
   useState,
   useRef,
   useCallback,
-  type ReactNode,
 } from "react"
 import { ChevronRight, Star, StarOff } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
@@ -34,7 +33,13 @@ import type {
   Activity,
   SyncStatus,
   WeeklyGoal,
+  PlanSessionStatus,
 } from "@/lib/types"
+import {
+  activitiesInPlanWeek,
+  summarisePlanWeek,
+  type CurrentPlanWeek,
+} from "@/lib/plan-today"
 import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { AppCard, CardRow } from "@/components/ui/app-card"
@@ -140,13 +145,125 @@ function WeeklyGoalLap({
   )
 }
 
+/**
+ * This week of the training plan, as one line.
+ *
+ * The plan lives on the goal's screen and always will — this is the smallest
+ * true thing that answers "what am I doing today" without going there. One
+ * session, its distance and its pace target, over a line showing how much of
+ * the week is behind them.
+ *
+ * The session shown is the next one outstanding, not "today's". A plan week is
+ * a set of sessions and a volume; it does not name days, because the runner
+ * arranges them around their own life. Dealing them out across the week to
+ * produce a "today" would be the app inventing a commitment the plan never
+ * made.
+ */
+function PlanWeekCard({
+  week,
+  activities,
+  statuses,
+  goalName,
+  showGoalName,
+  onOpen,
+  t,
+}: {
+  week: CurrentPlanWeek
+  activities: Activity[]
+  statuses: Record<string, PlanSessionStatus>
+  goalName: string
+  showGoalName: boolean
+  onOpen: () => void
+  t: (key: TranslationKey, params?: TranslationParams) => string
+}) {
+  const progress = useMemo(
+    () => summarisePlanWeek(week, activitiesInPlanWeek(activities, week.weekStart), statuses),
+    [week, activities, statuses],
+  )
+
+  // Skipped counts as settled, the same as it does in the plan's own week
+  // header: the runner has answered for it, so it is not still ahead of them.
+  const settled = progress.done + progress.skipped
+  const filled = progress.total > 0 ? Math.round((settled / progress.total) * 100) : 0
+
+  return (
+    <Section>
+      <SectionHeader
+        title={t("home.planThisWeek")}
+        hint={showGoalName ? goalName : undefined}
+        action={<SectionAction onClick={onOpen}>{t("home.planSeeWeek")}</SectionAction>}
+      />
+      <AppCard variant="rows">
+        <button onClick={onOpen} className="press flex w-full flex-col gap-3 p-4 text-left">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-micro font-semibold text-primary">
+              {t("home.planWeek", { week: week.weekNumber })}
+              {week.theme ? ` · ${week.theme}` : ""}
+            </span>
+            <span className="measure shrink-0 text-micro text-muted-foreground">
+              {t("home.planSessionsDone", { done: progress.done, total: progress.total })}
+              {progress.skipped > 0
+                ? ` · ${t("home.planSessionsSkipped", { skipped: progress.skipped })}`
+                : ""}
+            </span>
+          </div>
+
+          {progress.next ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-micro text-muted-foreground">{t("home.planNextUp")}</span>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="truncate text-lead font-semibold text-card-foreground">
+                  {progress.next.type}
+                </span>
+                <span className="measure shrink-0 text-label font-semibold text-primary">
+                  {progress.next.distance}
+                </span>
+              </div>
+              {/* The pace target when there is one — hill repeats have none,
+                  because uphill pace is set by the hill and not by fitness. */}
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="line-clamp-1 text-micro text-muted-foreground">
+                  {progress.next.effort}
+                </p>
+                {progress.next.suggestedPace && (
+                  <span className="measure shrink-0 text-micro text-primary/70">
+                    {progress.next.suggestedPace}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-label font-semibold text-card-foreground">
+                {t("home.planWeekSettled")}
+              </span>
+              <p className="text-micro text-muted-foreground">{t("home.planWeekSettledBody")}</p>
+            </div>
+          )}
+
+          {/* The week as one line. A lane would say the same thing, but the
+              lanes on this screen belong to the weekly targets, and two round
+              marks measuring different weeks would read as one pair. */}
+          <div
+            className="h-1 overflow-hidden rounded-full bg-surface-sunken"
+            role="img"
+            aria-label={t("home.planSessionsDone", {
+              done: progress.done,
+              total: progress.total,
+            })}
+          >
+            <div
+              className={`h-full rounded-full ${progress.next ? "bg-primary" : "bg-success"}`}
+              style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
+            />
+          </div>
+        </button>
+      </AppCard>
+    </Section>
+  )
+}
+
 interface HomeScreenProps {
-  /**
-   * The "Get started" checklist, when the account still has first-run work
-   * left. It leads the screen, and while it is up it also stands in for the
-   * no-goals empty state — both would otherwise ask for the same goal.
-   */
-  guide?: ReactNode
   starredGoals: Goal[]
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
@@ -159,6 +276,15 @@ interface HomeScreenProps {
    */
   warnings: Warning[]
   planBadges: Record<string, PlanBadge>
+  /**
+   * The week each goal's training plan is in, keyed by goal id, trimmed to the
+   * sessions on the server. Only the leading pinned goal's week is shown —
+   * Today answers one question at a time, and a runner with two races pinned
+   * is deciding today's run against the nearer of them.
+   */
+  currentPlanWeeks?: Record<string, CurrentPlanWeek>
+  /** Manual session statuses per goal, keyed `W3-1`. Seeded by the page render. */
+  planSessionStatuses?: Record<string, Record<string, PlanSessionStatus>>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
   onViewActivities: () => void
@@ -176,7 +302,6 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({
-  guide,
   starredGoals,
   currentWeekGoals,
   activities,
@@ -184,6 +309,8 @@ export function HomeScreen({
   recentActivities,
   warnings,
   planBadges,
+  currentPlanWeeks,
+  planSessionStatuses,
   onViewActivities,
   onViewGoal,
   onViewGoals,
@@ -315,11 +442,15 @@ export function HomeScreen({
     return currentWeekGoals.map((goal) => ({ goal, current: currentFor(goal) }))
   }, [currentWeekGoals, activities, currentMondayStr, weeklySummary])
 
+  // The plan belongs to the race that is next, which is the card leading the
+  // rail. A finished race sorts behind, and its block is over anyway — so if
+  // the lead goal is in the past there is no week to show.
+  const leadGoal = orderedGoals[0] ?? null
+  const leadPlanWeek =
+    leadGoal && !goalMetrics[0]?.past ? currentPlanWeeks?.[leadGoal.id] ?? null : null
+
   return (
     <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
-      {/* ── First run, while there is still first-run work ────────────── */}
-      {guide}
-
       {/* ── The race, and how much runway is left ─────────────────────── */}
       {starredGoals.length > 0 ? (
         <Section>
@@ -480,7 +611,7 @@ export function HomeScreen({
             </div>
           )}
         </Section>
-      ) : guide ? null : (
+      ) : (
         <EmptyState
           title={t("home.noActiveGoals")}
           body={t("home.noActiveGoalsBody")}
@@ -489,6 +620,22 @@ export function HomeScreen({
               {t("home.setGoal")}
             </Button>
           }
+        />
+      )}
+
+      {/* ── What there is to run ──────────────────────────────────────── */}
+      {/* Directly under the countdown, because it is the decision the
+          countdown leads to. Everything below this point is a report on what
+          has already happened. */}
+      {leadGoal && leadPlanWeek && (
+        <PlanWeekCard
+          week={leadPlanWeek}
+          activities={activities}
+          statuses={planSessionStatuses?.[leadGoal.id] ?? {}}
+          goalName={leadGoal.name}
+          showGoalName={starredGoals.length > 1}
+          onOpen={() => onViewGoal(leadGoal)}
+          t={t}
         />
       )}
 

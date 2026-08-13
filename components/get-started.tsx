@@ -4,7 +4,7 @@ import { Check } from "lucide-react"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 import type { GetStartedProgress, GetStartedStep, GetStartedStepId } from "@/lib/onboarding"
 import { AppCard, CardRow } from "@/components/ui/app-card"
-import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
+import { BottomSheet } from "@/components/ui/bottom-sheet"
 import { Button } from "@/components/ui/button"
 import { ConnectWithStravaButton } from "@/components/strava-brand"
 
@@ -13,12 +13,20 @@ import { ConnectWithStravaButton } from "@/components/strava-brand"
  *
  * First run is not a tour. A carousel over the top of the app teaches the
  * menus in the one moment the runner has no data to see in them, and it can
- * only be taken once. This is a checklist that sits at the top of Today,
- * inside the app rather than over it: three things worth doing, each with the
- * control that does it and the surface it belongs to named in the copy. The
- * app underneath stays usable throughout, a finished step collapses to a
- * marked line instead of vanishing, and hiding it is remembered on the
- * account — Profile brings it back.
+ * only be taken once. This is a checklist: three things worth doing, each with
+ * the control that does it and the surface it belongs to named in the copy.
+ * What is already done is read from the account rather than remembered, so the
+ * list is right on a second device and after data is deleted.
+ *
+ * It arrives as a sheet over Today rather than as a section inside it. As a
+ * section it was the first thing on the screen and the widest, so for a new
+ * account Today was the setup list with the app underneath — and it stayed
+ * that way, one step shorter at a time, for as long as any step was
+ * outstanding. Asked once per session and dismissed with a tap, it stops being
+ * something to scroll past on the screen the runner opens before every run.
+ *
+ * Closing it puts it away until the next session. Hiding it is remembered on
+ * the account, and Profile brings it back.
  */
 
 const STEP_COPY: Record<
@@ -30,7 +38,8 @@ const STEP_COPY: Record<
   week: { title: "getStarted.weekTitle", body: "getStarted.weekBody" },
 }
 
-interface GetStartedProps {
+interface GetStartedSheetProps {
+  open: boolean
   steps: GetStartedStep[]
   progress: GetStartedProgress
   stravaConnected: boolean
@@ -39,10 +48,14 @@ interface GetStartedProps {
   onAddGoal: () => void
   onAddWeeklyGoal: () => void
   onViewInsights: () => void
-  onDismiss: () => void
+  /** Put it away for now. It returns next session while there is work left. */
+  onClose: () => void
+  /** Stop offering it. Remembered on the account; Profile brings it back. */
+  onHide: () => void
 }
 
-export function GetStarted({
+export function GetStartedSheet({
+  open,
   steps,
   progress,
   stravaConnected,
@@ -51,22 +64,31 @@ export function GetStarted({
   onAddGoal,
   onAddWeeklyGoal,
   onViewInsights,
-  onDismiss,
-}: GetStartedProps) {
+  onClose,
+  onHide,
+}: GetStartedSheetProps) {
   const { t } = useI18n()
 
   const progressText = `${progress.done} ${t("getStarted.of")} ${progress.total} ${t(
     "getStarted.completed",
   )}`
 
-  return (
-    <Section>
-      <SectionHeader
-        title={t("getStarted.title")}
-        hint={progressText}
-        action={<SectionAction onClick={onDismiss}>{t("getStarted.hide")}</SectionAction>}
-      />
+  // Every step's control opens an editor, and an editor is a sheet too. Two
+  // stacked sheets is one sheet the runner cannot see the top of, so this one
+  // gets out of the way first.
+  const andClose = (action: () => void) => () => {
+    onClose()
+    action()
+  }
 
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={t("getStarted.title")}
+      description={progressText}
+      closeLabel={t("getStarted.closeForNow")}
+    >
       <AppCard variant="rows">
         {steps.map((step, i) => (
           <CardRow key={step.id} className="flex items-start gap-3">
@@ -110,20 +132,20 @@ export function GetStarted({
                     {step.id === "runs" && (
                       <>
                         {!stravaConnected && (
-                          <ConnectWithStravaButton onClick={onConnectStrava} />
+                          <ConnectWithStravaButton onClick={andClose(onConnectStrava)} />
                         )}
-                        <Button variant="secondary" block onClick={onAddActivity}>
+                        <Button variant="secondary" block onClick={andClose(onAddActivity)}>
                           {t("getStarted.addRun")}
                         </Button>
                       </>
                     )}
                     {step.id === "race" && (
-                      <Button className="self-start" onClick={onAddGoal}>
+                      <Button className="self-start" onClick={andClose(onAddGoal)}>
                         {t("getStarted.addRace")}
                       </Button>
                     )}
                     {step.id === "week" && (
-                      <Button className="self-start" onClick={onAddWeeklyGoal}>
+                      <Button className="self-start" onClick={andClose(onAddWeeklyGoal)}>
                         {t("getStarted.addWeek")}
                       </Button>
                     )}
@@ -144,19 +166,21 @@ export function GetStarted({
             <p className="max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
               {t("getStarted.readyBody")}
             </p>
-            <div className="mt-1 flex flex-wrap gap-2">
-              <Button onClick={onViewInsights}>{t("getStarted.openInsights")}</Button>
-              <Button variant="ghost" onClick={onDismiss}>
-                {t("getStarted.hide")}
-              </Button>
+            <div className="mt-1">
+              <Button onClick={andClose(onViewInsights)}>{t("getStarted.openInsights")}</Button>
             </div>
           </CardRow>
         )}
       </AppCard>
 
-      {!progress.complete && (
+      {/* Hiding is a different act from closing, so it is a control of its own
+          rather than the X in the corner quietly meaning "never again". */}
+      <div className="mt-4 flex flex-col items-start gap-1.5">
+        <Button variant="ghost" onClick={onHide}>
+          {t("getStarted.hide")}
+        </Button>
         <p className="text-micro text-muted-foreground">{t("getStarted.hideHint")}</p>
-      )}
-    </Section>
+      </div>
+    </BottomSheet>
   )
 }

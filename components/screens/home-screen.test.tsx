@@ -4,7 +4,14 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
-import type { Activity, Goal, WeeklyGoal, WeeklySummary } from "@/lib/types"
+import type {
+  Activity,
+  Goal,
+  PlanSessionStatus,
+  WeeklyGoal,
+  WeeklySummary,
+} from "@/lib/types"
+import type { CurrentPlanWeek } from "@/lib/plan-today"
 
 /**
  * The "This week" card.
@@ -470,5 +477,156 @@ describe("HomeScreen — unpinning a race that is done", () => {
     expect(onUnpinGoal).not.toHaveBeenCalled()
     // Without a handler the card is simply not offering it.
     expect(screen.queryByRole("button", { name: /unpin from today/i })).toBeNull()
+  })
+})
+
+/**
+ * The plan's current week, on Today.
+ *
+ * The plan lived two taps away behind a goal, and arrived only after that
+ * screen had fetched it — so the runner deciding what to do this morning had
+ * to go and look it up. One session and a count is what belongs here.
+ */
+function makePlanWeek(overrides: Partial<CurrentPlanWeek> = {}): CurrentPlanWeek {
+  const monday = new Date()
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() + (monday.getDay() === 0 ? -6 : 1 - monday.getDay()))
+  return {
+    goalId: "goal-1",
+    weekNumber: 2,
+    theme: "Building on the re-entry",
+    targetKm: 31,
+    weekStart: monday.toISOString(),
+    sessions: [
+      {
+        type: "Long run",
+        distance: "10.5 km",
+        effort: "Easy, conversational Z2",
+        purpose: "Aerobic base",
+        suggestedPace: "6:00–6:15 /km",
+      },
+      {
+        type: "Fartlek",
+        distance: "7 km",
+        effort: "Relaxed surges",
+        purpose: "Turnover",
+        suggestedPace: "4:24–4:32 /km",
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function renderWithPlan({
+  goals,
+  planWeeks,
+  activities = [],
+  statuses = {},
+  onViewGoal = () => {},
+}: {
+  goals: Goal[]
+  planWeeks: Record<string, CurrentPlanWeek>
+  activities?: Activity[]
+  statuses?: Record<string, Record<string, PlanSessionStatus>>
+  onViewGoal?: (goal: Goal) => void
+}) {
+  return render(
+    <I18nProvider>
+      <HomeScreen
+        starredGoals={goals}
+        currentWeekGoals={[]}
+        activities={activities}
+        weeklySummary={summaryOf(activities)}
+        recentActivities={[]}
+        warnings={[]}
+        planBadges={{}}
+        currentPlanWeeks={planWeeks}
+        planSessionStatuses={statuses}
+        onViewActivities={() => {}}
+        onViewGoal={onViewGoal}
+        onViewGoals={() => {}}
+        onViewInsights={() => {}}
+        onSelectActivity={() => {}}
+      />
+    </I18nProvider>,
+  )
+}
+
+describe("HomeScreen — this week of the training plan", () => {
+  it("names the next session outstanding, with its distance and pace", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() } })
+
+    expect(screen.getByText("Long run")).toBeTruthy()
+    expect(screen.getByText("10.5 km")).toBeTruthy()
+    expect(screen.getByText("6:00–6:15 /km")).toBeTruthy()
+    expect(screen.getByText("0/2 done")).toBeTruthy()
+  })
+
+  it("moves on to the next session once one has been run", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({
+      goals: [goal],
+      planWeeks: { "goal-1": makePlanWeek() },
+      activities: [makeActivity({ distance_km: 10.6, pace_min_per_km: 6.1 })],
+    })
+
+    expect(screen.getByText("Fartlek")).toBeTruthy()
+    expect(screen.getByText("1/2 done")).toBeTruthy()
+  })
+
+  it("counts a skipped session as answered for", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    renderWithPlan({
+      goals: [goal],
+      planWeeks: { "goal-1": makePlanWeek() },
+      statuses: { "goal-1": { "W2-0": "skipped", "W2-1": "completed" } },
+    })
+
+    expect(screen.getByText(/1 skipped/)).toBeTruthy()
+    expect(screen.getByText("Every session this week is accounted for")).toBeTruthy()
+  })
+
+  it("opens the goal the week belongs to", () => {
+    const goal = makeRaceGoal({ id: "goal-1" })
+    const onViewGoal = vi.fn()
+    renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() }, onViewGoal })
+
+    fireEvent.click(screen.getByRole("button", { name: /see the week/i }))
+    expect(onViewGoal).toHaveBeenCalledWith(goal)
+  })
+
+  it("shows the week of the race that is next, not of a race already run", () => {
+    // Today answers one question at a time, and it is answered against the
+    // nearer race — the same one leading the rail.
+    const past = makeRaceGoal({ id: "goal-past", name: "Last spring", target_date: daysFromNow(-120) })
+    const next = makeRaceGoal({ id: "goal-1", name: "Still ahead", target_date: daysFromNow(32) })
+    renderWithPlan({
+      goals: [past, next],
+      planWeeks: {
+        "goal-1": makePlanWeek(),
+        "goal-past": makePlanWeek({ goalId: "goal-past", sessions: [
+          { type: "Ghost session", distance: "5 km", effort: "-", purpose: "-" },
+        ] }),
+      },
+    })
+
+    expect(screen.getByText("Long run")).toBeTruthy()
+    expect(screen.queryByText("Ghost session")).toBeNull()
+    // With more than one race pinned, the card says which one it is about —
+    // so the name is on screen twice: on the goal card and on this one.
+    expect(screen.getAllByText("Still ahead")).toHaveLength(2)
+  })
+
+  it("says nothing at all when the goal has no plan", () => {
+    renderWithPlan({ goals: [makeRaceGoal({ id: "goal-1" })], planWeeks: {} })
+    expect(screen.queryByText("Training plan")).toBeNull()
+  })
+
+  it("says nothing when the leading race is already behind them", () => {
+    // The block is over with the race; the goal card's own prompt covers it.
+    const past = makeRaceGoal({ id: "goal-1", target_date: daysFromNow(-10) })
+    renderWithPlan({ goals: [past], planWeeks: { "goal-1": makePlanWeek() } })
+    expect(screen.queryByText("Training plan")).toBeNull()
   })
 })
