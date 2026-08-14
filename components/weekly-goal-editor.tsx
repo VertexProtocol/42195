@@ -5,6 +5,7 @@ import { Trash2, Repeat, Calendar } from "lucide-react"
 import type { WeeklyGoal, WeeklyGoalMetric } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { weekStartStr } from "@/lib/week"
+import { recordTargetChange } from "@/lib/weekly-goal-history"
 import type { WeeklySuggestion } from "@/lib/weekly-suggestions"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import { Input } from "@/components/ui/input"
@@ -135,6 +136,15 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
       // through stops an edit from jumping the goal to the top of the list.
       display_order: isNew ? undefined : goal!.display_order,
       ...provenanceFor(isNew, goal, suggestion, metric),
+      // A recurring target that changes closes the old number's run rather
+      // than erasing it, so the weeks the runner spent working to it keep
+      // saying what they were working to. Changing the metric drops the
+      // history for the same reason it drops the provenance: it is no longer
+      // a record of the same thing.
+      target_history:
+        isNew || !goal || goal.metric !== metric
+          ? []
+          : recordTargetChange(goal, parseFloat(target), weekStartStr()),
     }
     onSave(saved)
   }

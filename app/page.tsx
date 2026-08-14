@@ -17,6 +17,7 @@ import {
   type WarningState,
 } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadgeRow } from "@/lib/plan-badges"
+import { parseTargetHistory } from "@/lib/weekly-goal-history"
 import {
   derivePlanDigests,
   type GoalPlanningPrefs,
@@ -52,7 +53,7 @@ export default async function Page() {
         .order("display_order", { ascending: true }),
       supabase
         .from("weekly_goals")
-        .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target")
+        .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target, target_history")
         .order("display_order", { ascending: true }),
       supabase.from("profiles").select("id, display_name, email, avatar_url, locale, max_hr, resting_hr, hr_analysis_cache, warning_state, onboarding_dismissed_at").eq("id", authUser.id).single(),
       // Which activities are test runs. Fetched here rather than from the
@@ -196,6 +197,7 @@ export default async function Page() {
       source_goal_id: (wg as any).source_goal_id ?? null,
       suggested_target:
         (wg as any).suggested_target != null ? Number((wg as any).suggested_target) : null,
+      target_history: parseTargetHistory((wg as any).target_history),
     })),
     dismissals: ((dismissalsRes.data ?? []) as { metric: string; source_goal_id: string | null }[]).map(
       (d) => ({

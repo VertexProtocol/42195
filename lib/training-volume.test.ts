@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { computeWeeklyTargets, calcWeekTargets, calcMinWeeklyKm, type WeeklyTargetInputs } from "./training-volume"
-import type { AcwrSafety, ProlongedFatigueResult } from "./training-safety"
+import { computeVolumeBaseline, computeWeeklyTargets, calcWeekTargets, calcMinWeeklyKm, type WeeklyTargetInputs } from "./training-volume"
+import type { AcwrSafety, ProlongedFatigueResult, SafetyActivity } from "./training-safety"
 import type { ComebackRecommendation } from "./training-comeback"
 
 const noAcwr: AcwrSafety = { ratio: 0.9, risk: "low", weekOneMultiplier: 1.0, message: null }
@@ -140,5 +140,90 @@ describe("computeWeeklyTargets", () => {
       comeback: { ...noComeback, needsRamp: true, pauseDays: 21, weekOneKm: 18, category: "long" },
     }))
     expect(targets).toEqual([18])
+  })
+})
+
+describe("computeVolumeBaseline", () => {
+  const NOW = new Date(2026, 7, 12, 9, 0) // Wednesday
+  const DAY_MS = 24 * 60 * 60 * 1000
+
+  function run(daysAgo: number, km: number): SafetyActivity {
+    return {
+      date: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString(),
+      distance_km: km,
+      duration_seconds: Math.round(km * 330),
+    } as unknown as SafetyActivity
+  }
+
+  /** `weeks` weeks of `runsPerWeek` × `kmEach`, ending `offsetWeeks` ago. */
+  function history(weeks: number, runsPerWeek: number, kmEach: number, offsetWeeks = 0): SafetyActivity[] {
+    const out: SafetyActivity[] = []
+    for (let w = 0; w < weeks; w++) {
+      for (let r = 1; r <= runsPerWeek; r++) {
+        out.push(run((w + offsetWeeks) * 7 + r, kmEach))
+      }
+    }
+    return out
+  }
+
+  it("reads a steady runner's weekly volume", () => {
+    const out = computeVolumeBaseline(history(8, 4, 10), NOW)
+    expect(out.avgWeeklyKm).toBeCloseTo(40, 0)
+    expect(out.longestRecentRun).toBe(10)
+    expect(out.activeWeeks).toBe(8)
+  })
+
+  it("counts a week without runs as the zero it was", () => {
+    // Four weeks off after eight steady weeks. The recent average is zero, so
+    // what is left is the peak floor — not the volume from before the layoff.
+    // The route's own version took the last four weeks *that had runs in them*
+    // and divided by four, handing a detrained runner their full pre-layoff
+    // baseline.
+    const out = computeVolumeBaseline(history(8, 4, 10, 4), NOW)
+    expect(out.avgWeeklyKm).toBeLessThan(40)
+    expect(out.avgWeeklyKm).toBeCloseTo(34, 0) // 85% of the 40 km peak
+  })
+
+  it("holds the peak as a floor so a taper does not ratchet the next block down", () => {
+    // Eight weeks at 40, then two easy weeks at 10.
+    const tapered = [...history(8, 4, 10, 2), ...history(2, 2, 5)]
+    const out = computeVolumeBaseline(tapered, NOW)
+    expect(out.avgWeeklyKm).toBeGreaterThan(20)
+  })
+
+  it("gives the same answer whichever day the runner regenerates on", () => {
+    // The calendar-week version counted the current partial week as a whole
+    // one, so the same runner mid-block got 34.0 km/week on a Tuesday and
+    // 40.0 on a Friday — a 15% swing decided by nothing but the day they
+    // pressed the button. Rolling seven-day windows have no partial week.
+    const firstMonday = Date.UTC(2026, 5, 1)
+    const acts: SafetyActivity[] = []
+    for (let w = 0; w < 10; w++) {
+      for (const d of [1, 2, 3, 4]) {
+        acts.push({
+          date: new Date(firstMonday + (w * 7 + d) * DAY_MS).toISOString(),
+          distance_km: 10,
+          duration_seconds: 3300,
+        } as unknown as SafetyActivity)
+      }
+    }
+
+    const answers = [63, 64, 65, 66, 67, 68, 69].map((offset) =>
+      computeVolumeBaseline(acts, new Date(firstMonday + offset * DAY_MS + 12 * 3600e3)).avgWeeklyKm,
+    )
+    expect(new Set(answers.map((n) => n.toFixed(1))).size).toBe(1)
+    expect(answers[0]).toBeCloseTo(40, 0)
+  })
+
+  it("returns zeroes rather than NaN for a runner with no history", () => {
+    const out = computeVolumeBaseline([], NOW)
+    expect(out.avgWeeklyKm).toBe(0)
+    expect(out.longestRecentRun).toBe(0)
+    expect(out.activeWeeks).toBe(0)
+  })
+
+  it("ignores runs older than the lookback window", () => {
+    const ancient = history(4, 4, 20, 20) // 20+ weeks ago
+    expect(computeVolumeBaseline(ancient, NOW).longestRecentRun).toBe(0)
   })
 })

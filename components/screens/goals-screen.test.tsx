@@ -549,7 +549,7 @@ describe("GoalsScreen — accepting, adjusting and refusing", () => {
 describe("GoalsScreen — the drag order as priority", () => {
   const future = { target_date: daysFromNow(120), start_date: daysFromNow(-30) }
 
-  it("marks the race that sets the week", () => {
+  it("names the race that sets the week", () => {
     renderSuggestions({
       initialTab: "race",
       goals: [
@@ -557,19 +557,28 @@ describe("GoalsScreen — the drag order as priority", () => {
         makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 1 }),
       ],
     })
-    expect(screen.getByText("A")).toBeTruthy()
-    expect(screen.getByText(/The order sets priority/)).toBeTruthy()
+    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
   })
 
-  it("marks the race, never the performance goal above it", () => {
+  it("carries no badge on the card", () => {
+    // The meaning is in the sentence under the list. A one-letter pill in the
+    // name row is jargon competing with the phase pill already there.
+    renderSuggestions({
+      initialTab: "race",
+      goals: [
+        makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 1 }),
+        makeGoal({ ...future, goal_category: "event_training", name: "Berlin", display_order: 2 }),
+      ],
+    })
+    expect(screen.queryByText("A")).toBeNull()
+  })
+
+  it("names the race, never the performance goal above it", () => {
     const perf = makeGoal({ ...future, goal_category: "performance", name: "Sub-50", display_order: 1 })
     const race = makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 2 })
-    const { container } = renderSuggestions({ initialTab: "race", goals: [perf, race] })
-    const marked = container.querySelectorAll("span")
-    const pill = Array.from(marked).find((el) => el.textContent?.startsWith("A —"))
-    expect(pill).toBeTruthy()
-    // The pill sits inside Oslo's card, not the performance goal's.
-    expect(pill!.closest("div")!.textContent).toContain("Oslo")
+    renderSuggestions({ initialTab: "race", goals: [perf, race] })
+    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
+    expect(screen.queryByText(/Sub-50 is setting/)).toBeNull()
   })
 
   it("stays quiet about an order of one", () => {
@@ -577,7 +586,7 @@ describe("GoalsScreen — the drag order as priority", () => {
       initialTab: "race",
       goals: [makeGoal({ ...future, goal_category: "event_training", name: "Oslo" })],
     })
-    expect(screen.queryByText(/The order sets priority/)).toBeNull()
+    expect(screen.queryByText(/is setting this week's volume/)).toBeNull()
   })
 })
 
@@ -654,5 +663,122 @@ describe("GoalsScreen — stepping into next week", () => {
     })
     fireEvent.click(screen.getByRole("button", { name: /next week/i }))
     expect(screen.queryByRole("button", { name: /add weekly goal/i })).toBeNull()
+  })
+})
+
+describe("GoalsScreen — a recurring target's reach", () => {
+  const weekStart = mondayThisWeek()
+
+  function weeksAgo(n: number): string {
+    const d = new Date(`${weekStart}T00:00:00`)
+    d.setDate(d.getDate() - 7 * n)
+    const p = (x: number) => String(x).padStart(2, "0")
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+
+  function recurring(setInWeek: string): WeeklyGoal {
+    return {
+      id: "wg-recurring",
+      metric: "distance_km",
+      label: "Weekly Distance",
+      target: 40,
+      week_start: setInWeek,
+      is_recurring: true,
+      display_order: 1,
+      source: "manual",
+    } as WeeklyGoal
+  }
+
+  it("applies to the week it was set in", () => {
+    renderSuggestions({ weeklyGoals: [recurring(weekStart)] })
+    expect(screen.getAllByText(/40 km/).length).toBeGreaterThan(0)
+  })
+
+  it("applies to later weeks", () => {
+    renderSuggestions({ weeklyGoals: [recurring(weeksAgo(3))] })
+    expect(screen.getAllByText(/40 km/).length).toBeGreaterThan(0)
+  })
+
+  it("does not reach back into weeks that predate it", () => {
+    // Set this week, looking at last week. The target did not exist then, and
+    // showing it marks the runner as having missed something nobody asked for.
+    renderSuggestions({ weeklyGoals: [recurring(weekStart)] })
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.queryAllByText(/40 km/)).toHaveLength(0)
+    expect(screen.getByText("No goals this week")).toBeTruthy()
+  })
+
+  it("still shows a one-off target in its own week only", () => {
+    const oneOff = { ...recurring(weeksAgo(1)), is_recurring: false, target: 25 } as WeeklyGoal
+    renderSuggestions({ weeklyGoals: [oneOff] })
+    expect(screen.queryAllByText(/25 km/)).toHaveLength(0)
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.getAllByText(/25 km/).length).toBeGreaterThan(0)
+  })
+})
+
+describe("GoalsScreen — a recurring target that has changed", () => {
+  const weekStart = mondayThisWeek()
+
+  function weeksAgo(n: number): string {
+    const d = new Date(`${weekStart}T00:00:00`)
+    d.setDate(d.getDate() - 7 * n)
+    const p = (x: number) => String(x).padStart(2, "0")
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+
+  /** Set at 40 km four weeks ago; raised to 50 this week. */
+  function raised(): WeeklyGoal {
+    return {
+      id: "wg-raised",
+      metric: "distance_km",
+      label: "Weekly Distance",
+      target: 50,
+      week_start: weeksAgo(4),
+      is_recurring: true,
+      display_order: 1,
+      source: "manual",
+      target_history: [{ from: weeksAgo(4), until: weekStart, target: 40 }],
+    } as WeeklyGoal
+  }
+
+  /** The card's own "done / target" line, not the suggestion note beside it. */
+  const against = (km: number) => new RegExp(`/ ${km} km`)
+
+  it("shows the new number in the week it was raised", () => {
+    renderSuggestions({ weeklyGoals: [raised()] })
+    expect(screen.getAllByText(against(50)).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(against(40))).toHaveLength(0)
+  })
+
+  it("leaves last week judged against the number that was set then", () => {
+    // The whole point: a month finished on 42 km must not flip from
+    // comfortably over to eight short because the target moved afterwards.
+    renderSuggestions({ weeklyGoals: [raised()] })
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.getAllByText(against(40)).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(against(50))).toHaveLength(0)
+  })
+
+  it("still shows the current number for a goal that has never changed", () => {
+    const steady = { ...raised(), target: 40, target_history: [] } as WeeklyGoal
+    renderSuggestions({ weeklyGoals: [steady] })
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.getAllByText(against(40)).length).toBeGreaterThan(0)
+  })
+
+  it("records the change when the plan's number is taken in one tap", () => {
+    let saved: WeeklyGoal | null = null
+    const standing = {
+      ...raised(),
+      target: 30,
+      target_history: [],
+    } as WeeklyGoal
+    renderSuggestions({ onSaveWeeklyGoal: (g) => { saved = g }, weeklyGoals: [standing] })
+    fireEvent.click(screen.getByRole("button", { name: "Use that" }))
+    // The outgoing 30 keeps the weeks it governed; the new number starts now.
+    expect(saved!.target_history).toEqual([
+      { from: weeksAgo(4), until: weekStart, target: 30 },
+    ])
   })
 })

@@ -19,6 +19,7 @@ import { deriveCurrentPlanWeeks, type CurrentPlanWeek, type PlanWeekRow } from "
 import { fetchAllActivities, mapActivityRow } from "@/lib/activities-query"
 import type { Warning } from "@/lib/training-warnings"
 import { derivePlanBadges, type PlanBadge, type PlanBadgeRow } from "@/lib/plan-badges"
+import { parseTargetHistory } from "@/lib/weekly-goal-history"
 import {
   derivePlanDigests,
   type GoalPlanningPrefs,
@@ -291,7 +292,7 @@ export function useAppData(initialData?: InitialData | null) {
           supabase
             .from("weekly_goals")
             // [DND] include display_order; order by it so the array arrives pre-sorted
-            .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target")
+            .select("id, metric, label, target, week_start, is_recurring, session_min_duration_minutes, session_min_distance_km, display_order, source, source_goal_id, suggested_target, target_history")
             .order("display_order", { ascending: true }),
           supabase.from("profiles").select("id, display_name, email, avatar_url, onboarding_dismissed_at").eq("id", authUser.id).single(),
           fetch("/api/sync-status").then((r) => r.json()).catch(() => null),
@@ -336,6 +337,7 @@ export function useAppData(initialData?: InitialData | null) {
             source: wg.source ?? "manual",
             source_goal_id: wg.source_goal_id ?? null,
             suggested_target: wg.suggested_target != null ? Number(wg.suggested_target) : null,
+            target_history: parseTargetHistory(wg.target_history),
           }))
         )
       }
@@ -411,7 +413,13 @@ export function useAppData(initialData?: InitialData | null) {
   const currentWeekGoals = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, "0")
     const mondayStr = `${currentWeekMonday.getFullYear()}-${p(currentWeekMonday.getMonth() + 1)}-${p(currentWeekMonday.getDate())}`
-    return weeklyGoals.filter((wg) => wg.is_recurring || wg.week_start === mondayStr)
+    // Same rule as Plan's week list: a recurring target applies from the week
+    // it was set in onwards. It matters here too now that a target can be
+    // accepted for next week — a standing goal starting next Monday is not
+    // one of this week's.
+    return weeklyGoals.filter((wg) =>
+      wg.is_recurring ? wg.week_start <= mondayStr : wg.week_start === mondayStr,
+    )
   }, [weeklyGoals, currentWeekMonday])
 
   // ----- Goal CRUD -----
@@ -606,6 +614,7 @@ export function useAppData(initialData?: InitialData | null) {
             // the plan's 42 km and sets 45 has adjusted the suggestion, not
             // replaced it, and the card says so.
             suggested_target: saved.suggested_target ?? null,
+            target_history: saved.target_history ?? [],
           })
           .eq("id", saved.id)
         if (error) {
@@ -639,6 +648,7 @@ export function useAppData(initialData?: InitialData | null) {
             source: saved.source ?? "manual",
             source_goal_id: saved.source_goal_id ?? null,
             suggested_target: saved.suggested_target ?? null,
+            target_history: saved.target_history ?? [],
           })
           .select()
           .single()
@@ -664,6 +674,7 @@ export function useAppData(initialData?: InitialData | null) {
               source: data.source ?? "manual",
               source_goal_id: data.source_goal_id ?? null,
               suggested_target: data.suggested_target != null ? Number(data.suggested_target) : null,
+              target_history: parseTargetHistory(data.target_history),
             },
             ...prev,
           ])

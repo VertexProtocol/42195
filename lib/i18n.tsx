@@ -277,9 +277,7 @@ const translations = {
     "goals.events": "Events",
     "goals.targets": "Targets",
     "goals.noTargets": "No targets",
-    "goals.pacesetter": "A",
-    "goals.pacesetterHint": "Sets this week's volume",
-    "goals.orderIsPriority": "The order sets priority. The top race with a date still ahead decides this week's volume; the others can only make the week easier.",
+    "goals.orderIsPriority": "The order sets priority: {goal} is setting this week's volume. Races below it can only make the week easier, never harder. Drag another to the top to change that.",
     "goals.setEventTargets": "Add a race or time target to work towards",
     // Plan
     "plan.title": "Plan",
@@ -1204,9 +1202,7 @@ const translations = {
     "goals.events": "Løp",
     "goals.targets": "Mål",
     "goals.noTargets": "Ingen mål",
-    "goals.pacesetter": "A",
-    "goals.pacesetterHint": "Bestemmer ukens volum",
-    "goals.orderIsPriority": "Rekkefølgen setter prioritet. Det øverste løpet som ennå ikke er løpt bestemmer ukens volum; de andre kan bare gjøre uken lettere.",
+    "goals.orderIsPriority": "Rekkefølgen setter prioritet: {goal} bestemmer ukens volum. Løp under kan bare gjøre uken lettere, aldri hardere. Dra et annet øverst for å endre det.",
     "goals.setEventTargets": "Legg til et løp eller tidsmål å jobbe mot",
     // Plan
     "plan.title": "Plan",
