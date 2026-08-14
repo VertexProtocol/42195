@@ -228,25 +228,38 @@ change.
    translations. It works only as long as no two metric labels ever translate
    alike. The canonical label belongs in `METRIC_OPTIONS`. Fixed in step 1.
 
-Found while building step 1, noted rather than fixed:
+Found while building step 1, deferred then, **done afterwards**:
 
-4. **Two volume baselines.** `computeVolumeBaseline` (`lib/training-volume.ts`)
-   measures rolling seven-day windows; `app/api/ai/training-plan/route.ts`
-   groups activities into UTC calendar weeks and averages the last four. The
-   route's version counts the current partial week as a whole one, so
-   regenerating a plan on Tuesday asks for less than the same runner would get
-   on Sunday. Unifying them changes what the plan generator produces, which is
-   a change to make deliberately and test on its own — not a side effect of
-   adding suggestions.
-5. **A fifth week-boundary implementation** lives in that route's
-   `groupActivitiesByWeek`, in UTC. Same family as fix 2, same reason it is
-   left alone: it runs server-side, where local time is not knowable. Step 4.
+4. **Two volume baselines** — `app/api/ai/training-plan/route.ts` worked out its
+   own from UTC calendar weeks. It now calls `computeVolumeBaseline`. Deferring
+   it was right, and doing it separately turned up more than the partial-week
+   problem it was filed under: because grouping only produces entries for weeks
+   containing a run, "the last four weeks" meant "the last four weeks that had
+   a run in them". A runner measured 40.0 km/week no matter how long they had
+   been off — two weeks, six, ten. Measured deltas are in
+   `lib/training-volume.test.ts`; the partial-week swing was 34.0 on a Tuesday
+   against 40.0 on a Friday for the same runner.
+5. **A fifth week-boundary implementation** in that route's
+   `groupActivitiesByWeek` — now `utcWeekStartStr` in `lib/week.ts`. It stays
+   UTC, because a server route has no runner to be local to; what changed is
+   that the choice is named in the module that owns week boundaries instead of
+   open-coded, and it no longer feeds any number. It groups history for the
+   prompt's prose only.
 
 Noted, not fixed here:
 
-- `weekly_goals.current` is written by sync and ignored by every reader, which
-  recomputes from activities. Step 4 territory.
-- A recurring weekly goal renders into weeks that predate its creation. It is
-  what makes compute-on-read acceptable above, so it stays until someone
-  decides weekly history should be immutable — at which point suggestions and
-  recurring goals both need materialising, together.
+- ~~`weekly_goals.current` is written by sync and ignored by every reader.~~
+  Step 4.
+- ~~A recurring weekly goal renders into weeks that predate its creation.~~ It
+  now applies from the week it was set in onwards, which needed only a date
+  comparison.
+- **A recurring goal's target still changes retroactively.** Edit "40 km every
+  week" to 50 and last month reads as 50 too. This is the one that genuinely
+  needs weekly history to be materialised — a row per week, written as each
+  week arrives — and the app has no scheduler to write them with (`vercel.json`
+  has no cron). Materialising lazily, on the first visit of each week, is the
+  option that needs no cron, at the cost that a week the runner never opened
+  the app in gets no row at all. It is still a decision rather than a fix, and
+  suggestions would have to be materialised at the same time and on the same
+  terms. Unchanged from the original entry: this is what makes compute-on-read
+  acceptable everywhere above.

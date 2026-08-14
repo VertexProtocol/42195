@@ -15,7 +15,8 @@ import {
   computeRecentWeeklyVolumes,
   type SafetyActivity,
 } from "@/lib/training-safety"
-import { computeWeeklyTargets } from "@/lib/training-volume"
+import { computeVolumeBaseline, computeWeeklyTargets } from "@/lib/training-volume"
+import { utcWeekStartStr } from "@/lib/week"
 import {
   allocateSessionDistances,
   formatSessionDistance,
@@ -145,12 +146,12 @@ function groupActivitiesByWeek(
   const weeks = new Map<string, WeeklySummary & { totalDurationSec: number }>()
 
   for (const a of activities) {
-    const d = new Date(a.date)
-    // Use UTC methods to avoid server timezone issues
-    const day = d.getUTCDay()
-    const diff = day === 0 ? -6 : 1 - day
-    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diff))
-    const key = monday.toISOString().split("T")[0]
+    // UTC, and it has to be: this runs on the server, which has no runner to
+    // be local to. It decides how the history is *described* to the model and
+    // nothing else — the numbers the block is built from come from
+    // `computeVolumeBaseline`, which measures rolling seven-day windows and so
+    // has no week boundary to get wrong.
+    const key = utcWeekStartStr(new Date(a.date))
 
     const existing = weeks.get(key)
     const km = Number(a.distance_km)
@@ -533,33 +534,34 @@ export async function POST(req: NextRequest) {
     .eq("id", user.id)
     .single()
 
-  // Weekly summaries are computed from running activities only so that cycling/hiking weeks
-  // don't inflate weekly km targets in the AI prompt.
-  const weeklySummaries = groupActivitiesByWeek((activities ?? []).filter((a) => RUN_TYPES.has(a.type)))
+  // Running activities only, so cycling and hiking weeks do not inflate the
+  // weekly km this block is built from.
+  const runHistory = (activities ?? []).filter((a) => RUN_TYPES.has(a.type))
+  const weeklySummaries = groupActivitiesByWeek(runHistory)
 
-  // Compute derived metrics
-  // Use the same window as the plan regeneration cadence — if the user checks in
-  // every 2 weeks the plan should react to the last 2 weeks; every 8 weeks means
-  // a broader view. Empty weeks (no runs) are included by always dividing by the
-  // full window size, not just the count of active weeks.
-  const recentAvgWeeklyKm =
-    weeklySummaries.slice(0, FITNESS_ANALYSIS_WEEKS).reduce((s, w) => s + w.totalKm, 0) /
-    FITNESS_ANALYSIS_WEEKS
-
-  // Also find the peak 4-week rolling average across the full 12-week history.
-  // This prevents a recent taper or recovery plan from creating a feedback loop
-  // where each regeneration starts lower than the last, even though the runner's
-  // actual fitness is much higher. We use 85% of the peak as a floor so the new
-  // plan doesn't jump straight back to peak — a slight step-down is appropriate.
-  const peakFourWeekAvg = weeklySummaries.length >= 4
-    ? Math.max(...Array.from({ length: weeklySummaries.length - 3 }, (_, i) =>
-        weeklySummaries.slice(i, i + 4).reduce((s, w) => s + w.totalKm, 0) / 4
-      ))
-    : recentAvgWeeklyKm
-  const currentAvgWeeklyKm = Math.max(recentAvgWeeklyKm, peakFourWeekAvg * 0.85)
-
-  const longestRecentRun =
-    weeklySummaries.reduce((max, w) => Math.max(max, w.longestKm), 0)
+  /**
+   * The two numbers the block is built from, from the one volume engine.
+   *
+   * This route used to work them out itself, and got two things wrong that
+   * the shared implementation does not.
+   *
+   * The window reached too far back. `groupActivitiesByWeek` only produces
+   * entries for weeks that contain a run, so "the last four weeks" was really
+   * "the last four weeks that had a run in them" — divided by four regardless.
+   * A runner three weeks into a layoff had their baseline computed from the
+   * four weeks before it, at full volume, and the comment above it claimed the
+   * opposite. `computeVolumeBaseline` walks four actual rolling windows, so an
+   * empty week counts as the zero it was, and the 85% peak floor — which is
+   * still there, and is the deliberate mechanism for not ratcheting down after
+   * a taper — does the catching instead of an accident.
+   *
+   * And the windows were UTC calendar weeks, which count the current partial
+   * week as a whole one: the same runner got a lower baseline regenerating on
+   * Tuesday than on Sunday. Rolling seven-day windows have no partial week.
+   */
+  const { avgWeeklyKm: currentAvgWeeklyKm, longestRecentRun } = computeVolumeBaseline(
+    runHistory as unknown as SafetyActivity[],
+  )
 
   const daysUntilRace = daysUntil(goal.target_date)
 

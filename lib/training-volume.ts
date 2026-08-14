@@ -70,16 +70,21 @@ export interface VolumeBaseline {
  * What the runner has actually been doing, as the two numbers
  * `computeWeeklyTargets` needs to start from.
  *
- * Measured in rolling seven-day windows back from `now`, not calendar weeks.
- * A calendar-week version counts the current partial week as a whole one, so
- * the same runner gets a lower baseline on Tuesday than on Sunday — and
- * regenerating a plan mid-week quietly asks for less than the week before.
+ * Measured in rolling seven-day windows back from `now`, not calendar weeks,
+ * for two reasons the plan route learned the hard way before it was moved
+ * onto this function.
  *
- * `app/api/ai/training-plan/route.ts` still computes its own baseline from
- * UTC calendar weeks. The two agree within a kilometre or so for a runner with
- * steady volume and diverge mid-week; unifying them changes what the AI plan
- * generator produces, so it is deliberately not done here. See
- * WEEKLY_GOALS_PLAN.md.
+ * A calendar-week version counts the current partial week as a whole one: the
+ * same runner mid-block measured 34.0 km/week on a Tuesday and 40.0 on a
+ * Friday, so regenerating a plan early in the week quietly asked for less.
+ *
+ * And a week with no runs in it has to count as the zero it was. Grouping
+ * activities into weeks only produces entries for weeks that contain a run,
+ * so "the last four weeks" silently becomes "the last four weeks that had a
+ * run in them" — a runner ten weeks into a layoff still measured their full
+ * pre-layoff volume. Walking fixed windows means an empty week is present and
+ * empty, and the 85% peak floor below is what decides how far a baseline may
+ * fall, deliberately, rather than a gap in the data hiding the fall entirely.
  */
 export function computeVolumeBaseline(
   activities: SafetyActivity[],

@@ -6,13 +6,12 @@
  * with three different answers. `goals-screen.tsx`, `weekly-goal-editor.tsx`
  * and `training-timeline.ts` each had a local-time copy; `lib/format.ts`
  * parsed a `YYYY-MM-DD` week start with `new Date(...)`, which reads it as UTC
- * midnight and shifts the whole window by the runner's offset; and
- * `lib/strava-sync.ts` computes the week in UTC on purpose.
+ * midnight and shifts the whole window by the runner's offset.
  *
- * That last one is a real disagreement rather than an oversight — the server
- * does not know the runner's timezone — and it is left alone here. See step 4
- * of WEEKLY_GOALS_PLAN.md. Everything running in the runner's own context uses
- * this module, so the client at least agrees with itself.
+ * One caller genuinely cannot use local time: a server route has no runner to
+ * be local to. `utcWeekStartStr` is here for that, named rather than open-coded,
+ * so the choice is visible instead of looking like the same function written
+ * again slightly differently.
  *
  * Two representations, deliberately:
  *   - a `Date` at local midnight, for arithmetic
@@ -42,6 +41,23 @@ export function toDateStr(date: Date): string {
 /** `YYYY-MM-DD` of the Monday of the week `date` falls in. */
 export function weekStartStr(date: Date = new Date()): string {
   return toDateStr(mondayOf(date))
+}
+
+/**
+ * `YYYY-MM-DD` of the Monday of `date`, computed in UTC.
+ *
+ * For server-side grouping only, where there is no runner to be local to and
+ * the alternative is the deploy region's timezone deciding which week a run
+ * belongs to. Anything rendered to a runner, or compared against a stored
+ * `week_start`, must use `weekStartStr` instead: the two disagree by the
+ * runner's offset for runs near midnight on a Monday.
+ */
+export function utcWeekStartStr(date: Date): string {
+  const day = date.getUTCDay()
+  const monday = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + (day === 0 ? -6 : 1 - day)),
+  )
+  return monday.toISOString().slice(0, 10)
 }
 
 /**
