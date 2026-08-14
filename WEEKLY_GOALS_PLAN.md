@@ -253,13 +253,19 @@ Noted, not fixed here:
 - ~~A recurring weekly goal renders into weeks that predate its creation.~~ It
   now applies from the week it was set in onwards, which needed only a date
   comparison.
-- **A recurring goal's target still changes retroactively.** Edit "40 km every
-  week" to 50 and last month reads as 50 too. This is the one that genuinely
-  needs weekly history to be materialised — a row per week, written as each
-  week arrives — and the app has no scheduler to write them with (`vercel.json`
-  has no cron). Materialising lazily, on the first visit of each week, is the
-  option that needs no cron, at the cost that a week the runner never opened
-  the app in gets no row at all. It is still a decision rather than a fix, and
-  suggestions would have to be materialised at the same time and on the same
-  terms. Unchanged from the original entry: this is what makes compute-on-read
-  acceptable everywhere above.
+- ~~**A recurring goal's target still changes retroactively.**~~ Fixed, and
+  the framing above it was wrong. Both this document and the PR that raised it
+  said the fix needed weekly history materialised — a row per week, written by
+  a scheduler the app does not have. It does not. The row was never missing;
+  the *dates* were. `target_history` (migration 035) holds the periods that
+  have closed, each `{from, until, target}`, and the current `target` covers
+  everything after the last of them. No new writer, no cron, and a goal whose
+  number has never moved carries an empty array and behaves exactly as before.
+
+  **This weakens a precedent used elsewhere in this document.** Under
+  *Persistence*, the argument that an unaccepted suggestion may change
+  retroactively rests on `is_recurring` already behaving that way. It no longer
+  does. The argument for compute-on-read still stands on its own — a
+  suggestion is a proposal, not a commitment, and nothing is being re-judged
+  against it — but it no longer has that precedent to lean on, and a future
+  reader should not go looking for one.

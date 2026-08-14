@@ -74,6 +74,11 @@ export interface WeeklyGoal {
    * Null once the runner has typed a number with no suggestion behind it.
    */
   suggested_target?: number | null
+  /**
+   * Superseded values of `target`, for a recurring goal that has changed.
+   * Empty for everything else. @see lib/weekly-goal-history.ts
+   */
+  target_history?: import("@/lib/weekly-goal-history").WeeklyTargetRevision[]
 }
 
 /** @see scripts/034_weekly_goal_provenance.sql */

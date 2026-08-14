@@ -1079,3 +1079,17 @@ do $$ begin
     create policy "weekly_dismissals_delete_own" on public.weekly_suggestion_dismissals for delete using (auth.uid() = user_id);
   end if;
 end $$;
+
+
+-- ============================================================
+-- 035 · What a recurring target was, in the week it was worked to
+-- ============================================================
+-- A recurring goal is one row applying to many weeks, so `target` is the
+-- number it holds now — and changing it changed every week behind the runner
+-- with it. `target_history` holds the periods that have closed, each
+-- {from, until, target} with Mondays as YYYY-MM-DD, half-open so the week a
+-- change was made in belongs to the new number. The current `target` covers
+-- everything after the last of them, so a goal whose number never moved keeps
+-- an empty array and behaves exactly as before.
+alter table public.weekly_goals
+  add column if not exists target_history jsonb not null default '[]'::jsonb;

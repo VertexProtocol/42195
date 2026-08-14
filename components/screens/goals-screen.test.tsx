@@ -716,3 +716,69 @@ describe("GoalsScreen — a recurring target's reach", () => {
     expect(screen.getAllByText(/25 km/).length).toBeGreaterThan(0)
   })
 })
+
+describe("GoalsScreen — a recurring target that has changed", () => {
+  const weekStart = mondayThisWeek()
+
+  function weeksAgo(n: number): string {
+    const d = new Date(`${weekStart}T00:00:00`)
+    d.setDate(d.getDate() - 7 * n)
+    const p = (x: number) => String(x).padStart(2, "0")
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+
+  /** Set at 40 km four weeks ago; raised to 50 this week. */
+  function raised(): WeeklyGoal {
+    return {
+      id: "wg-raised",
+      metric: "distance_km",
+      label: "Weekly Distance",
+      target: 50,
+      week_start: weeksAgo(4),
+      is_recurring: true,
+      display_order: 1,
+      source: "manual",
+      target_history: [{ from: weeksAgo(4), until: weekStart, target: 40 }],
+    } as WeeklyGoal
+  }
+
+  /** The card's own "done / target" line, not the suggestion note beside it. */
+  const against = (km: number) => new RegExp(`/ ${km} km`)
+
+  it("shows the new number in the week it was raised", () => {
+    renderSuggestions({ weeklyGoals: [raised()] })
+    expect(screen.getAllByText(against(50)).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(against(40))).toHaveLength(0)
+  })
+
+  it("leaves last week judged against the number that was set then", () => {
+    // The whole point: a month finished on 42 km must not flip from
+    // comfortably over to eight short because the target moved afterwards.
+    renderSuggestions({ weeklyGoals: [raised()] })
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.getAllByText(against(40)).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(against(50))).toHaveLength(0)
+  })
+
+  it("still shows the current number for a goal that has never changed", () => {
+    const steady = { ...raised(), target: 40, target_history: [] } as WeeklyGoal
+    renderSuggestions({ weeklyGoals: [steady] })
+    fireEvent.click(screen.getByRole("button", { name: /previous week/i }))
+    expect(screen.getAllByText(against(40)).length).toBeGreaterThan(0)
+  })
+
+  it("records the change when the plan's number is taken in one tap", () => {
+    let saved: WeeklyGoal | null = null
+    const standing = {
+      ...raised(),
+      target: 30,
+      target_history: [],
+    } as WeeklyGoal
+    renderSuggestions({ onSaveWeeklyGoal: (g) => { saved = g }, weeklyGoals: [standing] })
+    fireEvent.click(screen.getByRole("button", { name: "Use that" }))
+    // The outgoing 30 keeps the weeks it governed; the new number starts now.
+    expect(saved!.target_history).toEqual([
+      { from: weeksAgo(4), until: weekStart, target: 30 },
+    ])
+  })
+})

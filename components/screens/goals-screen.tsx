@@ -59,6 +59,7 @@ import type {
 import { useI18n } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
 import { parseWeekStart, shiftWeekStr, weekStartStr, weeksBetweenStarts } from "@/lib/week"
+import { recordTargetChange, targetForWeek } from "@/lib/weekly-goal-history"
 import {
   detectSuggestionDrift,
   selectPacesetter,
@@ -504,6 +505,10 @@ export function GoalsScreen({
       source: suggestion.source,
       source_goal_id: suggestion.sourceGoalId,
       suggested_target: suggestion.target,
+      // This path changes a target without going through the editor, so it
+      // has to close the outgoing number's run itself. A standing goal taking
+      // the plan's figure is exactly the case the history exists for.
+      target_history: recordTargetChange(goal, suggestion.target, todayMondayStr),
     })
   }
 
@@ -634,17 +639,22 @@ export function GoalsScreen({
                       wg.session_min_duration_minutes,
                       wg.session_min_distance_km,
                     )
-                    const progress = progressPercentage(current, wg.target)
+                    // The number this goal held in the week on screen, which is
+                    // not always the number it holds now: a recurring target
+                    // that has been raised since must not re-judge the weeks
+                    // that were run against the old one.
+                    const target = targetForWeek(wg, selectedWeekStart)
+                    const progress = progressPercentage(current, target)
                     const Icon = WEEKLY_METRIC_ICONS[wg.metric]
-                    const isComplete = current >= wg.target
+                    const isComplete = current >= target
                     const label = t(WEEKLY_METRIC_LABEL_KEYS[wg.metric]) ?? wg.label
-                    const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(wg.target, wg.metric)}`
+                    const valueText = `${formatWeeklyMetric(current, wg.metric)} / ${formatWeeklyMetric(target, wg.metric)}`
                     const hint = hintByGoalId.get(wg.id)
                     const drift = driftByGoalId.get(wg.id)
                     // Only worth saying when the two differ. A target taken as
                     // offered has nothing to have been adjusted from.
                     const adjustedFrom =
-                      wg.suggested_target != null && Number(wg.suggested_target) !== wg.target
+                      wg.suggested_target != null && Number(wg.suggested_target) !== target
                         ? Number(wg.suggested_target)
                         : null
 
@@ -688,7 +698,7 @@ export function GoalsScreen({
                                     {formatWeeklyMetric(current, wg.metric)}
                                   </span>
                                   {" / "}
-                                  {formatWeeklyMetric(wg.target, wg.metric)}
+                                  {formatWeeklyMetric(target, wg.metric)}
                                   {isComplete && (
                                     <span className="ml-2 font-semibold text-success">
                                       {t("goals.goalReached")}
