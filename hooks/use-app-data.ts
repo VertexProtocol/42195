@@ -411,7 +411,13 @@ export function useAppData(initialData?: InitialData | null) {
   const currentWeekGoals = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, "0")
     const mondayStr = `${currentWeekMonday.getFullYear()}-${p(currentWeekMonday.getMonth() + 1)}-${p(currentWeekMonday.getDate())}`
-    return weeklyGoals.filter((wg) => wg.is_recurring || wg.week_start === mondayStr)
+    // Same rule as Plan's week list: a recurring target applies from the week
+    // it was set in onwards. It matters here too now that a target can be
+    // accepted for next week — a standing goal starting next Monday is not
+    // one of this week's.
+    return weeklyGoals.filter((wg) =>
+      wg.is_recurring ? wg.week_start <= mondayStr : wg.week_start === mondayStr,
+    )
   }, [weeklyGoals, currentWeekMonday])
 
   // ----- Goal CRUD -----

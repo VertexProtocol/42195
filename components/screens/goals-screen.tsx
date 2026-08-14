@@ -349,9 +349,26 @@ export function GoalsScreen({
   /** The weeks a suggestion is worth deriving for: this one, and a planned next. */
   const isSuggestibleWeek = isCurrentWeek || (isNextWeek && planCoversNextWeek)
 
-  // Recurring goals apply to every week; one-off goals only to their own.
+  /**
+   * The targets that apply to the week being looked at.
+   *
+   * A recurring goal applies to every week from the one it was set in
+   * onwards, not to every week there has ever been. It used to render into
+   * the whole archive, so a runner who set "40 km every week" today found
+   * last spring marked as a run of missed weeks against a target that did
+   * not exist then — the app inventing a commitment and then judging them
+   * for it.
+   *
+   * What this does not fix: a recurring target the runner *changes* still
+   * shows its new value in the weeks before the change. Holding those still
+   * means writing a row per week, which needs the materialisation decision
+   * in WEEKLY_GOALS_PLAN.md. This is the half that needs no schema.
+   */
   const selectedWeekGoals = useMemo(
-    () => weeklyGoals.filter((wg) => wg.is_recurring || wg.week_start === selectedWeekStart),
+    () =>
+      weeklyGoals.filter((wg) =>
+        wg.is_recurring ? wg.week_start <= selectedWeekStart : wg.week_start === selectedWeekStart,
+      ),
     [weeklyGoals, selectedWeekStart],
   )
 
@@ -470,12 +487,12 @@ export function GoalsScreen({
 
   /**
    * The race whose volume sets this week, asked of the engine rather than
-   * worked out again here — two answers to "which race is the A race" would
-   * eventually differ, and the difference would be a marker pointing at the
-   * wrong card.
+   * worked out again here — two answers to "which race is the pacesetter"
+   * would eventually differ, and the difference would be the screen naming
+   * the wrong race.
    */
-  const pacesetterId = useMemo(
-    () => selectPacesetter(goals, todayMondayStr)?.id ?? null,
+  const pacesetterName = useMemo(
+    () => selectPacesetter(goals, todayMondayStr)?.name ?? null,
     [goals, todayMondayStr],
   )
 
@@ -912,24 +929,6 @@ export function GoalsScreen({
                                       {status?.reached && (
                                         <Trophy size={13} className="shrink-0 text-success" aria-hidden />
                                       )}
-                                      {/* The order has driven which race sets
-                                          the week since the engine landed; only
-                                          this says so. Without it the runner
-                                          who ordered the list by taste has been
-                                          setting a priority without being told
-                                          the list had one. */}
-                                      {goal.id === pacesetterId && (
-                                        <Pill tone="action" title={t("goals.pacesetterHint")}>
-                                          {t("goals.pacesetter")}
-                                          {/* "A" on its own is a letter. The
-                                              line under the list explains it
-                                              for everyone; this is so the
-                                              badge is not read out as one. */}
-                                          <span className="sr-only">
-                                            {` — ${t("goals.pacesetterHint")}`}
-                                          </span>
-                                        </Pill>
-                                      )}
                                     </span>
                                     <span className="mt-0.5 block truncate text-micro text-muted-foreground">
                                       {formatDistance(goal.target_distance_km)}
@@ -1150,11 +1149,17 @@ export function GoalsScreen({
                   was reused as priority rather than adding a fourth flag to a
                   row that already carries is_active, is_starred and
                   display_order — but that redefinition has to be seen, or a
-                  runner who ordered the list by taste has set an A race
-                  without knowing there was one to set. */}
-              {pacesetterId !== null && orderedRaceGoals.length > 1 && (
+                  runner who ordered the list by taste has set a priority
+                  without being told the list had one.
+
+                  Said in a sentence rather than stamped on the card. A badge
+                  reading "A" is jargon shortened until it is a single letter,
+                  and it landed in a row that already carries the goal's name,
+                  its trophy and its training phase. Naming the race in the
+                  explanation says the same thing and needs no key. */}
+              {pacesetterName !== null && orderedRaceGoals.length > 1 && (
                 <p className="measure text-micro leading-relaxed text-muted-foreground">
-                  {t("goals.orderIsPriority")}
+                  {t("goals.orderIsPriority", { goal: pacesetterName })}
                 </p>
               )}
 
