@@ -593,11 +593,17 @@ function PlanSection({
             total: current.total,
           })}`}
         >
+          {/* Scaled rather than resized, as `Meter` is: animating width forces
+              layout on every frame, and the track already clips the fill to a
+              rounded shape. */}
           <div
-            className={`h-full rounded-full ${
+            className={`h-full w-full origin-left ${
               current.outstanding.length > 0 ? "bg-primary" : "bg-success"
             }`}
-            style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
+            style={{
+              transform: `scaleX(${filled / 100})`,
+              transition: "transform var(--dur-state) var(--ease-out)",
+            }}
           />
         </div>
       </div>
