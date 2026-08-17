@@ -34,15 +34,15 @@ theme, not different.
 | `--surface-sunken` | `oklch(0.845 0.016 68)` | `oklch(0.15 0.01 55)` |
 | `--card` / `--popover` | `oklch(0.985 0.006 72)` | `oklch(0.255 0.014 58)` |
 | `--foreground` | `oklch(0.235 0.02 45)` | `oklch(0.945 0.008 75)` |
-| `--muted-foreground` | `oklch(0.47 0.024 50)` | `oklch(0.735 0.018 60)` |
-| `--primary` | `oklch(0.505 0.17 36)` | `oklch(0.715 0.15 42)` |
+| `--muted-foreground` | `oklch(0.455 0.024 50)` | `oklch(0.735 0.018 60)` |
+| `--primary` | `oklch(0.472 0.163 36)` | `oklch(0.715 0.15 42)` |
 | `--primary-foreground` | `oklch(0.985 0.012 70)` | `oklch(0.19 0.03 40)` |
 | `--secondary` / `--muted` | `oklch(0.845 0.016 68)` | `oklch(0.305 0.014 58)` |
 | `--accent` | `oklch(0.815 0.02 66)` | `oklch(0.345 0.016 58)` |
 | `--border` / `--input` | `oklch(0.795 0.016 66)` | `oklch(0.345 0.014 58)` |
-| `--success` | `oklch(0.47 0.11 150)` | `oklch(0.76 0.13 150)` |
-| `--warning` | `oklch(0.5 0.12 72)` | `oklch(0.8 0.13 75)` |
-| `--destructive` | `oklch(0.49 0.18 27)` | `oklch(0.68 0.17 27)` |
+| `--success` | `oklch(0.441 0.11 150)` | `oklch(0.76 0.13 150)` |
+| `--warning` | `oklch(0.458 0.099 72)` | `oklch(0.8 0.13 75)` |
+| `--destructive` | `oklch(0.475 0.18 27)` | `oklch(0.68 0.17 27)` |
 
 Data series (`--chart-1` … `--chart-5`) are separated by lightness as well as
 hue, so the set survives greyscale and common colour-vision deficiencies:
@@ -57,8 +57,11 @@ hue, so the set survives greyscale and common colour-vision deficiencies:
 
 Rules:
 
-- Text and placeholders clear 4.5:1 against every surface they sit on; the
-  primary clears 4.5:1 on both the ground and the card in both themes.
+- Text and placeholders clear 4.5:1 against every surface they sit on — the page
+  ground, a sunken well and a card alike — in both themes. The sunken well is the
+  binding case in light mode and is what sets the lightness of the ember and the
+  semantic trio; each clears it by a small margin (4.55–4.56:1) rather than
+  comfortably, so lightening any of them re-breaks AA.
 - Colour is never the only cue. Load status carries a labelled pill; a completed
   goal carries a trophy; a filter chip carries `aria-pressed`.
 - No literal Tailwind palette colours (`amber-500`, `violet-500`, …) anywhere in
@@ -183,9 +186,14 @@ app would be a second vocabulary for something this one already says.
   that does stop it — reduced motion, a page on its way out — lands on the mark
   rather than on a spinner caught mid-stride.
 - Nothing animates `width`, `height`, `padding` or `margin`.
-- `prefers-reduced-motion` collapses durations and removes the press travel
-  while keeping colour and state transitions legible. The loader settles on its
-  first frame, which is the mark exactly as the icon draws it.
+- `prefers-reduced-motion` removes travel and keeps feedback. It overrides
+  `transition-property` to the colour, border, shadow and opacity set, so
+  `transform` stops transitioning — the lap never draws and a meter's fill
+  arrives at its value instead of running there — while the properties that
+  carry meaning still cross-fade at `--dur-reduced` (80ms), fast enough not to
+  read as movement. The press travel is removed and the loader settles on its
+  first frame, which is the mark exactly as the icon draws it. Durations are not
+  collapsed to zero: that would take the feedback along with the motion.
 
 ## Browser surfaces
 
