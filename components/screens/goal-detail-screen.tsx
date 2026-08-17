@@ -561,7 +561,7 @@ function PreferencesForm({
                   className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-micro ${
                     entry.resolved_at
                       ? "bg-secondary/50 text-muted-foreground"
-                      : "bg-amber-50 dark:bg-amber-950/30 text-foreground ring-1 ring-warning"
+                      : "bg-warning/10 text-foreground ring-1 ring-warning"
                   }`}
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">

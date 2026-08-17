@@ -28,12 +28,16 @@
   --foreground: oklch(0.235 0.02 45);
   --card-foreground: oklch(0.235 0.02 45);
   --popover-foreground: oklch(0.235 0.02 45);
-  --muted-foreground: oklch(0.47 0.024 50);
+  --muted-foreground: oklch(0.455 0.024 50);
 
   /* ---- Action ---------------------------------------------------------- */
-  --primary: oklch(0.505 0.17 36);
+  /* Lightness is set by the darkest ground these sit on, not by taste: at
+     0.505 the ember cleared 4.43:1 on the page and 3.96:1 on a sunken well,
+     both short of AA. Chroma comes down with it only as far as sRGB forces,
+     so the hue family is unchanged. */
+  --primary: oklch(0.472 0.163 36);
   --primary-foreground: oklch(0.985 0.012 70);
-  --primary-soft: oklch(0.505 0.17 36 / 0.1);
+  --primary-soft: oklch(0.472 0.163 36 / 0.1);
 
   /* ---- Quiet surfaces and lines ---------------------------------------- */
   --secondary: oklch(0.845 0.016 68);
@@ -43,14 +47,14 @@
   --accent-foreground: oklch(0.29 0.022 46);
   --border: oklch(0.795 0.016 66);
   --input: oklch(0.795 0.016 66);
-  --ring: oklch(0.505 0.17 36);
+  --ring: oklch(0.472 0.163 36);
 
   /* ---- State ----------------------------------------------------------- */
-  --success: oklch(0.47 0.11 150);
+  --success: oklch(0.441 0.11 150);
   --success-foreground: oklch(0.985 0.012 70);
-  --warning: oklch(0.5 0.12 72);
+  --warning: oklch(0.458 0.099 72);
   --warning-foreground: oklch(0.985 0.012 70);
-  --destructive: oklch(0.49 0.18 27);
+  --destructive: oklch(0.475 0.18 27);
   --destructive-foreground: oklch(0.985 0.012 70);
 
   /* ---- Data ------------------------------------------------------------
@@ -94,6 +98,10 @@
   /* One lap of the track loader. Slow enough to read as a runner on a lane,
      quick enough that a short wait still shows movement. */
   --dur-lap: 1500ms;
+  /* The single duration every transition collapses to under reduced motion.
+     Short enough that nothing reads as travel, long enough that a colour or
+     state change is still perceived as a change rather than a jump cut. */
+  --dur-reduced: 80ms;
 
   /* Sidebar tokens kept for shadcn primitives that reference them. */
   --sidebar: oklch(0.985 0.006 72);
@@ -432,13 +440,26 @@
 
 /* Reduced motion keeps state and feedback, drops travel. */
 @media (prefers-reduced-motion: reduce) {
+  /* What the preference asks for is the removal of motion, not the removal of
+     feedback. Travel goes: animations settle on their first frame, the press
+     stops moving, and nothing transitions `transform` any more — so the lap
+     never draws and a meter's fill arrives at its value rather than running
+     there. What stays is the part that carries meaning: colour, border, shadow
+     and opacity still cross-fade, fast enough not to read as movement but
+     slowly enough that a state change still reads as a change.
+
+     Overriding `transition-property` is what separates the two. A blanket
+     `transition-duration: 0.01ms` removes both, which is why it is not used
+     here: it takes the feedback with the motion. */
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    transition-property: color, background-color, border-color, outline-color,
+      text-decoration-color, fill, stroke, box-shadow, opacity !important;
+    transition-duration: var(--dur-reduced) !important;
   }
 
   .press:active {
