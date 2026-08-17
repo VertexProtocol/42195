@@ -10,18 +10,6 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/impeccable-version-check.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/impeccable-version-check.mjs\"",
-            "timeout": 10,
-            "statusMessage": "Checking Impeccable version"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
@@ -48,6 +36,15 @@
       }
     ]
   },
-  "extraKnownMarketplaces": {},
-  "enabledPlugins": {}
+  "extraKnownMarketplaces": {
+    "vertex": {
+      "source": {
+        "source": "github",
+        "repo": "VertexProtocol/claude-marketplace"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "frontend-standards@vertex": true
+  }
 }
