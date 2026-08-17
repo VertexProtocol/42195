@@ -1,0 +1,53 @@
+{
+  "description": "Shared, committed project settings. Personal overrides go in .claude/settings.local.json (gitignored).",
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(node .claude/skills/impeccable/scripts/*)",
+      "Bash(npx impeccable *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/impeccable-version-check.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/impeccable-version-check.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking Impeccable version"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking UI changes"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
+            "timeout": 30,
+            "statusMessage": "Design deep pass"
+          }
+        ]
+      }
+    ]
+  },
+  "extraKnownMarketplaces": {},
+  "enabledPlugins": {}
+}
