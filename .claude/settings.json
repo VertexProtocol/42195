@@ -40,7 +40,7 @@
     "vertex": {
       "source": {
         "source": "github",
-        "repo": "VertexProtocol/claude-marketplace"
+        "repo": "VertexProtocol/vertex-marketplace"
       }
     }
   },

@@ -33,7 +33,7 @@ The gate fires once per session and matches on **file extension, not directory**
 
 ```bash
 # publish the marketplace repo
-gh repo create VertexProtocol/claude-marketplace --private --source=. --push
+gh repo create VertexProtocol/vertex-marketplace --private --source=. --push
 ```
 
 ## Per repo
@@ -43,7 +43,7 @@ gh repo create VertexProtocol/claude-marketplace --private --source=. --push
 ```json
 {
   "extraKnownMarketplaces": {
-    "vertex": { "source": { "source": "github", "repo": "VertexProtocol/claude-marketplace" } }
+    "vertex": { "source": { "source": "github", "repo": "VertexProtocol/vertex-marketplace" } }
   },
   "enabledPlugins": { "frontend-standards@vertex": true }
 }
