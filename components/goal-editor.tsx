@@ -166,7 +166,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         className="flex flex-col gap-5"
       >
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {t("goalEditor.goalType")}
           </legend>
           <div className="grid grid-cols-2 gap-2">
@@ -174,10 +174,10 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
               type="button"
               onClick={() => setCategory("performance")}
               aria-pressed={category === "performance"}
-              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-semibold ${
+              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                 category === "performance"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+                  ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                  : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
               }`}
             >
               <Timer size={16} aria-hidden />
@@ -187,10 +187,10 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
               type="button"
               onClick={() => setCategory("event_training")}
               aria-pressed={category === "event_training"}
-              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-semibold ${
+              className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                 category === "event_training"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+                  ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                  : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
               }`}
             >
               <CalendarCheck size={16} aria-hidden />
@@ -203,7 +203,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         </fieldset>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="goal-name" className="text-label font-medium text-foreground">
+          <label htmlFor="goal-name" className="text-label font-extrabold text-foreground">
             {category === "event_training" ? t("goalEditor.eventName") : t("goalEditor.goalName")}
           </label>
           <Input
@@ -228,7 +228,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="goal-distance" className="text-label font-medium text-foreground">
+          <label htmlFor="goal-distance" className="text-label font-extrabold text-foreground">
             {category === "event_training"
               ? t("goalEditor.raceDistance")
               : t("goalEditor.targetDistance")}
@@ -252,7 +252,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         </div>
 
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {category === "performance"
               ? t("goalEditor.targetTimeRequired")
               : t("goalEditor.targetTimeOptional")}
@@ -288,7 +288,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         </fieldset>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="goal-start" className="text-label font-medium text-foreground">
+          <label htmlFor="goal-start" className="text-label font-extrabold text-foreground">
             {category === "event_training"
               ? t("goalEditor.trainingStartDate")
               : t("goalEditor.startCountingFrom")}
@@ -307,7 +307,7 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="goal-target-date" className="text-label font-medium text-foreground">
+          <label htmlFor="goal-target-date" className="text-label font-extrabold text-foreground">
             {category === "event_training" ? t("goalEditor.raceDate") : t("goalEditor.targetDate")}
           </label>
           <Input

@@ -73,6 +73,7 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
+import { Segmented } from "@/components/ui/segmented"
 
 /**
  * Plan — the two horizons a runner keeps: the race on the calendar, and the
@@ -187,13 +188,13 @@ function SuggestionNote({
 }) {
   return (
     <div
-      className={`mt-2 rounded-sm px-2 py-1.5 ${
-        tone === "attention" ? "bg-caution/10" : "bg-surface-sunken"
+      className={`mt-2 rounded-md px-3 py-2.5 ${
+        tone === "attention" ? "border-2 border-warning/45 bg-warning/10" : "bg-surface-sunken"
       }`}
     >
-      <p className="measure text-micro leading-relaxed text-muted-foreground">{text}</p>
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-3">
-        {actions.filter(Boolean).map((action) => (
+      <p className="text-label leading-snug text-muted-foreground">{text}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {actions.filter(Boolean).map((action, i) => (
           <button
             key={action!.label}
             type="button"
@@ -201,7 +202,13 @@ function SuggestionNote({
               e.stopPropagation()
               action!.onClick()
             }}
-            className="press -ml-1 min-h-[32px] rounded-sm px-1 text-micro font-semibold text-foreground hover:underline"
+            // The first answer is the one the app is offering; it gets the
+            // button. The way out is a quiet word beside it.
+            className={
+              i === 0
+                ? "chunky press h-9 rounded-full bg-primary px-4 text-micro font-extrabold uppercase tracking-wide text-primary-foreground [--chunk:var(--primary-edge)]"
+                : "press h-9 rounded-full px-3 text-micro font-bold text-muted-foreground hover:text-foreground"
+            }
           >
             {action!.label}
           </button>
@@ -249,7 +256,7 @@ function SuggestionCard({
             </span>
           </div>
 
-          <p className="measure mt-1 text-micro leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
             {t(suggestion.reasonKey, suggestion.reasonValues)}
           </p>
 
@@ -535,34 +542,16 @@ export function GoalsScreen({
   )
 
   return (
-    <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
-      {/* Segmented control */}
-      <div
-        role="tablist"
-        aria-label={t("goals.title")}
-        className="flex rounded-md bg-surface-sunken p-1"
-      >
-        {(
-          [
-            ["race", t("goals.targets")],
-            ["weekly", t("goals.weekly")],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`press flex-1 rounded-sm py-2.5 text-label font-semibold ${
-              tab === key
-                ? "bg-card text-foreground shadow-e1"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+    <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
+      <Segmented
+        label={t("goals.title")}
+        options={[
+          ["race", t("goals.tabRaces")],
+          ["weekly", t("goals.tabWeekly")],
+        ] as const}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* ── Weekly ─────────────────────────────────────────────────────── */}
       {tab === "weekly" && (
@@ -1168,7 +1157,7 @@ export function GoalsScreen({
                   its trophy and its training phase. Naming the race in the
                   explanation says the same thing and needs no key. */}
               {pacesetterName !== null && orderedRaceGoals.length > 1 && (
-                <p className="measure text-micro leading-relaxed text-muted-foreground">
+                <p className="text-label leading-snug text-muted-foreground">
                   {t("goals.orderIsPriority", { goal: pacesetterName })}
                 </p>
               )}

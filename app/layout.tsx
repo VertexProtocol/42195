@@ -47,6 +47,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // The on-screen keyboard shrinks the page rather than covering it, so the
+  // coach's input and the sheets' save buttons stay above it on Android.
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#e0d9d1' },
     { media: '(prefers-color-scheme: dark)', color: '#17110e' },
@@ -76,7 +79,7 @@ export default function RootLayout({
           the race that matters, and either logs, adjusts, or closes it.
           FIRST VIEWPORT: race countdown and week-to-date at the top of Today,
           load state beneath it, the primary action in the app bar.
-          FORM: mobile-first single column, 4-tab bar, profile in the app bar.
+          FORM: mobile-first single column, 3-tab bar, profile and streak in the app bar.
         */}
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <I18nProvider>{children}</I18nProvider>

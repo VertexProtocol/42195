@@ -223,7 +223,7 @@ export function PaceCalculatorCard({ goals }: PaceCalculatorCardProps) {
             </div>
           </div>
 
-          <p className="text-micro text-muted-foreground">{t("paceCalc.convertHint")}</p>
+
         </div>
       ) : (
         <div className="space-y-3">

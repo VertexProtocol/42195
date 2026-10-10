@@ -355,7 +355,7 @@ export function ProfileScreen({
   }
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── Identity ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3.5">
         {user.avatar_url ? (
@@ -635,12 +635,9 @@ export function ProfileScreen({
         <AppCard>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-label font-semibold text-card-foreground">
-                <Heart size={15} className="text-muted-foreground" aria-hidden />
+              <p className="flex items-center gap-2 text-lead font-extrabold text-card-foreground">
+                <Heart size={18} className="text-muted-foreground" aria-hidden />
                 {t("profile.hrZones")}
-              </p>
-              <p className="mt-1 max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
-                {t("profile.hrZonesDesc")}
               </p>
             </div>
             {hrLoading ? (
@@ -664,9 +661,6 @@ export function ProfileScreen({
               <div className="min-w-0">
                 <p className="text-micro font-semibold text-card-foreground">
                   {t("profile.hrSettings")}
-                </p>
-                <p className="mt-0.5 max-w-[46ch] text-micro leading-relaxed text-muted-foreground">
-                  {t("profile.hrSettingsDesc")}
                 </p>
               </div>
               {!editingHr && (

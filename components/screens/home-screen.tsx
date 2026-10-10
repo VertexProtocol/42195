@@ -9,13 +9,11 @@ import {
   useCallback,
   useEffect,
 } from "react"
-import { ChevronRight, Star, StarOff } from "lucide-react"
+import { Star, StarOff } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressLap } from "@/components/progress-lap"
 import {
-  formatDistance,
   formatDuration,
-  formatDateShort,
   daysUntil,
   timeElapsedPercentage,
   isDatePast,
@@ -67,83 +65,71 @@ import type { PlanBadge } from "@/lib/plan-badges"
  */
 
 /**
- * How big a lane is, and how many share a row.
+ * A weekly goal, as one row of the week's goals.
  *
- * The lanes divide the width between them, so their size has to come from how
- * many there are or a row of two would be two small marks with a screen of
- * nothing beside them. Sized to leave a margin inside its column at a 390px
- * screen, which is the narrowest this app is built for; past five they wrap
- * rather than shrinking to a dot.
+ * The way a game lists the day's quests: what the goal is, a bar for how far
+ * along it is, and the two numbers. A row of bare rings said none of that —
+ * an empty ring with an icon in it read as a button, not as "4 of 10 km".
+ *
+ * The bar is a `role="img"` whose name carries the whole reading, so a screen
+ * reader hears the same thing the eye gets from the bar and the figures.
  */
-const LANE_SIZES = [64, 58, 50, 44, 36] as const
-const MAX_LANE_COLUMNS = LANE_SIZES.length
-
-function laneSize(count: number): number {
-  return LANE_SIZES[Math.min(Math.max(count, 1), MAX_LANE_COLUMNS) - 1]
-}
-
-/**
- * A weekly goal, as a lane with its metric icon inside.
- *
- * The lane is the shape a pinned race carries, and the icon rides in it the
- * way the elapsed percentage does there — so the icon is the thing travelling
- * the track rather than a label stuck beside it.
- *
- * No text at all, deliberately. Today asks one question of a weekly goal —
- * how far along is it — and the fill answers it; the figures live a tap away
- * under Targets, and printing them here is what turned this card into a wall
- * of small numbers. The accessible name still carries the lot, because a fill
- * is not readable by ear.
- *
- * Nothing about it is bound to a column either. A runner adds and removes
- * these, and a lane that has to belong to one of three fixed slots means the
- * card changes shape every time they do.
- */
-function WeeklyGoalLap({
+function WeeklyGoalRow({
   goal,
   current,
-  size,
   onOpen,
   t,
 }: {
   goal: WeeklyGoal
   current: number
-  size: number
   onOpen: () => void
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
   const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
   const label = goal.label || t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
+  const pct = progressPercentage(current, goal.target)
   const valueText = `${formatWeeklyMetric(current, goal.metric)} / ${formatWeeklyMetric(
     goal.target,
     goal.metric,
   )}`
   return (
-    <button
-      onClick={onOpen}
-      // The button fills its column and centres the lane, so the row stays
-      // even however many lanes are in it and the tap target is the column
-      // rather than the mark.
-      className="press flex justify-center rounded-md py-1.5"
-      title={`${label} — ${valueText}`}
-    >
-      <ProgressLap
-        percentage={progressPercentage(current, goal.target)}
-        size={size}
-        strokeWidth={Math.max(3, Math.round(size / 16))}
-        tone={isComplete ? "done" : "action"}
-        // These sit on the page, not in a card.
-        track="border"
-        label={`${label} — ${valueText}`}
-      >
-        <Icon
-          size={Math.round(size * 0.4)}
-          className={isComplete ? "text-success" : "text-muted-foreground"}
+    <CardRow className="p-0">
+      <button onClick={onOpen} className="press flex w-full items-center gap-3 px-4 py-3 text-left">
+        <span
+          className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+            isComplete
+              ? "border-[var(--success-edge)] bg-success text-success-foreground"
+              : "border-[var(--chunk-edge)] bg-primary/12 text-primary"
+          }`}
           aria-hidden
-        />
-      </ProgressLap>
-    </button>
+        >
+          <Icon size={18} strokeWidth={2.4} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-label font-extrabold text-card-foreground">{label}</span>
+            <span
+              className={`measure shrink-0 text-micro font-bold ${
+                isComplete ? "text-success" : "text-muted-foreground"
+              }`}
+            >
+              {valueText}
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label={`${label} — ${valueText}: ${pct}%`}
+            className="h-3 overflow-hidden rounded-full bg-surface-sunken"
+          >
+            <div
+              className={`grow-x h-full rounded-full ${isComplete ? "bg-success" : "bg-primary"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      </button>
+    </CardRow>
   )
 }
 
@@ -436,10 +422,10 @@ function PlanSessionRail({
               className="press surface flex h-full w-full flex-col p-4 text-left"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-lead font-semibold text-card-foreground">
+                <span className="truncate text-lead font-extrabold text-card-foreground">
                   {session.type}
                 </span>
-                <span className="measure shrink-0 text-label font-semibold text-primary">
+                <span className="measure shrink-0 text-lead font-bold text-primary">
                   {session.distance}
                 </span>
               </div>
@@ -452,9 +438,6 @@ function PlanSessionRail({
                 </span>
               )}
 
-              <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
-                {session.effort}
-              </p>
             </button>
           </div>
         ))}
@@ -558,14 +541,7 @@ function PlanSection({
 
   return (
     <Section>
-      <SectionHeader
-        title={t("home.planThisWeek")}
-        action={
-          <SectionAction onClick={() => onViewGoal(current.goal)}>
-            {t("home.planSeeWeek")}
-          </SectionAction>
-        }
-      />
+      <SectionHeader title={t("home.nextRun")} />
 
       {/* The heading that stays put. Not in a card — the cards below are the
           content, and a card around the lot would be a card holding cards. */}
@@ -586,7 +562,7 @@ function PlanSection({
           <span className="measure shrink-0 text-micro text-muted-foreground">{countText}</span>
         </div>
         <div
-          className="h-1 overflow-hidden rounded-full bg-surface-sunken"
+          className="h-3 overflow-hidden rounded-full bg-surface-sunken"
           role="img"
           aria-label={`${current.goal.name} — ${t("home.planSessionsDone", {
             done: current.done,
@@ -594,7 +570,7 @@ function PlanSection({
           })}`}
         >
           <div
-            className={`h-full rounded-full ${
+            className={`grow-x h-full rounded-full ${
               current.outstanding.length > 0 ? "bg-primary" : "bg-success"
             }`}
             style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
@@ -651,7 +627,6 @@ interface HomeScreenProps {
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
-  recentActivities: Activity[]
   /**
    * Both derived during the page render and owned by the app shell. This
    * screen unmounts on every tab change, so fetching them here made the
@@ -670,7 +645,6 @@ interface HomeScreenProps {
   planSessionStatuses?: Record<string, Record<string, PlanSessionStatus>>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
-  onViewActivities: () => void
   onViewGoal: (goal: Goal) => void
   /** Unpins a goal from this screen. Offered only once its date has gone. */
   onUnpinGoal?: (goalId: string) => void
@@ -681,7 +655,6 @@ interface HomeScreenProps {
    */
   onViewWeeklyGoals?: () => void
   onViewInsights: () => void
-  onSelectActivity: (activity: Activity) => void
 }
 
 export function HomeScreen({
@@ -689,16 +662,13 @@ export function HomeScreen({
   currentWeekGoals,
   activities,
   weeklySummary,
-  recentActivities,
   warnings,
   planBadges,
   currentPlanWeeks,
   planSessionStatuses,
-  onViewActivities,
   onViewGoal,
   onViewGoals,
   onViewWeeklyGoals,
-  onSelectActivity,
   onUnpinGoal,
 }: HomeScreenProps) {
   const { t } = useI18n()
@@ -826,20 +796,10 @@ export function HomeScreen({
   )
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── The race, and how much runway is left ─────────────────────── */}
       {starredGoals.length > 0 ? (
         <Section>
-          <SectionHeader
-            title={t("home.activeGoals")}
-            action={
-              starredGoals.length > 1 ? (
-                <span className="text-micro text-muted-foreground">
-                  {starredGoals.length} {t("home.goals")}
-                </span>
-              ) : undefined
-            }
-          />
           <div
             ref={goalRailRef}
             onScroll={isGoalRail ? onGoalRailScroll : undefined}
@@ -871,15 +831,12 @@ export function HomeScreen({
                       at the foot of the card, where an extra row on one goal
                       pushed every line below it out of step with the card
                       beside it — up here they cost no height at all. */}
-                  <div
-                    className={`flex items-center gap-1.5 ${
-                      m.past ? "text-muted-foreground" : "text-primary"
-                    }`}
-                  >
-                    <Star size={12} fill="currentColor" aria-hidden />
-                    <span className="truncate text-micro font-semibold">
-                      {m.past ? t("home.finishedGoal") : t("home.activeGoal")}
-                    </span>
+                  {(m.past || badge?.checkpoint || badge?.blockCompleted) && (
+                  <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+                    {m.past && <Star size={12} fill="currentColor" aria-hidden />}
+                    {m.past && (
+                      <span className="truncate text-micro font-bold">{t("home.finishedGoal")}</span>
+                    )}
                     {(badge?.checkpoint || badge?.blockCompleted) && (
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
                         {badge?.checkpoint && (
@@ -895,22 +852,23 @@ export function HomeScreen({
                       </span>
                     )}
                   </div>
+                  )}
 
-                  <div className="mt-2 flex flex-1 gap-4">
+                  <div className="flex flex-1 items-center gap-4">
                     <div className="flex min-w-0 flex-1 flex-col">
                       {/* The countdown leads. It is the one number the runner
                           opens this screen to check, so it is the only thing on
                           it set at display size. */}
                       <p className="flex items-baseline gap-1.5">
-                        <span className="measure text-display font-semibold leading-none text-card-foreground">
+                        <span className="measure text-display font-bold leading-none text-card-foreground">
                           {m.days}
                         </span>
-                        <span className="text-label text-muted-foreground">
+                        <span className="text-label font-bold text-muted-foreground">
                           {m.past ? t("home.daysAgo") : t("home.daysLeft")}
                         </span>
                       </p>
 
-                      <h3 className="mt-2 line-clamp-2 text-lead font-semibold text-card-foreground">
+                      <h3 className="mt-2 line-clamp-2 text-title font-extrabold text-card-foreground">
                         {goal.name}
                       </h3>
 
@@ -918,35 +876,26 @@ export function HomeScreen({
                           under the name, so a two-line name on one card cannot
                           knock the line out of step with the card beside it.
                           `mt-auto` is inert on a card that stands alone. */}
-                      <p className="mt-auto line-clamp-2 pt-1.5 text-label text-muted-foreground">
-                        <span className="measure font-semibold text-foreground">
-                          {formatDistance(m.logged)}
-                        </span>{" "}
-                        {t("home.logged")}
-                        {goal.target_time_seconds ? (
-                          <>
-                            {" · "}
-                            {t("home.target")}{" "}
-                            <span className="measure font-semibold text-foreground">
-                              {formatTargetTime(goal.target_time_seconds)}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
+                      {goal.target_time_seconds ? (
+                        <span className="mt-2 self-start">
+                          <Pill tone="action" className="measure px-2.5 py-1 text-label">
+                            {t("home.target")} {formatTargetTime(goal.target_time_seconds)}
+                          </Pill>
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="flex shrink-0 flex-col items-center gap-1.5">
                       <ProgressLap
                         percentage={m.timeProgress}
-                        size={46}
-                        strokeWidth={4}
+                        size={64}
+                        strokeWidth={6}
                         label={`${goal.name} — ${t("home.elapsed")}`}
                       >
                         <span className="measure text-micro font-semibold leading-none text-foreground">
                           {m.timeProgress}%
                         </span>
                       </ProgressLap>
-                      <span className="text-micro text-muted-foreground">{t("home.elapsed")}</span>
                     </div>
                   </div>
                 </button>
@@ -1010,6 +959,31 @@ export function HomeScreen({
         </Suspense>
       )}
 
+      {/* ── What the week is aiming at ────────────────────────────────── */}
+      {/* Ahead of the week's totals: the goals are what there is still to do,
+          the totals are a report on what has been done. */}
+      {weeklyLaps.length > 0 && (
+        <Section>
+          <SectionHeader
+            title={t("home.weeklyTargets")}
+            action={
+              <SectionAction onClick={openWeeklyGoals}>{t("home.seeAll")}</SectionAction>
+            }
+          />
+          <AppCard variant="rows">
+            {weeklyLaps.map(({ goal, current }) => (
+              <WeeklyGoalRow
+                key={goal.id}
+                goal={goal}
+                current={current}
+                onOpen={openWeeklyGoals}
+                t={t}
+              />
+            ))}
+          </AppCard>
+        </Section>
+      )}
+
       {/* ── The week so far ───────────────────────────────────────────── */}
       <Section>
         <SectionHeader title={t("home.thisWeek")} />
@@ -1028,86 +1002,6 @@ export function HomeScreen({
           </StatGroup>
         </AppCard>
       </Section>
-
-      {/* ── What the week was aiming at ───────────────────────────────── */}
-      {/* Its own section, not the tail of the one above. The week's three
-          numbers are a report and always the same three; the targets are a
-          set the runner edits, and there may be none. Sharing a card made the
-          card change shape as goals came and went, and left two unrelated
-          readings stacked with nothing saying which was which. A heading says
-          it in one word. */}
-      {weeklyLaps.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("home.weeklyTargets")}
-            action={
-              <SectionAction onClick={openWeeklyGoals}>{t("home.seeAll")}</SectionAction>
-            }
-          />
-          {/* No card. A card is a surface for content that needs one, and a
-              row of lanes is already its own shape — boxing it added an edge
-              around four marks and nothing else. The lanes take the page's
-              track colour to make up for the surface they lost. */}
-          <div
-            className="grid gap-1"
-            style={{
-              gridTemplateColumns: `repeat(${Math.min(
-                weeklyLaps.length,
-                MAX_LANE_COLUMNS,
-              )}, minmax(0, 1fr))`,
-            }}
-          >
-            {weeklyLaps.map(({ goal, current }) => (
-              <WeeklyGoalLap
-                key={goal.id}
-                goal={goal}
-                current={current}
-                size={laneSize(weeklyLaps.length)}
-                onOpen={openWeeklyGoals}
-                t={t}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* ── What was run ──────────────────────────────────────────────── */}
-      {recentActivities.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("home.recentActivities")}
-            action={<SectionAction onClick={onViewActivities}>{t("home.seeAll")}</SectionAction>}
-          />
-          <AppCard variant="rows">
-            {recentActivities.map((activity) => (
-              <CardRow key={activity.id} className="p-0">
-                <button
-                  onClick={() => onSelectActivity(activity)}
-                  className="press flex w-full items-center gap-3 px-4 py-3 text-left"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-label font-semibold text-card-foreground">
-                      {activity.name}
-                    </p>
-                    <p className="mt-0.5 text-micro text-muted-foreground">
-                      {formatDateShort(activity.date)} · {activity.type}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="measure text-label font-semibold text-card-foreground">
-                      {formatDistance(activity.distance_km)}
-                    </p>
-                    <p className="measure mt-0.5 text-micro text-muted-foreground">
-                      {formatDuration(activity.duration_seconds)}
-                    </p>
-                  </div>
-                  <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
-                </button>
-              </CardRow>
-            ))}
-          </AppCard>
-        </Section>
-      )}
 
       {activities.length > 0 && <PoweredByStrava className="pt-1" />}
     </div>

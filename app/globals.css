@@ -64,9 +64,17 @@
 
   /* ---- Shape -----------------------------------------------------------
      Cards hold 14px. Controls hold 10px. Pills are for small controls only. */
-  --radius: 0.875rem;
-  --radius-card: 0.875rem;
-  --radius-control: 0.625rem;
+  --radius: 1.25rem;
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
+
+  /* ---- Chunk -----------------------------------------------------------
+     The solid lower edge every card and button stands on. Pressing a button
+     pushes it down onto that edge, so a tap is felt rather than just seen. */
+  --chunk-edge: oklch(0.8 0.016 66);
+  --primary-edge: oklch(0.41 0.15 36);
+  --success-edge: oklch(0.38 0.1 150);
+  --destructive-edge: oklch(0.4 0.16 27);
 
   /* ---- Elevation -------------------------------------------------------
      One depth system: offset + soft blur, tinted from the ground's own hue.
@@ -154,6 +162,11 @@
   --elevation-2: 0 8px 24px -8px oklch(0 0 0 / 0.6);
   --elevation-edge: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 0 0 1px oklch(0.345 0.014 58);
 
+  --chunk-edge: oklch(0.36 0.014 58);
+  --primary-edge: oklch(0.56 0.14 40);
+  --success-edge: oklch(0.6 0.12 150);
+  --destructive-edge: oklch(0.54 0.16 27);
+
   --sidebar: oklch(0.255 0.014 58);
   --sidebar-foreground: oklch(0.945 0.008 75);
   --sidebar-primary: oklch(0.715 0.15 42);
@@ -235,7 +248,31 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
+    /* iOS must not inflate text when the phone is turned sideways. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+    /* Android Chrome reloads the page on an overscroll at the top; the app
+       has its own pull-to-sync, and iOS keeps its bounce inside the page. */
+    overscroll-behavior-y: contain;
+  }
+
+  /* Controls behave like a native app's: no 300ms double-tap wait, no text
+     selection or callout menu on a long press. */
+  button,
+  a,
+  [role="tab"],
+  summary,
+  label {
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="tab"],
+  summary {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   body {
@@ -308,19 +345,89 @@
 }
 
 @layer components {
-  /* The single card surface. One elevation system, never border + shadow. */
+  /* The single card surface: a chalk tile standing on a solid lower edge,
+     the same edge a button stands on. One system in both themes. */
   .surface {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    box-shadow: var(--elevation-1), var(--elevation-edge);
+    border: 2px solid var(--chunk-edge);
+    border-bottom-width: 4px;
   }
 
   .surface-raised {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    box-shadow: var(--elevation-2), var(--elevation-edge);
+    border: 2px solid var(--chunk-edge);
+    border-bottom-width: 4px;
+    box-shadow: var(--elevation-2);
+  }
+
+  /* A button that stands on its own edge and is pushed down onto it. */
+  .chunky {
+    --chunk: var(--chunk-edge);
+    box-shadow: 0 4px 0 0 var(--chunk);
+  }
+
+  .chunky:active {
+    transform: translateY(3px) !important;
+    box-shadow: 0 1px 0 0 var(--chunk);
+  }
+
+  .chunky:disabled {
+    box-shadow: 0 4px 0 0 var(--chunk);
+  }
+
+  /* One celebration: a quick pop when something is earned. */
+  .pop-in {
+    animation: pop-in 420ms var(--ease-out) both;
+  }
+
+  /* A screen's sections arrive one after another rather than all at once.
+     Short and small: it says "this is fresh", it never makes anyone wait. */
+  .stagger > * {
+    animation: rise var(--dur-view) var(--ease-out) both;
+  }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+  /* A lit streak flame breathes. */
+  .flicker {
+    transform-origin: 50% 90%;
+    animation: flicker 2.4s ease-in-out infinite;
+  }
+
+  /* A tab hops when it becomes the one you are on. */
+  .hop {
+    animation: hop 360ms var(--ease-out);
+  }
+
+  /* A bar that fills from the start line on first mount. */
+  .grow-x {
+    transform-origin: left center;
+    animation: grow-x 700ms var(--ease-out) both;
+  }
+
+  /* Earned medals drop in one after another. */
+  .pop-stagger > * {
+    animation: pop-in 420ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* Confetti: each piece flies to its own --dx/--dy and spins. */
+  .confetti-piece {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    width: 12px;
+    height: 16px;
+    border-radius: 3px;
+    animation: confetti 1600ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   }
 
   /* The two persistent bars.
@@ -403,6 +510,51 @@
   }
 }
 
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.08, 0.96) rotate(-4deg); }
+  60% { transform: scale(0.96, 1.06) rotate(3deg); }
+}
+
+@keyframes hop {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-5px) scale(1.15); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes confetti {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(0deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), var(--dy)) rotate(var(--rot));
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -437,11 +589,17 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 
-  .press:active {
-    transform: none;
+  .press:active,
+  .chunky:active {
+    transform: none !important;
+  }
+
+  .confetti-piece {
+    display: none;
   }
 }

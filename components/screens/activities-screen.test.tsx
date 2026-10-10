@@ -75,18 +75,20 @@ beforeEach(() => {
 
 describe("ActivitiesScreen — page size", () => {
   it("shows one default page of a long log", () => {
+    // Ten: a phone screen of rows, not a season of them.
     renderScreen(makeActivities(60))
-    expect(rowCount()).toBe(25)
+    expect(rowCount()).toBe(10)
   })
 
   it("adds exactly one more page per tap", () => {
     renderScreen(makeActivities(60))
     fireEvent.click(screen.getByRole("button", { name: /show more/i }))
-    expect(rowCount()).toBe(50)
+    expect(rowCount()).toBe(20)
   })
 
   it("shows fewer rows when a smaller step is chosen", () => {
     renderScreen(makeActivities(60))
+    choosePageSize(25)
     choosePageSize(10)
     expect(rowCount()).toBe(10)
   })
@@ -101,6 +103,7 @@ describe("ActivitiesScreen — page size", () => {
     // The regression a row count would invite: expanded to 50 of 25, then
     // switched to 10 — the list must show 10, not stay on a stale 50.
     renderScreen(makeActivities(60))
+    choosePageSize(25)
     fireEvent.click(screen.getByRole("button", { name: /show more/i }))
     expect(rowCount()).toBe(50)
 
@@ -144,13 +147,14 @@ describe("ActivitiesScreen — remembering the choice", () => {
   it("falls back to the default when the stored value is not one of the options", () => {
     localStorage.setItem("activities.pageSize", "999")
     renderScreen(makeActivities(60))
-    expect(rowCount()).toBe(25)
+    expect(rowCount()).toBe(10)
   })
 })
 
 describe("ActivitiesScreen — paging against filters", () => {
   it("folds an expanded list back to one page when the filter changes", () => {
     renderScreen(makeActivities(60))
+    choosePageSize(25)
     fireEvent.click(screen.getByRole("button", { name: /show more/i }))
     expect(rowCount()).toBe(50)
 
@@ -161,10 +165,10 @@ describe("ActivitiesScreen — paging against filters", () => {
 
   it("keeps the chosen step across a filter change", () => {
     renderScreen(makeActivities(60))
-    choosePageSize(10)
+    choosePageSize(25)
     fireEvent.click(screen.getByRole("button", { name: "Run" }))
-    expect(rowCount()).toBe(10)
-    expect(pageSizeSelect().value).toBe("10")
+    expect(rowCount()).toBe(25)
+    expect(pageSizeSelect().value).toBe("25")
   })
 })
 

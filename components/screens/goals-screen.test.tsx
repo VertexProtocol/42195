@@ -176,21 +176,21 @@ function renderWeekly(weeklyGoals: WeeklyGoal[], initialTab?: "weekly" | "race")
       />
     </I18nProvider>,
   )
-  if (!initialTab) fireEvent.click(screen.getByRole("tab", { name: "Weekly" }))
+  if (!initialTab) fireEvent.click(screen.getByRole("tab", { name: "Weekly goals" }))
   return view
 }
 
 describe("GoalsScreen — which horizon it opens on", () => {
   it("opens on races by default", () => {
     renderWeekly([makeWeeklyGoal()], "race")
-    expect(screen.getByRole("tab", { name: "Targets" }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getByRole("tab", { name: "Races" }).getAttribute("aria-selected")).toBe("true")
   })
 
   it("opens on the weekly list when the caller asks for it", () => {
     // What a weekly goal on Today links to. Landing on the race list means
     // landing on a screen the goal that was tapped is not on.
     renderWeekly([makeWeeklyGoal()], "weekly")
-    expect(screen.getByRole("tab", { name: "Weekly" }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getByRole("tab", { name: "Weekly goals" }).getAttribute("aria-selected")).toBe("true")
   })
 })
 
@@ -557,7 +557,7 @@ describe("GoalsScreen — the drag order as priority", () => {
         makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 1 }),
       ],
     })
-    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
+    expect(screen.getByText(/Oslo sets this week's volume/)).toBeTruthy()
   })
 
   it("carries no badge on the card", () => {
@@ -577,7 +577,7 @@ describe("GoalsScreen — the drag order as priority", () => {
     const perf = makeGoal({ ...future, goal_category: "performance", name: "Sub-50", display_order: 1 })
     const race = makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 2 })
     renderSuggestions({ initialTab: "race", goals: [perf, race] })
-    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
+    expect(screen.getByText(/Oslo sets this week's volume/)).toBeTruthy()
     expect(screen.queryByText(/Sub-50 is setting/)).toBeNull()
   })
 
@@ -586,7 +586,7 @@ describe("GoalsScreen — the drag order as priority", () => {
       initialTab: "race",
       goals: [makeGoal({ ...future, goal_category: "event_training", name: "Oslo" })],
     })
-    expect(screen.queryByText(/is setting this week's volume/)).toBeNull()
+    expect(screen.queryByText(/sets this week's volume/)).toBeNull()
   })
 })
 

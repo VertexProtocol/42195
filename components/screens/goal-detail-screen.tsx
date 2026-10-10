@@ -6,7 +6,6 @@ import {
   Sparkles,
   RefreshCw,
   ChevronDown,
-  ChevronUp,
   MapPin,
   CalendarCheck,
   Trophy,
@@ -19,6 +18,9 @@ import {
   Flag,
   Archive,
   CheckCircle2,
+  Check,
+  X,
+  ChevronRight,
 } from "lucide-react"
 import {
   formatDistance,
@@ -55,13 +57,17 @@ import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 // is never one length here and another there.
 import { matchSessionsToActivities } from "@/lib/plan-session-match"
 import { startOfWeek as toMonday, sessionKey, isManualAnswer } from "@/lib/plan-today"
-import { AppCard } from '@/components/ui/app-card'
+import { AppCard, CardRow } from '@/components/ui/app-card'
+import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
 import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { Pill } from '@/components/ui/pill'
+import { Meter } from '@/components/ui/meter'
+import { TrackLoader } from '@/components/ui/track-mark'
 
 /**
  * How a goal that has run its course actually went.
@@ -115,19 +121,21 @@ function GoalResultCard({
     <AppCard variant="rows">
       <div className="flex items-center gap-3 px-5 py-4">
         <div
-          className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${
-            reached ? "bg-success/12" : "bg-secondary"
+          className={`pop-in flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+            reached
+              ? "border-[var(--success-edge)] bg-success text-success-foreground"
+              : "border-[var(--chunk-edge)] bg-surface-sunken"
           }`}
         >
           {reached ? (
-            <Trophy size={19} className="text-success" aria-hidden />
+            <Trophy size={26} aria-hidden />
           ) : (
-            <Flag size={19} className="text-muted-foreground" aria-hidden />
+            <Flag size={24} className="text-muted-foreground" aria-hidden />
           )}
         </div>
         <div className="min-w-0 flex-1">
           <p
-            className={`text-lead font-semibold ${
+            className={`text-title font-extrabold ${
               reached ? "text-success" : "text-card-foreground"
             }`}
           >
@@ -240,37 +248,53 @@ function CollapsibleSection({
   defaultOpen?: boolean
   variant?: "default" | "warning"
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-  
-  const baseStyles = variant === "warning"
-    ? "rounded-lg bg-warning/10 ring-1 ring-warning/30"
-    : "surface"
-  
-  const iconColor = variant === "warning" ? "text-warning" : "text-muted-foreground"
-  
   return (
-    <div className={baseStyles}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
-      >
-        <div className="flex items-center gap-2">
-          {variant === "warning" && <AlertCircle size={15} className="text-warning" />}
-          <span className="text-micro font-semibold uppercase tracking-wider text-muted-foreground">
-            {title}
-          </span>
-        </div>
-        <ChevronDown 
-          size={16} 
-          className={`${iconColor} transition-transform ${isOpen ? "rotate-180" : ""}`} 
+    <details
+      open={defaultOpen}
+      className={`group ${variant === "warning" ? "rounded-md border-2 border-warning/45 bg-warning/10" : "surface"}`}
+    >
+      <summary className="press flex cursor-pointer list-none items-center gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        {variant === "warning" && <AlertCircle size={18} className="shrink-0 text-warning" aria-hidden />}
+        <span className="flex-1 text-label font-extrabold text-foreground">{title}</span>
+        <ChevronDown
+          size={18}
+          className={`shrink-0 transition-transform group-open:rotate-180 ${
+            variant === "warning" ? "text-warning" : "text-muted-foreground"
+          }`}
+          aria-hidden
         />
-      </button>
-      {isOpen && (
-        <div className="px-4 pb-4">
-          {children}
-        </div>
-      )}
+      </summary>
+      <div className="px-4 pb-4">{children}</div>
+    </details>
+  )
+}
+
+/** A state on the plan, said in one title and one line. */
+function PlanNotice({
+  tone,
+  icon: Icon,
+  title,
+  children,
+}: {
+  tone: "danger" | "caution" | "done" | "action" | "quiet"
+  icon: typeof AlertCircle
+  title: string
+  children?: React.ReactNode
+}) {
+  const styles = {
+    danger: ["border-destructive/45 bg-destructive/10", "text-destructive"],
+    caution: ["border-warning/45 bg-warning/10", "text-warning"],
+    done: ["border-success/45 bg-success/10", "text-success"],
+    action: ["border-primary/45 bg-primary/10", "text-primary"],
+    quiet: ["border-[var(--chunk-edge)] bg-surface-sunken", "text-muted-foreground"],
+  }[tone]
+  return (
+    <div className={`flex gap-3 rounded-md border-2 px-4 py-3.5 ${styles[0]}`}>
+      <Icon size={20} className={`mt-0.5 shrink-0 ${styles[1]}`} aria-hidden />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="text-label font-extrabold text-foreground">{title}</p>
+        {children && <div className="text-label leading-snug text-muted-foreground">{children}</div>}
+      </div>
     </div>
   )
 }
@@ -280,14 +304,21 @@ function PreferencesForm({
   goalId,
   initial,
   onSaved,
+  mode = "list",
+  onFinish,
 }: {
   goalId: string
   initial: GoalPreferences
+  /** "wizard" walks a first-time setup one question at a time; "list" edits. */
+  mode?: "wizard" | "list"
+  /** Called after the last wizard step has saved. */
+  onFinish?: () => void
   onSaved: (
     prefs: GoalPreferences,
     meta?: { shouldRegenerate: boolean; regenerateReason: string | null },
   ) => void
 }) {
+  const { t } = useI18n()
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
@@ -299,6 +330,7 @@ function PreferencesForm({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [localHistory, setLocalHistory] = useState(initial.notes_history)
   const [resolvingAt, setResolvingAt] = useState<string | null>(null)
+  const [editing, setEditing] = useState<PrefKey | null>(null)
 
   const injuryHistory = localHistory
     .filter((e) => e.type === "injury")
@@ -321,7 +353,7 @@ function PreferencesForm({
     }
   }
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     setSaving(true)
     setSaveError(null)
     try {
@@ -341,8 +373,8 @@ function PreferencesForm({
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setSaveError(body.error ?? "Failed to save — please try again.")
-        return
+        setSaveError(body.error ?? t("gp.saveFailed"))
+        return false
       }
       onSaved(
         {
@@ -361,261 +393,380 @@ function PreferencesForm({
           regenerateReason: body.regenerateReason ?? null,
         },
       )
+      return true
     } catch {
-      setSaveError("Network error — please check your connection and try again.")
+      setSaveError(t("gp.network"))
+      return false
     } finally {
       setSaving(false)
     }
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Sessions per week */}
-      <div>
-        <label className="mb-2 block text-micro font-medium text-muted-foreground">
-          Sessions per week
-        </label>
-        <div className="flex gap-2">
-          {[2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              onClick={() => setSessions(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
-                sessions === n
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
+  const sessionsField = (
+    <ChoiceRow
+      options={[2, 3, 4, 5].map((n) => [n, String(n)] as const)}
+      value={sessions}
+      onChange={setSessions}
+    />
+  )
 
-      {/* Focus */}
-      <div>
-        <label className="mb-2 block text-micro font-medium text-muted-foreground">
-          What matters most to you?
-        </label>
-        <div className="flex flex-col gap-2">
-          {(
-            [
-              { value: "volume", label: "Hit the km", desc: "Easy runs and a weekly target. Small weeks get fewer, longer runs rather than more short ones" },
-              { value: "workouts", label: "Structured sessions", desc: "Tempo, intervals and hills where the phase calls for them — always your chosen number of sessions" },
-              { value: "balanced", label: "Both", desc: "Mostly easy running, with quality sessions where they help" },
-            ] as { value: TrainingFocus; label: string; desc: string }[]
-          ).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setFocus(opt.value)}
-              className={`flex flex-col items-start gap-0.5 rounded-md px-4 py-3 text-left transition-colors ${
-                focus === opt.value
-                  ? "bg-primary/10 ring-2 ring-primary"
-                  : "bg-secondary active:bg-accent"
-              }`}
-            >
-              <span className={`text-label font-semibold ${focus === opt.value ? "text-primary" : "text-foreground"}`}>
-                {opt.label}
-              </span>
-              <span className="text-micro text-muted-foreground">{opt.desc}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+  const focusOptions: [TrainingFocus, string, string][] = [
+    ["volume", t("gp.focusVolume"), t("gp.focusVolumeDesc")],
+    ["workouts", t("gp.focusWorkouts"), t("gp.focusWorkoutsDesc")],
+    ["balanced", t("gp.focusBalanced"), t("gp.focusBalancedDesc")],
+  ]
+  const focusField = (
+    <div className="flex flex-col gap-2">
+      {focusOptions.map(([value, label, desc]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={focus === value}
+          onClick={() => setFocus(value)}
+          className={`press flex flex-col items-start gap-0.5 rounded-md border-2 border-b-4 px-4 py-3 text-left ${
+            focus === value ? "border-primary/60 bg-primary/10" : "border-[var(--chunk-edge)] bg-card"
+          }`}
+        >
+          <span className={`text-label font-extrabold ${focus === value ? "text-primary" : "text-foreground"}`}>
+            {label}
+          </span>
+          <span className="text-micro text-muted-foreground">{desc}</span>
+        </button>
+      ))}
+    </div>
+  )
 
-      {/* Weekly volume increase */}
-      <div>
-        <label className="mb-1 block text-micro font-medium text-muted-foreground">
-          Weekly volume increase
-        </label>
-        <p className="mb-2 text-micro text-muted-foreground/70">
-          How much to increase your weekly km each build week. 10% is the standard guideline for injury prevention — your training history sets the actual ceiling, which is lower for newer runners.
-        </p>
-        <div className="flex gap-2">
-          {[5, 8, 10].map((n) => (
-            <button
-              key={n}
-              onClick={() => setIncreasePct(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
-                increasePct === n
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-            >
-              {n}%
-            </button>
-          ))}
-        </div>
-      </div>
+  const increaseField = (
+    <ChoiceRow
+      options={[5, 8, 10].map((n) => [n, `${n}%`] as const)}
+      value={increasePct}
+      onChange={setIncreasePct}
+    />
+  )
 
-      {/* Block length */}
-      <div>
-        <label className="mb-1 block text-micro font-medium text-muted-foreground">
-          Training block length
-        </label>
-        <p className="mb-2 text-micro text-muted-foreground/70">
-          The last week is always a recovery week (~80% volume). Standard is 4 weeks (3 build + 1 recovery), which works well for most runners.
-        </p>
-        <div className="flex gap-2">
-          {([2, 3, 4, 6] as const).map((n) => (
-            <button
-              key={n}
-              onClick={() => setBlockWeeks(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
-                blockWeeks === n
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-            >
-              {n}w
-            </button>
-          ))}
-        </div>
-      </div>
+  const blockField = (
+    <ChoiceRow
+      options={([2, 3, 4, 6] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
+      value={blockWeeks}
+      onChange={setBlockWeeks}
+    />
+  )
 
-      {/* Regenerate frequency */}
-      <div>
-        <label className="mb-1 block text-micro font-medium text-muted-foreground">
-          Regenerate plan every
-        </label>
-        <p className="mb-2 text-micro text-muted-foreground/70">
-          How often you want to generate a new plan. You&apos;ll see a reminder when
-          it&apos;s due.
-        </p>
-        <div className="flex gap-2">
-          {([2, 4, 6, 8] as const).map((n) => (
-            <button
-              key={n}
-              onClick={() => setRegenEvery(n)}
-              className={`flex h-10 flex-1 items-center justify-center rounded-md text-label font-semibold transition-colors ${
-                regenEvery === n
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground active:bg-accent"
-              }`}
-            >
-              {n}w
-            </button>
-          ))}
-        </div>
-        {regenEvery < blockWeeks && (
-          <p className="mt-2 text-micro text-warning">
-            Your plan will regenerate before the mid-block checkpoint can run. Set to at least {blockWeeks}w to benefit from automatic adjustments.
-          </p>
-        )}
-      </div>
+  const regenField = (
+    <>
+      <ChoiceRow
+        options={([2, 4, 6, 8] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
+        value={regenEvery}
+        onChange={setRegenEvery}
+      />
+      {regenEvery < blockWeeks && (
+        <p className="mt-2 text-micro font-semibold text-warning">{t("gp.regenWarn")}</p>
+      )}
+    </>
+  )
 
-      {/* Notes */}
-      <div>
-        <label className="mb-1 block text-micro font-medium text-muted-foreground">
-          Coach notes (optional)
-        </label>
-        <p className="mb-2 text-micro text-muted-foreground/70">
-          Any context for the AI coach — schedule constraints, experience level, etc.
-        </p>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g. only available Wed + weekends, experienced ultra runner..."
-          className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          rows={3}
-        />
-      </div>
+  const notesField = (
+    <textarea
+      value={notes}
+      onChange={(e) => setNotes(e.target.value)}
+      placeholder={t("gp.prefNotesPlaceholder")}
+      aria-label={t("gp.prefNotes")}
+      className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+      rows={3}
+    />
+  )
 
-      {/* Injury notes */}
-      <div>
-        <label className="mb-1 block text-micro font-medium text-muted-foreground">
-          Injury history (optional)
-        </label>
-        <p className="mb-2 text-micro text-muted-foreground/70">
-          Recurring issues or injury history the coach should keep in mind for safety.
-        </p>
-        <textarea
-          value={injuryNotes}
-          onChange={(e) => setInjuryNotes(e.target.value)}
-          placeholder="e.g. recurring left knee pain, previous stress fracture in right foot..."
-          className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          rows={2}
-        />
-        {injuryHistory.length > 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
-            {injuryHistory.map((entry) => {
-              const addedDate = new Date(entry.added_at).toLocaleDateString("en-US", {
-                month: "short", day: "numeric", year: "numeric",
-              })
-              const resolvedDate = entry.resolved_at
-                ? new Date(entry.resolved_at).toLocaleDateString("en-US", {
-                    month: "short", day: "numeric", year: "numeric",
-                  })
-                : null
-              const isResolving = resolvingAt === entry.added_at
-              // An unresolved note keeps tightening the comeback cap and keeps
-              // reaching the coach as a current restriction. People rarely go
-              // back to mark one resolved, so after a while we ask.
-              const weeksOld =
-                (Date.now() - new Date(entry.added_at).getTime()) / (7 * 24 * 60 * 60 * 1000)
-              const isStale = !entry.resolved_at && weeksOld >= INJURY_NOTE_STALE_WEEKS
+  const injuryField = (
+    <>
+      <textarea
+        value={injuryNotes}
+        onChange={(e) => setInjuryNotes(e.target.value)}
+        placeholder={t("gp.prefInjuryPlaceholder")}
+        aria-label={t("gp.prefInjury")}
+        className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        rows={2}
+      />
+      {injuryHistory.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {injuryHistory.map((entry) => {
+            const addedDate = formatDate(entry.added_at)
+            const resolvedDate = entry.resolved_at ? formatDate(entry.resolved_at) : null
+            const isResolving = resolvingAt === entry.added_at
+            // An unresolved note keeps tightening the comeback cap and keeps
+            // reaching the coach as a current restriction. People rarely go
+            // back to mark one resolved, so after a while we ask.
+            const weeksOld =
+              (Date.now() - new Date(entry.added_at).getTime()) / (7 * 24 * 60 * 60 * 1000)
+            const isStale = !entry.resolved_at && weeksOld >= INJURY_NOTE_STALE_WEEKS
 
-              return (
-                <div
-                  key={entry.added_at}
-                  className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-micro ${
-                    entry.resolved_at
-                      ? "bg-secondary/50 text-muted-foreground"
-                      : "bg-amber-50 dark:bg-amber-950/30 text-foreground ring-1 ring-warning"
-                  }`}
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className={entry.resolved_at ? "line-through opacity-60" : "font-medium"}>
-                      {entry.content}
+            return (
+              <div
+                key={entry.added_at}
+                className={`flex items-start justify-between gap-2 rounded-md px-3 py-2.5 text-micro ${
+                  entry.resolved_at
+                    ? "bg-surface-sunken text-muted-foreground"
+                    : "border-2 border-warning/45 bg-warning/10 text-foreground"
+                }`}
+              >
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className={entry.resolved_at ? "line-through opacity-60" : "font-bold"}>
+                    {entry.content}
+                  </span>
+                  <span className="text-micro text-muted-foreground">
+                    {resolvedDate
+                      ? t("gp.injuryResolvedOn", { added: addedDate, resolved: resolvedDate })
+                      : t("gp.injuryAdded", { date: addedDate })}
+                    {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase}`}
+                  </span>
+                  {isStale && (
+                    <span className="text-micro font-semibold text-warning">
+                      {t("gp.injuryStale", { weeks: Math.floor(weeksOld) })}
                     </span>
-                    <span className="text-micro text-muted-foreground">
-                      {resolvedDate ? `Added ${addedDate} · Resolved ${resolvedDate}` : `Added ${addedDate}`}
-                      {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase} phase`}
-                    </span>
-                    {isStale && (
-                      <span className="text-micro text-warning">
-                        Added {Math.floor(weeksOld)} weeks ago and still holding your volume
-                        down. Still an issue?
-                      </span>
-                    )}
-                  </div>
-                  {!entry.resolved_at && (
-                    <button
-                      onClick={() => handleResolve(entry.added_at)}
-                      disabled={isResolving}
-                      className="shrink-0 rounded-md bg-success px-2 py-1 text-micro font-medium text-success active:opacity-70 disabled:opacity-50"
-                    >
-                      {isResolving ? "…" : "Resolved"}
-                    </button>
                   )}
                 </div>
-              )
-            })}
+                {!entry.resolved_at && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => handleResolve(entry.added_at)}
+                    loading={isResolving}
+                  >
+                    <Check size={14} />
+                    {t("gp.resolved")}
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+
+  const focusLabel = focusOptions.find(([v]) => v === focus)?.[1] ?? ""
+  const openInjuries = injuryHistory.filter((e) => !e.resolved_at).length
+
+  /** Every setting, as a question, the line that answers it, and its control. */
+  const fields: Record<PrefKey, { question: string; label: string; value: string; hint?: string; control: React.ReactNode }> = {
+    sessions: { question: t("gp.qSessions"), label: t("gp.prefSessions"), value: String(sessions), control: sessionsField },
+    focus: { question: t("gp.prefFocus"), label: t("gp.prefFocusShort"), value: focusLabel, control: focusField },
+    block: {
+      question: t("gp.qBlock"),
+      label: t("gp.prefBlock"),
+      value: t("gp.weeksShort", { n: blockWeeks }),
+      hint: t("gp.prefBlockHint"),
+      control: blockField,
+    },
+    increase: {
+      question: t("gp.qIncrease"),
+      label: t("gp.prefIncrease"),
+      value: `${increasePct}%`,
+      hint: t("gp.prefIncreaseHint"),
+      control: increaseField,
+    },
+    regen: { question: t("gp.prefRegen"), label: t("gp.prefRegen"), value: t("gp.weeksShort", { n: regenEvery }), control: regenField },
+    notes: {
+      question: t("gp.qNotes"),
+      label: t("gp.prefNotes"),
+      value: notes.trim() ? notes.trim() : "—",
+      control: (
+        <div className="flex flex-col gap-4">
+          <PrefField label={t("gp.prefNotes")}>{notesField}</PrefField>
+          <PrefField label={t("gp.prefInjury")}>{injuryField}</PrefField>
+        </div>
+      ),
+    },
+    injury: {
+      question: t("gp.prefInjury"),
+      label: t("gp.prefInjury"),
+      value: injuryNotes.trim() ? injuryNotes.trim() : openInjuries > 0 ? String(openInjuries) : "—",
+      control: injuryField,
+    },
+  }
+
+  // ── Setup: one question per page, then the plan ─────────────────────────
+  const [step, setStep] = useState(0)
+  if (mode === "wizard") {
+    const steps: PrefKey[] = ["sessions", "focus", "block", "increase", "notes"]
+    const field = fields[steps[step]]
+    const last = step === steps.length - 1
+    return (
+      <div className="surface flex flex-col gap-5 p-5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+            aria-label={t("common.back")}
+            className="press -ml-1 flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground disabled:opacity-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div
+            className="h-3 flex-1 overflow-hidden rounded-full bg-surface-sunken"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={steps.length}
+            aria-valuenow={step + 1}
+            aria-label={t("gp.stepOf", { step: step + 1, total: steps.length })}
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{
+                width: `${((step + 1) / steps.length) * 100}%`,
+                transition: "width var(--dur-view) var(--ease-out)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Keyed on the step so each question arrives fresh. */}
+        <div key={step} className="flex flex-col gap-4 [animation:rise_var(--dur-view)_var(--ease-out)_both]">
+          <div>
+            <h3 className="text-title font-extrabold text-card-foreground">{field.question}</h3>
+            {field.hint && <p className="mt-1 text-label text-muted-foreground">{field.hint}</p>}
+          </div>
+          {field.control}
+        </div>
+
+        {saveError && <p role="alert" className="text-label font-semibold text-destructive">{saveError}</p>}
+        <Button
+          block
+          size="lg"
+          loading={saving}
+          onClick={async () => {
+            if (!last) {
+              setStep((s) => s + 1)
+              return
+            }
+            if (await handleSave()) onFinish?.()
+          }}
+        >
+          {last ? (
+            <>
+              <Sparkles size={18} />
+              {t("gp.makePlan")}
+            </>
+          ) : (
+            t("gp.next")
+          )}
+        </Button>
+      </div>
+    )
+  }
+
+  // ── Afterwards: a short list, each line opens its own question ───────────
+  const listOrder: PrefKey[] = ["sessions", "focus", "block", "increase", "regen", "notes"]
+  const editingField = editing ? fields[editing] : null
+  return (
+    <>
+      <AppCard variant="rows">
+        {listOrder.map((key) => (
+          <CardRow key={key} className="p-0">
+            <button
+              type="button"
+              onClick={() => setEditing(key)}
+              className="press flex min-h-[56px] w-full items-center gap-3 px-4 py-3 text-left"
+            >
+              <span className="min-w-0 flex-1 text-label font-extrabold text-card-foreground">
+                {fields[key].label}
+              </span>
+              <span className="max-w-[45%] truncate text-label font-semibold text-muted-foreground">
+                {fields[key].value}
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          </CardRow>
+        ))}
+      </AppCard>
+
+      <BottomSheet
+        open={editingField !== null}
+        onClose={() => setEditing(null)}
+        title={editingField?.question ?? ""}
+        closeLabel={t("gp.cancel")}
+      >
+        {editingField && (
+          <div className="flex flex-col gap-4">
+            {editingField.hint && <p className="text-label text-muted-foreground">{editingField.hint}</p>}
+            {editingField.control}
+            {saveError && <p role="alert" className="text-label font-semibold text-destructive">{saveError}</p>}
+            <Button
+              block
+              size="lg"
+              loading={saving}
+              onClick={async () => {
+                if (await handleSave()) setEditing(null)
+              }}
+            >
+              {saving ? t("gp.saving") : t("gp.save")}
+            </Button>
           </div>
         )}
-      </div>
+      </BottomSheet>
+    </>
+  )
+}
 
-      {saveError && (
-        <p className="text-micro text-destructive">{saveError}</p>
-      )}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="flex min-h-[44px] items-center justify-center rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-50"
-      >
-        {saving ? "Saving..." : "Save preferences"}
-      </button>
+type PrefKey = "sessions" | "focus" | "block" | "increase" | "regen" | "notes" | "injury"
+
+/** One setting: a bold label, an optional one-line hint, then the control. */
+function PrefField({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <p className="text-label font-extrabold text-foreground">{label}</p>
+      {hint && <p className="mt-0.5 text-micro text-muted-foreground">{hint}</p>}
+      <div className="mt-2">{children}</div>
     </div>
   )
 }
 
-// ---- Loading skeletons ----
+/** A row of chunky toggles where exactly one is on. */
+function ChoiceRow<T extends number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly (readonly [T, string])[]
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex gap-2">
+      {options.map(([v, label]) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(v)}
+          className={`press h-11 flex-1 rounded-md border-2 border-b-4 text-label font-extrabold ${
+            value === v
+              ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
+              : "border-[var(--chunk-edge)] bg-card text-foreground"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function WeekCardSkeleton() {
   return (
     <AppCard variant="rows">
       <div className="flex w-full items-center justify-between px-4 py-3.5">
         <div className="flex items-center gap-3">
-          <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
+          <Skeleton className="size-11 shrink-0 rounded-full" />
           <div className="flex flex-col gap-1.5">
             <Skeleton className="h-3.5 w-32" />
             <Skeleton className="h-3 w-14" />
@@ -628,13 +779,15 @@ function WeekCardSkeleton() {
 }
 
 function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusText?: string | null }) {
+  const { t } = useI18n()
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-center text-label text-muted-foreground animate-pulse">
-        {statusText ?? "Analysing your training history…"}
+      <p className="flex items-center justify-center gap-2 text-center text-label font-bold text-primary">
+        <TrackLoader size={14} />
+        {statusText ?? t("gp.analysing")}
       </p>
       {/* Summary */}
-      <div className="rounded-lg bg-primary/5 px-4 py-3.5 ring-1 ring-primary/20 flex flex-col gap-2">
+      <div className="surface flex flex-col gap-2 px-4 py-3.5">
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-2/3" />
@@ -670,10 +823,9 @@ function WeekCard({
   weekStart: Date
   weekEnd: Date
 }) {
+  const { t, locale } = useI18n()
   const [expanded, setExpanded] = useState(isCurrent)
-  const [coachNoteOpen, setCoachNoteOpen] = useState(false)
 
-  const deltaKm = actualKm !== null ? actualKm - week.targetKm : null
   const deltaPct = actualKm !== null && week.targetKm > 0
     ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
     : null
@@ -685,154 +837,147 @@ function WeekCard({
   // two sessions still to come when in fact two had been written off.
   const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
   const totalSessions = week.sessions.length
+  const allSettled = totalSessions > 0 && completedCount + skippedCount === totalSessions
 
-  // Format date range like "3. mar – 9. mar"
-  const fmtDay = (d: Date) => {
-    const day = d.getDate()
-    const month = d.toLocaleDateString("nb-NO", { month: "short" }).replace(".", "")
-    return `${day}. ${month}`
-  }
+  const fmtDay = (d: Date) =>
+    d.toLocaleDateString(locale === "no" ? "nb-NO" : "en-GB", { day: "numeric", month: "short" })
   const lastDay = new Date(weekEnd)
   lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
   const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
 
+  const nextStatusLabel = (status: SessionStatus) =>
+    status === "planned"
+      ? t("gp.markCompleted")
+      : status === "completed"
+        ? t("gp.markSkipped")
+        : t("gp.markPlanned")
+
   return (
-    <div
-      className={`overflow-hidden rounded-lg ring-1 transition-all ${
-        isCurrent ? "bg-card ring-primary/40 ring-2 shadow-sm" : "bg-card ring-border shadow-sm"
-      }`}
-    >
+    <div className={`surface overflow-hidden ${isCurrent ? "border-primary/45" : ""}`}>
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3.5"
+        aria-expanded={expanded}
+        className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
       >
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-micro font-bold ${
-              isCurrent ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
-            }`}
-          >
-            W{week.weekNumber}
-          </div>
-          <div className="text-left">
-            <div className="flex items-center gap-2">
-              <p className="text-label font-semibold text-card-foreground">{week.theme}</p>
-              <span className="text-micro text-muted-foreground">{dateLabel}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="text-micro text-muted-foreground">~{week.targetKm} km</p>
-              {(isPast || isCurrent) && actualKm !== null && (
-                <span
-                  className={`text-micro font-semibold ${
-                    deltaPct !== null && deltaPct >= 0
-                      ? "text-primary"
-                      : "text-warning"
-                  }`}
-                >
-                  {actualKm.toFixed(1)} km ({deltaPct !== null && deltaPct >= 0 ? "+" : ""}{deltaPct}%)
-                </span>
-              )}
-              {(isPast || isCurrent) && completedCount > 0 && (
-                <span className="text-micro font-medium text-success">
-                  {completedCount}/{totalSessions} done
-                </span>
-              )}
-              {(isPast || isCurrent) && skippedCount > 0 && (
-                <span className="text-micro font-medium text-muted-foreground">
-                  {skippedCount}/{totalSessions} skipped
-                </span>
-              )}
-            </div>
-          </div>
+        {/* The week number in a medal: lit for this week, green once every
+            session in it is answered for, plain otherwise. */}
+        <span
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-b-4 text-lead font-extrabold ${
+            allSettled && (isPast || isCurrent)
+              ? "border-[var(--success-edge)] bg-success text-success-foreground"
+              : isCurrent
+                ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                : "border-[var(--chunk-edge)] bg-surface-sunken text-foreground"
+          }`}
+          aria-hidden
+        >
+          {allSettled && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lead font-extrabold text-card-foreground">{week.theme}</p>
+          <p className="truncate text-micro font-semibold text-muted-foreground">
+            {dateLabel} · <span className="measure">~{week.targetKm} km</span>
+          </p>
         </div>
-        {expanded ? (
-          <ChevronUp size={16} className="shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
+        {(isPast || isCurrent) && (completedCount > 0 || skippedCount > 0) && (
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
+            {completedCount > 0 && (
+              <span className="text-micro font-bold text-success">
+                {t("gp.sessionsDone", { done: completedCount, total: totalSessions })}
+              </span>
+            )}
+            {skippedCount > 0 && (
+              <span className="text-micro font-bold text-muted-foreground">
+                {t("gp.sessionsSkipped", { skipped: skippedCount, total: totalSessions })}
+              </span>
+            )}
+          </div>
         )}
+        <ChevronDown
+          size={18}
+          className={`shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+          aria-hidden
+        />
       </button>
 
       {expanded && (
-        <div className="border-t border-border px-4 pb-4 pt-3">
-          {/* Planned vs actual bar */}
+        <div className="flex flex-col gap-3 border-t-2 border-[var(--chunk-edge)] px-4 pb-4 pt-3.5">
+          {/* Planned vs actual, as the same meter the rest of the app uses. */}
           {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
-            <div className="mb-3">
-              <div className="flex items-center justify-between text-micro text-muted-foreground mb-1">
-                <span>Planned {week.targetKm} km</span>
-                <span>Actual {actualKm.toFixed(1)} km</span>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-baseline justify-between text-micro font-semibold text-muted-foreground">
+                <span>{t("gp.planned", { km: week.targetKm })}</span>
+                <span className={deltaPct !== null && deltaPct >= 0 ? "text-primary" : "text-warning"}>
+                  {t("gp.actual", { km: actualKm.toFixed(1) })}
+                  {deltaPct !== null && ` (${deltaPct >= 0 ? "+" : ""}${deltaPct}%)`}
+                </span>
               </div>
-              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={`absolute inset-y-0 left-0 rounded-full transition-all ${
-                    (deltaKm ?? 0) >= 0 ? "bg-primary" : "bg-warning"
-                  }`}
-                  style={{ width: `${Math.min(100, (actualKm / week.targetKm) * 100)}%` }}
-                />
-              </div>
+              <Meter
+                value={Math.min(100, (actualKm / week.targetKm) * 100)}
+                tone={(deltaPct ?? 0) >= 0 ? "action" : "caution"}
+                label={t("gp.actual", { km: actualKm.toFixed(1) })}
+              />
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2">
             {week.sessions.map((session, i) => {
               const status = sessionStatuses[i] ?? "planned"
+              const canToggle = isPast || isCurrent
               return (
-                <div key={i} className={`flex gap-3 ${status === "skipped" ? "opacity-50" : ""}`}>
-                  {/* Session status toggle */}
-                  {(isPast || isCurrent) && (
+                <li
+                  key={i}
+                  className={`flex items-center gap-3 rounded-md bg-surface-sunken px-3 py-2.5 ${
+                    status === "skipped" ? "opacity-55" : ""
+                  }`}
+                >
+                  {canToggle && (
                     <button
                       onClick={() => onToggleSession(week.weekNumber, i)}
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                      className={`press flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
                         status === "completed"
-                          ? "border-success bg-success text-white"
+                          ? "pop-in border-[var(--success-edge)] bg-success text-success-foreground"
                           : status === "skipped"
-                            ? "border-muted-foreground bg-muted-foreground/20"
-                            : "border-border active:bg-secondary"
+                            ? "border-[var(--chunk-edge)] bg-muted text-muted-foreground"
+                            : "border-[var(--chunk-edge)] bg-card"
                       }`}
-                      aria-label={`Mark session as ${status === "planned" ? "completed" : status === "completed" ? "skipped" : "planned"}`}
+                      aria-label={`${session.type}: ${nextStatusLabel(status)}`}
                     >
-                      {status === "completed" && (
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                          <path d="M2 5L4 7L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                      {status === "skipped" && (
-                        <span className="text-micro font-bold text-muted-foreground">S</span>
-                      )}
+                      {status === "completed" && <Check size={18} strokeWidth={3} />}
+                      {status === "skipped" && <X size={16} strokeWidth={3} />}
                     </button>
                   )}
-                  <div className="flex-1 flex flex-col gap-0.5">
-                    <div className="flex items-baseline justify-between">
-                      <span className={`text-label font-semibold ${status === "completed" ? "text-success line-through" : "text-card-foreground"}`}>
-                        {session.type}
-                      </span>
-                      <span className="text-label measure font-bold text-primary">{session.distance}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-micro text-muted-foreground">{session.effort}</p>
-                      {session.suggestedPace && (
-                        <span className="shrink-0 measure text-micro text-primary/70">{session.suggestedPace}</span>
-                      )}
-                    </div>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`truncate text-label font-extrabold ${
+                        status === "completed" ? "text-success" : "text-card-foreground"
+                      }`}
+                    >
+                      {session.type}
+                    </p>
+                    {session.suggestedPace && (
+                      <p className="measure text-micro text-muted-foreground">{session.suggestedPace}</p>
+                    )}
                   </div>
-                </div>
+                  <span className="measure shrink-0 text-lead font-bold text-primary">{session.distance}</span>
+                </li>
               )
             })}
-          </div>
+          </ul>
 
           {week.coachNote && (
-            <div className="mt-3">
-              <button
-                onClick={() => setCoachNoteOpen(v => !v)}
-                className="flex w-full items-center gap-2 rounded-md bg-secondary px-3 py-2.5 transition-colors active:bg-accent"
-              >
-                <Lightbulb size={14} className="shrink-0 text-warning" />
-                <span className="flex-1 text-left text-micro font-medium text-muted-foreground">Coach note</span>
-                <ChevronDown size={13} className={`shrink-0 text-muted-foreground transition-transform ${coachNoteOpen ? "rotate-180" : ""}`} />
-              </button>
-              {coachNoteOpen && (
-                <p className="mt-1.5 px-3 text-micro text-muted-foreground leading-relaxed">{week.coachNote}</p>
-              )}
-            </div>
+            <details className="group rounded-md bg-surface-sunken">
+              <summary className="press flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                <Lightbulb size={16} className="shrink-0 text-warning" aria-hidden />
+                <span className="flex-1 text-label font-bold text-foreground">{t("gp.coachNote")}</span>
+                <ChevronDown
+                  size={16}
+                  className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+              <p className="px-3 pb-3 text-label leading-snug text-muted-foreground">{week.coachNote}</p>
+            </details>
           )}
         </div>
       )}
@@ -887,9 +1032,9 @@ function TrainingTimelineView({
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center justify-between px-5 py-4 text-left active:bg-secondary/50 transition-colors"
+        className="press flex w-full items-center justify-between px-5 py-4 text-left"
       >
-        <h3 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
+        <h3 className="text-label font-extrabold text-foreground">
           {t("timeline.title")}
         </h3>
         <div className="flex items-center gap-2">
@@ -907,7 +1052,7 @@ function TrainingTimelineView({
       {!isExpanded && currentPhase && (
         <div className="px-5 pb-4">
           <div className="flex items-center gap-3">
-            <div className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+            <div className="size-3.5 shrink-0 rounded-full border-2 border-[var(--primary-edge)] bg-primary" />
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="text-label font-semibold text-foreground">
@@ -990,12 +1135,12 @@ function TrainingTimelineView({
           })}
 
           {/* Race day indicator */}
-          <div className="flex items-center gap-2.5 rounded-md bg-destructive/10 px-3.5 py-3 ring-1 ring-destructive/30">
+          <div className="flex items-center gap-2.5 rounded-md border-2 border-destructive/40 bg-destructive/10 px-3.5 py-3">
             <Flag size={14} className="text-destructive shrink-0" />
             <div className="flex-1">
               <span className="text-label font-semibold text-destructive">{t("timeline.raceDay")}</span>
               <span className="ml-2 text-micro text-muted-foreground">
-                {timeline.raceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                {formatDate(timeline.raceDate.toISOString())}
               </span>
             </div>
           </div>
@@ -1005,7 +1150,7 @@ function TrainingTimelineView({
   )
 
   if (embedded) {
-    return <div className="border-t border-border overflow-hidden">{timelineContent}</div>
+    return <div className="overflow-hidden border-t-2 border-[var(--chunk-edge)]">{timelineContent}</div>
   }
 
   return (
@@ -1277,7 +1422,7 @@ export function GoalDetailScreen({
       }
 
       setIsGenerating(true)
-      setGenerateStatus("Analysing your training history…")
+      setGenerateStatus(t("gp.analysing"))
       setError(null)
       setShowAdjustForm(false)
       setCheckpoint(null) // new block — reset checkpoint display
@@ -1299,13 +1444,13 @@ export function GoalDetailScreen({
             setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
             return
           }
-          setError(data.error ?? "Failed to generate plan")
+          setError(data.error ?? t("gp.generateFailed"))
           return
         }
 
         const reader = res.body?.getReader()
         if (!reader) {
-          setError("Streaming not supported")
+          setError(t("gp.streaming"))
           return
         }
 
@@ -1325,9 +1470,9 @@ export function GoalDetailScreen({
             const event = JSON.parse(line.slice(6))
 
             if (event.status === "thinking") {
-              setGenerateStatus("Coach is thinking…")
+              setGenerateStatus(t("gp.thinking"))
             } else if (event.status === "generating") {
-              setGenerateStatus("Writing your plan…")
+              setGenerateStatus(t("gp.writing"))
             } else if (event.status === "done") {
               if (event.pace_source) setPaceSource(event.pace_source)
               setAiPlan((prev) => ({
@@ -1356,12 +1501,12 @@ export function GoalDetailScreen({
               setAdjustNote("")
               onPlanChange?.()
             } else if (event.status === "error") {
-              setError(event.error ?? "Failed to generate plan")
+              setError(event.error ?? t("gp.generateFailed"))
             }
           }
         }
       } catch {
-        setError("Network error. Please try again.")
+        setError(t("gp.network"))
       } finally {
         setIsGenerating(false)
         setGenerateStatus(null)
@@ -1484,8 +1629,14 @@ export function GoalDetailScreen({
         }
       />
 
-      <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
+        {!past && days > 0 && (
+          <p className="flex items-baseline gap-2">
+            <span className="measure text-display font-bold leading-none text-foreground">{days}</span>
+            <span className="text-lead font-bold text-muted-foreground">{t("common.daysLeft")}</span>
+          </p>
+        )}
+        <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {goal.is_active && !past && <Pill tone="action">{t("plan.activePlan")}</Pill>}
           <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
             <MapPin size={13} aria-hidden />
@@ -1495,22 +1646,7 @@ export function GoalDetailScreen({
             <CalendarCheck size={13} aria-hidden />
             {formatDate(goal.target_date)}
           </span>
-          {!past && days > 0 && (
-            <span className="text-micro font-semibold text-foreground">
-              {days} {t("common.daysLeft")}
-            </span>
-          )}
         </div>
-
-      {onOpenGroup && (
-        <SharedGoalEntry
-          goalId={goal.id}
-          group={sharedGoal ?? null}
-          finished={past}
-          onOpen={onOpenGroup}
-          onCreated={onSharedGoalChange}
-        />
-      )}
 
       {/* Once the date has gone, the question is no longer "how far into the
           training am I" — that bar reads 100% for every past goal and says
@@ -1528,13 +1664,15 @@ export function GoalDetailScreen({
           <div className="px-5 py-4">
             <div className="flex items-center justify-between text-micro mb-2">
               <span className="text-muted-foreground">
-                {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
+                {goal.start_date
+                  ? `${t("plan.trainingFrom")} ${formatDate(goal.start_date)}`
+                  : t("plan.trainingProgress")}
               </span>
               <span className="font-medium text-foreground">{timeProgress}%</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+            <div className="h-3 overflow-hidden rounded-full bg-surface-sunken">
               <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
+                className="grow-x h-full rounded-full bg-primary transition-all duration-500"
                 style={{ width: `${timeProgress}%` }}
               />
             </div>
@@ -1552,83 +1690,67 @@ export function GoalDetailScreen({
       {/* ---- AI Training Plan section ---- */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
-            AI Training Plan
-          </h2>
+          <h2 className="text-lead font-extrabold text-foreground">{t("plan.sectionTitle")}</h2>
           {aiPlan && activeTab === "plan" && (
             <div className="flex items-center gap-1.5">
               {isDueForRefresh && (
                 <span className="rounded-full bg-warning/20 px-2 py-0.5 text-micro font-semibold text-warning">
-                  Due for refresh
+                  {t("plan.dueForRefresh")}
                 </span>
               )}
-              <span className="text-micro text-muted-foreground">
-                {generatedAgo === 0 ? "Generated today" : `Generated ${generatedAgo}d ago`}
-              </span>
+
             </div>
           )}
         </div>
 
-        {/* Tab bar */}
-        <div className="mb-3 flex gap-1 rounded-md bg-secondary p-1">
-          <button
-            onClick={() => setActiveTab("plan")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
-              activeTab === "plan"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground"
-            }`}
-          >
-            <Flag size={14} />
-            Training Plan
-          </button>
-          <button
-            onClick={() => setActiveTab("preferences")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
-              activeTab === "preferences"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground"
-            }`}
-          >
-            <Pencil size={14} />
-            Preferences
-          </button>
-        </div>
+        {/* Plan and Preferences only split once there is a plan. Before that
+            the preferences are the way in: set them, then the plan is made. */}
+        {aiPlan && (
+        <Segmented
+          className="mb-3"
+          label={t("plan.sectionTitle")}
+          options={[
+            ["plan", t("plan.tabPlan")],
+            ["preferences", t("plan.tabPreferences")],
+          ] as const}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
+        )}
 
         {/* Preferences tab */}
-        {activeTab === "preferences" && (
-          <AppCard>
+        {activeTab === "preferences" && aiPlan && (
+          <div>
             <PreferencesForm
               goalId={goal.id}
               initial={prefs}
               onSaved={(saved, meta) => {
                 setPrefs(saved)
-                setActiveTab("plan")
                 if (meta?.shouldRegenerate && meta.regenerateReason === "new_active_injury") {
+                  setActiveTab("plan")
                   // A brand-new active injury was logged — auto-regenerate the
                   // plan so the comeback + injury caps apply immediately.
                   handleGenerate("Auto-regenerated after a new active injury was logged.")
                 }
               }}
             />
-          </AppCard>
+          </div>
         )}
 
         {/* Training Plan tab */}
-        {activeTab === "plan" && (
+        {(activeTab === "plan" || !aiPlan) && (
         <>
 
         {/* Error */}
         {error && (
-          <div className="mb-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3">
-            <AlertCircle size={15} className="mt-0.5 shrink-0 text-destructive" />
-            <p className="text-label text-destructive">{error}</p>
+          <div className="mb-3" role="alert">
+            <PlanNotice tone="danger" icon={AlertCircle} title={error} />
           </div>
         )}
 
         {/* No plan yet */}
         {!planResolved && !isGenerating && (
-          <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText="Loading your plan…" />
+          <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText={t("gp.loading")} />
         )}
 
         {/* A block is built forward from today toward a race date, so a race
@@ -1637,12 +1759,12 @@ export function GoalDetailScreen({
             an enabled button whose only outcome was an error. Say why up
             front instead. */}
         {planResolved && !aiPlan && !isGenerating && past && (
-          <div className="flex flex-col items-center gap-3 surface px-6 py-8 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
-              <CalendarCheck size={24} className="text-muted-foreground" />
+          <div className="surface flex flex-col items-center gap-3 px-6 py-8 text-center">
+            <div className="flex size-16 items-center justify-center rounded-full bg-surface-sunken">
+              <CalendarCheck size={30} className="text-muted-foreground" />
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">{t("plan.raceIsPast")}</p>
+              <p className="text-lead font-extrabold text-card-foreground">{t("plan.raceIsPast")}</p>
               <p className="mt-1 text-label text-muted-foreground">
                 {t("plan.raceIsPastBody", {
                   name: goal.name,
@@ -1654,27 +1776,13 @@ export function GoalDetailScreen({
         )}
 
         {planResolved && !aiPlan && !isGenerating && !past && (
-          <div className="flex flex-col items-center gap-4 surface px-6 py-8 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
-              <Sparkles size={24} className="text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-card-foreground">{t("plan.generate")}</p>
-              <p className="mt-1 text-label text-muted-foreground">
-                {t("plan.generateBody", {
-                  weeks: prefs.block_weeks ?? 4,
-                  name: goal.name,
-                })}
-              </p>
-            </div>
-            <button
-              onClick={() => handleGenerate()}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80"
-            >
-              <Sparkles size={16} />
-              {t("plan.generateCta")}
-            </button>
-          </div>
+          <PreferencesForm
+            mode="wizard"
+            goalId={goal.id}
+            initial={prefs}
+            onSaved={(saved) => setPrefs(saved)}
+            onFinish={() => handleGenerate()}
+          />
         )}
 
         {/* Generating skeleton */}
@@ -1690,68 +1798,45 @@ export function GoalDetailScreen({
               than one that says it has.
             */}
             {aiPlan.archived_at && (
-              <div className="flex gap-2.5 rounded-lg bg-surface-sunken px-4 py-3.5 ring-1 ring-border">
-                <Archive size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-label font-medium text-foreground">{t("plan.archivedTitle")}</p>
-                  <p className="text-micro text-muted-foreground">
-                    {t("plan.archivedBody", {
-                      date: new Date(aiPlan.archived_at).toLocaleDateString(undefined, {
-                        day: "numeric",
-                        month: "long",
-                      }),
-                    })}
-                  </p>
-                </div>
-              </div>
+              <PlanNotice tone="quiet" icon={Archive} title={t("plan.archivedTitle")}>
+                {t("plan.archivedBody", { date: formatDate(aiPlan.archived_at) })}
+              </PlanNotice>
             )}
 
             {/* Block completion summary */}
             {isBlockExpired && blockCompletionStats && (
-              <div className="flex gap-2.5 rounded-lg bg-success/10 px-4 py-3.5 ring-1 ring-success/30">
-                <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-label font-medium text-foreground">Block complete</p>
-                  <p className="text-micro text-muted-foreground">
-                    {blockCompletionStats.weeks}w · {blockCompletionStats.totalKm} km · {blockCompletionStats.completedSessions}/{blockCompletionStats.totalSessions} sessions · Regenerate when ready
-                  </p>
-                </div>
-              </div>
+              <PlanNotice tone="done" icon={CheckCircle2} title={t("gp.blockComplete")}>
+                {t("gp.blockCompleteBody", {
+                  weeks: blockCompletionStats.weeks,
+                  km: blockCompletionStats.totalKm,
+                  done: blockCompletionStats.completedSessions,
+                  total: blockCompletionStats.totalSessions,
+                })}
+              </PlanNotice>
             )}
 
             {/* Skip-load spike warning */}
             {skipWarning && !isBlockExpired && (
-              <div className={`flex gap-2.5 rounded-lg px-4 py-3.5 ring-1 ${
-                skipWarning.severity === "danger"
-                  ? "bg-destructive/10 ring-destructive/30"
-                  : "bg-warning/10 ring-warning/30"
-              }`}>
-                <AlertCircle size={15} className={`mt-0.5 shrink-0 ${
-                  skipWarning.severity === "danger" ? "text-destructive" : "text-warning"
-                }`} />
-                <div className="flex flex-col gap-1">
-                  <p className="text-label font-medium text-foreground">
-                    {skipWarning.severity === "danger" ? "Unsafe volume jump" : "Volume spike ahead"}
-                  </p>
-                  <p className="text-micro text-muted-foreground">
-                    {skipWarning.actualKm === 0
-                      ? `You had a rest week, but next week plans ${skipWarning.nextPlannedKm} km. Consider regenerating your plan to ease back in safely.`
-                      : `Last week you ran ${skipWarning.actualKm} km. Next week\u2019s plan calls for ${skipWarning.nextPlannedKm} km (+${skipWarning.spikePct}%). A safe target would be ~${skipWarning.safeMaxKm} km. Consider adjusting your plan.`
-                    }
-                  </p>
-                </div>
-              </div>
+              <PlanNotice
+                tone={skipWarning.severity === "danger" ? "danger" : "caution"}
+                icon={AlertCircle}
+                title={skipWarning.severity === "danger" ? t("gp.spikeDanger") : t("gp.spikeWarn")}
+              >
+                {skipWarning.actualKm === 0
+                  ? t("gp.spikeRest", { next: skipWarning.nextPlannedKm })
+                  : t("gp.spikeBody", {
+                      actual: skipWarning.actualKm,
+                      next: skipWarning.nextPlannedKm,
+                      safe: skipWarning.safeMaxKm,
+                    })}
+              </PlanNotice>
             )}
 
             {/* Mid-block checkpoint banner */}
             {checkpoint?.adjustmentApplied && !isBlockExpired && (
-              <div className="flex gap-2.5 rounded-lg bg-primary/10 px-4 py-3.5 ring-1 ring-primary/30">
-                <Lightbulb size={15} className="mt-0.5 shrink-0 text-primary" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-label font-medium text-foreground">Mid-block plan adjusted</p>
-                  <p className="text-micro text-muted-foreground">{checkpoint.adjustmentNote}</p>
-                </div>
-              </div>
+              <PlanNotice tone="action" icon={Lightbulb} title={t("gp.checkpointApplied")}>
+                {checkpoint.adjustmentNote}
+              </PlanNotice>
             )}
 
             {/* Weekly blocks */}
@@ -1789,30 +1874,29 @@ export function GoalDetailScreen({
 
             {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
-              <CollapsibleSection title="Watch out" defaultOpen={false} variant="warning">
+              <CollapsibleSection title={t("gp.watchOut")} defaultOpen={false} variant="warning">
                 <p className="text-label text-foreground">{aiPlan.plan.watchOut}</p>
               </CollapsibleSection>
             )}
 
             {/* Pace source warning — only shown when pace targets are estimates */}
             {(paceSource === "historical" || paceSource === "none") && (
-              <div className="flex items-start gap-2 rounded-md bg-secondary px-3 py-2.5">
-                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" />
-                <p className="text-micro text-muted-foreground">
-                  {paceSource === "none"
-                    ? "Pace suggestions are rough estimates — complete a test run to get accurate, personalised targets."
-                    : "Pace suggestions are based on your training history. Complete a test run for more precise targets."}
-                </p>
-              </div>
+              <p className="flex items-start gap-2 px-1 text-micro font-semibold text-muted-foreground">
+                <AlertTriangle size={14} className="mt-px shrink-0 text-warning" aria-hidden />
+                {paceSource === "none" ? t("gp.paceNone") : t("gp.paceHistory")}
+              </p>
             )}
 
             {/* Adjust / Regenerate */}
-            <div className="flex flex-col gap-2 pt-1">
+            <div className="flex flex-col gap-3 pt-1">
               {(() => {
                 const checkpointPending = !!pendingCheckpoint?.isWayOff && !checkpoint?.adjustmentApplied
                 return (
                   <>
-                    <button
+                    <Button
+                      variant="secondary"
+                      block
+                      className={checkpointPending ? "border-warning/60 text-warning" : undefined}
                       onClick={() => {
                         if (checkpointPending) {
                           setShowCheckpointReview((v) => !v)
@@ -1822,81 +1906,65 @@ export function GoalDetailScreen({
                           setShowCheckpointReview(false)
                         }
                       }}
-                      className={
-                        "flex min-h-[44px] items-center justify-center gap-2 rounded-md px-4 text-label font-medium transition-colors active:bg-accent " +
-                        (checkpointPending
-                          ? "bg-warning/10 text-warning ring-1 ring-warning/40"
-                          : "bg-secondary text-secondary-foreground")
-                      }
                     >
-                      {checkpointPending && (
-                        <span className="relative flex h-2 w-2 shrink-0">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-warning" />
+                      {checkpointPending && !(showAdjustForm || showCheckpointReview) && (
+                        <span className="relative flex size-2 shrink-0">
+                          <span className="absolute inline-flex size-full animate-ping rounded-full bg-warning opacity-75" />
+                          <span className="relative inline-flex size-2 rounded-full bg-warning" />
                         </span>
                       )}
-                      {showAdjustForm || showCheckpointReview
-                        ? "Cancel"
-                        : checkpointPending
-                          ? "Review mid-block adjustment"
-                          : "Adjust plan"}
-                    </button>
+                      {showAdjustForm || showCheckpointReview ? (
+                        t("gp.cancel")
+                      ) : checkpointPending ? (
+                        t("gp.reviewCheckpoint")
+                      ) : (
+                        <>
+                          <Pencil size={16} />
+                          {t("gp.adjust")}
+                        </>
+                      )}
+                    </Button>
 
                     {showCheckpointReview && pendingCheckpoint && (
-                      <AppCard className="flex flex-col gap-3">
-                        <div className="flex gap-2.5">
-                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
-                          <div className="flex flex-col gap-1">
-                            <p className="text-label font-medium text-foreground">Plan adjustment available</p>
-                            <p className="text-micro text-muted-foreground">
-                              {`After ${pendingCheckpoint.completedWeeks.length} completed ${pendingCheckpoint.completedWeeks.length === 1 ? "week" : "weeks"} at ${Math.round(pendingCheckpoint.overallAdherencePct)}% of planned volume, the remaining weeks can be scaled ${pendingCheckpoint.direction === "under" ? "down" : "up"} to better match your actual training.`}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleApplyCheckpoint}
-                          disabled={isApplyingCheckpoint}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
-                        >
-                          {isApplyingCheckpoint ? "Applying…" : "Apply adjustment"}
-                        </button>
-                      </AppCard>
+                      <div className="pop-in flex flex-col gap-3">
+                        <PlanNotice tone="caution" icon={AlertTriangle} title={t("gp.checkpointTitle")}>
+                          {t(
+                            pendingCheckpoint.direction === "under"
+                              ? "gp.checkpointBodyDown"
+                              : "gp.checkpointBodyUp",
+                            { pct: Math.round(pendingCheckpoint.overallAdherencePct) },
+                          )}
+                        </PlanNotice>
+                        <Button block onClick={handleApplyCheckpoint} loading={isApplyingCheckpoint}>
+                          {isApplyingCheckpoint ? t("gp.applying") : t("gp.apply")}
+                        </Button>
+                      </div>
                     )}
                   </>
                 )
               })()}
 
               {showAdjustForm && (
-                <AppCard className="flex flex-col gap-2">
-                  <p className="text-micro text-muted-foreground">
-                    Tell Claude what to change — e.g. &ldquo;fewer runs but longer&rdquo;,
-                    &ldquo;no tempo work yet&rdquo;, &ldquo;I can only run at weekends&rdquo;
-                  </p>
+                <div className="surface pop-in flex flex-col gap-3 p-4">
+                  <p className="text-label text-muted-foreground">{t("gp.adjustHint")}</p>
                   <textarea
                     value={adjustNote}
                     onChange={(e) => setAdjustNote(e.target.value)}
-                    placeholder="What would you like to change?"
-                    className="w-full resize-none rounded-md bg-secondary px-4 py-3 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder={t("gp.adjustPlaceholder")}
+                    className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     rows={3}
                   />
-                  <button
-                    onClick={() => handleGenerate(adjustNote)}
-                    disabled={!adjustNote.trim()}
-                    className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-primary px-4 text-label font-semibold text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-40"
-                  >
-                    <Sparkles size={16} />
-                    Regenerate with changes
-                  </button>
-                </AppCard>
+                  <Button block onClick={() => handleGenerate(adjustNote)} disabled={!adjustNote.trim()}>
+                    <Sparkles size={18} />
+                    {t("gp.regenerateWith")}
+                  </Button>
+                </div>
               )}
 
-              <button
-                onClick={() => handleGenerate()}
-                className="flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-secondary px-4 text-label font-medium text-muted-foreground transition-colors active:bg-accent"
-              >
-                <RefreshCw size={14} />
-                Regenerate (fresh start)
-              </button>
+              <Button variant="ghost" block onClick={() => handleGenerate()} className="text-muted-foreground">
+                <RefreshCw size={16} />
+                {t("gp.regenerateFresh")}
+              </Button>
             </div>
 
             {/* Previous plans */}
@@ -1904,23 +1972,23 @@ export function GoalDetailScreen({
               <div className="pt-2">
                 <button
                   onClick={() => setShowPreviousPlans((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-md bg-secondary px-4 py-3 text-label transition-colors active:bg-accent"
+                  aria-expanded={showPreviousPlans}
+                  className="press flex w-full items-center justify-between rounded-md bg-surface-sunken px-4 py-3"
                 >
-                  <span className="font-medium text-foreground">
-                    Previous plans ({aiPlan.previous_plans.length})
+                  <span className="text-label font-extrabold text-foreground">
+                    {t("gp.previousPlans", { count: aiPlan.previous_plans.length })}
                   </span>
-                  {showPreviousPlans ? (
-                    <ChevronUp size={16} className="text-muted-foreground" />
-                  ) : (
-                    <ChevronDown size={16} className="text-muted-foreground" />
-                  )}
+                  <ChevronDown
+                    size={18}
+                    className={`text-muted-foreground transition-transform ${showPreviousPlans ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {showPreviousPlans && (
                   <div className="mt-2 flex flex-col gap-2">
                     {aiPlan.previous_plans.map((prev, i) => {
                       const genDate = new Date(prev.generated_at)
-                      const label = genDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      const label = formatDate(genDate.toISOString())
                       // Support both new format (prev.weeks) and legacy format (prev.plan.weeks)
                       const weeks = prev.weeks ?? prev.plan?.weeks ?? []
                       const totalKm = weeks.reduce((s, w) => s + w.targetKm, 0)
@@ -1934,15 +2002,17 @@ export function GoalDetailScreen({
                           className="flex flex-col gap-1.5 rounded-md bg-surface-sunken px-4 py-3"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-label font-medium text-card-foreground">{label}</span>
+                            <span className="text-label font-bold text-card-foreground">{label}</span>
                             <span className="text-micro text-muted-foreground">
-                              {weeks.length}w · {totalKm} km
-                              {completedSessions !== null ? ` · ${completedSessions}/${totalSessions} sessions` : ""}
-                              {prev.adjust_note ? " · adjusted" : ""}
+                              {t("gp.weeksKm", { weeks: weeks.length, km: totalKm })}
+                              {completedSessions !== null
+                                ? ` · ${t("gp.sessionsShort", { done: completedSessions, total: totalSessions })}`
+                                : ""}
+                              {prev.adjust_note ? ` · ${t("gp.adjusted")}` : ""}
                             </span>
                           </div>
                           {prev.summary && (
-                            <p className="text-micro text-muted-foreground">{prev.summary}</p>
+                            <p className="line-clamp-2 text-micro text-muted-foreground">{prev.summary}</p>
                           )}
                         </div>
                       )
@@ -1956,6 +2026,16 @@ export function GoalDetailScreen({
         </>
         )}
       </section>
+
+      {onOpenGroup && (
+        <SharedGoalEntry
+          goalId={goal.id}
+          group={sharedGoal ?? null}
+          finished={past}
+          onOpen={onOpenGroup}
+          onCreated={onSharedGoalChange}
+        />
+      )}
       </div>
 
       {/*

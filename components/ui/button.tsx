@@ -22,7 +22,7 @@ import { TrackLoader } from '@/components/ui/track-mark'
 const buttonVariants = cva(
   [
     'press inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap',
-    'rounded-md font-semibold',
+    'rounded-md font-extrabold tracking-wide',
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     'disabled:pointer-events-none disabled:opacity-45',
     'aria-invalid:ring-2 aria-invalid:ring-destructive/50',
@@ -30,20 +30,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/85',
+        default:
+          'chunky uppercase bg-primary text-primary-foreground [--chunk:var(--primary-edge)] hover:brightness-105',
         secondary:
-          'bg-surface-sunken text-secondary-foreground hover:bg-accent active:bg-accent',
+          'chunky uppercase border-2 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken',
         ghost: 'text-foreground hover:bg-surface-sunken active:bg-accent',
         outline:
-          'border border-border bg-transparent text-foreground hover:bg-surface-sunken active:bg-accent',
+          'chunky uppercase border-2 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken',
         danger:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/85',
+          'chunky uppercase bg-destructive text-destructive-foreground [--chunk:var(--destructive-edge)] hover:brightness-105',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
         sm: 'h-9 px-3 text-micro',
-        md: 'h-11 px-4 text-label',
-        lg: 'h-12 px-5 text-body',
+        md: 'h-12 px-5 text-label',
+        lg: 'h-14 px-6 text-body',
         icon: 'size-11',
         'icon-sm': 'size-9',
       },

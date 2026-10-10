@@ -9,6 +9,7 @@ import {
   TrendingDown,
   Zap,
   X,
+  ChevronDown,
 } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import {
@@ -329,17 +330,36 @@ export function TrainingLoadIndicator({
   return (
     <AppCard padding="sm" className="p-0">
       <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-3.5">
-        <Pill tone={cfg.tone} icon={<Icon size={11} />}>
+        <span className="text-lead font-extrabold text-card-foreground">
+          {t("loadIndicator.trainingLoad")}
+        </span>
+        <Pill tone={cfg.tone} icon={<Icon size={14} />} className="px-3 py-1 text-label">
           {cfg.label}
         </Pill>
-        {showFitness && latest && (
-          <span className="text-micro text-muted-foreground">
-            {t("loadIndicator.fitness")} {fitnessTrend}{" "}
-            <span className="measure font-medium text-foreground">{latest.ctl.toFixed(1)}</span>
-          </span>
+      </div>
+
+      <div className="px-4 pb-3.5">
+        <Meter
+          value={loadPct}
+          tone={cfg.meterTone}
+          label={t("loadIndicator.trainingLoad")}
+          valueText={`${ratioText} — ${cfg.label}`}
+          zone={{ from: BAND_FROM_PCT, to: BAND_TO_PCT }}
+        />
+        {adviceKey && (
+          <p className="mt-2.5 text-label font-semibold leading-snug text-muted-foreground">
+            {t(adviceKey)}
+          </p>
         )}
       </div>
 
+      {/* Everything past the verdict is a tap away: the numbers behind it are
+          for the runner who wants them, not for every morning. */}
+      <details className="group border-t border-border">
+        <summary className="press flex cursor-pointer list-none items-center justify-between px-4 py-3 text-label font-extrabold uppercase tracking-wide text-primary [&::-webkit-details-marker]:hidden">
+          {t("loadIndicator.details")}
+          <ChevronDown size={18} className="transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
       <div className="px-4 pb-3.5">
         <div className="mb-1.5 flex items-baseline justify-between gap-2 text-micro">
           <span className="flex items-center gap-1 text-muted-foreground">
@@ -348,13 +368,12 @@ export function TrainingLoadIndicator({
           </span>
           <span className="measure shrink-0 font-medium text-foreground">{ratioText}</span>
         </div>
-        <Meter
-          value={loadPct}
-          tone={cfg.meterTone}
-          label={t("loadIndicator.trainingLoad")}
-          valueText={`${ratioText} — ${cfg.label}`}
-          zone={{ from: BAND_FROM_PCT, to: BAND_TO_PCT }}
-        />
+        {showFitness && latest && (
+          <p className="mb-1.5 text-micro text-muted-foreground">
+            {t("loadIndicator.fitness")} {fitnessTrend}{" "}
+            <span className="measure font-medium text-foreground">{latest.ctl.toFixed(1)}</span>
+          </p>
+        )}
         {/* Absolute rather than space-between: the middle label names the band
             drawn on the track above it, so it has to sit over the band. The
             first span is an in-flow spacer that gives the row the height of one
@@ -371,9 +390,6 @@ export function TrainingLoadIndicator({
           </span>
           <span className="absolute right-0 top-0">{t("loadIndicator.scaleHigh")}</span>
         </div>
-        {adviceKey && (
-          <p className="mt-2 text-micro leading-relaxed text-muted-foreground">{t(adviceKey)}</p>
-        )}
       </div>
 
       <dl className="grid grid-cols-2 border-t border-border">
@@ -408,6 +424,7 @@ export function TrainingLoadIndicator({
           </dd>
         </div>
       </dl>
+      </details>
 
       {warningList}
     </AppCard>

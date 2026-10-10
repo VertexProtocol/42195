@@ -109,7 +109,7 @@ describe("AppShell — Plan navigation", () => {
     fireEvent.click(screen.getByRole("tab", { name: /today/i }))
     await waitFor(() => expect(screen.getByText("HOME")).toBeTruthy())
 
-    fireEvent.click(screen.getByRole("tab", { name: /plan/i }))
+    fireEvent.click(screen.getByRole("tab", { name: /goals/i }))
     await waitFor(() => expect(screen.getByText("PLAN LIST")).toBeTruthy())
     // The group the runner walked out of is not still sitting under the list.
     expect(screen.queryByText("GROUP")).toBeNull()

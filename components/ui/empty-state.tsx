@@ -3,9 +3,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * EmptyState — teaches the surface rather than announcing that it is empty.
- *
- * No icon tile above a heading: the icon sits inline with the title at the
- * same optical weight, and the copy says what to do next.
+ * A centred tile: a round icon badge, a short title, one line, one button.
  */
 
 interface EmptyStateProps extends React.ComponentProps<'div'> {
@@ -26,21 +24,23 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-start gap-2 rounded-lg border border-dashed border-border px-4 py-5',
+        'surface flex flex-col items-center gap-2 px-5 py-7 text-center',
         className,
       )}
       {...props}
     >
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-muted-foreground">{icon}</span>}
-        <p className="text-body font-semibold text-foreground">{title}</p>
-      </div>
+      {icon && (
+        <span className="flex size-14 items-center justify-center rounded-full bg-primary/12 text-primary [&_svg]:size-7">
+          {icon}
+        </span>
+      )}
+      <p className="text-lead font-extrabold text-foreground">{title}</p>
       {body && (
-        <p className="max-w-[46ch] text-label leading-relaxed text-muted-foreground">
+        <p className="max-w-[34ch] text-label leading-relaxed text-muted-foreground">
           {body}
         </p>
       )}
-      {action && <div className="mt-1">{action}</div>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }

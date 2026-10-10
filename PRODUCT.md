@@ -20,8 +20,10 @@ One runner, on a phone, in two moments:
 - **After a run**, checking that what they just did landed where they expected.
 
 They are amateur runners training for a specific event, comfortable with pace,
-splits and heart-rate zones. They already use Strava. They are not looking for
-motivation graphics; they are looking for a number and a decision.
+splits and heart-rate zones. They already use Strava. They want a number and a
+decision, with as little text around it as possible — and a small reward for
+showing up: a weekly streak, badges, and a moment of celebration when a week is
+won.
 
 A runner can share a race with other runners, and that is the only place anyone
 else appears. It is an addition to a goal, never a layer over the app: the
@@ -47,14 +49,21 @@ the runner and the number they came for.
 
 | Surface | Job |
 |---|---|
-| Today | The race countdown, the next session of the plan, training load, the week so far, the last runs. |
-| Activities | The log. Search, filter, open one. |
-| Plan | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
-| Insights | Records, race predictions, benchmarks, calendar, and the AI coach. |
+| Today | The race countdown, the next run of the plan, training load, the week so far, the weekly targets. The log lives under Runs, not here. |
+| Runs | Two halves behind one switch: **Log** (search, filter, open one; grouped by month, ten at a time) and **Insights** (the streak and totals, then a board of tiles — coach, records, predictions, calendar, pace calculator, badges, test runs — each opening on its own). |
+| Goals | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. A goal without a plan opens on its preferences, one question at a time, and the plan is made at the end of them. |
 | Profile | Account, Strava connection, HR calibration, appearance, language. |
 
-Profile is reached from the app bar rather than the tab bar: it is visited
-occasionally, and it is not a peer of the three daily destinations.
+Three tabs, no more. Profile is reached from the avatar in the app bar; the
+streak flame sits beside it on every main screen.
+
+## Streaks and badges
+
+Derived, never stored (`lib/gamification.ts`). A week is won when every weekly
+goal that applied to it was met; a runner with no weekly goals wins a week by
+running in it. Badges mark distance milestones (5 km to marathon), lifetime
+totals and streak lengths. Winning the week or earning a badge shows one
+full-screen celebration, once.
 
 ## Language
 
@@ -74,7 +83,10 @@ whether an address is registered.
   This is the one place the app's palette does not apply.
 - **Measurements are metric**: kilometres, min/km pace, metres of elevation, bpm.
 - Mobile-first, one column, max 28rem (`max-w-md`) centred. There is no desktop
-  layout; the phone layout is the product.
+  layout; the phone layout is the product, on iOS and Android alike: 360px is
+  the narrowest width it is checked at, controls take no double-tap delay or
+  long-press selection, the on-screen keyboard resizes the page, and Android's
+  pull-to-reload is held off in favour of the app's own pull-to-sync.
 - Installable as a PWA, so the chrome must respect safe-area insets top and
   bottom.
 - AI features are rate-limited and degrade to a stated error, never to silence.

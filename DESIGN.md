@@ -92,26 +92,30 @@ tracking (−0.026em at `h1`); the tracking floor is −0.04em.
 Form inputs stay at 16px (`text-base`) so iOS does not zoom the viewport on
 focus.
 
+## Chunk
+
+The app reads like a game board, not a report: big rounded tiles, heavy type,
+one idea per card, as little prose as possible. Every card and every primary
+button stands on a solid lower edge (`--chunk-edge`, `--primary-edge`); a
+button is pushed down onto that edge when pressed (`.chunky`). Buttons are
+uppercase and extra-bold. Explanations that are not needed every day sit behind
+a "Details" disclosure rather than on the card.
+
 ## Shape and elevation
 
-Radii: cards `0.875rem` (14px), controls `0.625rem` (10px), `radius-sm` 6px for
+Radii: cards `1.25rem` (20px), controls `0.875rem` (14px), `radius-sm` 6px for
 focus rings and inline targets. Pills (`rounded-full`) are for small controls
 only — chips, status markers, segmented toggles.
 
-**One elevation system, declared once.** A surface gets a shadow *or* a border,
-never both:
-
-- Light mode: `.surface` casts `--elevation-1` (offset + soft blur, tinted from
-  the ground's hue). No border.
-- Dark mode: shadows read as nothing, so `.surface` swaps to a lit top edge plus
-  a 1px hairline (`--elevation-edge`) and the shadow goes to `none`.
+**One elevation system, declared once.** `.surface` is a chalk tile with a 2px
+border and a 4px lower edge in `--chunk-edge`, in both themes. No soft shadow.
 
 Cards never nest. A group inside a card is expressed with a divider, a heading,
 or a sunken well (`AppCard variant="quiet"` / `bg-surface-sunken`) — never a
 second card.
 
-State on a card is a 1px tone ring (`ring-primary/40`, `ring-success/40`,
-`ring-warning/40`), which reads as a state hint rather than a second border.
+State on a card tints its border (`border-primary/45`, `border-success/45`,
+`border-warning/45`).
 
 ## Space and rhythm
 

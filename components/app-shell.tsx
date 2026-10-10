@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useSyncExternalStore, lazy, Suspense } from "react"
+import { useState, useCallback, useEffect, useMemo, useSyncExternalStore, lazy, Suspense } from "react"
 import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
 import { AppBar } from "@/components/app-bar"
@@ -15,6 +15,10 @@ import { useAppData, type InitialData } from "@/hooks/use-app-data"
 import { useGetStarted } from "@/hooks/use-get-started"
 import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/types"
 import type { WeeklySuggestion } from "@/lib/weekly-suggestions"
+import { computeStreak, computeBadges } from "@/lib/gamification"
+import { weekStartStr } from "@/lib/week"
+import { StreakChip, CelebrationOverlay, useCelebration } from "@/components/gamification"
+import { Segmented } from "@/components/ui/segmented"
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
 
@@ -58,6 +62,33 @@ function ScreenFallback() {
       <div className="h-24 animate-pulse rounded-lg bg-surface-sunken" />
       <div className="h-16 animate-pulse rounded-lg bg-surface-sunken" />
       <div className="h-16 animate-pulse rounded-lg bg-surface-sunken" />
+    </div>
+  )
+}
+
+/**
+ * Log and Insights, as two halves of one tab. A pill switch rather than two
+ * destinations in the tab bar: they are the same runs, looked at two ways.
+ */
+function RunsSwitch({
+  active,
+  onChange,
+}: {
+  active: "activities" | "insights"
+  onChange: (tab: "activities" | "insights") => void
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="px-4 pt-1">
+      <Segmented
+        label={t("tab.activities")}
+        options={[
+          ["activities", t("tab.log")],
+          ["insights", t("tab.insights")],
+        ] as const}
+        value={active}
+        onChange={onChange}
+      />
     </div>
   )
 }
@@ -145,6 +176,21 @@ export function AppShell({ initialData }: AppShellProps) {
   // is written to the account. Without the distinction, an accidental tap on
   // the X would be the last the runner ever saw of the setup list.
   const [guideClosed, setGuideClosed] = useState(false)
+
+  const thisWeek = weekStartStr()
+  const streak = useMemo(
+    () => computeStreak(data.activities, data.weeklyGoals),
+    [data.activities, data.weeklyGoals],
+  )
+  const badges = useMemo(() => computeBadges(data.activities, streak), [data.activities, streak])
+  const celebration = useCelebration(
+    !data.isLoading,
+    data.user?.id,
+    thisWeek,
+    streak,
+    badges,
+    data.weeklyGoals.length > 0,
+  )
 
 // ----- URL navigation helpers -----
   // Uses pushState directly to avoid Next.js server round-trips
@@ -318,7 +364,7 @@ export function AppShell({ initialData }: AppShellProps) {
     return (
       <div className="mx-auto min-h-dvh max-w-md bg-background">
         <AppBar title="42195" brand subtitle={t("common.loading")} />
-        <main className="pb-24">
+        <main style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}>
           <ScreenFallback />
         </main>
       </div>
@@ -333,28 +379,13 @@ export function AppShell({ initialData }: AppShellProps) {
   )
 
   const barTitle =
-    activeTab === "activities"
+    activeTab === "activities" || activeTab === "insights"
       ? t("activities.title")
       : activeTab === "goals"
         ? t("goals.title")
-        : activeTab === "insights"
-          ? t("insights.title")
-          : activeTab === "profile"
-            ? t("profile.title")
-            : "42195"
-
-  const barSubtitle =
-    activeTab === "home"
-      ? t("app.tagline")
-      : activeTab === "activities"
-        ? `${data.activities.length} ${
-            data.activities.length === 1 ? t("activities.activity") : t("activities.activities")
-          }`
-        : activeTab === "goals"
-          ? t("goals.subtitle")
-          : activeTab === "insights"
-            ? t("insights.subtitle")
-            : undefined
+        : activeTab === "profile"
+          ? t("profile.title")
+          : "42195"
 
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-background">
@@ -365,7 +396,7 @@ export function AppShell({ initialData }: AppShellProps) {
         <AppBar
           title={barTitle}
           brand={activeTab === "home"}
-          subtitle={barSubtitle}
+          action={activeTab === "profile" ? undefined : <StreakChip streak={streak} />}
           syncStatus={data.syncStatus}
           stravaConnected={data.stravaConnected}
           user={data.user}
@@ -375,28 +406,30 @@ export function AppShell({ initialData }: AppShellProps) {
       )}
 
       {/* Screen content */}
-      <main className="relative pb-24">
+      {/* Clear of the tab bar, and of the home indicator under it. */}
+      <main className="relative" style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}>
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
-            recentActivities={data.activities.slice(0, 5)}
             warnings={data.warnings}
             planBadges={data.planBadges}
             currentPlanWeeks={data.currentPlanWeeks}
             planSessionStatuses={data.planSessionStatuses}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
-            onViewActivities={() => handleTabChange("activities")}
             onViewGoal={(goal) => { navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id }) }}
             onViewGoals={() => handleTabChange("goals")}
             onViewWeeklyGoals={handleViewWeeklyGoals}
             onViewInsights={() => handleTabChange("insights")}
-            onSelectActivity={(activity) => { navigate({ ...STACKED_VIEWS, tab: "activities", activity: activity.id }) }}
             onUnpinGoal={data.toggleStarGoal}
           />
+        )}
+
+        {(activeTab === "insights" || (activeTab === "activities" && !selectedActivity)) && (
+          <RunsSwitch active={activeTab === "insights" ? "insights" : "activities"} onChange={handleTabChange} />
         )}
 
         {activeTab === "activities" && !selectedActivity && (
@@ -486,6 +519,8 @@ export function AppShell({ initialData }: AppShellProps) {
             <Suspense fallback={<ScreenFallback />}>
               <InsightsScreen
                 activities={data.activities}
+                streak={streak}
+                badges={badges}
                 goals={data.goals}
                 onViewGoal={(goal) => navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id })}
                 onSelectActivity={(activity) =>
@@ -584,6 +619,12 @@ export function AppShell({ initialData }: AppShellProps) {
           />
         </Suspense>
       )}
+
+      <CelebrationOverlay
+        celebration={celebration.current}
+        streak={streak}
+        onClose={celebration.dismiss}
+      />
 
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />

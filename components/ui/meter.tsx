@@ -61,7 +61,7 @@ export function Meter({
       aria-valuetext={valueText}
       className={cn(
         'relative w-full overflow-hidden rounded-full bg-surface-sunken',
-        size === 'sm' ? 'h-1.5' : 'h-2',
+        size === 'sm' ? 'h-2' : 'h-3',
         className,
       )}
       {...props}
@@ -75,13 +75,18 @@ export function Meter({
       )}
       {/* Scaled rather than resized: animating width forces layout on every
           frame, and the track already clips the fill to a rounded shape. */}
-      <div
-        className={cn('relative h-full w-full origin-left', toneMap[tone])}
-        style={{
-          transform: `scaleX(${pct / 100})`,
-          transition: 'transform var(--dur-view) var(--ease-out)',
-        }}
-      />
+      {/* The wrapper fills in from the start line once, on mount; the fill
+          inside it then follows the value. Two transforms, never one fighting
+          the other. */}
+      <div className="grow-x h-full w-full">
+        <div
+          className={cn('relative h-full w-full origin-left', toneMap[tone])}
+          style={{
+            transform: `scaleX(${pct / 100})`,
+            transition: 'transform var(--dur-view) var(--ease-out)',
+          }}
+        />
+      </div>
       {/* Edges drawn ON TOP of the fill. The shaded band alone disappears
           underneath it exactly when it matters most: a value past the band
           covers the whole thing, leaving no way to see what it was past. */}

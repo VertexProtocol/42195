@@ -66,7 +66,7 @@ export function BottomSheet({
 
           <div className="flex items-start gap-3 px-5 pb-3 pt-1">
             <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="text-lead font-semibold text-card-foreground">
+              <DialogPrimitive.Title className="text-title font-extrabold text-card-foreground">
                 {title}
               </DialogPrimitive.Title>
               {description ? (

@@ -10,7 +10,13 @@ import {
   FlaskConical,
   ArrowLeft,
   LineChart,
+  Timer,
+  CalendarDays,
+  Calculator,
+  Medal,
 } from "lucide-react"
+import type { StreakSummary, Badge } from "@/lib/gamification"
+import { StreakCard, BadgeGrid } from "@/components/gamification"
 import { TrackLoader } from "@/components/ui/track-mark"
 import {
   formatTargetTime,
@@ -24,7 +30,6 @@ import { computePredictionAdjustment } from "@/lib/test-run-benchmark"
 import { useI18n } from "@/lib/i18n"
 import type { Activity, Goal, TestRun } from "@/lib/types"
 import { TEST_RUN_TYPES } from "@/lib/types"
-import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
@@ -53,9 +58,20 @@ interface InsightsScreenProps {
   goals: Goal[]
   onViewGoal?: (goal: Goal) => void
   onSelectActivity?: (activity: Activity) => void
+  /** The streak and badges, worked out once by the app shell. */
+  streak?: StreakSummary
+  badges?: Badge[]
 }
 
-type InsightsTab = "overview" | "coach"
+type InsightsTab =
+  | "overview"
+  | "coach"
+  | "records"
+  | "predictions"
+  | "pace"
+  | "tests"
+  | "calendar"
+  | "badges"
 type StatsPeriod = "30d" | "year" | "last_year" | "all"
 
 export function InsightsScreen({
@@ -63,6 +79,8 @@ export function InsightsScreen({
   goals,
   onViewGoal,
   onSelectActivity,
+  streak,
+  badges,
 }: InsightsScreenProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
@@ -263,7 +281,15 @@ export function InsightsScreen({
   // ── Coach ────────────────────────────────────────────────────────────────
   if (activeTab === "coach") {
     return (
-      <div className="flex flex-col" style={{ height: "calc(100dvh - 5.5rem)" }}>
+      // The conversation fills what is left between the Runs switch and the
+      // tab bar, so the input sits just above the tab bar on any phone.
+      <div
+        className="flex flex-col"
+        style={{
+          height:
+            "calc(100dvh - 13.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        }}
+      >
         <header className="flex items-center gap-2 px-4 pb-2 screen-body">
           <Button
             variant="ghost"
@@ -372,57 +398,40 @@ export function InsightsScreen({
   // ── Overview ─────────────────────────────────────────────────────────────
   const hasAnyInsight = personalRecords.length > 0 || racePredictions.predictions.length > 0
 
-  return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
-      {/* The coach is the primary action on this screen, so it leads. */}
-      <button
-        onClick={() => setActiveTab("coach")}
-        className="press surface flex w-full items-center gap-3 p-4 text-left"
-      >
-        <Sparkles size={20} className="shrink-0 text-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-body font-semibold text-card-foreground">{t("insights.askCoach")}</p>
-          <p className="mt-0.5 text-micro text-muted-foreground">{t("insights.coachDesc")}</p>
-        </div>
-        <ChevronRight size={17} className="shrink-0 text-muted-foreground" aria-hidden />
-      </button>
+  const openTool = (tool: InsightsTab) => {
+    setActiveTab(tool)
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 })
+  }
 
-      {activities.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("stats.section")}
-            action={
-              <div className="flex gap-0.5" role="group" aria-label={t("stats.section")}>
-                {STATS_PERIODS.map(({ key, labelKey }) => (
-                  <button
-                    key={key}
-                    onClick={() => setStatsPeriod(key)}
-                    aria-pressed={statsPeriod === key}
-                    className={`press rounded-full px-2 py-1 text-micro font-semibold ${
-                      statsPeriod === key
-                        ? "bg-primary/12 text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t(labelKey)}
-                  </button>
-                ))}
-              </div>
-            }
-          />
-          <AppCard>
-            <StatGroup>
-              <Stat label={t("stats.distance")} value={totalKm.toFixed(0)} unit="km" />
-              <Stat label={t("stats.longestLabel")} value={longestRunKm.toFixed(1)} unit="km" />
-              <Stat label={t("stats.runsLabel")} value={recentRunCount} />
-            </StatGroup>
-          </AppCard>
-        </Section>
-      )}
+  // One tool at a time. The overview used to be every tool stacked on one
+  // page; now it is a board of tiles and each opens on its own.
+  if (activeTab !== "overview") {
+    const titles: Record<Exclude<InsightsTab, "overview" | "coach">, string> = {
+      records: t("insights.personalRecords"),
+      predictions: t("insights.racePredictions"),
+      pace: t("paceCalc.section"),
+      tests: t("testRun.benchmarks"),
+      calendar: t("calendar.section"),
+      badges: t("badges.title"),
+    }
+    return (
+      <div className="flex flex-col gap-4 px-4 pb-8 screen-body">
+        <header className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => openTool("overview")}
+            aria-label={t("common.back")}
+          >
+            <ArrowLeft size={20} />
+          </Button>
+          <h2 className="min-w-0 flex-1 truncate text-title font-extrabold text-foreground">
+            {titles[activeTab]}
+          </h2>
+        </header>
 
-      {personalRecords.length > 0 && (
-        <Section>
-          <SectionHeader title={t("insights.personalRecords")} />
+        <div className="stagger flex flex-col gap-3">
+          {activeTab === "records" && (
           <AppCard variant="rows">
             {personalRecords.map((pr) => {
               const row = (
@@ -463,15 +472,10 @@ export function InsightsScreen({
               )
             })}
           </AppCard>
-        </Section>
-      )}
+          )}
 
-      {racePredictions.predictions.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("insights.racePredictions")}
-            action={<InfoTooltip content={t("insights.predictionsHelp")} />}
-          />
+          {activeTab === "predictions" && (
+            <>
           <AppCard variant="rows">
             {racePredictions.predictions.map((pred) => (
               <CardRow key={pred.distance_label} className="flex items-baseline gap-3">
@@ -494,24 +498,15 @@ export function InsightsScreen({
               {t("insights.on")} {formatDateShort(racePredictions.referenceActivity.date)}
             </p>
           )}
-        </Section>
-      )}
+            </>
+          )}
 
-      <Section>
-        <SectionHeader title={t("paceCalc.section")} />
-        <PaceCalculatorCard goals={goals} />
-      </Section>
+          {activeTab === "pace" && <PaceCalculatorCard goals={goals} />}
 
-      <Section>
-        <SectionHeader title={t("testRun.benchmarks")} />
+          {activeTab === "tests" && (
+            <div>
         {testRunsLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-surface-sunken" aria-hidden />
-        ) : testRuns.length === 0 ? (
-          <EmptyState
-            icon={<FlaskConical size={18} />}
-            title={t("testRun.noBenchmarksTitle")}
-            body={t("testRun.noBenchmarks")}
-          />
         ) : (
           <div className="flex flex-col gap-3">
             {(() => {
@@ -619,18 +614,136 @@ export function InsightsScreen({
             )}
           </div>
         )}
-      </Section>
+            </div>
+          )}
 
-      <Section>
-        <SectionHeader title={t("calendar.section")} />
-        <TrainingCalendarCard
-          activities={runActivities}
-          goals={goals}
-          testRuns={testRuns}
-          onViewGoal={onViewGoal}
-          onSelectActivity={onSelectActivity}
+          {activeTab === "calendar" && (
+            <TrainingCalendarCard
+              activities={runActivities}
+              goals={goals}
+              testRuns={testRuns}
+              onViewGoal={onViewGoal}
+              onSelectActivity={onSelectActivity}
+            />
+          )}
+
+          {activeTab === "badges" && badges && (
+            <div className="surface p-4">
+              <BadgeGrid badges={badges} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const bestRecord = personalRecords[0]
+  const lastPrediction = racePredictions.predictions[racePredictions.predictions.length - 1]
+  const monthKm = runActivities
+    .filter((a) => {
+      const d = new Date(a.date)
+      const now = new Date()
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+    })
+    .reduce((sum, a) => sum + Number(a.distance_km), 0)
+
+  return (
+    <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
+      {streak && <StreakCard streak={streak} />}
+
+      {activities.length > 0 && (
+        <Section>
+          <SectionHeader
+            title={t("stats.section")}
+            action={
+              <div className="flex gap-0.5" role="group" aria-label={t("stats.section")}>
+                {STATS_PERIODS.map(({ key, labelKey }) => (
+                  <button
+                    key={key}
+                    onClick={() => setStatsPeriod(key)}
+                    aria-pressed={statsPeriod === key}
+                    className={`press rounded-full px-2 py-1 text-micro font-semibold ${
+                      statsPeriod === key
+                        ? "bg-primary/12 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <AppCard>
+            <StatGroup>
+              <Stat label={t("stats.distance")} value={totalKm.toFixed(0)} unit="km" />
+              <Stat label={t("stats.longestLabel")} value={longestRunKm.toFixed(1)} unit="km" />
+              <Stat label={t("stats.runsLabel")} value={recentRunCount} />
+            </StatGroup>
+          </AppCard>
+        </Section>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <ToolTile
+          wide
+          lead
+          icon={Sparkles}
+          title={t("insights.askCoach")}
+          detail={t("insights.coachDesc")}
+          onClick={() => openTool("coach")}
         />
-      </Section>
+        {bestRecord && (
+          <ToolTile
+            icon={Trophy}
+            title={t("insights.personalRecords")}
+            value={`${bestRecord.distance_label} ${formatTargetTime(bestRecord.time_seconds)}`}
+            onClick={() => openTool("records")}
+          />
+        )}
+        {lastPrediction && (
+          <ToolTile
+            icon={Timer}
+            title={t("insights.racePredictions")}
+            value={`${lastPrediction.distance_label} ${formatTargetTime(lastPrediction.predicted_seconds)}`}
+            onClick={() => openTool("predictions")}
+          />
+        )}
+        <ToolTile
+          icon={CalendarDays}
+          title={t("calendar.section")}
+          value={`${monthKm.toFixed(0)} km`}
+          onClick={() => openTool("calendar")}
+        />
+        <ToolTile
+          icon={Calculator}
+          title={t("paceCalc.section")}
+          onClick={() => openTool("pace")}
+        />
+        {badges && (
+          <ToolTile
+            icon={Medal}
+            title={t("badges.title")}
+            value={t("badges.count", {
+              earned: badges.filter((b) => b.earned).length,
+              total: badges.length,
+            })}
+            onClick={() => openTool("badges")}
+          />
+        )}
+        {!testRunsLoading && testRuns.length > 0 && (
+          <ToolTile
+            icon={FlaskConical}
+            title={t("testRun.benchmarks")}
+            value={
+              testRuns[0].derived_metrics.estimated_vo2max != null
+                ? `VO₂ ${testRuns[0].derived_metrics.estimated_vo2max.toFixed(1)}`
+                : undefined
+            }
+            onClick={() => openTool("tests")}
+          />
+        )}
+      </div>
 
       {!hasAnyInsight && (
         <EmptyState
@@ -640,5 +753,51 @@ export function InsightsScreen({
         />
       )}
     </div>
+  )
+}
+
+/** One tool on the Insights board: an icon medal, a name, and its headline. */
+function ToolTile({
+  icon: Icon,
+  title,
+  value,
+  detail,
+  wide = false,
+  lead = false,
+  onClick,
+}: {
+  icon: typeof Trophy
+  title: string
+  value?: string
+  detail?: string
+  wide?: boolean
+  lead?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`press surface flex gap-2.5 p-4 text-left ${
+        wide ? "col-span-2 flex-row items-center" : "min-h-[7.5rem] flex-col items-start"
+      } ${lead ? "border-primary/45" : ""}`}
+    >
+      <span
+        className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+          lead
+            ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
+            : "border-[var(--chunk-edge)] bg-primary/12 text-primary"
+        }`}
+        aria-hidden
+      >
+        <Icon size={22} strokeWidth={2.3} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-label font-extrabold leading-tight text-card-foreground">{title}</span>
+        {value && <span className="measure truncate text-micro font-semibold text-muted-foreground">{value}</span>}
+        {detail && <span className="text-micro text-muted-foreground">{detail}</span>}
+      </span>
+      {wide && <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />}
+    </button>
   )
 }

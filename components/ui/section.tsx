@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
  */
 
 export function Section({ className, ...props }: React.ComponentProps<'section'>) {
-  return <section className={cn('flex flex-col gap-2.5', className)} {...props} />
+  return <section className={cn('flex flex-col gap-3', className)} {...props} />
 }
 
 interface SectionHeaderProps extends React.ComponentProps<'div'> {
@@ -31,7 +31,7 @@ export function SectionHeader({
   return (
     <div className={cn('flex items-baseline justify-between gap-3', className)} {...props}>
       <div className="min-w-0">
-        <h2 className="text-label font-semibold text-foreground">{title}</h2>
+        <h2 className="text-lead font-extrabold text-foreground">{title}</h2>
         {hint && <p className="mt-0.5 text-micro text-muted-foreground">{hint}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -48,7 +48,7 @@ export function SectionAction({
     <button
       type="button"
       className={cn(
-        'press -mr-1 rounded-sm px-1 py-0.5 text-label font-semibold text-primary hover:text-primary/80',
+        'press -mr-1 rounded-sm px-1 py-0.5 text-label font-extrabold uppercase tracking-wide text-primary hover:text-primary/80',
         className,
       )}
       {...props}

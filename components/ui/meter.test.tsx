@@ -52,7 +52,10 @@ describe("Meter", () => {
     render(<Meter value={93} label="Training load" zone={{ from: 53, to: 87 }} />)
 
     const children = Array.from(track().children) as HTMLElement[]
-    const fillIndex = children.findIndex((el) => el.style.transform.startsWith("scaleX"))
+    // The fill sits inside the wrapper that grows it in on mount.
+    const fillIndex = children.findIndex((el) =>
+      Array.from(el.children).some((c) => (c as HTMLElement).style.transform.startsWith("scaleX")),
+    )
     expect(fillIndex).toBeGreaterThanOrEqual(0)
 
     const edges = children.filter((el) => el.classList.contains("w-px"))
