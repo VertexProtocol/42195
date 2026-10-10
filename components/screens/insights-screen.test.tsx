@@ -57,6 +57,8 @@ describe("InsightsScreen — personal records", () => {
     const slower = makeActivity({ distance_km: 5, duration_seconds: 1900 })
     renderInsights([best, slower], onSelectActivity)
 
+    // Records live behind their own tile on the Insights board.
+    fireEvent.click(screen.getByRole("button", { name: /personal records/i }))
     fireEvent.click(screen.getByRole("button", { name: /5 km/ }))
     expect(onSelectActivity).toHaveBeenCalledTimes(1)
     // The record's own run, not merely the first of the qualifying ones.
@@ -65,6 +67,7 @@ describe("InsightsScreen — personal records", () => {
 
   it("keeps the record readable when there is nowhere to send it", () => {
     renderInsights([makeActivity()])
+    fireEvent.click(screen.getByRole("button", { name: /personal records/i }))
     expect(screen.getByText("5 km")).toBeTruthy()
     expect(screen.queryByRole("button", { name: /5 km/ })).toBeNull()
   })

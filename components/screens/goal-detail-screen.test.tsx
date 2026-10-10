@@ -212,3 +212,47 @@ describe("GoalDetailScreen — how a week reports itself", () => {
     expect(screen.queryByText(/skipped/)).toBeNull()
   })
 })
+
+/**
+ * A goal with no plan yet.
+ *
+ * The plan used to open on "Generate", and the preferences that shape it sat
+ * behind a second tab most runners never found. Now the preferences are the
+ * way in — one question at a time — and the plan is made at the end of them.
+ */
+describe("GoalDetailScreen — setting up a plan", () => {
+  function stubNoPlan() {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const body = url.includes("/preferences") && init?.method === "PUT" ? { ok: true } : {}
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    return fetchMock
+  }
+
+  it("asks the first question rather than offering to generate", async () => {
+    stubNoPlan()
+    renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
+    expect(await screen.findByText("How many runs a week?")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /make my plan/i })).toBeNull()
+    // No Plan / Preferences split before there is a plan to split.
+    expect(screen.queryByRole("tab", { name: /preferences/i })).toBeNull()
+  })
+
+  it("saves the answers and only then makes the plan", async () => {
+    const fetchMock = stubNoPlan()
+    renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
+    await screen.findByText("How many runs a week?")
+
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole("button", { name: /continue/i }))
+    fireEvent.click(screen.getByRole("button", { name: /make my plan/i }))
+
+    await vi.waitFor(() => {
+      const calls = fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? "GET"} ${url}`)
+      const save = calls.findIndex((c) => c.startsWith("PUT") && c.includes("/preferences"))
+      const generate = calls.findIndex((c) => c.startsWith("POST") && c.endsWith("/api/ai/training-plan"))
+      expect(save).toBeGreaterThanOrEqual(0)
+      expect(generate).toBeGreaterThan(save)
+    })
+  })
+})

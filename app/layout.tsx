@@ -47,6 +47,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // The on-screen keyboard shrinks the page rather than covering it, so the
+  // coach's input and the sheets' save buttons stay above it on Android.
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#e0d9d1' },
     { media: '(prefers-color-scheme: dark)', color: '#17110e' },

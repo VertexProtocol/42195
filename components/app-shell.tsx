@@ -17,14 +17,7 @@ import type { TabId, Activity, Goal, GoalCategory, WeeklyGoal } from "@/lib/type
 import type { WeeklySuggestion } from "@/lib/weekly-suggestions"
 import { computeStreak, computeBadges } from "@/lib/gamification"
 import { weekStartStr } from "@/lib/week"
-import {
-  StreakChip,
-  StreakCard,
-  BadgeGrid,
-  CelebrationOverlay,
-  useCelebration,
-} from "@/components/gamification"
-import { Section, SectionHeader } from "@/components/ui/section"
+import { StreakChip, CelebrationOverlay, useCelebration } from "@/components/gamification"
 import { Segmented } from "@/components/ui/segmented"
 
 const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "profile"])
@@ -371,7 +364,7 @@ export function AppShell({ initialData }: AppShellProps) {
     return (
       <div className="mx-auto min-h-dvh max-w-md bg-background">
         <AppBar title="42195" brand subtitle={t("common.loading")} />
-        <main className="pb-24">
+        <main style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}>
           <ScreenFallback />
         </main>
       </div>
@@ -413,26 +406,24 @@ export function AppShell({ initialData }: AppShellProps) {
       )}
 
       {/* Screen content */}
-      <main className="relative pb-24">
+      {/* Clear of the tab bar, and of the home indicator under it. */}
+      <main className="relative" style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}>
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
-            recentActivities={data.activities.slice(0, 3)}
             warnings={data.warnings}
             planBadges={data.planBadges}
             currentPlanWeeks={data.currentPlanWeeks}
             planSessionStatuses={data.planSessionStatuses}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
-            onViewActivities={() => handleTabChange("activities")}
             onViewGoal={(goal) => { navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id }) }}
             onViewGoals={() => handleTabChange("goals")}
             onViewWeeklyGoals={handleViewWeeklyGoals}
             onViewInsights={() => handleTabChange("insights")}
-            onSelectActivity={(activity) => { navigate({ ...STACKED_VIEWS, tab: "activities", activity: activity.id }) }}
             onUnpinGoal={data.toggleStarGoal}
           />
         )}
@@ -525,28 +516,11 @@ export function AppShell({ initialData }: AppShellProps) {
         {/* InsightsScreen stays mounted after first visit to avoid refetching on tab switch */}
         {insightsMounted && (
           <div className={activeTab !== "insights" ? "hidden" : ""}>
-            <div className="flex flex-col gap-4 px-4 pt-5">
-              <StreakCard streak={streak} />
-              <Section>
-                <SectionHeader
-                  title={t("badges.title")}
-                  action={
-                    <span className="text-label font-bold text-muted-foreground">
-                      {t("badges.count", {
-                        earned: badges.filter((b) => b.earned).length,
-                        total: badges.length,
-                      })}
-                    </span>
-                  }
-                />
-                <div className="surface p-4">
-                  <BadgeGrid badges={badges} />
-                </div>
-              </Section>
-            </div>
             <Suspense fallback={<ScreenFallback />}>
               <InsightsScreen
                 activities={data.activities}
+                streak={streak}
+                badges={badges}
                 goals={data.goals}
                 onViewGoal={(goal) => navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id })}
                 onSelectActivity={(activity) =>

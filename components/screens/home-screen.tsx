@@ -9,13 +9,11 @@ import {
   useCallback,
   useEffect,
 } from "react"
-import { ChevronRight, Star, StarOff } from "lucide-react"
+import { Star, StarOff } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
 import { ProgressLap } from "@/components/progress-lap"
 import {
-  formatDistance,
   formatDuration,
-  formatDateShort,
   daysUntil,
   timeElapsedPercentage,
   isDatePast,
@@ -44,7 +42,7 @@ import {
 } from "@/lib/plan-today"
 import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
-import { AppCard, CardRow } from "@/components/ui/app-card"
+import { AppCard } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
 import { Pill } from "@/components/ui/pill"
@@ -641,7 +639,6 @@ interface HomeScreenProps {
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
-  recentActivities: Activity[]
   /**
    * Both derived during the page render and owned by the app shell. This
    * screen unmounts on every tab change, so fetching them here made the
@@ -660,7 +657,6 @@ interface HomeScreenProps {
   planSessionStatuses?: Record<string, Record<string, PlanSessionStatus>>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
-  onViewActivities: () => void
   onViewGoal: (goal: Goal) => void
   /** Unpins a goal from this screen. Offered only once its date has gone. */
   onUnpinGoal?: (goalId: string) => void
@@ -671,7 +667,6 @@ interface HomeScreenProps {
    */
   onViewWeeklyGoals?: () => void
   onViewInsights: () => void
-  onSelectActivity: (activity: Activity) => void
 }
 
 export function HomeScreen({
@@ -679,16 +674,13 @@ export function HomeScreen({
   currentWeekGoals,
   activities,
   weeklySummary,
-  recentActivities,
   warnings,
   planBadges,
   currentPlanWeeks,
   planSessionStatuses,
-  onViewActivities,
   onViewGoal,
   onViewGoals,
   onViewWeeklyGoals,
-  onSelectActivity,
   onUnpinGoal,
 }: HomeScreenProps) {
   const { t } = useI18n()
@@ -1037,44 +1029,6 @@ export function HomeScreen({
               />
             ))}
           </div>
-        </Section>
-      )}
-
-      {/* ── What was run ──────────────────────────────────────────────── */}
-      {recentActivities.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("home.recentActivities")}
-            action={<SectionAction onClick={onViewActivities}>{t("home.seeAll")}</SectionAction>}
-          />
-          <AppCard variant="rows">
-            {recentActivities.map((activity) => (
-              <CardRow key={activity.id} className="p-0">
-                <button
-                  onClick={() => onSelectActivity(activity)}
-                  className="press flex w-full items-center gap-3 px-4 py-3 text-left"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-label font-semibold text-card-foreground">
-                      {activity.name}
-                    </p>
-                    <p className="mt-0.5 text-micro text-muted-foreground">
-                      {formatDateShort(activity.date)} · {activity.type}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="measure text-label font-semibold text-card-foreground">
-                      {formatDistance(activity.distance_km)}
-                    </p>
-                    <p className="measure mt-0.5 text-micro text-muted-foreground">
-                      {formatDuration(activity.duration_seconds)}
-                    </p>
-                  </div>
-                  <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
-                </button>
-              </CardRow>
-            ))}
-          </AppCard>
         </Section>
       )}
 

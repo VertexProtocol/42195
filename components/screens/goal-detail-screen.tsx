@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Check,
   X,
+  ChevronRight,
 } from "lucide-react"
 import {
   formatDistance,
@@ -56,7 +57,8 @@ import { RUN_TYPES, INJURY_NOTE_STALE_WEEKS } from "@/lib/training-constants"
 // is never one length here and another there.
 import { matchSessionsToActivities } from "@/lib/plan-session-match"
 import { startOfWeek as toMonday, sessionKey, isManualAnswer } from "@/lib/plan-today"
-import { AppCard } from '@/components/ui/app-card'
+import { AppCard, CardRow } from '@/components/ui/app-card'
+import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
@@ -302,9 +304,15 @@ function PreferencesForm({
   goalId,
   initial,
   onSaved,
+  mode = "list",
+  onFinish,
 }: {
   goalId: string
   initial: GoalPreferences
+  /** "wizard" walks a first-time setup one question at a time; "list" edits. */
+  mode?: "wizard" | "list"
+  /** Called after the last wizard step has saved. */
+  onFinish?: () => void
   onSaved: (
     prefs: GoalPreferences,
     meta?: { shouldRegenerate: boolean; regenerateReason: string | null },
@@ -322,6 +330,7 @@ function PreferencesForm({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [localHistory, setLocalHistory] = useState(initial.notes_history)
   const [resolvingAt, setResolvingAt] = useState<string | null>(null)
+  const [editing, setEditing] = useState<PrefKey | null>(null)
 
   const injuryHistory = localHistory
     .filter((e) => e.type === "injury")
@@ -344,7 +353,7 @@ function PreferencesForm({
     }
   }
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     setSaving(true)
     setSaveError(null)
     try {
@@ -365,7 +374,7 @@ function PreferencesForm({
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSaveError(body.error ?? t("gp.saveFailed"))
-        return
+        return false
       }
       onSaved(
         {
@@ -384,163 +393,323 @@ function PreferencesForm({
           regenerateReason: body.regenerateReason ?? null,
         },
       )
+      return true
     } catch {
       setSaveError(t("gp.network"))
+      return false
     } finally {
       setSaving(false)
     }
   }
 
-  return (
-    <div className="flex flex-col gap-5">
-      <PrefField label={t("gp.prefSessions")}>
-        <ChoiceRow
-          options={[2, 3, 4, 5].map((n) => [n, String(n)] as const)}
-          value={sessions}
-          onChange={setSessions}
-        />
-      </PrefField>
+  const sessionsField = (
+    <ChoiceRow
+      options={[2, 3, 4, 5].map((n) => [n, String(n)] as const)}
+      value={sessions}
+      onChange={setSessions}
+    />
+  )
 
-      <PrefField label={t("gp.prefFocus")}>
-        <div className="flex flex-col gap-2">
-          {(
-            [
-              ["volume", t("gp.focusVolume"), t("gp.focusVolumeDesc")],
-              ["workouts", t("gp.focusWorkouts"), t("gp.focusWorkoutsDesc")],
-              ["balanced", t("gp.focusBalanced"), t("gp.focusBalancedDesc")],
-            ] as [TrainingFocus, string, string][]
-          ).map(([value, label, desc]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={focus === value}
-              onClick={() => setFocus(value)}
-              className={`press flex flex-col items-start gap-0.5 rounded-md border-2 border-b-4 px-4 py-3 text-left ${
-                focus === value
-                  ? "border-primary/60 bg-primary/10"
-                  : "border-[var(--chunk-edge)] bg-card"
-              }`}
-            >
-              <span
-                className={`text-label font-extrabold ${focus === value ? "text-primary" : "text-foreground"}`}
-              >
-                {label}
-              </span>
-              <span className="text-micro text-muted-foreground">{desc}</span>
-            </button>
-          ))}
-        </div>
-      </PrefField>
-
-      <PrefField label={t("gp.prefIncrease")} hint={t("gp.prefIncreaseHint")}>
-        <ChoiceRow
-          options={[5, 8, 10].map((n) => [n, `${n}%`] as const)}
-          value={increasePct}
-          onChange={setIncreasePct}
-        />
-      </PrefField>
-
-      <PrefField label={t("gp.prefBlock")} hint={t("gp.prefBlockHint")}>
-        <ChoiceRow
-          options={([2, 3, 4, 6] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
-          value={blockWeeks}
-          onChange={setBlockWeeks}
-        />
-      </PrefField>
-
-      <PrefField label={t("gp.prefRegen")}>
-        <ChoiceRow
-          options={([2, 4, 6, 8] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
-          value={regenEvery}
-          onChange={setRegenEvery}
-        />
-        {regenEvery < blockWeeks && (
-          <p className="mt-2 text-micro font-semibold text-warning">{t("gp.regenWarn")}</p>
-        )}
-      </PrefField>
-
-      <PrefField label={t("gp.prefNotes")}>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder={t("gp.prefNotesPlaceholder")}
-          className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          rows={3}
-        />
-      </PrefField>
-
-      <PrefField label={t("gp.prefInjury")}>
-        <textarea
-          value={injuryNotes}
-          onChange={(e) => setInjuryNotes(e.target.value)}
-          placeholder={t("gp.prefInjuryPlaceholder")}
-          className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          rows={2}
-        />
-        {injuryHistory.length > 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
-            {injuryHistory.map((entry) => {
-              const addedDate = formatDate(entry.added_at)
-              const resolvedDate = entry.resolved_at ? formatDate(entry.resolved_at) : null
-              const isResolving = resolvingAt === entry.added_at
-              // An unresolved note keeps tightening the comeback cap and keeps
-              // reaching the coach as a current restriction. People rarely go
-              // back to mark one resolved, so after a while we ask.
-              const weeksOld =
-                (Date.now() - new Date(entry.added_at).getTime()) / (7 * 24 * 60 * 60 * 1000)
-              const isStale = !entry.resolved_at && weeksOld >= INJURY_NOTE_STALE_WEEKS
-
-              return (
-                <div
-                  key={entry.added_at}
-                  className={`flex items-start justify-between gap-2 rounded-md px-3 py-2.5 text-micro ${
-                    entry.resolved_at
-                      ? "bg-surface-sunken text-muted-foreground"
-                      : "border-2 border-warning/45 bg-warning/10 text-foreground"
-                  }`}
-                >
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className={entry.resolved_at ? "line-through opacity-60" : "font-bold"}>
-                      {entry.content}
-                    </span>
-                    <span className="text-micro text-muted-foreground">
-                      {resolvedDate
-                        ? t("gp.injuryResolvedOn", { added: addedDate, resolved: resolvedDate })
-                        : t("gp.injuryAdded", { date: addedDate })}
-                      {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase}`}
-                    </span>
-                    {isStale && (
-                      <span className="text-micro font-semibold text-warning">
-                        {t("gp.injuryStale", { weeks: Math.floor(weeksOld) })}
-                      </span>
-                    )}
-                  </div>
-                  {!entry.resolved_at && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="shrink-0"
-                      onClick={() => handleResolve(entry.added_at)}
-                      loading={isResolving}
-                    >
-                      <Check size={14} />
-                      {t("gp.resolved")}
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </PrefField>
-
-      {saveError && <p role="alert" className="text-label font-semibold text-destructive">{saveError}</p>}
-      <Button block size="lg" onClick={handleSave} loading={saving}>
-        {saving ? t("gp.saving") : t("gp.save")}
-      </Button>
+  const focusOptions: [TrainingFocus, string, string][] = [
+    ["volume", t("gp.focusVolume"), t("gp.focusVolumeDesc")],
+    ["workouts", t("gp.focusWorkouts"), t("gp.focusWorkoutsDesc")],
+    ["balanced", t("gp.focusBalanced"), t("gp.focusBalancedDesc")],
+  ]
+  const focusField = (
+    <div className="flex flex-col gap-2">
+      {focusOptions.map(([value, label, desc]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={focus === value}
+          onClick={() => setFocus(value)}
+          className={`press flex flex-col items-start gap-0.5 rounded-md border-2 border-b-4 px-4 py-3 text-left ${
+            focus === value ? "border-primary/60 bg-primary/10" : "border-[var(--chunk-edge)] bg-card"
+          }`}
+        >
+          <span className={`text-label font-extrabold ${focus === value ? "text-primary" : "text-foreground"}`}>
+            {label}
+          </span>
+          <span className="text-micro text-muted-foreground">{desc}</span>
+        </button>
+      ))}
     </div>
   )
+
+  const increaseField = (
+    <ChoiceRow
+      options={[5, 8, 10].map((n) => [n, `${n}%`] as const)}
+      value={increasePct}
+      onChange={setIncreasePct}
+    />
+  )
+
+  const blockField = (
+    <ChoiceRow
+      options={([2, 3, 4, 6] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
+      value={blockWeeks}
+      onChange={setBlockWeeks}
+    />
+  )
+
+  const regenField = (
+    <>
+      <ChoiceRow
+        options={([2, 4, 6, 8] as const).map((n) => [n, t("gp.weeksShort", { n })] as const)}
+        value={regenEvery}
+        onChange={setRegenEvery}
+      />
+      {regenEvery < blockWeeks && (
+        <p className="mt-2 text-micro font-semibold text-warning">{t("gp.regenWarn")}</p>
+      )}
+    </>
+  )
+
+  const notesField = (
+    <textarea
+      value={notes}
+      onChange={(e) => setNotes(e.target.value)}
+      placeholder={t("gp.prefNotesPlaceholder")}
+      aria-label={t("gp.prefNotes")}
+      className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+      rows={3}
+    />
+  )
+
+  const injuryField = (
+    <>
+      <textarea
+        value={injuryNotes}
+        onChange={(e) => setInjuryNotes(e.target.value)}
+        placeholder={t("gp.prefInjuryPlaceholder")}
+        aria-label={t("gp.prefInjury")}
+        className="w-full resize-none rounded-md bg-surface-sunken px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        rows={2}
+      />
+      {injuryHistory.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {injuryHistory.map((entry) => {
+            const addedDate = formatDate(entry.added_at)
+            const resolvedDate = entry.resolved_at ? formatDate(entry.resolved_at) : null
+            const isResolving = resolvingAt === entry.added_at
+            // An unresolved note keeps tightening the comeback cap and keeps
+            // reaching the coach as a current restriction. People rarely go
+            // back to mark one resolved, so after a while we ask.
+            const weeksOld =
+              (Date.now() - new Date(entry.added_at).getTime()) / (7 * 24 * 60 * 60 * 1000)
+            const isStale = !entry.resolved_at && weeksOld >= INJURY_NOTE_STALE_WEEKS
+
+            return (
+              <div
+                key={entry.added_at}
+                className={`flex items-start justify-between gap-2 rounded-md px-3 py-2.5 text-micro ${
+                  entry.resolved_at
+                    ? "bg-surface-sunken text-muted-foreground"
+                    : "border-2 border-warning/45 bg-warning/10 text-foreground"
+                }`}
+              >
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className={entry.resolved_at ? "line-through opacity-60" : "font-bold"}>
+                    {entry.content}
+                  </span>
+                  <span className="text-micro text-muted-foreground">
+                    {resolvedDate
+                      ? t("gp.injuryResolvedOn", { added: addedDate, resolved: resolvedDate })
+                      : t("gp.injuryAdded", { date: addedDate })}
+                    {entry.training_phase && !entry.resolved_at && ` · ${entry.training_phase}`}
+                  </span>
+                  {isStale && (
+                    <span className="text-micro font-semibold text-warning">
+                      {t("gp.injuryStale", { weeks: Math.floor(weeksOld) })}
+                    </span>
+                  )}
+                </div>
+                {!entry.resolved_at && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => handleResolve(entry.added_at)}
+                    loading={isResolving}
+                  >
+                    <Check size={14} />
+                    {t("gp.resolved")}
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+
+  const focusLabel = focusOptions.find(([v]) => v === focus)?.[1] ?? ""
+  const openInjuries = injuryHistory.filter((e) => !e.resolved_at).length
+
+  /** Every setting, as a question, the line that answers it, and its control. */
+  const fields: Record<PrefKey, { question: string; label: string; value: string; hint?: string; control: React.ReactNode }> = {
+    sessions: { question: t("gp.qSessions"), label: t("gp.prefSessions"), value: String(sessions), control: sessionsField },
+    focus: { question: t("gp.prefFocus"), label: t("gp.prefFocusShort"), value: focusLabel, control: focusField },
+    block: {
+      question: t("gp.qBlock"),
+      label: t("gp.prefBlock"),
+      value: t("gp.weeksShort", { n: blockWeeks }),
+      hint: t("gp.prefBlockHint"),
+      control: blockField,
+    },
+    increase: {
+      question: t("gp.qIncrease"),
+      label: t("gp.prefIncrease"),
+      value: `${increasePct}%`,
+      hint: t("gp.prefIncreaseHint"),
+      control: increaseField,
+    },
+    regen: { question: t("gp.prefRegen"), label: t("gp.prefRegen"), value: t("gp.weeksShort", { n: regenEvery }), control: regenField },
+    notes: {
+      question: t("gp.qNotes"),
+      label: t("gp.prefNotes"),
+      value: notes.trim() ? notes.trim() : "—",
+      control: (
+        <div className="flex flex-col gap-4">
+          <PrefField label={t("gp.prefNotes")}>{notesField}</PrefField>
+          <PrefField label={t("gp.prefInjury")}>{injuryField}</PrefField>
+        </div>
+      ),
+    },
+    injury: {
+      question: t("gp.prefInjury"),
+      label: t("gp.prefInjury"),
+      value: injuryNotes.trim() ? injuryNotes.trim() : openInjuries > 0 ? String(openInjuries) : "—",
+      control: injuryField,
+    },
+  }
+
+  // ── Setup: one question per page, then the plan ─────────────────────────
+  const [step, setStep] = useState(0)
+  if (mode === "wizard") {
+    const steps: PrefKey[] = ["sessions", "focus", "block", "increase", "notes"]
+    const field = fields[steps[step]]
+    const last = step === steps.length - 1
+    return (
+      <div className="surface flex flex-col gap-5 p-5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+            aria-label={t("common.back")}
+            className="press -ml-1 flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground disabled:opacity-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div
+            className="h-3 flex-1 overflow-hidden rounded-full bg-surface-sunken"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={steps.length}
+            aria-valuenow={step + 1}
+            aria-label={t("gp.stepOf", { step: step + 1, total: steps.length })}
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{
+                width: `${((step + 1) / steps.length) * 100}%`,
+                transition: "width var(--dur-view) var(--ease-out)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Keyed on the step so each question arrives fresh. */}
+        <div key={step} className="flex flex-col gap-4 [animation:rise_var(--dur-view)_var(--ease-out)_both]">
+          <div>
+            <h3 className="text-title font-extrabold text-card-foreground">{field.question}</h3>
+            {field.hint && <p className="mt-1 text-label text-muted-foreground">{field.hint}</p>}
+          </div>
+          {field.control}
+        </div>
+
+        {saveError && <p role="alert" className="text-label font-semibold text-destructive">{saveError}</p>}
+        <Button
+          block
+          size="lg"
+          loading={saving}
+          onClick={async () => {
+            if (!last) {
+              setStep((s) => s + 1)
+              return
+            }
+            if (await handleSave()) onFinish?.()
+          }}
+        >
+          {last ? (
+            <>
+              <Sparkles size={18} />
+              {t("gp.makePlan")}
+            </>
+          ) : (
+            t("gp.next")
+          )}
+        </Button>
+      </div>
+    )
+  }
+
+  // ── Afterwards: a short list, each line opens its own question ───────────
+  const listOrder: PrefKey[] = ["sessions", "focus", "block", "increase", "regen", "notes"]
+  const editingField = editing ? fields[editing] : null
+  return (
+    <>
+      <AppCard variant="rows">
+        {listOrder.map((key) => (
+          <CardRow key={key} className="p-0">
+            <button
+              type="button"
+              onClick={() => setEditing(key)}
+              className="press flex min-h-[56px] w-full items-center gap-3 px-4 py-3 text-left"
+            >
+              <span className="min-w-0 flex-1 text-label font-extrabold text-card-foreground">
+                {fields[key].label}
+              </span>
+              <span className="max-w-[45%] truncate text-label font-semibold text-muted-foreground">
+                {fields[key].value}
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          </CardRow>
+        ))}
+      </AppCard>
+
+      <BottomSheet
+        open={editingField !== null}
+        onClose={() => setEditing(null)}
+        title={editingField?.question ?? ""}
+        closeLabel={t("gp.cancel")}
+      >
+        {editingField && (
+          <div className="flex flex-col gap-4">
+            {editingField.hint && <p className="text-label text-muted-foreground">{editingField.hint}</p>}
+            {editingField.control}
+            {saveError && <p role="alert" className="text-label font-semibold text-destructive">{saveError}</p>}
+            <Button
+              block
+              size="lg"
+              loading={saving}
+              onClick={async () => {
+                if (await handleSave()) setEditing(null)
+              }}
+            >
+              {saving ? t("gp.saving") : t("gp.save")}
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+    </>
+  )
 }
+
+type PrefKey = "sessions" | "focus" | "block" | "increase" | "regen" | "notes" | "injury"
 
 /** One setting: a bold label, an optional one-line hint, then the control. */
 function PrefField({
@@ -1534,6 +1703,9 @@ export function GoalDetailScreen({
           )}
         </div>
 
+        {/* Plan and Preferences only split once there is a plan. Before that
+            the preferences are the way in: set them, then the plan is made. */}
+        {aiPlan && (
         <Segmented
           className="mb-3"
           label={t("plan.sectionTitle")}
@@ -1544,28 +1716,29 @@ export function GoalDetailScreen({
           value={activeTab}
           onChange={setActiveTab}
         />
+        )}
 
         {/* Preferences tab */}
-        {activeTab === "preferences" && (
-          <AppCard>
+        {activeTab === "preferences" && aiPlan && (
+          <div>
             <PreferencesForm
               goalId={goal.id}
               initial={prefs}
               onSaved={(saved, meta) => {
                 setPrefs(saved)
-                setActiveTab("plan")
                 if (meta?.shouldRegenerate && meta.regenerateReason === "new_active_injury") {
+                  setActiveTab("plan")
                   // A brand-new active injury was logged — auto-regenerate the
                   // plan so the comeback + injury caps apply immediately.
                   handleGenerate("Auto-regenerated after a new active injury was logged.")
                 }
               }}
             />
-          </AppCard>
+          </div>
         )}
 
         {/* Training Plan tab */}
-        {activeTab === "plan" && (
+        {(activeTab === "plan" || !aiPlan) && (
         <>
 
         {/* Error */}
@@ -1603,24 +1776,13 @@ export function GoalDetailScreen({
         )}
 
         {planResolved && !aiPlan && !isGenerating && !past && (
-          <div className="surface flex flex-col items-center gap-4 px-6 py-8 text-center">
-            <div className="pop-in flex size-20 items-center justify-center rounded-full border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground">
-              <Sparkles size={36} />
-            </div>
-            <div>
-              <p className="text-title font-extrabold text-card-foreground">{t("plan.generate")}</p>
-              <p className="mt-1 text-label text-muted-foreground">
-                {t("plan.generateBody", {
-                  weeks: prefs.block_weeks ?? 4,
-                  name: goal.name,
-                })}
-              </p>
-            </div>
-            <Button block size="lg" onClick={() => handleGenerate()}>
-              <Sparkles size={18} />
-              {t("plan.generateCta")}
-            </Button>
-          </div>
+          <PreferencesForm
+            mode="wizard"
+            goalId={goal.id}
+            initial={prefs}
+            onSaved={(saved) => setPrefs(saved)}
+            onFinish={() => handleGenerate()}
+          />
         )}
 
         {/* Generating skeleton */}

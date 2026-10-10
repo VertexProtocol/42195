@@ -10,7 +10,6 @@ import {
   useSyncExternalStore,
 } from "react"
 import {
-  ChevronRight,
   ChevronDown,
   RefreshCw,
   Plus,
@@ -22,7 +21,7 @@ import {
   Route,
   Footprints,
 } from "lucide-react"
-import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
+import { formatDistance, formatDuration, formatDateShort } from "@/lib/format"
 import type { Activity, SyncStatus } from "@/lib/types"
 import { syncCooldownRemainingMs } from "@/lib/sync-constants"
 import { useI18n } from "@/lib/i18n"
@@ -69,7 +68,7 @@ const PULL_THRESHOLD = 80
  */
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
-const DEFAULT_PAGE_SIZE: PageSize = 25
+const DEFAULT_PAGE_SIZE: PageSize = 10
 const PAGE_SIZE_STORAGE_KEY = "activities.pageSize"
 
 function isPageSize(value: unknown): value is PageSize {
@@ -107,7 +106,7 @@ export function ActivitiesScreen({
   onSync,
   onAddActivity,
 }: ActivitiesScreenProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   // A sync asked for inside the cooldown is turned away by the server, so for
@@ -234,6 +233,40 @@ export function ActivitiesScreen({
     [filteredActivities, visibleCount],
   )
   const remaining = filteredActivities.length - visibleActivities.length
+
+  // The visible rows, split by month. Each month's total comes from the whole
+  // filtered log, not just the rows on screen, so the header does not change
+  // as more of the month is paged in.
+  const monthGroups = useMemo(() => {
+    const key = (a: Activity) => {
+      const d = new Date(a.date)
+      return `${d.getFullYear()}-${d.getMonth()}`
+    }
+    const totals = new Map<string, number>()
+    for (const a of filteredActivities) totals.set(key(a), (totals.get(key(a)) ?? 0) + a.distance_km)
+    const groups: { key: string; label: string; km: number; rows: Activity[] }[] = []
+    for (const a of visibleActivities) {
+      const k = key(a)
+      let g = groups[groups.length - 1]
+      if (!g || !g.key.startsWith(`${k}#`)) {
+        const d = new Date(a.date)
+        g = {
+          // Indexed as well as dated: the log is newest-first, but a list that
+          // is not would revisit a month, and React keys must stay unique.
+          key: `${k}#${groups.length}`,
+          label: d.toLocaleDateString(locale === "no" ? "nb-NO" : "en-GB", {
+            month: "long",
+            year: "numeric",
+          }),
+          km: totals.get(k) ?? 0,
+          rows: [],
+        }
+        groups.push(g)
+      }
+      g.rows.push(a)
+    }
+    return groups
+  }, [filteredActivities, visibleActivities, locale])
 
   // Nothing to choose when even the smallest step shows the whole result set.
   const canChoosePageSize = filteredActivities.length > PAGE_SIZE_OPTIONS[0]
@@ -404,54 +437,53 @@ export function ActivitiesScreen({
         />
       ) : (
         <>
-          <AppCard variant="rows">
-            {visibleActivities.map((activity) => (
-              <CardRow key={activity.id} className="p-0">
-                <button
-                  onClick={() => onSelectActivity(activity)}
-                  className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                >
-                  <span
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary"
-                    aria-hidden
-                  >
-                    <Footprints size={20} strokeWidth={2.4} />
+          <div className="flex flex-col gap-4">
+            {monthGroups.map((group) => (
+              <section key={group.key} aria-label={group.label} className="flex flex-col gap-2">
+                <div className="flex items-baseline justify-between px-1">
+                  <h2 className="text-label font-extrabold capitalize text-foreground">{group.label}</h2>
+                  <span className="measure text-micro font-bold text-muted-foreground">
+                    {formatDistance(group.km)}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-label font-extrabold text-card-foreground">
-                        {activity.name}
-                      </p>
-                      {testRunActivityIds.has(activity.id) && (
-                        <Pill tone="data" icon={<FlaskConical size={10} />}>
-                          {t("testRun.badge")}
-                        </Pill>
-                      )}
-                    </div>
-                    <p className="measure mt-0.5 text-micro text-muted-foreground">
-                      {formatDuration(activity.duration_seconds)}
-                      {activity.pace_min_per_km !== null && (
-                        <> · {formatPace(activity.pace_min_per_km)}</>
-                      )}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="measure text-lead font-bold text-card-foreground">
-                      {formatDistance(activity.distance_km)}
-                    </p>
-                    <p className="text-micro text-muted-foreground">
-                      {formatDateShort(activity.date)}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="shrink-0 text-muted-foreground"
-                    aria-hidden
-                  />
-                </button>
-              </CardRow>
+                </div>
+                <AppCard variant="rows">
+                  {group.rows.map((activity) => (
+                    <CardRow key={activity.id} className="p-0">
+                      <button
+                        onClick={() => onSelectActivity(activity)}
+                        className="press flex min-h-[56px] w-full items-center gap-3 px-3.5 py-2.5 text-left"
+                      >
+                        <span
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary"
+                          aria-hidden
+                        >
+                          <Footprints size={17} strokeWidth={2.4} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-label font-extrabold text-card-foreground">
+                              {activity.name}
+                            </p>
+                            {testRunActivityIds.has(activity.id) && (
+                              <Pill tone="data" icon={<FlaskConical size={10} />}>
+                                {t("testRun.badge")}
+                              </Pill>
+                            )}
+                          </div>
+                          <p className="measure truncate text-micro text-muted-foreground">
+                            {formatDateShort(activity.date)} · {formatDuration(activity.duration_seconds)}
+                          </p>
+                        </div>
+                        <span className="measure shrink-0 text-lead font-bold text-card-foreground">
+                          {formatDistance(activity.distance_km)}
+                        </span>
+                      </button>
+                    </CardRow>
+                  ))}
+                </AppCard>
+              </section>
             ))}
-          </AppCard>
+          </div>
 
           {(remaining > 0 || canChoosePageSize) && (
             <div className="flex flex-col items-center gap-3">

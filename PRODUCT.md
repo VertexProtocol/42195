@@ -49,9 +49,9 @@ the runner and the number they came for.
 
 | Surface | Job |
 |---|---|
-| Today | The race countdown, the next run of the plan, training load, the week so far, the last runs. |
-| Runs | Two halves behind one switch: **Log** (search, filter, open one) and **Insights** (streak, badges, records, predictions, calendar, the AI coach). |
-| Goals | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
+| Today | The race countdown, the next run of the plan, training load, the week so far, the weekly targets. The log lives under Runs, not here. |
+| Runs | Two halves behind one switch: **Log** (search, filter, open one; grouped by month, ten at a time) and **Insights** (the streak and totals, then a board of tiles — coach, records, predictions, calendar, pace calculator, badges, test runs — each opening on its own). |
+| Goals | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. A goal without a plan opens on its preferences, one question at a time, and the plan is made at the end of them. |
 | Profile | Account, Strava connection, HR calibration, appearance, language. |
 
 Three tabs, no more. Profile is reached from the avatar in the app bar; the
@@ -83,7 +83,10 @@ whether an address is registered.
   This is the one place the app's palette does not apply.
 - **Measurements are metric**: kilometres, min/km pace, metres of elevation, bpm.
 - Mobile-first, one column, max 28rem (`max-w-md`) centred. There is no desktop
-  layout; the phone layout is the product.
+  layout; the phone layout is the product, on iOS and Android alike: 360px is
+  the narrowest width it is checked at, controls take no double-tap delay or
+  long-press selection, the on-screen keyboard resizes the page, and Android's
+  pull-to-reload is held off in favour of the app's own pull-to-sync.
 - Installable as a PWA, so the chrome must respect safe-area insets top and
   bottom.
 - AI features are rate-limited and degrade to a stated error, never to silence.

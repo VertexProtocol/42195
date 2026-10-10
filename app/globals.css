@@ -248,7 +248,31 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
+    /* iOS must not inflate text when the phone is turned sideways. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+    /* Android Chrome reloads the page on an overscroll at the top; the app
+       has its own pull-to-sync, and iOS keeps its bounce inside the page. */
+    overscroll-behavior-y: contain;
+  }
+
+  /* Controls behave like a native app's: no 300ms double-tap wait, no text
+     selection or callout menu on a long press. */
+  button,
+  a,
+  [role="tab"],
+  summary,
+  label {
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="tab"],
+  summary {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   body {

@@ -84,14 +84,11 @@ function renderHome(activities: Activity[], weeklyGoals: WeeklyGoal[]) {
         currentWeekGoals={weeklyGoals}
         activities={activities}
         weeklySummary={summaryOf(activities)}
-        recentActivities={activities.slice(0, 5)}
         warnings={[]}
         planBadges={{}}
-        onViewActivities={() => {}}
         onViewGoal={() => {}}
         onViewGoals={() => {}}
         onViewInsights={() => {}}
-        onSelectActivity={() => {}}
       />
     </I18nProvider>,
   )
@@ -206,15 +203,12 @@ describe("HomeScreen — one lane per weekly goal", () => {
           currentWeekGoals={[makeGoal({ metric: "distance_km", target: 10 })]}
           activities={[makeActivity()]}
           weeklySummary={summaryOf([makeActivity()])}
-          recentActivities={[]}
           warnings={[]}
           planBadges={{}}
-          onViewActivities={() => {}}
           onViewGoal={() => {}}
           onViewGoals={onViewGoals}
           onViewWeeklyGoals={onViewWeeklyGoals}
           onViewInsights={() => {}}
-          onSelectActivity={() => {}}
         />
       </I18nProvider>,
     )
@@ -372,14 +366,11 @@ function renderPinned(goals: Goal[]) {
         currentWeekGoals={[]}
         activities={[]}
         weeklySummary={summaryOf([])}
-        recentActivities={[]}
         warnings={[]}
         planBadges={{}}
-        onViewActivities={() => {}}
         onViewGoal={() => {}}
         onViewGoals={() => {}}
         onViewInsights={() => {}}
-        onSelectActivity={() => {}}
       />
     </I18nProvider>,
   )
@@ -429,14 +420,11 @@ describe("HomeScreen — unpinning a race that is done", () => {
           currentWeekGoals={[]}
           activities={[]}
           weeklySummary={summaryOf([])}
-          recentActivities={[]}
           warnings={[]}
           planBadges={{}}
-          onViewActivities={() => {}}
           onViewGoal={() => {}}
           onViewGoals={() => {}}
           onViewInsights={() => {}}
-          onSelectActivity={() => {}}
           onUnpinGoal={onUnpinGoal}
         />
       </I18nProvider>,
@@ -455,14 +443,11 @@ describe("HomeScreen — unpinning a race that is done", () => {
           currentWeekGoals={[]}
           activities={[]}
           weeklySummary={summaryOf([])}
-          recentActivities={[]}
           warnings={[]}
           planBadges={{}}
-          onViewActivities={() => {}}
           onViewGoal={() => {}}
           onViewGoals={() => {}}
           onViewInsights={() => {}}
-          onSelectActivity={() => {}}
           onUnpinGoal={() => {}}
         />
       </I18nProvider>,
@@ -536,16 +521,13 @@ function renderWithPlan({
         currentWeekGoals={[]}
         activities={activities}
         weeklySummary={summaryOf(activities)}
-        recentActivities={[]}
         warnings={[]}
         planBadges={{}}
         currentPlanWeeks={planWeeks}
         planSessionStatuses={statuses}
-        onViewActivities={() => {}}
         onViewGoal={onViewGoal}
         onViewGoals={() => {}}
         onViewInsights={() => {}}
-        onSelectActivity={() => {}}
       />
     </I18nProvider>,
   )
