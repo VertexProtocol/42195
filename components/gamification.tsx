@@ -53,7 +53,7 @@ function BadgeMedal({ badge, order }: { badge: Badge; order: number }) {
       style={{ "--i": order } as CSSProperties}
     >
       <span
-        className={`flex size-16 items-center justify-center rounded-full border-2 border-b-4 ${
+        className={`flex size-16 items-center justify-center rounded-full border ${
           badge.earned
             ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
             : "border-[var(--chunk-edge)] bg-surface-sunken text-muted-foreground"
@@ -104,7 +104,7 @@ export function StreakCard({ streak }: { streak: StreakSummary }) {
           {t("streak.weeks", { count: streak.current })}
         </p>
         <p className="text-label font-semibold text-muted-foreground">
-          {lit ? t("streak.thisWeekWon") : t("streak.keepGoing")}
+          {lit ? t("streak.thisWeekWon") : t(streak.current > 0 ? "streak.keepGoing" : "streak.start")}
         </p>
       </div>
     </div>

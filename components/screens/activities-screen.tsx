@@ -295,7 +295,7 @@ export function ActivitiesScreen({
       {/* Actions sit above the list rather than inside the app bar: syncing is
           a decision about this screen's contents. */}
       <div className="flex items-center gap-3">
-        <Button className="flex-1" onClick={onAddActivity}>
+        <Button variant="secondary" className="flex-1" onClick={onAddActivity}>
           <Plus size={18} strokeWidth={3} />
           {t("activities.addActivity")}
         </Button>
@@ -362,7 +362,7 @@ export function ActivitiesScreen({
 
           {/* Type filters are always visible: hiding them behind a toggle made
               the current filter invisible from the list itself. */}
-          <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
+          <div className="scroll-quiet -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
             <FilterChip
               active={selectedType === "all"}
               onClick={() => setSelectedType("all")}
@@ -565,10 +565,10 @@ function FilterChip({
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border-2 px-4 text-label font-bold ${
+      className={`press inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-label font-bold ${
         active
-          ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
-          : "border-[var(--chunk-edge)] bg-card text-secondary-foreground hover:bg-surface-sunken"
+          ? "bg-primary/10 text-primary"
+          : "bg-transparent text-secondary-foreground hover:bg-surface-sunken"
       }`}
     >
       {icon}

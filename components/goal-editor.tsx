@@ -176,8 +176,8 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
               aria-pressed={category === "performance"}
               className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                 category === "performance"
-                  ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
-                  : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
+                  ? "border border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                  : "border border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
               }`}
             >
               <Timer size={16} aria-hidden />
@@ -189,8 +189,8 @@ export function GoalEditor({ goal, isNew, defaultCategory, prefill, open, onSave
               aria-pressed={category === "event_training"}
               className={`press flex min-h-[52px] items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                 category === "event_training"
-                  ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
-                  : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
+                  ? "border border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                  : "border border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
               }`}
             >
               <CalendarCheck size={16} aria-hidden />

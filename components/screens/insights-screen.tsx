@@ -61,6 +61,8 @@ interface InsightsScreenProps {
   /** The streak and badges, worked out once by the app shell. */
   streak?: StreakSummary
   badges?: Badge[]
+  selectedTool?: string | null
+  onToolChange?: (tool: InsightsTab) => void
 }
 
 type InsightsTab =
@@ -81,9 +83,16 @@ export function InsightsScreen({
   onSelectActivity,
   streak,
   badges,
+  selectedTool,
+  onToolChange,
 }: InsightsScreenProps) {
   const { t } = useI18n()
-  const [activeTab, setActiveTab] = useState<InsightsTab>("overview")
+  const [localTab, setLocalTab] = useState<InsightsTab>("overview")
+  const validTools: readonly string[] = ["overview", "coach", "records", "predictions", "pace", "tests", "calendar", "badges"]
+  const activeTab: InsightsTab = onToolChange
+    ? (selectedTool && validTools.includes(selectedTool) ? selectedTool as InsightsTab : "overview")
+    : localTab
+  const setActiveTab = (tool: InsightsTab) => onToolChange ? onToolChange(tool) : setLocalTab(tool)
 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -275,7 +284,6 @@ export function InsightsScreen({
     t("coach.suggestion1"),
     t("coach.suggestion2"),
     t("coach.suggestion3"),
-    t("coach.suggestion4"),
   ]
 
   // ── Coach ────────────────────────────────────────────────────────────────
@@ -301,7 +309,7 @@ export function InsightsScreen({
           </Button>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lead font-semibold text-foreground">{t("coach.title")}</h2>
-            <p className="truncate text-micro text-muted-foreground">{t("coach.subtitle")}</p>
+            <p className="text-label text-muted-foreground">{t("coach.subtitle")}</p>
           </div>
           {messages.length > 0 && (
             <Button
@@ -318,12 +326,6 @@ export function InsightsScreen({
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {messages.length === 0 && (
             <div className="flex flex-col gap-4 py-6">
-              <div>
-                <p className="text-body font-semibold text-foreground">{t("coach.empty")}</p>
-                <p className="mt-1 max-w-[46ch] text-label leading-relaxed text-muted-foreground">
-                  {t("coach.emptyDesc")}
-                </p>
-              </div>
               <div className="flex flex-col gap-2">
                 {suggestions.map((suggestion) => (
                   <button
@@ -649,7 +651,7 @@ export function InsightsScreen({
 
   return (
     <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
-      {streak && <StreakCard streak={streak} />}
+      {streak && streak.current > 0 && <StreakCard streak={streak} />}
 
       {activities.length > 0 && (
         <Section>
@@ -684,9 +686,8 @@ export function InsightsScreen({
         </Section>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="flex flex-col divide-y divide-border">
         <ToolTile
-          wide
           lead
           icon={Sparkles}
           title={t("insights.askCoach")}
@@ -762,7 +763,6 @@ function ToolTile({
   title,
   value,
   detail,
-  wide = false,
   lead = false,
   onClick,
 }: {
@@ -770,7 +770,6 @@ function ToolTile({
   title: string
   value?: string
   detail?: string
-  wide?: boolean
   lead?: boolean
   onClick: () => void
 }) {
@@ -778,26 +777,15 @@ function ToolTile({
     <button
       type="button"
       onClick={onClick}
-      className={`press surface flex gap-2.5 p-4 text-left ${
-        wide ? "col-span-2 flex-row items-center" : "min-h-[7.5rem] flex-col items-start"
-      } ${lead ? "border-primary/45" : ""}`}
+      className={`press flex min-h-16 items-center gap-3 px-1 py-4 text-left ${lead ? "text-primary" : "text-foreground"}`}
     >
-      <span
-        className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
-          lead
-            ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
-            : "border-[var(--chunk-edge)] bg-primary/12 text-primary"
-        }`}
-        aria-hidden
-      >
-        <Icon size={22} strokeWidth={2.3} />
-      </span>
+      <Icon size={20} className="shrink-0 text-muted-foreground" aria-hidden />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-label font-extrabold leading-tight text-card-foreground">{title}</span>
         {value && <span className="measure truncate text-micro font-semibold text-muted-foreground">{value}</span>}
         {detail && <span className="text-micro text-muted-foreground">{detail}</span>}
       </span>
-      {wide && <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />}
+      <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
     </button>
   )
 }

@@ -4,8 +4,7 @@ import { cn } from '@/lib/utils'
 /**
  * AppCard — the only card surface in the app.
  *
- * One elevation system: `.surface` carries a shadow in light mode and a lit
- * edge in dark mode. Never a hairline border *and* a shadow, and never a card
+ * Flat surfaces share a subtle outline in both themes. Never a card
  * inside another card — a nested group is expressed with a divider, a heading,
  * or space, not with a second container.
  *

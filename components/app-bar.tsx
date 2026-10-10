@@ -101,7 +101,7 @@ export function AppBar({
   return (
     <header className="chrome chrome-top sticky top-0 z-40" data-raised={raised}>
       <div
-        className="mx-auto flex max-w-md items-center gap-3 px-4 pb-2.5 pt-3"
+        className="mx-auto flex max-w-2xl items-center gap-3 px-4 pb-2.5 pt-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
         {onBack && (

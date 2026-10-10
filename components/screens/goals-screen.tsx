@@ -895,9 +895,9 @@ export function GoalsScreen({
                             <AppCard
                               padding="sm"
                               tone={
-                                status?.reached ? "done" : goal.is_active ? "action" : "neutral"
+                                status?.reached ? "done" : "neutral"
                               }
-                              className={isPast && !status?.reached ? "opacity-65" : ""}
+                              className=""
                             >
                               <div className="flex items-center gap-1">
                                 <button

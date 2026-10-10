@@ -8,6 +8,7 @@ import {
   ChevronDown,
   MapPin,
   CalendarCheck,
+  CalendarDays,
   Trophy,
   StarOff,
   AlertCircle,
@@ -121,7 +122,7 @@ function GoalResultCard({
     <AppCard variant="rows">
       <div className="flex items-center gap-3 px-5 py-4">
         <div
-          className={`pop-in flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+          className={`pop-in flex size-14 shrink-0 items-center justify-center rounded-full border ${
             reached
               ? "border-[var(--success-edge)] bg-success text-success-foreground"
               : "border-[var(--chunk-edge)] bg-surface-sunken"
@@ -286,10 +287,10 @@ function PlanNotice({
     caution: ["border-warning/45 bg-warning/10", "text-warning"],
     done: ["border-success/45 bg-success/10", "text-success"],
     action: ["border-primary/45 bg-primary/10", "text-primary"],
-    quiet: ["border-[var(--chunk-edge)] bg-surface-sunken", "text-muted-foreground"],
+    quiet: ["border-transparent bg-surface-sunken", "text-muted-foreground"],
   }[tone]
   return (
-    <div className={`flex gap-3 rounded-md border-2 px-4 py-3.5 ${styles[0]}`}>
+    <div className={`flex gap-3 rounded-md border px-4 py-3.5 ${styles[0]}`}>
       <Icon size={20} className={`mt-0.5 shrink-0 ${styles[1]}`} aria-hidden />
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-label font-extrabold text-foreground">{title}</p>
@@ -423,7 +424,7 @@ function PreferencesForm({
           type="button"
           aria-pressed={focus === value}
           onClick={() => setFocus(value)}
-          className={`press flex flex-col items-start gap-0.5 rounded-md border-2 border-b-4 px-4 py-3 text-left ${
+          className={`press flex flex-col items-start gap-0.5 rounded-md border px-4 py-3 text-left ${
             focus === value ? "border-primary/60 bg-primary/10" : "border-[var(--chunk-edge)] bg-card"
           }`}
         >
@@ -748,7 +749,7 @@ function ChoiceRow<T extends number>({
           type="button"
           aria-pressed={value === v}
           onClick={() => onChange(v)}
-          className={`press h-11 flex-1 rounded-md border-2 border-b-4 text-label font-extrabold ${
+          className={`press h-11 flex-1 rounded-md border text-label font-extrabold ${
             value === v
               ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
               : "border-[var(--chunk-edge)] bg-card text-foreground"
@@ -862,7 +863,7 @@ function WeekCard({
         {/* The week number in a medal: lit for this week, green once every
             session in it is answered for, plain otherwise. */}
         <span
-          className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-b-4 text-lead font-extrabold ${
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full border text-lead font-extrabold ${
             allSettled && (isPast || isCurrent)
               ? "border-[var(--success-edge)] bg-success text-success-foreground"
               : isCurrent
@@ -874,7 +875,8 @@ function WeekCard({
           {allSettled && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-lead font-extrabold text-card-foreground">{week.theme}</p>
+          <p className="text-body font-semibold text-card-foreground">{t("gp.weekNumber", { count: week.weekNumber })}</p>
+          <p className="mt-0.5 text-label text-muted-foreground">{week.theme}</p>
           <p className="truncate text-micro font-semibold text-muted-foreground">
             {dateLabel} · <span className="measure">~{week.targetKm} km</span>
           </p>
@@ -901,7 +903,7 @@ function WeekCard({
       </button>
 
       {expanded && (
-        <div className="flex flex-col gap-3 border-t-2 border-[var(--chunk-edge)] px-4 pb-4 pt-3.5">
+        <div className="flex flex-col gap-3 border-t border-border px-4 pb-4 pt-3.5">
           {/* Planned vs actual, as the same meter the rest of the app uses. */}
           {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -927,14 +929,14 @@ function WeekCard({
               return (
                 <li
                   key={i}
-                  className={`flex items-center gap-3 rounded-md bg-surface-sunken px-3 py-2.5 ${
+                  className={`flex items-center gap-3 border-b border-border py-3 last:border-b-0 ${
                     status === "skipped" ? "opacity-55" : ""
                   }`}
                 >
                   {canToggle && (
                     <button
                       onClick={() => onToggleSession(week.weekNumber, i)}
-                      className={`press flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+                      className={`press flex size-11 shrink-0 items-center justify-center rounded-full border ${
                         status === "completed"
                           ? "pop-in border-[var(--success-edge)] bg-success text-success-foreground"
                           : status === "skipped"
@@ -959,14 +961,14 @@ function WeekCard({
                       <p className="measure text-micro text-muted-foreground">{session.suggestedPace}</p>
                     )}
                   </div>
-                  <span className="measure shrink-0 text-lead font-bold text-primary">{session.distance}</span>
+                  <span className="measure shrink-0 text-body font-semibold text-foreground">{session.distance}</span>
                 </li>
               )
             })}
           </ul>
 
           {week.coachNote && (
-            <details className="group rounded-md bg-surface-sunken">
+            <details className="group border-t border-border">
               <summary className="press flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
                 <Lightbulb size={16} className="shrink-0 text-warning" aria-hidden />
                 <span className="flex-1 text-label font-bold text-foreground">{t("gp.coachNote")}</span>
@@ -1150,7 +1152,7 @@ function TrainingTimelineView({
   )
 
   if (embedded) {
-    return <div className="overflow-hidden border-t-2 border-[var(--chunk-edge)]">{timelineContent}</div>
+    return <div className="overflow-hidden border-t border-border">{timelineContent}</div>
   }
 
   return (
@@ -1693,7 +1695,7 @@ export function GoalDetailScreen({
           <h2 className="text-lead font-extrabold text-foreground">{t("plan.sectionTitle")}</h2>
           {aiPlan && activeTab === "plan" && (
             <div className="flex items-center gap-1.5">
-              {isDueForRefresh && (
+              {isDueForRefresh && !past && !aiPlan.archived_at && !isBlockExpired && (
                 <span className="rounded-full bg-warning/20 px-2 py-0.5 text-micro font-semibold text-warning">
                   {t("plan.dueForRefresh")}
                 </span>
@@ -1805,7 +1807,7 @@ export function GoalDetailScreen({
 
             {/* Block completion summary */}
             {isBlockExpired && blockCompletionStats && (
-              <PlanNotice tone="done" icon={CheckCircle2} title={t("gp.blockComplete")}>
+              <PlanNotice tone={blockCompletionStats.completedSessions === blockCompletionStats.totalSessions && blockCompletionStats.totalSessions > 0 ? "done" : "quiet"} icon={CalendarDays} title={t("gp.blockComplete")}>
                 {t("gp.blockCompleteBody", {
                   weeks: blockCompletionStats.weeks,
                   km: blockCompletionStats.totalKm,

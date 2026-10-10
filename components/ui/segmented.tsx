@@ -2,8 +2,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Segmented — two or three halves of one screen, as a chunky pill switch.
- * The selected half is a raised chalk tile; the rest sit in the well.
+ * Segmented — quiet, flat controls with a contrasting selected surface.
  */
 interface SegmentedProps<T extends string> {
   options: readonly (readonly [T, string])[]
@@ -29,7 +28,7 @@ export function Segmented<T extends string>({
       role="tablist"
       aria-label={label}
       className={cn(
-        'relative flex rounded-md border-2 border-[var(--chunk-edge)] bg-surface-sunken p-1',
+        'relative flex rounded-md bg-surface-sunken p-1',
         className,
       )}
     >
@@ -37,7 +36,7 @@ export function Segmented<T extends string>({
           switching its own background on and off. */}
       <span
         aria-hidden
-        className="absolute inset-y-1 left-1 rounded-[0.625rem] bg-card shadow-[0_2px_0_0_var(--chunk-edge)]"
+        className="absolute inset-y-1 left-1 rounded-[0.625rem] bg-card"
         style={{
           width: `calc((100% - 0.5rem) / ${options.length})`,
           transform: `translateX(${index * 100}%)`,
@@ -52,7 +51,7 @@ export function Segmented<T extends string>({
           aria-selected={value === key}
           onClick={() => onChange(key)}
           className={cn(
-            'press relative h-10 flex-1 rounded-[0.625rem] text-label font-extrabold uppercase tracking-wide',
+            'press relative h-10 flex-1 rounded-[0.625rem] text-label font-semibold',
             value === key ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
