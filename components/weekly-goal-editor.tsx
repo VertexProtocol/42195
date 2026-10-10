@@ -180,10 +180,10 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
         )}
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {t("weeklyGoalEditor.frequency")}
           </legend>
-          <div className="flex rounded-md bg-surface-sunken p-1">
+          <div className="grid grid-cols-2 gap-2">
             {(
               [
                 [false, Calendar, t("weeklyGoalEditor.thisWeekOnly")],
@@ -195,10 +195,10 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
                 type="button"
                 onClick={() => setIsRecurring(value)}
                 aria-pressed={isRecurring === value}
-                className={`press flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-sm text-label font-semibold ${
+                className={`press flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                   isRecurring === value
-                    ? "bg-card text-foreground shadow-e1"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                    : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
                 }`}
               >
                 <Icon size={14} aria-hidden />
@@ -214,7 +214,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
         </fieldset>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {t("weeklyGoalEditor.metric")}
           </legend>
           <div className="grid grid-cols-2 gap-2">
@@ -229,8 +229,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
                 aria-pressed={metric === option.value}
                 className={`press flex min-h-[44px] items-center justify-center rounded-md px-3 text-label font-semibold ${
                   metric === option.value
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+                    ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                    : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
                 }`}
               >
                 {t(option.labelKey)}
@@ -240,7 +240,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
         </fieldset>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="weekly-target" className="text-label font-medium text-foreground">
+          <label htmlFor="weekly-target" className="text-label font-extrabold text-foreground">
             {`${t("weeklyGoalEditor.weeklyTarget")} (${selectedOption.unit})`}
           </label>
           <Input
@@ -257,7 +257,7 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
 
         {metric === "sessions" && (
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-label font-medium text-foreground">
+            <legend className="mb-1 text-label font-extrabold text-foreground">
               {t("weeklyGoalEditor.perSessionReq")}
             </legend>
             <p className="text-micro leading-relaxed text-muted-foreground">

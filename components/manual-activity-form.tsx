@@ -46,10 +46,10 @@ function TypeChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`press h-9 rounded-full px-3.5 text-micro font-semibold ${
+      className={`press h-10 rounded-full px-4 text-label font-bold ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+          ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
+          : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
       } ${className}`}
     >
       {children}
@@ -134,7 +134,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
         )}
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {t("manualActivity.activityType")}
           </legend>
           <div className="flex flex-wrap gap-1.5">
@@ -209,7 +209,7 @@ export function ManualActivityForm({ open, onClose, onSave }: ManualActivityForm
         </Field>
 
         <fieldset>
-          <legend className="mb-1.5 text-label font-medium text-foreground">
+          <legend className="mb-1.5 text-label font-extrabold text-foreground">
             {t("manualActivity.duration")}
           </legend>
           <div className="flex gap-2">

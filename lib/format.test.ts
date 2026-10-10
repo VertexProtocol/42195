@@ -5,6 +5,8 @@ import {
   goalOutcome,
   longestRun,
   timeAgoParts,
+  formatDateShort,
+  setDateLocale,
 } from "./format"
 import type { Activity } from "./types"
 
@@ -214,5 +216,14 @@ describe("computeWeeklyProgress", () => {
     ]
     expect(computeWeeklyProgress(acts, "duration_minutes", weekStart)).toBe(75)
     expect(computeWeeklyProgress(acts, "elevation_m", weekStart)).toBe(20)
+  })
+})
+
+describe("formatDate — follows the runner's language", () => {
+  it("writes Norwegian months once the locale is Norwegian, and back again", () => {
+    setDateLocale("no")
+    expect(formatDateShort("2026-10-09T12:00:00")).toMatch(/okt/)
+    setDateLocale("en")
+    expect(formatDateShort("2026-10-09T12:00:00")).toBe("Oct 9")
   })
 })

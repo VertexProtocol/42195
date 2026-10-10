@@ -31,9 +31,21 @@ export function formatPace(minPerKm: number | null): string {
   return `${mins}:${secs.toString().padStart(2, "0")} /km`
 }
 
+/**
+ * The language dates are written in. Set by the I18nProvider whenever the
+ * runner's language changes, so "Oct 9" reads "9. okt." in Norwegian without
+ * every caller having to pass a locale through. English stays US-style, which
+ * is what it has always been.
+ */
+let dateLocale = "en-US"
+
+export function setDateLocale(locale: "en" | "no") {
+  dateLocale = locale === "no" ? "nb-NO" : "en-US"
+}
+
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(dateLocale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -42,7 +54,7 @@ export function formatDate(dateStr: string): string {
 
 export function formatDateShort(dateStr: string): string {
   const date = new Date(dateStr)
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(dateLocale, {
     month: "short",
     day: "numeric",
   })
