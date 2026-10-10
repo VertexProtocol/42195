@@ -360,6 +360,52 @@
     animation: pop-in 420ms var(--ease-out) both;
   }
 
+  /* A screen's sections arrive one after another rather than all at once.
+     Short and small: it says "this is fresh", it never makes anyone wait. */
+  .stagger > * {
+    animation: rise var(--dur-view) var(--ease-out) both;
+  }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+  /* A lit streak flame breathes. */
+  .flicker {
+    transform-origin: 50% 90%;
+    animation: flicker 2.4s ease-in-out infinite;
+  }
+
+  /* A tab hops when it becomes the one you are on. */
+  .hop {
+    animation: hop 360ms var(--ease-out);
+  }
+
+  /* A bar that fills from the start line on first mount. */
+  .grow-x {
+    transform-origin: left center;
+    animation: grow-x 700ms var(--ease-out) both;
+  }
+
+  /* Earned medals drop in one after another. */
+  .pop-stagger > * {
+    animation: pop-in 420ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* Confetti: each piece flies to its own --dx/--dy and spins. */
+  .confetti-piece {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    width: 12px;
+    height: 16px;
+    border-radius: 3px;
+    animation: confetti 1600ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+
   /* The two persistent bars.
      ------------------------------------------------------------------------
      Both stay opaque — a blurred bar over scrolling content fails contrast —
@@ -454,6 +500,37 @@
   }
 }
 
+@keyframes flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.08, 0.96) rotate(-4deg); }
+  60% { transform: scale(0.96, 1.06) rotate(3deg); }
+}
+
+@keyframes hop {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-5px) scale(1.15); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes confetti {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(0deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), var(--dy)) rotate(var(--rot));
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -488,6 +565,7 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
@@ -495,5 +573,9 @@
   .press:active,
   .chunky:active {
     transform: none !important;
+  }
+
+  .confetti-piece {
+    display: none;
   }
 }

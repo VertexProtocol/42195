@@ -20,15 +20,30 @@ export function Segmented<T extends string>({
   label,
   className,
 }: SegmentedProps<T>) {
+  const index = Math.max(
+    0,
+    options.findIndex(([key]) => key === value),
+  )
   return (
     <div
       role="tablist"
       aria-label={label}
       className={cn(
-        'flex gap-1 rounded-md border-2 border-[var(--chunk-edge)] bg-surface-sunken p-1',
+        'relative flex rounded-md border-2 border-[var(--chunk-edge)] bg-surface-sunken p-1',
         className,
       )}
     >
+      {/* One tile that slides to the chosen half, rather than each half
+          switching its own background on and off. */}
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-1 rounded-[0.625rem] bg-card shadow-[0_2px_0_0_var(--chunk-edge)]"
+        style={{
+          width: `calc((100% - 0.5rem) / ${options.length})`,
+          transform: `translateX(${index * 100}%)`,
+          transition: 'transform var(--dur-state) var(--ease-out)',
+        }}
+      />
       {options.map(([key, text]) => (
         <button
           key={key}
@@ -37,10 +52,8 @@ export function Segmented<T extends string>({
           aria-selected={value === key}
           onClick={() => onChange(key)}
           className={cn(
-            'press h-10 flex-1 rounded-[0.625rem] text-label font-extrabold uppercase tracking-wide',
-            value === key
-              ? 'bg-card text-primary shadow-[0_2px_0_0_var(--chunk-edge)]'
-              : 'text-muted-foreground hover:text-foreground',
+            'press relative h-10 flex-1 rounded-[0.625rem] text-label font-extrabold uppercase tracking-wide',
+            value === key ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {text}

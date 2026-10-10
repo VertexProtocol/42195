@@ -355,7 +355,7 @@ export function ProfileScreen({
   }
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── Identity ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3.5">
         {user.avatar_url ? (

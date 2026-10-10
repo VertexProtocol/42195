@@ -217,7 +217,7 @@ export function SharedGoalScreen({ groupId, onBack, initial, onLeft }: SharedGoa
           onBack={onBack}
           backLabel={t("common.back")}
         />
-        <div className="flex flex-col gap-3 px-4 pb-8 screen-body">
+        <div className="stagger flex flex-col gap-3 px-4 pb-8 screen-body">
           <AppCard padding="lg">
             {initial && (
               <div className="flex items-baseline justify-between gap-3">
@@ -290,7 +290,7 @@ export function SharedGoalScreen({ groupId, onBack, initial, onLeft }: SharedGoa
     <>
       <AppBar title={view.name} onBack={onBack} backLabel={t("common.back")} />
 
-      <div className="flex flex-col gap-3 px-4 pb-8 screen-body">
+      <div className="stagger flex flex-col gap-3 px-4 pb-8 screen-body">
         <AppCard padding="lg">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-lead font-semibold tracking-tight">

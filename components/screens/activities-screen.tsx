@@ -240,7 +240,7 @@ export function ActivitiesScreen({
 
   return (
     <div
-      className="flex flex-col gap-5 px-4 pb-8 screen-body"
+      className="stagger flex flex-col gap-5 px-4 pb-8 screen-body"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

@@ -373,7 +373,7 @@ export function InsightsScreen({
   const hasAnyInsight = personalRecords.length > 0 || racePredictions.predictions.length > 0
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* The coach is the primary action on this screen, so it leads. */}
       <button
         onClick={() => setActiveTab("coach")}

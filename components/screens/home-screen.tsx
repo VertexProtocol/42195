@@ -584,7 +584,7 @@ function PlanSection({
           })}`}
         >
           <div
-            className={`h-full rounded-full ${
+            className={`grow-x h-full rounded-full ${
               current.outstanding.length > 0 ? "bg-primary" : "bg-success"
             }`}
             style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
@@ -816,7 +816,7 @@ export function HomeScreen({
   )
 
   return (
-    <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {/* ── The race, and how much runway is left ─────────────────────── */}
       {starredGoals.length > 0 ? (
         <Section>

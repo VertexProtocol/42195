@@ -968,7 +968,7 @@ export function ActivityDetailScreen({
     <>
       <AppBar title={activity.name} onBack={onBack} backLabel={t("tab.activities")} />
 
-      <div className="flex flex-col gap-7 px-4 pb-8 screen-body">
+      <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
         {/* ── What it was ─────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2">
           <ActivityTypeBadge type={activity.type} size="md" />

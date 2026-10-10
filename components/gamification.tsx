@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import { Award, Flame, Footprints, Lock, Medal, Route, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
@@ -31,19 +31,27 @@ export function StreakChip({ streak, className = "" }: { streak: StreakSummary; 
       title={t("streak.weeks", { count: streak.current })}
       aria-label={t("streak.weeks", { count: streak.current })}
     >
-      <Flame size={18} fill={lit ? "currentColor" : "none"} aria-hidden />
+      <Flame
+        size={18}
+        fill={lit ? "currentColor" : "none"}
+        className={lit ? "flicker" : undefined}
+        aria-hidden
+      />
       <span className="measure">{streak.current}</span>
     </span>
   )
 }
 
 /** One medal: coloured once earned, a locked grey disc until then. */
-function BadgeMedal({ badge }: { badge: Badge }) {
+function BadgeMedal({ badge, order }: { badge: Badge; order: number }) {
   const { t } = useI18n()
   const Icon = badge.earned ? BADGE_ICONS[badge.id] : Lock
   const name = t(`badge.${badge.id}`)
   return (
-    <div className="flex flex-col items-center gap-1.5 text-center">
+    <div
+      className="flex flex-col items-center gap-1.5 text-center"
+      style={{ "--i": order } as CSSProperties}
+    >
       <span
         className={`flex size-16 items-center justify-center rounded-full border-2 border-b-4 ${
           badge.earned
@@ -68,9 +76,10 @@ function BadgeMedal({ badge }: { badge: Badge }) {
 
 export function BadgeGrid({ badges }: { badges: Badge[] }) {
   return (
-    <div className="grid grid-cols-3 gap-x-2 gap-y-4 sm:grid-cols-4">
-      {badges.map((b) => (
-        <BadgeMedal key={b.id} badge={b} />
+    // Medals drop in one after another, the earned ones first in line.
+    <div className="pop-stagger grid grid-cols-3 gap-x-2 gap-y-4 sm:grid-cols-4">
+      {badges.map((b, i) => (
+        <BadgeMedal key={b.id} badge={b} order={i} />
       ))}
     </div>
   )
@@ -88,7 +97,7 @@ export function StreakCard({ streak }: { streak: StreakSummary }) {
         }`}
         aria-hidden
       >
-        <Flame size={30} fill={lit ? "currentColor" : "none"} />
+        <Flame size={30} fill={lit ? "currentColor" : "none"} className={lit ? "flicker" : undefined} />
       </span>
       <div className="min-w-0">
         <p className="text-title font-extrabold text-foreground">
@@ -175,6 +184,79 @@ export function useCelebration(
   }
 }
 
+const CONFETTI_COLOURS = [
+  "var(--primary)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+]
+
+/**
+ * A burst of paper from behind the medal. The spread is fixed per piece
+ * (computed from its index) rather than random, so it renders the same on
+ * every pass and never shifts under a re-render.
+ */
+function Confetti() {
+  const pieces = Array.from({ length: 28 }, (_, i) => {
+    const angle = (i / 28) * Math.PI * 2
+    const reach = 120 + ((i * 37) % 90)
+    return {
+      dx: `${Math.round(Math.cos(angle) * reach)}px`,
+      // Biased downward, so it falls rather than only bursting.
+      dy: `${Math.round(Math.sin(angle) * reach + 160)}px`,
+      rot: `${(i % 2 ? 1 : -1) * (240 + ((i * 53) % 300))}deg`,
+      colour: CONFETTI_COLOURS[i % CONFETTI_COLOURS.length],
+      delay: `${(i % 5) * 30}ms`,
+    }
+  })
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className="confetti-piece"
+          style={
+            {
+              "--dx": p.dx,
+              "--dy": p.dy,
+              "--rot": p.rot,
+              background: p.colour,
+              animationDelay: p.delay,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+/** Counts up to `to` once, quickly, so the streak number lands rather than appears. */
+function useCountUp(to: number, run: boolean): number {
+  const [value, setValue] = useState(run ? 0 : to)
+  useEffect(() => {
+    if (!run) return
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduce || to <= 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setValue(to)
+      return
+    }
+    setValue(0)
+    const start = performance.now()
+    const duration = 700
+    let frame = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      setValue(Math.round(to * (1 - Math.pow(1 - t, 3))))
+      if (t < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [to, run])
+  return value
+}
+
 /** The full-screen moment: one big icon, one line, one button. */
 export function CelebrationOverlay({
   celebration,
@@ -186,13 +268,14 @@ export function CelebrationOverlay({
   onClose: () => void
 }) {
   const { t } = useI18n()
+  const count = useCountUp(streak.current, celebration?.kind === "week")
   if (!celebration) return null
 
   const Icon = celebration.kind === "week" ? Flame : BADGE_ICONS[celebration.id]
   const title = celebration.kind === "week" ? t("celebrate.weekTitle") : t("celebrate.badgeTitle")
   const body =
     celebration.kind === "week"
-      ? `${t("celebrate.weekBody")} ${t("streak.weeks", { count: streak.current })}`
+      ? `${t("celebrate.weekBody")} ${t("streak.weeks", { count })}`
       : t(`badge.${celebration.id}`)
 
   return (
@@ -200,21 +283,25 @@ export function CelebrationOverlay({
       role="dialog"
       aria-modal="true"
       aria-labelledby="celebration-title"
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-background px-6 text-center"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 overflow-hidden bg-background px-6 text-center"
     >
+      <Confetti />
       <span
         className="pop-in flex size-32 items-center justify-center rounded-full border-4 border-b-8 border-[var(--primary-edge)] bg-primary text-primary-foreground"
         aria-hidden
       >
         <Icon size={64} strokeWidth={2.4} fill={celebration.kind === "week" ? "currentColor" : "none"} />
       </span>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 [animation:rise_var(--dur-view)_var(--ease-out)_200ms_both]">
         <h2 id="celebration-title" className="text-screen font-extrabold text-foreground">
           {title}
         </h2>
         <p className="text-lead font-semibold text-muted-foreground">{body}</p>
       </div>
-      <div className="w-full max-w-xs" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div
+        className="w-full max-w-xs [animation:rise_var(--dur-view)_var(--ease-out)_380ms_both]"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <Button size="lg" block onClick={onClose} autoFocus>
           {t("celebrate.continue")}
         </Button>

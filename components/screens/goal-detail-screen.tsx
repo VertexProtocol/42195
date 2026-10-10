@@ -1485,7 +1485,7 @@ export function GoalDetailScreen({
         }
       />
 
-      <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
+      <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
         {!past && days > 0 && (
           <p className="flex items-baseline gap-2">
             <span className="measure text-display font-bold leading-none text-foreground">{days}</span>
@@ -1528,7 +1528,7 @@ export function GoalDetailScreen({
             </div>
             <div className="h-3 overflow-hidden rounded-full bg-secondary">
               <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
+                className="grow-x h-full rounded-full bg-primary transition-all duration-500"
                 style={{ width: `${timeProgress}%` }}
               />
             </div>

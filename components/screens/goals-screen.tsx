@@ -536,7 +536,7 @@ export function GoalsScreen({
   )
 
   return (
-    <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
+    <div className="stagger flex flex-col gap-5 px-4 pb-8 screen-body">
       <Segmented
         label={t("goals.title")}
         options={[

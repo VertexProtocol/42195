@@ -66,7 +66,14 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               }`}
               onClick={() => onTabChange(tab.id)}
             >
-              <Icon size={26} strokeWidth={isActive ? 2.5 : 2} />
+              {/* Keyed on the state so the icon remounts, and hops, the
+                  moment its tab becomes the one you are on. */}
+              <Icon
+                key={isActive ? "on" : "off"}
+                size={26}
+                strokeWidth={isActive ? 2.5 : 2}
+                className={isActive ? "hop" : undefined}
+              />
               <span className="text-micro font-extrabold uppercase leading-none tracking-wide">
                 {t(tab.labelKey)}
               </span>
