@@ -64,9 +64,17 @@
 
   /* ---- Shape -----------------------------------------------------------
      Cards hold 14px. Controls hold 10px. Pills are for small controls only. */
-  --radius: 0.875rem;
-  --radius-card: 0.875rem;
-  --radius-control: 0.625rem;
+  --radius: 1.25rem;
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
+
+  /* ---- Chunk -----------------------------------------------------------
+     The solid lower edge every card and button stands on. Pressing a button
+     pushes it down onto that edge, so a tap is felt rather than just seen. */
+  --chunk-edge: oklch(0.8 0.016 66);
+  --primary-edge: oklch(0.41 0.15 36);
+  --success-edge: oklch(0.38 0.1 150);
+  --destructive-edge: oklch(0.4 0.16 27);
 
   /* ---- Elevation -------------------------------------------------------
      One depth system: offset + soft blur, tinted from the ground's own hue.
@@ -153,6 +161,11 @@
   --elevation-1: 0 0 0 0 transparent;
   --elevation-2: 0 8px 24px -8px oklch(0 0 0 / 0.6);
   --elevation-edge: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 0 0 1px oklch(0.345 0.014 58);
+
+  --chunk-edge: oklch(0.36 0.014 58);
+  --primary-edge: oklch(0.56 0.14 40);
+  --success-edge: oklch(0.6 0.12 150);
+  --destructive-edge: oklch(0.54 0.16 27);
 
   --sidebar: oklch(0.255 0.014 58);
   --sidebar-foreground: oklch(0.945 0.008 75);
@@ -308,19 +321,43 @@
 }
 
 @layer components {
-  /* The single card surface. One elevation system, never border + shadow. */
+  /* The single card surface: a chalk tile standing on a solid lower edge,
+     the same edge a button stands on. One system in both themes. */
   .surface {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    box-shadow: var(--elevation-1), var(--elevation-edge);
+    border: 2px solid var(--chunk-edge);
+    border-bottom-width: 4px;
   }
 
   .surface-raised {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    box-shadow: var(--elevation-2), var(--elevation-edge);
+    border: 2px solid var(--chunk-edge);
+    border-bottom-width: 4px;
+    box-shadow: var(--elevation-2);
+  }
+
+  /* A button that stands on its own edge and is pushed down onto it. */
+  .chunky {
+    --chunk: var(--chunk-edge);
+    box-shadow: 0 4px 0 0 var(--chunk);
+  }
+
+  .chunky:active {
+    transform: translateY(3px) !important;
+    box-shadow: 0 1px 0 0 var(--chunk);
+  }
+
+  .chunky:disabled {
+    box-shadow: 0 4px 0 0 var(--chunk);
+  }
+
+  /* One celebration: a quick pop when something is earned. */
+  .pop-in {
+    animation: pop-in 420ms var(--ease-out) both;
   }
 
   /* The two persistent bars.
@@ -403,6 +440,20 @@
   }
 }
 
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -441,7 +492,8 @@
     scroll-behavior: auto !important;
   }
 
-  .press:active {
-    transform: none;
+  .press:active,
+  .chunky:active {
+    transform: none !important;
   }
 }

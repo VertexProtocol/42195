@@ -436,10 +436,10 @@ function PlanSessionRail({
               className="press surface flex h-full w-full flex-col p-4 text-left"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-lead font-semibold text-card-foreground">
+                <span className="truncate text-lead font-extrabold text-card-foreground">
                   {session.type}
                 </span>
-                <span className="measure shrink-0 text-label font-semibold text-primary">
+                <span className="measure shrink-0 text-lead font-bold text-primary">
                   {session.distance}
                 </span>
               </div>
@@ -452,9 +452,6 @@ function PlanSessionRail({
                 </span>
               )}
 
-              <p className="mt-1.5 line-clamp-2 text-micro leading-relaxed text-muted-foreground">
-                {session.effort}
-              </p>
             </button>
           </div>
         ))}
@@ -558,14 +555,7 @@ function PlanSection({
 
   return (
     <Section>
-      <SectionHeader
-        title={t("home.planThisWeek")}
-        action={
-          <SectionAction onClick={() => onViewGoal(current.goal)}>
-            {t("home.planSeeWeek")}
-          </SectionAction>
-        }
-      />
+      <SectionHeader title={t("home.nextRun")} />
 
       {/* The heading that stays put. Not in a card — the cards below are the
           content, and a card around the lot would be a card holding cards. */}
@@ -586,7 +576,7 @@ function PlanSection({
           <span className="measure shrink-0 text-micro text-muted-foreground">{countText}</span>
         </div>
         <div
-          className="h-1 overflow-hidden rounded-full bg-surface-sunken"
+          className="h-3 overflow-hidden rounded-full bg-surface-sunken"
           role="img"
           aria-label={`${current.goal.name} — ${t("home.planSessionsDone", {
             done: current.done,
@@ -830,16 +820,6 @@ export function HomeScreen({
       {/* ── The race, and how much runway is left ─────────────────────── */}
       {starredGoals.length > 0 ? (
         <Section>
-          <SectionHeader
-            title={t("home.activeGoals")}
-            action={
-              starredGoals.length > 1 ? (
-                <span className="text-micro text-muted-foreground">
-                  {starredGoals.length} {t("home.goals")}
-                </span>
-              ) : undefined
-            }
-          />
           <div
             ref={goalRailRef}
             onScroll={isGoalRail ? onGoalRailScroll : undefined}
@@ -871,15 +851,12 @@ export function HomeScreen({
                       at the foot of the card, where an extra row on one goal
                       pushed every line below it out of step with the card
                       beside it — up here they cost no height at all. */}
-                  <div
-                    className={`flex items-center gap-1.5 ${
-                      m.past ? "text-muted-foreground" : "text-primary"
-                    }`}
-                  >
-                    <Star size={12} fill="currentColor" aria-hidden />
-                    <span className="truncate text-micro font-semibold">
-                      {m.past ? t("home.finishedGoal") : t("home.activeGoal")}
-                    </span>
+                  {(m.past || badge?.checkpoint || badge?.blockCompleted) && (
+                  <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+                    {m.past && <Star size={12} fill="currentColor" aria-hidden />}
+                    {m.past && (
+                      <span className="truncate text-micro font-bold">{t("home.finishedGoal")}</span>
+                    )}
                     {(badge?.checkpoint || badge?.blockCompleted) && (
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
                         {badge?.checkpoint && (
@@ -895,22 +872,23 @@ export function HomeScreen({
                       </span>
                     )}
                   </div>
+                  )}
 
-                  <div className="mt-2 flex flex-1 gap-4">
+                  <div className="flex flex-1 items-center gap-4">
                     <div className="flex min-w-0 flex-1 flex-col">
                       {/* The countdown leads. It is the one number the runner
                           opens this screen to check, so it is the only thing on
                           it set at display size. */}
                       <p className="flex items-baseline gap-1.5">
-                        <span className="measure text-display font-semibold leading-none text-card-foreground">
+                        <span className="measure text-display font-bold leading-none text-card-foreground">
                           {m.days}
                         </span>
-                        <span className="text-label text-muted-foreground">
+                        <span className="text-label font-bold text-muted-foreground">
                           {m.past ? t("home.daysAgo") : t("home.daysLeft")}
                         </span>
                       </p>
 
-                      <h3 className="mt-2 line-clamp-2 text-lead font-semibold text-card-foreground">
+                      <h3 className="mt-2 line-clamp-2 text-title font-extrabold text-card-foreground">
                         {goal.name}
                       </h3>
 
@@ -918,35 +896,26 @@ export function HomeScreen({
                           under the name, so a two-line name on one card cannot
                           knock the line out of step with the card beside it.
                           `mt-auto` is inert on a card that stands alone. */}
-                      <p className="mt-auto line-clamp-2 pt-1.5 text-label text-muted-foreground">
-                        <span className="measure font-semibold text-foreground">
-                          {formatDistance(m.logged)}
-                        </span>{" "}
-                        {t("home.logged")}
-                        {goal.target_time_seconds ? (
-                          <>
-                            {" · "}
-                            {t("home.target")}{" "}
-                            <span className="measure font-semibold text-foreground">
-                              {formatTargetTime(goal.target_time_seconds)}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
+                      {goal.target_time_seconds ? (
+                        <span className="mt-2 self-start">
+                          <Pill tone="action" className="measure px-2.5 py-1 text-label">
+                            {t("home.target")} {formatTargetTime(goal.target_time_seconds)}
+                          </Pill>
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="flex shrink-0 flex-col items-center gap-1.5">
                       <ProgressLap
                         percentage={m.timeProgress}
-                        size={46}
-                        strokeWidth={4}
+                        size={64}
+                        strokeWidth={6}
                         label={`${goal.name} — ${t("home.elapsed")}`}
                       >
                         <span className="measure text-micro font-semibold leading-none text-foreground">
                           {m.timeProgress}%
                         </span>
                       </ProgressLap>
-                      <span className="text-micro text-muted-foreground">{t("home.elapsed")}</span>
                     </div>
                   </div>
                 </button>

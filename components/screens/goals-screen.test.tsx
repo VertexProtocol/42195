@@ -557,7 +557,7 @@ describe("GoalsScreen — the drag order as priority", () => {
         makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 1 }),
       ],
     })
-    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
+    expect(screen.getByText(/Oslo sets this week's volume/)).toBeTruthy()
   })
 
   it("carries no badge on the card", () => {
@@ -577,7 +577,7 @@ describe("GoalsScreen — the drag order as priority", () => {
     const perf = makeGoal({ ...future, goal_category: "performance", name: "Sub-50", display_order: 1 })
     const race = makeGoal({ ...future, goal_category: "event_training", name: "Oslo", display_order: 2 })
     renderSuggestions({ initialTab: "race", goals: [perf, race] })
-    expect(screen.getByText(/Oslo is setting this week's volume/)).toBeTruthy()
+    expect(screen.getByText(/Oslo sets this week's volume/)).toBeTruthy()
     expect(screen.queryByText(/Sub-50 is setting/)).toBeNull()
   })
 
@@ -586,7 +586,7 @@ describe("GoalsScreen — the drag order as priority", () => {
       initialTab: "race",
       goals: [makeGoal({ ...future, goal_category: "event_training", name: "Oslo" })],
     })
-    expect(screen.queryByText(/is setting this week's volume/)).toBeNull()
+    expect(screen.queryByText(/sets this week's volume/)).toBeNull()
   })
 })
 

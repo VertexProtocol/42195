@@ -60,6 +60,7 @@ import { AppBar } from '@/components/app-bar'
 import { SharedGoalEntry } from '@/components/shared-goal-entry'
 import type { SharedGoalSummary } from '@/app/api/shared-goals/route'
 import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { Pill } from '@/components/ui/pill'
 
@@ -1485,7 +1486,13 @@ export function GoalDetailScreen({
       />
 
       <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {!past && days > 0 && (
+          <p className="flex items-baseline gap-2">
+            <span className="measure text-display font-bold leading-none text-foreground">{days}</span>
+            <span className="text-lead font-bold text-muted-foreground">{t("common.daysLeft")}</span>
+          </p>
+        )}
+        <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {goal.is_active && !past && <Pill tone="action">{t("plan.activePlan")}</Pill>}
           <span className="flex items-center gap-1.5 text-micro text-muted-foreground">
             <MapPin size={13} aria-hidden />
@@ -1495,22 +1502,7 @@ export function GoalDetailScreen({
             <CalendarCheck size={13} aria-hidden />
             {formatDate(goal.target_date)}
           </span>
-          {!past && days > 0 && (
-            <span className="text-micro font-semibold text-foreground">
-              {days} {t("common.daysLeft")}
-            </span>
-          )}
         </div>
-
-      {onOpenGroup && (
-        <SharedGoalEntry
-          goalId={goal.id}
-          group={sharedGoal ?? null}
-          finished={past}
-          onOpen={onOpenGroup}
-          onCreated={onSharedGoalChange}
-        />
-      )}
 
       {/* Once the date has gone, the question is no longer "how far into the
           training am I" — that bar reads 100% for every past goal and says
@@ -1528,11 +1520,13 @@ export function GoalDetailScreen({
           <div className="px-5 py-4">
             <div className="flex items-center justify-between text-micro mb-2">
               <span className="text-muted-foreground">
-                {goal.start_date ? `Training from ${formatDate(goal.start_date)}` : "Training progress"}
+                {goal.start_date
+                  ? `${t("plan.trainingFrom")} ${formatDate(goal.start_date)}`
+                  : t("plan.trainingProgress")}
               </span>
               <span className="font-medium text-foreground">{timeProgress}%</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+            <div className="h-3 overflow-hidden rounded-full bg-secondary">
               <div
                 className="h-full rounded-full bg-primary transition-all duration-500"
                 style={{ width: `${timeProgress}%` }}
@@ -1552,48 +1546,29 @@ export function GoalDetailScreen({
       {/* ---- AI Training Plan section ---- */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
-            AI Training Plan
-          </h2>
+          <h2 className="text-lead font-extrabold text-foreground">{t("plan.sectionTitle")}</h2>
           {aiPlan && activeTab === "plan" && (
             <div className="flex items-center gap-1.5">
               {isDueForRefresh && (
                 <span className="rounded-full bg-warning/20 px-2 py-0.5 text-micro font-semibold text-warning">
-                  Due for refresh
+                  {t("plan.dueForRefresh")}
                 </span>
               )}
-              <span className="text-micro text-muted-foreground">
-                {generatedAgo === 0 ? "Generated today" : `Generated ${generatedAgo}d ago`}
-              </span>
+
             </div>
           )}
         </div>
 
-        {/* Tab bar */}
-        <div className="mb-3 flex gap-1 rounded-md bg-secondary p-1">
-          <button
-            onClick={() => setActiveTab("plan")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
-              activeTab === "plan"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground"
-            }`}
-          >
-            <Flag size={14} />
-            Training Plan
-          </button>
-          <button
-            onClick={() => setActiveTab("preferences")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-label font-medium transition-colors ${
-              activeTab === "preferences"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground"
-            }`}
-          >
-            <Pencil size={14} />
-            Preferences
-          </button>
-        </div>
+        <Segmented
+          className="mb-3"
+          label={t("plan.sectionTitle")}
+          options={[
+            ["plan", t("plan.tabPlan")],
+            ["preferences", t("plan.tabPreferences")],
+          ] as const}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
 
         {/* Preferences tab */}
         {activeTab === "preferences" && (
@@ -1956,6 +1931,16 @@ export function GoalDetailScreen({
         </>
         )}
       </section>
+
+      {onOpenGroup && (
+        <SharedGoalEntry
+          goalId={goal.id}
+          group={sharedGoal ?? null}
+          finished={past}
+          onOpen={onOpenGroup}
+          onCreated={onSharedGoalChange}
+        />
+      )}
       </div>
 
       {/*

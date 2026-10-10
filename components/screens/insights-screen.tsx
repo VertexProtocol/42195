@@ -502,16 +502,13 @@ export function InsightsScreen({
         <PaceCalculatorCard goals={goals} />
       </Section>
 
+      {/* Only once there is something to show: an empty section here was one
+          more block of text between the runner and their calendar. */}
+      {(testRunsLoading || testRuns.length > 0) && (
       <Section>
         <SectionHeader title={t("testRun.benchmarks")} />
         {testRunsLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-surface-sunken" aria-hidden />
-        ) : testRuns.length === 0 ? (
-          <EmptyState
-            icon={<FlaskConical size={18} />}
-            title={t("testRun.noBenchmarksTitle")}
-            body={t("testRun.noBenchmarks")}
-          />
         ) : (
           <div className="flex flex-col gap-3">
             {(() => {
@@ -620,6 +617,7 @@ export function InsightsScreen({
           </div>
         )}
       </Section>
+      )}
 
       <Section>
         <SectionHeader title={t("calendar.section")} />

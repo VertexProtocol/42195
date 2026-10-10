@@ -20,6 +20,7 @@ import {
   TriangleAlert,
   FlaskConical,
   Route,
+  Footprints,
 } from "lucide-react"
 import { formatDistance, formatDuration, formatPace, formatDateShort } from "@/lib/format"
 import type { Activity, SyncStatus } from "@/lib/types"
@@ -260,32 +261,30 @@ export function ActivitiesScreen({
 
       {/* Actions sit above the list rather than inside the app bar: syncing is
           a decision about this screen's contents. */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <Button className="flex-1" onClick={onAddActivity}>
+          <Plus size={18} strokeWidth={3} />
+          {t("activities.addActivity")}
+        </Button>
         {stravaConnected && (
           <Button
-            variant={syncSuccess ? "ghost" : "secondary"}
-            size="sm"
-            className={`flex-1 ${syncSuccess ? "text-success" : ""}`}
+            variant="secondary"
+            size="icon"
+            className={`size-12 ${syncSuccess ? "text-success" : ""}`}
             onClick={onSync}
             loading={isSyncing}
             disabled={isSyncing || coolingDown}
+            aria-label={
+              isSyncing
+                ? t("profile.syncing")
+                : syncSuccess
+                  ? t("profile.synced")
+                  : t("activities.syncStrava")
+            }
           >
-            {!isSyncing && (syncSuccess ? <Check size={14} /> : <RefreshCw size={14} />)}
-            {isSyncing
-              ? t("profile.syncing")
-              : syncSuccess
-                ? t("profile.synced")
-                : t("activities.syncStrava")}
+            {!isSyncing && (syncSuccess ? <Check size={20} /> : <RefreshCw size={20} />)}
           </Button>
         )}
-        <Button
-          size="sm"
-          className={stravaConnected ? "" : "flex-1"}
-          onClick={onAddActivity}
-        >
-          <Plus size={16} />
-          {t("activities.addActivity")}
-        </Button>
       </div>
 
       {syncStatus.state === "error" && syncStatus.error_message && (
@@ -412,9 +411,15 @@ export function ActivitiesScreen({
                   onClick={() => onSelectActivity(activity)}
                   className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
                 >
+                  <span
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary"
+                    aria-hidden
+                  >
+                    <Footprints size={20} strokeWidth={2.4} />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-label font-semibold text-card-foreground">
+                      <p className="truncate text-label font-extrabold text-card-foreground">
                         {activity.name}
                       </p>
                       {testRunActivityIds.has(activity.id) && (
@@ -423,18 +428,19 @@ export function ActivitiesScreen({
                         </Pill>
                       )}
                     </div>
-                    <p className="mt-0.5 text-micro text-muted-foreground">
-                      {formatDateShort(activity.date)} · {activity.type}
-                    </p>
-                    <p className="measure mt-1.5 text-micro text-muted-foreground">
-                      <span className="text-label font-semibold text-foreground">
-                        {formatDistance(activity.distance_km)}
-                      </span>
-                      {"  "}
+                    <p className="measure mt-0.5 text-micro text-muted-foreground">
                       {formatDuration(activity.duration_seconds)}
                       {activity.pace_min_per_km !== null && (
                         <> · {formatPace(activity.pace_min_per_km)}</>
                       )}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="measure text-lead font-bold text-card-foreground">
+                      {formatDistance(activity.distance_km)}
+                    </p>
+                    <p className="text-micro text-muted-foreground">
+                      {formatDateShort(activity.date)}
                     </p>
                   </div>
                   <ChevronRight
@@ -527,10 +533,10 @@ function FilterChip({
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-micro font-semibold ${
+      className={`press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border-2 px-4 text-label font-bold ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "bg-surface-sunken text-secondary-foreground hover:bg-accent"
+          ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
+          : "border-[var(--chunk-edge)] bg-card text-secondary-foreground hover:bg-surface-sunken"
       }`}
     >
       {icon}

@@ -20,8 +20,10 @@ One runner, on a phone, in two moments:
 - **After a run**, checking that what they just did landed where they expected.
 
 They are amateur runners training for a specific event, comfortable with pace,
-splits and heart-rate zones. They already use Strava. They are not looking for
-motivation graphics; they are looking for a number and a decision.
+splits and heart-rate zones. They already use Strava. They want a number and a
+decision, with as little text around it as possible — and a small reward for
+showing up: a weekly streak, badges, and a moment of celebration when a week is
+won.
 
 A runner can share a race with other runners, and that is the only place anyone
 else appears. It is an addition to a goal, never a layer over the app: the
@@ -47,14 +49,21 @@ the runner and the number they came for.
 
 | Surface | Job |
 |---|---|
-| Today | The race countdown, the next session of the plan, training load, the week so far, the last runs. |
-| Activities | The log. Search, filter, open one. |
-| Plan | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
-| Insights | Records, race predictions, benchmarks, calendar, and the AI coach. |
+| Today | The race countdown, the next run of the plan, training load, the week so far, the last runs. |
+| Runs | Two halves behind one switch: **Log** (search, filter, open one) and **Insights** (streak, badges, records, predictions, calendar, the AI coach). |
+| Goals | Race targets and weekly targets; the AI training plan per goal; the group sharing a race, if there is one. |
 | Profile | Account, Strava connection, HR calibration, appearance, language. |
 
-Profile is reached from the app bar rather than the tab bar: it is visited
-occasionally, and it is not a peer of the three daily destinations.
+Three tabs, no more. Profile is reached from the avatar in the app bar; the
+streak flame sits beside it on every main screen.
+
+## Streaks and badges
+
+Derived, never stored (`lib/gamification.ts`). A week is won when every weekly
+goal that applied to it was met; a runner with no weekly goals wins a week by
+running in it. Badges mark distance milestones (5 km to marathon), lifetime
+totals and streak lengths. Winning the week or earning a badge shows one
+full-screen celebration, once.
 
 ## Language
 

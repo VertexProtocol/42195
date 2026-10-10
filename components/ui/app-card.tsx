@@ -38,9 +38,9 @@ const paddingMap: Record<AppCardPadding, string> = {
 
 const toneMap: Record<AppCardTone, string> = {
   neutral: '',
-  action: 'ring-1 ring-primary/40',
-  done: 'ring-1 ring-success/40',
-  caution: 'ring-1 ring-warning/40',
+  action: 'border-primary/45',
+  done: 'border-success/45',
+  caution: 'border-warning/45',
 }
 
 export function AppCard({

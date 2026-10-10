@@ -89,7 +89,7 @@ describe("TrainingLoadIndicator — no baseline", () => {
     renderCard(<TrainingLoadIndicator activities={lapsedBase()} />)
 
     expect(screen.getByText("Building Baseline")).toBeTruthy()
-    expect(screen.getByText(/no baseline to measure today against/i)).toBeTruthy()
+    expect(screen.getByText(/no runs in four weeks/i)).toBeTruthy()
     // The three values that used to be defaults dressed as findings.
     expect(meter()).toBeNull()
     expect(screen.queryByText("Fatigue")).toBeNull()

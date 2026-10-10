@@ -412,7 +412,7 @@ describe("HomeScreen — pinned goals that have been run", () => {
 
   it("leaves a race still to come exactly as it was", () => {
     renderPinned([makeRaceGoal({ target_date: daysFromNow(32) })])
-    expect(screen.getByText("Active goal")).toBeTruthy()
+    expect(screen.queryByText("Finished")).toBeNull()
     expect(screen.getByText("days left")).toBeTruthy()
     expect(screen.getByText("32")).toBeTruthy()
   })
@@ -639,7 +639,8 @@ describe("HomeScreen — this week of the training plan", () => {
     const onViewGoal = vi.fn()
     renderWithPlan({ goals: [goal], planWeeks: { "goal-1": makePlanWeek() }, onViewGoal })
 
-    fireEvent.click(screen.getByRole("button", { name: /see the week/i }))
+    // The session card itself is the way in; there is no separate link.
+    fireEvent.click(screen.getByText("Long run"))
     expect(onViewGoal).toHaveBeenCalledWith(goal)
   })
 
@@ -704,7 +705,7 @@ describe("HomeScreen — several races, several plans", () => {
     })
     expect(screen.getByText("OSLO LONG RUN")).toBeTruthy()
     expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
-    expect(screen.getAllByRole("heading", { name: "Training plan" })).toHaveLength(1)
+    expect(screen.getAllByRole("heading", { name: "Next run" })).toHaveLength(1)
   })
 
   it("names the race in one heading that stays put, not once per page", () => {

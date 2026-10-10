@@ -41,7 +41,7 @@ export function Pill({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-micro font-semibold',
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-micro font-bold',
         toneMap[tone],
         className,
       )}

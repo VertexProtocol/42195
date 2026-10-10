@@ -73,6 +73,7 @@ import { Meter } from "@/components/ui/meter"
 import { Pill } from "@/components/ui/pill"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
+import { Segmented } from "@/components/ui/segmented"
 
 /**
  * Plan — the two horizons a runner keeps: the race on the calendar, and the
@@ -191,7 +192,7 @@ function SuggestionNote({
         tone === "attention" ? "bg-caution/10" : "bg-surface-sunken"
       }`}
     >
-      <p className="measure text-micro leading-relaxed text-muted-foreground">{text}</p>
+      <p className="text-label leading-snug text-muted-foreground">{text}</p>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-3">
         {actions.filter(Boolean).map((action) => (
           <button
@@ -249,7 +250,7 @@ function SuggestionCard({
             </span>
           </div>
 
-          <p className="measure mt-1 text-micro leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
             {t(suggestion.reasonKey, suggestion.reasonValues)}
           </p>
 
@@ -536,33 +537,15 @@ export function GoalsScreen({
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-8 screen-body">
-      {/* Segmented control */}
-      <div
-        role="tablist"
-        aria-label={t("goals.title")}
-        className="flex rounded-md bg-surface-sunken p-1"
-      >
-        {(
-          [
-            ["race", t("goals.targets")],
-            ["weekly", t("goals.weekly")],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`press flex-1 rounded-sm py-2.5 text-label font-semibold ${
-              tab === key
-                ? "bg-card text-foreground shadow-e1"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label={t("goals.title")}
+        options={[
+          ["race", t("goals.targets")],
+          ["weekly", t("goals.weekly")],
+        ] as const}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* ── Weekly ─────────────────────────────────────────────────────── */}
       {tab === "weekly" && (
@@ -1168,7 +1151,7 @@ export function GoalsScreen({
                   its trophy and its training phase. Naming the race in the
                   explanation says the same thing and needs no key. */}
               {pacesetterName !== null && orderedRaceGoals.length > 1 && (
-                <p className="measure text-micro leading-relaxed text-muted-foreground">
+                <p className="text-label leading-snug text-muted-foreground">
                   {t("goals.orderIsPriority", { goal: pacesetterName })}
                 </p>
               )}
