@@ -9,17 +9,15 @@ import {
   useCallback,
   useEffect,
 } from "react"
-import { Star, StarOff } from "lucide-react"
+import { ChevronRight, StarOff } from "lucide-react"
 import { PoweredByStrava } from "@/components/strava-brand"
-import { ProgressLap } from "@/components/progress-lap"
 import {
   formatDuration,
+  formatDateShort,
   daysUntil,
-  timeElapsedPercentage,
   isDatePast,
   daysSince,
   formatTargetTime,
-  computeDistanceInRange,
   computeWeeklyProgress,
   formatWeeklyMetric,
   progressPercentage,
@@ -46,7 +44,6 @@ import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
 import { Pill } from "@/components/ui/pill"
-import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 
 const TrainingLoadIndicator = lazy(() =>
@@ -97,10 +94,10 @@ function WeeklyGoalRow({
     <CardRow className="p-0">
       <button onClick={onOpen} className="press flex w-full items-center gap-3 px-4 py-3 text-left">
         <span
-          className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+          className={`flex size-8 shrink-0 items-center justify-center ${
             isComplete
-              ? "border-[var(--success-edge)] bg-success text-success-foreground"
-              : "border-[var(--chunk-edge)] bg-primary/12 text-primary"
+              ? "text-success"
+              : "text-muted-foreground"
           }`}
           aria-hidden
         >
@@ -654,6 +651,8 @@ interface HomeScreenProps {
    * has led somewhere the goal is not, which is what the tap used to do.
    */
   onViewWeeklyGoals?: () => void
+  onViewCoach?: () => void
+  onSelectActivity?: (activity: Activity) => void
   onViewInsights: () => void
 }
 
@@ -663,13 +662,15 @@ export function HomeScreen({
   activities,
   weeklySummary,
   warnings,
-  planBadges,
   currentPlanWeeks,
   planSessionStatuses,
   onViewGoal,
   onViewGoals,
   onViewWeeklyGoals,
   onUnpinGoal,
+  onViewCoach,
+  onViewInsights,
+  onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
 
@@ -718,42 +719,6 @@ export function HomeScreen({
     return [...starredGoals].sort((a, b) => past(a) - past(b))
   }, [starredGoals])
 
-  // Precomputed outside JSX so we never run O(goals × activities) per render.
-  const goalMetrics = useMemo(
-    () =>
-      orderedGoals.map((goal) => {
-        const logged = computeDistanceInRange(
-          activities,
-          goal.start_date,
-          goal.target_date,
-          goal.created_at,
-        )
-        const effectiveStart = goal.start_date ?? goal.created_at
-        const past = isDatePast(goal.target_date)
-        return {
-          id: goal.id,
-          logged,
-          past,
-          timeProgress: timeElapsedPercentage(effectiveStart, goal.target_date),
-          // daysUntil floors at zero, so a race last spring and one tomorrow
-          // both read "0 days left". Past cards count the other way instead.
-          days: past ? daysSince(goal.target_date) : daysUntil(goal.target_date),
-        }
-      }),
-    [orderedGoals, activities],
-  )
-
-  // Pinned goals ride a snap rail once there is more than one of them: stacked
-  // full-height cards pushed training load and the week below the fold, and the
-  // runner pins a second goal to compare it with the first, not to scroll past
-  // it. One goal keeps the plain card — a carousel of one is a lie.
-  const isGoalRail = starredGoals.length > 1
-  const {
-    ref: goalRailRef,
-    index: goalRailIndex,
-    onScroll: onGoalRailScroll,
-  } = useSnapRail()
-
   // Every weekly goal is one lane, in one row, in the order the runner put
   // them in. There is no longer a split between goals that fit a stat column
   // and goals that do not — that split was invisible to whoever set the goals
@@ -787,156 +752,30 @@ export function HomeScreen({
   // block ended with it, and what is left to say about it is on its own card.
   const planPages = useMemo(
     () =>
-      orderedGoals.flatMap((goal, i) => {
-        if (goalMetrics[i]?.past) return []
+      orderedGoals.flatMap((goal) => {
+        if (isDatePast(goal.target_date)) return []
         const week = currentPlanWeeks?.[goal.id]
         return week ? [{ goal, week }] : []
       }),
-    [orderedGoals, goalMetrics, currentPlanWeeks],
+    [orderedGoals, currentPlanWeeks],
   )
+
+  const latestActivity = useMemo(() => activities.reduce<Activity | null>(
+    (latest, activity) => !latest || activity.date > latest.date ? activity : latest,
+    null,
+  ), [activities])
 
   return (
     <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
-      {/* ── The race, and how much runway is left ─────────────────────── */}
-      {starredGoals.length > 0 ? (
-        <Section>
-          <div
-            ref={goalRailRef}
-            onScroll={isGoalRail ? onGoalRailScroll : undefined}
-            role={isGoalRail ? "group" : undefined}
-            aria-label={isGoalRail ? t("home.activeGoals") : undefined}
-            className={
-              isGoalRail
-                ? "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1"
-                : "flex flex-col gap-3"
-            }
-          >
-            {orderedGoals.map((goal, i) => {
-              const m = goalMetrics[i]
-              const badge = planBadges[goal.id]
-              return (
-                <div
-                  key={goal.id}
-                  className={isGoalRail ? "w-[86%] shrink-0 snap-start" : undefined}
-                >
-                <button
-                  onClick={() => onViewGoal(goal)}
-                  // `flex flex-col` is load-bearing: a button taller than its
-                  // content centres that content vertically, which on the rail
-                  // floated the shorter card's text between two bands of white
-                  // while its neighbour filled the card edge to edge.
-                  className="press surface flex h-full w-full flex-col p-4 text-left"
-                >
-                  {/* Status line, full card width. The plan badges used to sit
-                      at the foot of the card, where an extra row on one goal
-                      pushed every line below it out of step with the card
-                      beside it — up here they cost no height at all. */}
-                  {(m.past || badge?.checkpoint || badge?.blockCompleted) && (
-                  <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
-                    {m.past && <Star size={12} fill="currentColor" aria-hidden />}
-                    {m.past && (
-                      <span className="truncate text-micro font-bold">{t("home.finishedGoal")}</span>
-                    )}
-                    {(badge?.checkpoint || badge?.blockCompleted) && (
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                        {badge?.checkpoint && (
-                          <Pill tone="action" className="px-1.5 py-0">
-                            {t("plan.checkpointBadge")}
-                          </Pill>
-                        )}
-                        {badge?.blockCompleted && (
-                          <Pill tone="positive" className="px-1.5 py-0">
-                            {t("plan.blockDoneBadge")}
-                          </Pill>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  )}
-
-                  <div className="flex flex-1 items-center gap-4">
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      {/* The countdown leads. It is the one number the runner
-                          opens this screen to check, so it is the only thing on
-                          it set at display size. */}
-                      <p className="flex items-baseline gap-1.5">
-                        <span className="measure text-display font-bold leading-none text-card-foreground">
-                          {m.days}
-                        </span>
-                        <span className="text-label font-bold text-muted-foreground">
-                          {m.past ? t("home.daysAgo") : t("home.daysLeft")}
-                        </span>
-                      </p>
-
-                      <h3 className="mt-2 line-clamp-2 text-title font-extrabold text-card-foreground">
-                        {goal.name}
-                      </h3>
-
-                      {/* The totals sit on the floor of the card rather than
-                          under the name, so a two-line name on one card cannot
-                          knock the line out of step with the card beside it.
-                          `mt-auto` is inert on a card that stands alone. */}
-                      {goal.target_time_seconds ? (
-                        <span className="mt-2 self-start">
-                          <Pill tone="action" className="measure px-2.5 py-1 text-label">
-                            {t("home.target")} {formatTargetTime(goal.target_time_seconds)}
-                          </Pill>
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="flex shrink-0 flex-col items-center gap-1.5">
-                      <ProgressLap
-                        percentage={m.timeProgress}
-                        size={64}
-                        strokeWidth={6}
-                        label={`${goal.name} — ${t("home.elapsed")}`}
-                      >
-                        <span className="measure text-micro font-semibold leading-none text-foreground">
-                          {m.timeProgress}%
-                        </span>
-                      </ProgressLap>
-                    </div>
-                  </div>
-                </button>
-
-                {/* A sibling of the card, not a child: the card is itself a
-                    button, and a button inside a button is not a thing. Offered
-                    only once the race is behind them, and only as an offer —
-                    unpinning something the runner chose to pin is their call,
-                    not a tidy-up the app does quietly overnight. */}
-                {m.past && onUnpinGoal && (
-                  <button
-                    onClick={() => onUnpinGoal(goal.id)}
-                    className="press mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-sm py-1.5 text-micro font-semibold text-muted-foreground hover:text-foreground"
-                  >
-                    <StarOff size={13} aria-hidden />
-                    {t("home.unpinFinished")}
-                  </button>
-                )}
-                </div>
-              )
-            })}
-          </div>
-
-          {isGoalRail && <RailDots count={orderedGoals.length} index={goalRailIndex} />}
-        </Section>
-      ) : (
-        <EmptyState
-          title={t("home.noActiveGoals")}
-          body={t("home.noActiveGoalsBody")}
-          action={
-            <Button size="sm" onClick={onViewGoals}>
-              {t("home.setGoal")}
-            </Button>
-          }
-        />
+      {planPages.length === 0 && (
+        <div className="py-2">
+          <h2 className="text-screen font-semibold">{t("home.startTitle")}</h2>
+          <p className="mt-2 max-w-prose text-body text-muted-foreground">{t("home.startBody")}</p>
+          <Button className="mt-4" onClick={onViewGoals}>{t("home.setGoal")}</Button>
+        </div>
       )}
-
       {/* ── What there is to run ──────────────────────────────────────── */}
-      {/* Directly under the countdown, because it is the decision the
-          countdown leads to. Everything below this point is a report on what
-          has already happened. */}
+      {/* Current training leads; historical goals stay below the week. */}
       {planPages.length > 0 && (
         <PlanSection
           plans={planPages}
@@ -946,17 +785,6 @@ export function HomeScreen({
           onViewGoal={onViewGoal}
           t={t}
         />
-      )}
-
-      {/* ── Is the body handling it ───────────────────────────────────── */}
-      {hasLoadHistory && (
-        <Suspense fallback={null}>
-          <TrainingLoadIndicator
-            activities={activities}
-            warnings={warnings}
-            onDismissWarning={handleDismissWarning}
-          />
-        </Suspense>
       )}
 
       {/* ── What the week is aiming at ────────────────────────────────── */}
@@ -1002,6 +830,70 @@ export function HomeScreen({
           </StatGroup>
         </AppCard>
       </Section>
+
+      {orderedGoals.some((goal) => !isDatePast(goal.target_date)) && <Section>
+        {orderedGoals.some((goal) => !isDatePast(goal.target_date)) && (
+          <SectionHeader title={t("home.activeGoals")} action={<SectionAction onClick={onViewGoals}>{t("home.seeAll")}</SectionAction>} />
+        )}
+        <div className="flex flex-col gap-3">
+          {orderedGoals.filter((goal) => !isDatePast(goal.target_date)).map((goal, i) => {
+            return (
+              <button key={goal.id} onClick={() => onViewGoal(goal)} className={`press flex w-full items-center justify-between gap-4 text-left ${i === 0 ? "surface p-5" : "border-b border-border py-3"}`}>
+                <div className="min-w-0">
+                  <h3 className="text-title font-semibold">{goal.name}</h3>
+                  {goal.target_time_seconds ? <p className="mt-1 text-label text-muted-foreground">{t("home.target")} <span className="measure">{formatTargetTime(goal.target_time_seconds)}</span></p> : null}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="measure text-title font-semibold">{daysUntil(goal.target_date)}</p>
+                  <p className="text-micro text-muted-foreground">{t("home.daysLeft")}</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </Section>}
+      <button onClick={onViewCoach ?? onViewInsights} className="press flex min-h-14 items-center justify-between gap-3 border-y border-border py-4 text-left">
+        <span><span className="block text-body font-semibold">{t("insights.askCoach")}</span><span className="text-label text-muted-foreground">{t("insights.coachDesc")}</span></span>
+        <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+
+      {latestActivity && onSelectActivity && (
+        <Section>
+          <SectionHeader title={t("home.latestRun")} />
+          <button onClick={() => onSelectActivity(latestActivity)} className="press flex w-full items-center justify-between gap-3 py-3 text-left">
+            <span className="min-w-0"><span className="block text-body font-semibold">{latestActivity.name}</span><span className="text-label text-muted-foreground">{formatDateShort(latestActivity.date)} · {formatDuration(latestActivity.duration_seconds)}</span></span>
+            <span className="measure shrink-0 text-body">{Number(latestActivity.distance_km).toFixed(1)} km</span>
+          </button>
+        </Section>
+      )}
+
+      {orderedGoals.some((goal) => isDatePast(goal.target_date)) && (
+        <Section>
+          <SectionHeader title={t("home.pastGoals")} />
+          <div className="divide-y divide-border">
+            {orderedGoals.filter((goal) => isDatePast(goal.target_date)).map((goal) => (
+              <div key={goal.id} className="flex items-center gap-2 py-2">
+                <button onClick={() => onViewGoal(goal)} className="press min-h-12 min-w-0 flex-1 text-left">
+                  <h3 className="text-body font-semibold">{goal.name}</h3>
+                  <p className="text-label text-muted-foreground"><span>{t("home.finishedGoal")}</span> · <span>{daysSince(goal.target_date)}</span> <span>{t("home.daysAgo")}</span></p>
+                </button>
+                {onUnpinGoal && <button onClick={() => onUnpinGoal(goal.id)} className="press flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-sunken" aria-label={t("home.unpinFinished")}><StarOff size={17} aria-hidden /></button>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* ── Is the body handling it ───────────────────────────────────── */}
+      {hasLoadHistory && (
+        <Suspense fallback={null}>
+          <TrainingLoadIndicator
+            activities={activities}
+            warnings={warnings}
+            onDismissWarning={handleDismissWarning}
+          />
+        </Suspense>
+      )}
 
       {activities.length > 0 && <PoweredByStrava className="pt-1" />}
     </div>

@@ -18,9 +18,9 @@
 
 :root {
   /* ---- Ground and surfaces -------------------------------------------- */
-  /* The page is clay, not off-white. Cards are chalk and genuinely lift. */
-  --background: oklch(0.88 0.014 68);
-  --surface-sunken: oklch(0.845 0.016 68);
+  /* Warm off-white ground; quiet surfaces keep training data in focus. */
+  --background: oklch(0.975 0.006 68);
+  --surface-sunken: oklch(0.95 0.008 68);
   --card: oklch(0.985 0.006 72);
   --popover: oklch(0.985 0.006 72);
 
@@ -36,13 +36,13 @@
   --primary-soft: oklch(0.505 0.17 36 / 0.1);
 
   /* ---- Quiet surfaces and lines ---------------------------------------- */
-  --secondary: oklch(0.845 0.016 68);
+  --secondary: oklch(0.95 0.008 68);
   --secondary-foreground: oklch(0.31 0.022 48);
-  --muted: oklch(0.845 0.016 68);
-  --accent: oklch(0.815 0.02 66);
+  --muted: oklch(0.95 0.008 68);
+  --accent: oklch(0.92 0.01 66);
   --accent-foreground: oklch(0.29 0.022 46);
-  --border: oklch(0.795 0.016 66);
-  --input: oklch(0.795 0.016 66);
+  --border: oklch(0.89 0.008 66);
+  --input: oklch(0.89 0.008 66);
   --ring: oklch(0.505 0.17 36);
 
   /* ---- State ----------------------------------------------------------- */
@@ -64,9 +64,9 @@
 
   /* ---- Shape -----------------------------------------------------------
      Cards hold 14px. Controls hold 10px. Pills are for small controls only. */
-  --radius: 1.25rem;
-  --radius-card: 1.25rem;
-  --radius-control: 0.875rem;
+  --radius: 1rem;
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
 
   /* ---- Chunk -----------------------------------------------------------
      The solid lower edge every card and button stands on. Pressing a button
@@ -108,9 +108,9 @@
   --sidebar-foreground: oklch(0.235 0.02 45);
   --sidebar-primary: oklch(0.505 0.17 36);
   --sidebar-primary-foreground: oklch(0.985 0.012 70);
-  --sidebar-accent: oklch(0.845 0.016 68);
+  --sidebar-accent: oklch(0.95 0.008 68);
   --sidebar-accent-foreground: oklch(0.29 0.022 46);
-  --sidebar-border: oklch(0.795 0.016 66);
+  --sidebar-border: oklch(0.89 0.008 66);
   --sidebar-ring: oklch(0.505 0.17 36);
 }
 
@@ -345,39 +345,27 @@
 }
 
 @layer components {
-  /* The single card surface: a chalk tile standing on a solid lower edge,
-     the same edge a button stands on. One system in both themes. */
+  /* Flat surfaces. Elevation is reserved for dialogs and overlays. */
   .surface {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    border: 2px solid var(--chunk-edge);
-    border-bottom-width: 4px;
+    border: 1px solid var(--border);
   }
 
   .surface-raised {
     background-color: var(--card);
     color: var(--card-foreground);
     border-radius: var(--radius-card);
-    border: 2px solid var(--chunk-edge);
-    border-bottom-width: 4px;
+    border: 1px solid var(--border);
     box-shadow: var(--elevation-2);
   }
 
-  /* A button that stands on its own edge and is pushed down onto it. */
-  .chunky {
-    --chunk: var(--chunk-edge);
-    box-shadow: 0 4px 0 0 var(--chunk);
-  }
+  /* Legacy utility retained for shared controls; interaction stays flat. */
+  .chunky { box-shadow: none; }
 
-  .chunky:active {
-    transform: translateY(3px) !important;
-    box-shadow: 0 1px 0 0 var(--chunk);
-  }
-
-  .chunky:disabled {
-    box-shadow: 0 4px 0 0 var(--chunk);
-  }
+  .scroll-quiet { scrollbar-width: none; }
+  .scroll-quiet::-webkit-scrollbar { display: none; }
 
   /* One celebration: a quick pop when something is earned. */
   .pop-in {

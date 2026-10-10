@@ -27,7 +27,7 @@ const VALID_TABS = new Set<TabId>(["home", "activities", "goals", "insights", "p
 // from this set: walking out of a group to another tab left `group` in the
 // URL, and coming back to Plan put the group you had left back on screen —
 // under the Plan list, since the list renders too when no goal is selected.
-const STACKED_VIEWS = { activity: null, goal: null, group: null, plan: null } as const
+const STACKED_VIEWS = { activity: null, goal: null, group: null, plan: null, tool: null } as const
 
 // Lazy-load heavy screens (ActivityDetail pulls in Recharts ~200KB, GoalDetail pulls in AI plan UI)
 const ActivityDetailScreen = lazy(() => import("@/components/screens/activity-detail-screen").then(m => ({ default: m.ActivityDetailScreen })))
@@ -362,7 +362,7 @@ export function AppShell({ initialData }: AppShellProps) {
   // and only the content region is a skeleton.
   if (data.isLoading) {
     return (
-      <div className="mx-auto min-h-dvh max-w-md bg-background">
+      <div className="mx-auto min-h-dvh max-w-2xl bg-background">
         <AppBar title="42195" brand subtitle={t("common.loading")} />
         <main style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}>
           <ScreenFallback />
@@ -388,7 +388,7 @@ export function AppShell({ initialData }: AppShellProps) {
           : "42195"
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-background">
+    <div className="mx-auto min-h-dvh max-w-2xl bg-background">
       {/* One app bar for every screen: where you are, whether the data is
           current, and the way to your account. Detail views swap the profile
           button for a back button rather than growing a header of their own. */}
@@ -424,6 +424,8 @@ export function AppShell({ initialData }: AppShellProps) {
             onViewGoals={() => handleTabChange("goals")}
             onViewWeeklyGoals={handleViewWeeklyGoals}
             onViewInsights={() => handleTabChange("insights")}
+            onViewCoach={() => navigate({ ...STACKED_VIEWS, tab: "insights", tool: "coach" })}
+            onSelectActivity={handleSelectActivity}
             onUnpinGoal={data.toggleStarGoal}
           />
         )}
@@ -518,6 +520,8 @@ export function AppShell({ initialData }: AppShellProps) {
           <div className={activeTab !== "insights" ? "hidden" : ""}>
             <Suspense fallback={<ScreenFallback />}>
               <InsightsScreen
+                selectedTool={searchParams.get("tool")}
+                onToolChange={(tool) => navigate({ tool: tool === "overview" ? null : tool })}
                 activities={data.activities}
                 streak={streak}
                 badges={badges}

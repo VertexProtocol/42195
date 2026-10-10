@@ -726,3 +726,17 @@ describe("HomeScreen — several races, several plans", () => {
     expect(screen.queryByText("GHOST SESSION")).toBeNull()
   })
 })
+
+describe("HomeScreen — next steps and recent activity", () => {
+  it("opens the coach directly and selects the newest activity by date", () => {
+    const onViewCoach = vi.fn()
+    const onSelectActivity = vi.fn()
+    const older = makeActivity({ name: "Older run", date: "2026-01-01" })
+    const newer = makeActivity({ name: "Latest run", date: "2026-02-01" })
+    render(<I18nProvider><HomeScreen starredGoals={[]} currentWeekGoals={[]} activities={[older, newer]} weeklySummary={summaryOf([])} warnings={[]} planBadges={{}} onViewGoal={() => {}} onViewGoals={() => {}} onViewInsights={() => {}} onViewCoach={onViewCoach} onSelectActivity={onSelectActivity} /></I18nProvider>)
+    fireEvent.click(screen.getByRole("button", { name: /ask your coach/i }))
+    expect(onViewCoach).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole("button", { name: /latest run/i }))
+    expect(onSelectActivity).toHaveBeenCalledWith(newer)
+  })
+})

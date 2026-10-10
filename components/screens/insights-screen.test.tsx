@@ -72,3 +72,16 @@ describe("InsightsScreen — personal records", () => {
     expect(screen.queryByRole("button", { name: /5 km/ })).toBeNull()
   })
 })
+
+describe("InsightsScreen — coach deep link", () => {
+  it("opens the coach from Today and follows route changes without remounting", () => {
+    const onToolChange = vi.fn()
+    const view = render(<I18nProvider><InsightsScreen activities={[]} goals={[]} selectedTool="coach" onToolChange={onToolChange} /></I18nProvider>)
+    expect(screen.getByRole("textbox", { name: /ask your coach/i })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: /back/i }))
+    expect(onToolChange).toHaveBeenCalledWith("overview")
+    view.rerender(<I18nProvider><InsightsScreen activities={[]} goals={[]} selectedTool={null} onToolChange={onToolChange} /></I18nProvider>)
+    expect(screen.queryByRole("textbox", { name: /ask your coach/i })).toBeNull()
+    expect(screen.getByRole("button", { name: /ask your coach/i })).toBeTruthy()
+  })
+})

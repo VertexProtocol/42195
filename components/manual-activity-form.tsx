@@ -48,8 +48,8 @@ function TypeChip({
       aria-pressed={active}
       className={`press h-10 rounded-full px-4 text-label font-bold ${
         active
-          ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
-          : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
+          ? "border border-[var(--primary-edge)] bg-primary text-primary-foreground"
+          : "border border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
       } ${className}`}
     >
       {children}

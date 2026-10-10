@@ -196,7 +196,7 @@ export default function LoginPage() {
           </div>
         </Field>
 
-        <Button type="submit" block loading={isPending} className="mt-1">
+        <Button variant="secondary" type="submit" block loading={isPending} className="mt-1">
           {isPending ? t("auth.signingIn") : t("auth.signIn")}
         </Button>
 

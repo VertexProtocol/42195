@@ -45,12 +45,12 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-[var(--chunk-edge)] bg-background"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       role="tablist"
       aria-label={t("nav.main")}
     >
-      <div className="mx-auto flex max-w-md items-stretch gap-2 px-4 py-2">
+      <div className="mx-auto flex max-w-2xl items-stretch gap-2 px-4 py-2">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = current === tab.id
@@ -59,22 +59,21 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
               key={tab.id}
               role="tab"
               aria-selected={isActive}
-              className={`press flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md border-2 ${
+              className={`press flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md ${
                 isActive
-                  ? "border-primary/60 bg-primary/10 text-primary"
-                  : "border-transparent text-muted-foreground"
+                  ? "bg-primary/8 text-primary"
+                  : "text-muted-foreground"
               }`}
               onClick={() => onTabChange(tab.id)}
             >
-              {/* Keyed on the state so the icon remounts, and hops, the
-                  moment its tab becomes the one you are on. */}
+              {/* Selected weight and tint provide a quiet, persistent cue. */}
               <Icon
                 key={isActive ? "on" : "off"}
-                size={26}
+                size={23}
                 strokeWidth={isActive ? 2.5 : 2}
-                className={isActive ? "hop" : undefined}
+
               />
-              <span className="text-micro font-extrabold uppercase leading-none tracking-wide">
+              <span className="text-micro font-semibold leading-none">
                 {t(tab.labelKey)}
               </span>
             </button>

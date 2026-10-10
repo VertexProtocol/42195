@@ -197,8 +197,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
                 aria-pressed={isRecurring === value}
                 className={`press flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-md text-label font-extrabold ${
                   isRecurring === value
-                    ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
-                    : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
+                    ? "border border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                    : "border border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
                 }`}
               >
                 <Icon size={14} aria-hidden />
@@ -229,8 +229,8 @@ export function WeeklyGoalEditor({ goal, isNew, open, suggestion, onSave, onDele
                 aria-pressed={metric === option.value}
                 className={`press flex min-h-[44px] items-center justify-center rounded-md px-3 text-label font-semibold ${
                   metric === option.value
-                    ? "border-2 border-b-4 border-[var(--primary-edge)] bg-primary text-primary-foreground"
-                    : "border-2 border-b-4 border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
+                    ? "border border-[var(--primary-edge)] bg-primary text-primary-foreground"
+                    : "border border-[var(--chunk-edge)] bg-card text-foreground hover:bg-surface-sunken"
                 }`}
               >
                 {t(option.labelKey)}
