@@ -42,7 +42,7 @@ import {
 } from "@/lib/plan-today"
 import { useI18n, type TranslationKey, type TranslationParams } from "@/lib/i18n"
 import { WEEKLY_METRIC_ICONS, WEEKLY_METRIC_LABEL_KEYS } from "@/lib/weekly-metrics"
-import { AppCard } from "@/components/ui/app-card"
+import { AppCard, CardRow } from "@/components/ui/app-card"
 import { Section, SectionHeader, SectionAction } from "@/components/ui/section"
 import { Stat, StatGroup } from "@/components/ui/stat"
 import { Pill } from "@/components/ui/pill"
@@ -65,83 +65,71 @@ import type { PlanBadge } from "@/lib/plan-badges"
  */
 
 /**
- * How big a lane is, and how many share a row.
+ * A weekly goal, as one row of the week's goals.
  *
- * The lanes divide the width between them, so their size has to come from how
- * many there are or a row of two would be two small marks with a screen of
- * nothing beside them. Sized to leave a margin inside its column at a 390px
- * screen, which is the narrowest this app is built for; past five they wrap
- * rather than shrinking to a dot.
+ * The way a game lists the day's quests: what the goal is, a bar for how far
+ * along it is, and the two numbers. A row of bare rings said none of that —
+ * an empty ring with an icon in it read as a button, not as "4 of 10 km".
+ *
+ * The bar is a `role="img"` whose name carries the whole reading, so a screen
+ * reader hears the same thing the eye gets from the bar and the figures.
  */
-const LANE_SIZES = [64, 58, 50, 44, 36] as const
-const MAX_LANE_COLUMNS = LANE_SIZES.length
-
-function laneSize(count: number): number {
-  return LANE_SIZES[Math.min(Math.max(count, 1), MAX_LANE_COLUMNS) - 1]
-}
-
-/**
- * A weekly goal, as a lane with its metric icon inside.
- *
- * The lane is the shape a pinned race carries, and the icon rides in it the
- * way the elapsed percentage does there — so the icon is the thing travelling
- * the track rather than a label stuck beside it.
- *
- * No text at all, deliberately. Today asks one question of a weekly goal —
- * how far along is it — and the fill answers it; the figures live a tap away
- * under Targets, and printing them here is what turned this card into a wall
- * of small numbers. The accessible name still carries the lot, because a fill
- * is not readable by ear.
- *
- * Nothing about it is bound to a column either. A runner adds and removes
- * these, and a lane that has to belong to one of three fixed slots means the
- * card changes shape every time they do.
- */
-function WeeklyGoalLap({
+function WeeklyGoalRow({
   goal,
   current,
-  size,
   onOpen,
   t,
 }: {
   goal: WeeklyGoal
   current: number
-  size: number
   onOpen: () => void
   t: (key: TranslationKey, params?: TranslationParams) => string
 }) {
   const Icon = WEEKLY_METRIC_ICONS[goal.metric]
   const isComplete = current >= goal.target
   const label = goal.label || t(WEEKLY_METRIC_LABEL_KEYS[goal.metric])
+  const pct = progressPercentage(current, goal.target)
   const valueText = `${formatWeeklyMetric(current, goal.metric)} / ${formatWeeklyMetric(
     goal.target,
     goal.metric,
   )}`
   return (
-    <button
-      onClick={onOpen}
-      // The button fills its column and centres the lane, so the row stays
-      // even however many lanes are in it and the tap target is the column
-      // rather than the mark.
-      className="press flex justify-center rounded-md py-1.5"
-      title={`${label} — ${valueText}`}
-    >
-      <ProgressLap
-        percentage={progressPercentage(current, goal.target)}
-        size={size}
-        strokeWidth={Math.max(3, Math.round(size / 16))}
-        tone={isComplete ? "done" : "action"}
-        // These sit on the page, not in a card.
-        track="border"
-        label={`${label} — ${valueText}`}
-      >
-        <Icon
-          size={Math.round(size * 0.4)}
-          className={isComplete ? "text-success" : "text-muted-foreground"}
+    <CardRow className="p-0">
+      <button onClick={onOpen} className="press flex w-full items-center gap-3 px-4 py-3 text-left">
+        <span
+          className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-b-4 ${
+            isComplete
+              ? "border-[var(--success-edge)] bg-success text-success-foreground"
+              : "border-[var(--chunk-edge)] bg-primary/12 text-primary"
+          }`}
           aria-hidden
-        />
-      </ProgressLap>
-    </button>
+        >
+          <Icon size={18} strokeWidth={2.4} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-label font-extrabold text-card-foreground">{label}</span>
+            <span
+              className={`measure shrink-0 text-micro font-bold ${
+                isComplete ? "text-success" : "text-muted-foreground"
+              }`}
+            >
+              {valueText}
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label={`${label} — ${valueText}: ${pct}%`}
+            className="h-3 overflow-hidden rounded-full bg-surface-sunken"
+          >
+            <div
+              className={`grow-x h-full rounded-full ${isComplete ? "bg-success" : "bg-primary"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      </button>
+    </CardRow>
   )
 }
 
@@ -971,6 +959,31 @@ export function HomeScreen({
         </Suspense>
       )}
 
+      {/* ── What the week is aiming at ────────────────────────────────── */}
+      {/* Ahead of the week's totals: the goals are what there is still to do,
+          the totals are a report on what has been done. */}
+      {weeklyLaps.length > 0 && (
+        <Section>
+          <SectionHeader
+            title={t("home.weeklyTargets")}
+            action={
+              <SectionAction onClick={openWeeklyGoals}>{t("home.seeAll")}</SectionAction>
+            }
+          />
+          <AppCard variant="rows">
+            {weeklyLaps.map(({ goal, current }) => (
+              <WeeklyGoalRow
+                key={goal.id}
+                goal={goal}
+                current={current}
+                onOpen={openWeeklyGoals}
+                t={t}
+              />
+            ))}
+          </AppCard>
+        </Section>
+      )}
+
       {/* ── The week so far ───────────────────────────────────────────── */}
       <Section>
         <SectionHeader title={t("home.thisWeek")} />
@@ -989,48 +1002,6 @@ export function HomeScreen({
           </StatGroup>
         </AppCard>
       </Section>
-
-      {/* ── What the week was aiming at ───────────────────────────────── */}
-      {/* Its own section, not the tail of the one above. The week's three
-          numbers are a report and always the same three; the targets are a
-          set the runner edits, and there may be none. Sharing a card made the
-          card change shape as goals came and went, and left two unrelated
-          readings stacked with nothing saying which was which. A heading says
-          it in one word. */}
-      {weeklyLaps.length > 0 && (
-        <Section>
-          <SectionHeader
-            title={t("home.weeklyTargets")}
-            action={
-              <SectionAction onClick={openWeeklyGoals}>{t("home.seeAll")}</SectionAction>
-            }
-          />
-          {/* No card. A card is a surface for content that needs one, and a
-              row of lanes is already its own shape — boxing it added an edge
-              around four marks and nothing else. The lanes take the page's
-              track colour to make up for the surface they lost. */}
-          <div
-            className="grid gap-1"
-            style={{
-              gridTemplateColumns: `repeat(${Math.min(
-                weeklyLaps.length,
-                MAX_LANE_COLUMNS,
-              )}, minmax(0, 1fr))`,
-            }}
-          >
-            {weeklyLaps.map(({ goal, current }) => (
-              <WeeklyGoalLap
-                key={goal.id}
-                goal={goal}
-                current={current}
-                size={laneSize(weeklyLaps.length)}
-                onOpen={openWeeklyGoals}
-                t={t}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
 
       {activities.length > 0 && <PoweredByStrava className="pt-1" />}
     </div>

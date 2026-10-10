@@ -95,12 +95,12 @@ function renderHome(activities: Activity[], weeklyGoals: WeeklyGoal[]) {
 }
 
 /**
- * The lanes, one per weekly goal.
+ * The rows, one per weekly goal.
  *
- * A lane is a `role="img"` rather than a progressbar — it draws its value
- * instead of exposing a numeric range — so its accessible name is where both
- * figures live, and these read the name for the value. Nothing on the card
- * prints them.
+ * Each row's bar is a `role="img"` whose accessible name carries the whole
+ * reading, so these read the name for the value. The row also prints the
+ * goal's name and both figures, because a bare ring with an icon in it did not
+ * say what it was measuring.
  */
 function lanes(): HTMLElement[] {
   // "current / target" is what makes a weekly lane; a pinned race's lane reads
@@ -112,8 +112,8 @@ function lanes(): HTMLElement[] {
 
 const laneNames = () => lanes().map((el) => el.getAttribute("aria-label"))
 
-describe("HomeScreen — one lane per weekly goal", () => {
-  it("gives every goal a lane, whatever mix of metrics they are", () => {
+describe("HomeScreen — one row per weekly goal", () => {
+  it("gives every goal a row, whatever mix of metrics they are", () => {
     renderHome(
       [makeActivity(), makeActivity()],
       [
@@ -126,7 +126,7 @@ describe("HomeScreen — one lane per weekly goal", () => {
     expect(lanes()).toHaveLength(4)
   })
 
-  it("gives a second goal on the same metric its own lane", () => {
+  it("gives a second goal on the same metric its own row", () => {
     // These used to compete for one stat column, so the loser was exiled to a
     // different-looking row below a rule.
     renderHome(
@@ -142,13 +142,10 @@ describe("HomeScreen — one lane per weekly goal", () => {
     ])
   })
 
-  it("prints no figures or labels of its own", () => {
-    // The whole point of the lane: Today asks how far along a goal is, and the
-    // fill answers it. The numbers are a tap away under Targets.
+  it("says what the goal is and how far along it is, in words", () => {
     renderHome([makeActivity({ distance_km: 4 })], [makeGoal({ metric: "distance_km", target: 10 })])
-    expect(screen.queryByText(/of 10 km/)).toBeNull()
-    expect(screen.queryByText(/4 km \/ 10 km/)).toBeNull()
-    expect(screen.queryByText("Weekly distance")).toBeNull()
+    expect(screen.getByText("Weekly distance")).toBeTruthy()
+    expect(screen.getByText("4 km / 10 km")).toBeTruthy()
   })
 
   it("gives the targets a heading of their own, not the tail of This week", () => {
@@ -156,39 +153,14 @@ describe("HomeScreen — one lane per weekly goal", () => {
     renderHome([makeActivity()], [makeGoal({ metric: "distance_km", target: 10 })])
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
     expect(headings).toContain("This week")
-    expect(headings).toContain("Targets")
+    expect(headings).toContain("Weekly goals")
   })
 
   it("drops that section entirely rather than heading an empty card", () => {
     renderHome([makeActivity()], [])
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
     expect(headings).toContain("This week")
-    expect(headings).not.toContain("Targets")
-  })
-
-  it("sizes the lanes by how many are sharing the row", () => {
-    // They divide the width between them, so a fixed size makes a row of two
-    // into two small marks with a screen of nothing beside them.
-    const two = renderHome(
-      [makeActivity()],
-      [
-        makeGoal({ metric: "distance_km", target: 10 }),
-        makeGoal({ metric: "sessions", target: 3 }),
-      ],
-    )
-    const heightOfTwo = Number.parseFloat(lanes()[0].style.height)
-    two.unmount()
-
-    renderHome(
-      [makeActivity()],
-      [
-        makeGoal({ metric: "distance_km", target: 10 }),
-        makeGoal({ metric: "sessions", target: 3 }),
-        makeGoal({ metric: "duration_minutes", target: 60 }),
-        makeGoal({ metric: "elevation_m", target: 300 }),
-      ],
-    )
-    expect(Number.parseFloat(lanes()[0].style.height)).toBeLessThan(heightOfTwo)
+    expect(headings).not.toContain("Weekly goals")
   })
 
   it("opens Plan on the weekly list, not the race list", () => {
@@ -213,17 +185,10 @@ describe("HomeScreen — one lane per weekly goal", () => {
       </I18nProvider>,
     )
 
-    fireEvent.click(screen.getByTitle(/Weekly distance/))
+    fireEvent.click(screen.getByRole("button", { name: /Weekly distance/ }))
     fireEvent.click(screen.getByRole("button", { name: "See all" }))
     expect(onViewWeeklyGoals).toHaveBeenCalledTimes(2)
     expect(onViewGoals).not.toHaveBeenCalled()
-  })
-
-  it("draws a track that survives the page background", () => {
-    // surface-sunken is a well in a card and is 0.035 off the page in
-    // lightness. On the page, a goal at 0% would be an icon with no ring.
-    renderHome([], [makeGoal({ metric: "distance_km", target: 10 })])
-    expect(lanes()[0].querySelector("rect")?.getAttribute("stroke")).toBe("var(--border)")
   })
 
   it("leaves the stat row the same shape whether or not there are goals", () => {
@@ -282,24 +247,23 @@ describe("HomeScreen — what a lane is measuring", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * The metric icon rides inside the lane.
+ * The metric icon sits in its goal's row.
  *
- * With no text on the card, the icon is the only thing saying which goal a
- * lane belongs to — so it has to be inside that lane and it has to differ per
- * metric. An icon beside a lane, or one generic mark on all of them, is the
- * shape this replaced.
+ * It has to be in that row and it has to differ per metric, so a glance down
+ * the list tells distance from minutes from sessions before the words do.
  */
 const iconsIn = (scope: ParentNode, cls: string) =>
   scope.querySelectorAll(`svg.lucide-${cls}`).length
 
-/** The lane element itself, so an icon can be located inside one. */
+/** The row a goal's bar sits in, so an icon can be located inside it. */
 const laneFor = (name: RegExp) =>
   screen
     .getAllByRole("img")
     .find((el) => name.test(el.getAttribute("aria-label") ?? ""))!
+    .closest("button")!
 
-describe("HomeScreen — the metric icon rides inside the lane", () => {
-  it("puts a goal's icon inside that goal's lane", () => {
+describe("HomeScreen — the metric icon sits in its goal's row", () => {
+  it("puts a goal's icon in that goal's row", () => {
     renderHome(
       [makeActivity({ distance_km: 4 })],
       [makeGoal({ metric: "distance_km", target: 10 })],

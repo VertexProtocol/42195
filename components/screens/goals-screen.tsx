@@ -546,8 +546,8 @@ export function GoalsScreen({
       <Segmented
         label={t("goals.title")}
         options={[
-          ["race", t("goals.targets")],
-          ["weekly", t("goals.weekly")],
+          ["race", t("goals.tabRaces")],
+          ["weekly", t("goals.tabWeekly")],
         ] as const}
         value={tab}
         onChange={setTab}
