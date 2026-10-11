@@ -32,3 +32,12 @@ it("shows a genuinely empty starter state immediately when the server confirmed 
   mount({ plan: null, userId: "owner" })
   expect(screen.getByRole("button", { name: "Open plan" })).toBeTruthy()
 })
+
+
+it("keeps unstarred active goals visible alongside the starter without needing a generated plan", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})))
+  mount({ plan: { state, version: 1 }, userId: "owner" })
+  expect(screen.getByRole("button", { name: /Next session/ })).toBeTruthy()
+  expect(screen.getByRole("button", { name: /Test.*days left/i })).toBeTruthy()
+  expect(screen.queryByRole("button", { name: "Open plan" })).toBeNull()
+})
