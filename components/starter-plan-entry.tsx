@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState, type ComponentProps } from "react";
 import { useStarterPlanCache, type StarterSnapshot } from "@/components/starter-plan-cache";
+import { StarterWeekView } from "@/components/starter-week-view";
 import { useI18n } from "@/lib/i18n";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { Smile, Meh, Frown, Clock, HeartPulse, Footprints, RotateCcw, Activity, Flag, Repeat, Sprout, ChevronRight } from "lucide-react";
+import { Footprints, RotateCcw, Activity, Flag, Repeat, Sprout, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
   StarterProfile,
@@ -323,114 +324,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
               </div>
             </form>
           ) : saved ? (
-            <>
-              <p className="text-micro text-muted-foreground">
-                {l(
-                  "Foreløpig · Selvrapportert grunnlag · Uke",
-                  "Provisional · Self-reported baseline · Week",
-                )}{" "}
-                {saved.state.week.number}
-              </p>
-              <p className="text-label">
-                {
-                  {
-                    initial: l(
-                      "Første uke handler om å finne en rytme som passer.",
-                      "The first week is about finding a manageable routine.",
-                    ),
-                    repeat: l(
-                      "Vi beholder nivået. Tidsmangel tolkes ikke som dårligere form.",
-                      "We keep the level. Lack of time is not treated as reduced fitness.",
-                    ),
-                    easier: l(
-                      "Du opplevde øktene som krevende. Denne uken er lettere.",
-                      "You found sessions hard. This week is easier.",
-                    ),
-                    progress: l(
-                      "To uker opplevdes lette. Vi prøver en liten økning i tid.",
-                      "Two weeks felt easy. We try a small increase in time.",
-                    ),
-                    review: l(
-                      "Vi setter løpeøktene på vent mens plagene avklares. Ikke press gjennom smerte; avklar med helsepersonell ved behov.",
-                      "Running sessions are paused while discomfort is clarified. Do not push through pain; consult a clinician when needed.",
-                    ),
-                  }[saved.state.week.reason]
-                }
-              </p>
-              {saved.state.profile.aim === "race" && (
-                <p className="text-label text-muted-foreground">
-                  {l(
-                    "Startuken bygger en rutine. Den er ikke en plan for å rekke en bestemt løpsdato.",
-                    "This starter week builds a routine. It is not a plan for a specific race deadline.",
-                  )}
-                </p>
-              )}
-              <p className="text-title font-semibold">{l("Din første sti", "Your starting path")} · {l("Etappe", "Stage")} {saved.state.week.number}</p>
-              <p className="text-label text-muted-foreground">{l("Hvile mellom stoppene er en del av reisen.", "Rest between stops is part of the journey.")}</p>
-              <ol className="ml-3 flex flex-col border-l-2 border-border">
-                {saved.state.week.sessions.map((session, i) => (
-                  <li key={session.id} className="relative flex flex-col gap-2 py-4 pl-7">
-                    <span aria-hidden className={`absolute -left-3 top-4 flex size-6 items-center justify-center rounded-full border-4 border-background ${session.feedback && ["easy", "ok", "hard"].includes(session.feedback) ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>{session.feedback && ["easy", "ok", "hard"].includes(session.feedback) ? "✓" : "·"}</span>
-                    {!session.feedback && saved.state.week.reason !== "review" && i === saved.state.week.sessions.findIndex(s => !s.feedback) && <p className="text-micro font-semibold text-primary">{l("Neste steg", "Next step")}</p>}
-                    <h3 className="font-semibold">
-                      {l("Økt", "Session")} {i + 1} · {session.minutes} min ·{" "}
-                      {new Date(
-                        +new Date(saved.state.week.startsAt) +
-                          session.dayOffset * 86400000,
-                      ).toLocaleDateString(no ? "nb-NO" : "en-GB", {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </h3>
-                    <p className="text-label">
-                      {saved.state.week.reason === "review" && !session.feedback
-                        ? l(
-                            "Satt på vent. Oppdater utgangspunktet før du fortsetter å løpe.",
-                            "Paused. Review your starting point before continuing to run.",
-                          )
-                        : session.repeats
-                          ? l(
-                              `5 min gange. Gjenta ${session.repeats} ganger: 1 min rolig løping + 90 sek gange. Avslutt med 5 min gange.`,
-                              `Walk 5 min. Repeat ${session.repeats} times: 1 min easy running + 90 sec walking. Finish with 5 min walking.`,
-                            )
-                          : l(
-                              "Rolig innsats hvor du kan prate. Start og avslutt rolig; gå ved behov.",
-                              "Easy conversational effort. Start and finish gently; walk as needed.",
-                            )}
-                    </p>
-                    <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-label">{l("Hvordan gikk økten?", "How did it go?")}</legend>
-                      <div className="grid grid-cols-3 gap-2">{([{ value: "easy", icon: Smile, label: l("Lett", "Easy") }, { value: "ok", icon: Meh, label: l("Passe", "Manageable") }, { value: "hard", icon: Frown, label: l("Tungt", "Hard") }] as const).map(({ value, icon: Icon, label }) => <button key={value} disabled={busy} aria-pressed={session.feedback === value} onClick={() => void save({ action: "feedback", sessionId: session.id, feedback: value })} className={`press flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border text-label ${session.feedback === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={28} aria-hidden />{label}</button>)}</div>
-                      <div className="flex flex-wrap gap-2">{([{ value: "time", icon: Clock, label: l("Hoppet over · tidsmangel", "Skipped · lack of time") }, { value: "pain", icon: HeartPulse, label: l("Kjente smerte", "Felt pain") }] as const).map(({ value, icon: Icon, label }) => <button key={value} disabled={busy} aria-pressed={session.feedback === value} onClick={() => void save({ action: "feedback", sessionId: session.id, feedback: value })} className={`press flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-label ${session.feedback === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={18} aria-hidden />{label}</button>)}</div>
-                    </fieldset>
-                  </li>
-                ))}
-              </ol>
-              <p className="text-micro text-muted-foreground">
-                {l(
-                  "Tilbakemeldingene brukes til neste uke og oppretter ikke målte aktiviteter. Du kan flytte øktene; ha hviledager mellom løp/gange-øktene.",
-                  "Feedback informs next week and does not create measured activities. Move sessions as needed; keep rest days between run/walk sessions.",
-                )}
-              </p>
-              {saved.state.history.length > 0 && <details className="border-t border-border py-3"><summary className="press min-h-11 cursor-pointer text-label font-semibold">{l("Tidligere etapper", "Previous stages")} · {saved.state.history.length}</summary><ol className="flex flex-col gap-3 pt-3">{saved.state.history.map((week, index) => <li key={`${week.startsAt}:${index}`} className="text-label"><span className="font-semibold">{l("Etappe", "Stage")} {week.number}</span><span className="ml-2 text-muted-foreground">{week.sessions.filter(s => s.feedback && ["easy", "ok", "hard"].includes(s.feedback)).length}/{week.sessions.length} {l("økter gjennomført", "sessions completed")}</span></li>)}</ol></details>}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  disabled={busy || !saved.state.week.sessions.length}
-                  onClick={() => void save({ action: "next" })}
-                >
-                  {l("Planlegg neste uke", "Plan next week")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setProfile(saved.state.profile);
-                    setStep(0);
-                    setOpen(true);
-                  }}
-                >
-                  {l("Oppdater utgangspunkt", "Update starting point")}
-                </Button>
-              </div>
-            </>
+            <StarterWeekView state={saved.state} busy={busy} save={save} onEdit={() => { setProfile(saved.state.profile); setStep(0); setOpen(true); }} />
           ) : null}
         </div>
       </StarterSurface>

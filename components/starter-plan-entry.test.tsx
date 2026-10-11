@@ -45,8 +45,10 @@ describe("starter onboarding", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Create starter plan" }),
     );
-    await screen.findByText(/Provisional · Self-reported/);
-    expect(screen.getAllByText(/Walk 5 min/)).toHaveLength(2);
+    await screen.findByText(/Week 1 ·/);
+    expect(screen.queryByText(/Walk 5 min/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Session 1 ·/ }));
+    expect(screen.getByText(/Walk 5 min/)).toBeTruthy();
     expect(plan.state.profile.mode).toBe("beginner");
     view.unmount();
     render(
@@ -57,7 +59,7 @@ describe("starter onboarding", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /Next session/ }),
     );
-    await screen.findByText(/Provisional · Self-reported/);
+    await screen.findByText(/Week 1 ·/);
     expect(screen.queryByRole("button", { name: "Get started →" })).toBeNull();
   });
   it("keeps the form and shows a failure when saving fails", async () => {
@@ -125,7 +127,7 @@ it("creates a returning runner plan without requiring remembered numbers", async
   expect(screen.getByRole("button", { name: "Not sure · start gently" }).getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   fireEvent.click(screen.getByRole("button", { name: "Create starter plan" }));
-  await screen.findByText(/Provisional · Self-reported/);
+  await screen.findByText(/Week 1 ·/);
   expect(submitted.estimatedFields).toEqual(["continuousMinutes", "weeklyMinutes", "pauseWeeks"]);
   expect(submitted.mode).toBe("returning");
 });
@@ -182,11 +184,12 @@ it("opens a saved starter plan as a goal and shows it on its own page", async ()
   expect(screen.queryByRole("dialog")).toBeNull();
   view.unmount();
   render(<I18nProvider><StarterPlanEntry presentation="page" /></I18nProvider>);
-  await screen.findByText(/Provisional · Self-reported/);
+  await screen.findByText(/Week 1 ·/);
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("combobox")).toBeNull();
-  expect(screen.getAllByRole("button", { name: "Easy" })).toHaveLength(2);
-  expect(screen.getAllByRole("button", { name: "Felt pain" })).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: /Session 1 ·/ }));
+  expect(screen.getAllByRole("button", { name: "Easy" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "Felt pain" })).toHaveLength(1);
 });
 
 it("persists icon feedback and reflects only confirmed answers", async () => {
@@ -200,7 +203,8 @@ it("persists icon feedback and reflects only confirmed answers", async () => {
     return { ok: true, json: async () => ({ plan }) };
   }));
   render(<I18nProvider><StarterPlanEntry presentation="page" /></I18nProvider>);
-  fireEvent.click((await screen.findAllByRole("button", { name: "Manageable" }))[0]);
+  fireEvent.click(await screen.findByRole("button", { name: /Session 1 ·/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Manageable" }));
   await waitFor(() => expect(screen.getAllByRole("button", { name: "Manageable" })[0].getAttribute("aria-pressed")).toBe("true"));
   expect(payload.feedback).toBe("ok");
   expect(payload.version).toBe(1);
