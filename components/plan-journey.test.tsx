@@ -16,9 +16,10 @@ describe("plan journey", () => {
   })
   it("orders stages toward the goal and marks only the current one", () => {
     const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={1}>{weeks.map(w => <div key={w.weekNumber}>Stage {w.weekNumber}</div>)}</PlanJourney></I18nProvider>)
-    expect(Array.from(container.querySelectorAll("ol > li")).map(li => li.textContent)).toEqual(["Stage 3", "YOU ARE HEREStage 2", "Stage 1"])
+    expect(Array.from(container.querySelectorAll("ol > li")).map(li => li.textContent)).toEqual(["Stage 1", "YOU ARE HEREStage 2", "Stage 3"])
     expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(1)
     expect(screen.getByText("Oslo")).toBeTruthy()
+    expect(screen.getByText("Stage 3").compareDocumentPosition(screen.getByText("Oslo")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole("button", { name: /You are here/ })).toBeTruthy()
   })
   it("does not claim the user is on an archived path", () => {

@@ -40,9 +40,7 @@ describe("starter onboarding", () => {
     expect(start.closest(".surface")).toBeNull();
     fireEvent.click(start);
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe(
-      "0",
-    );
+    expect(screen.getByRole("button", { name: "Not sure · start with run/walk" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Create starter plan" }),
@@ -96,4 +94,38 @@ describe("starter onboarding", () => {
       ).disabled,
     ).toBe(false);
   });
+});
+
+
+it("lets users erase and replace their own estimate", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null }) })));
+  render(<I18nProvider><StarterPlanEntry /></I18nProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Get started →" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  fireEvent.click(screen.getByText("Enter my own estimate"));
+  const input = screen.getByRole("spinbutton") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "" } });
+  expect(input.value).toBe("");
+  expect(input.checkValidity()).toBe(false);
+  fireEvent.change(input, { target: { value: "15" } });
+  expect(input.value).toBe("15");
+  expect(input.checkValidity()).toBe(true);
+});
+
+it("creates a returning runner plan without requiring remembered numbers", async () => {
+  let submitted: any;
+  vi.stubGlobal("fetch", vi.fn(async (_url, options) => {
+    if (options?.method === "POST") { submitted = JSON.parse(options.body).profile; return { ok: true, json: async () => ({ plan: { state: createStarterPlan(submitted), version: 1 } }) }; }
+    return { ok: true, json: async () => ({ plan: null }) };
+  }));
+  render(<I18nProvider><StarterPlanEntry /></I18nProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Get started →" }));
+  fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "returning" } });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(screen.getByRole("button", { name: "Not sure · start gently" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create starter plan" }));
+  await screen.findByText(/Provisional · Self-reported/);
+  expect(submitted.estimatedFields).toEqual(["continuousMinutes", "weeklyMinutes", "pauseWeeks"]);
+  expect(submitted.mode).toBe("returning");
 });

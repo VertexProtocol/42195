@@ -15,8 +15,9 @@ const initial: StarterProfile = {
   aim: "start",
   days: 2,
   continuousMinutes: 0,
-  weeklyMinutes: 0,
-  pauseWeeks: 1,
+  weeklyMinutes: 30,
+  pauseWeeks: 12,
+  estimatedFields: ["continuousMinutes", "weeklyMinutes", "pauseWeeks"],
   hasPain: false,
 };
 export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?: boolean; autoPrompt?: boolean }) {
@@ -129,30 +130,18 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
   }
   if (loading) return null;
   if (!offer && !saved && !error) return null;
-  const field = (
-    label: string,
-    key: "continuousMinutes" | "weeklyMinutes" | "pauseWeeks" | "days",
-    min: number,
-    max: number,
-  ) => (
-    <label className="flex flex-col gap-1 text-label">
-      {label}
-      <input
-        className="rounded-md border bg-background p-3"
-        type="number"
-        min={min}
-        max={max}
-        required
-        value={profile[key]}
-        onChange={(e) =>
-          setProfile({
-            ...profile,
-            [key]: e.target.value === "" ? 0 : Number(e.target.value),
-          })
-        }
-      />
-    </label>
-  );
+  const answer = (key: "continuousMinutes" | "weeklyMinutes" | "pauseWeeks" | "days", value: number, estimated = false) => {
+    setProfile(p => ({ ...p, [key]: value, estimatedFields: key === "days" ? p.estimatedFields : [...(p.estimatedFields ?? []).filter(k => k !== key), ...(estimated ? [key] : [])] as StarterProfile["estimatedFields"] }));
+  };
+  const choices = (label: string, key: "continuousMinutes" | "weeklyMinutes" | "pauseWeeks" | "days", options: { label: string; value: number; estimated?: boolean }[], min: number, max: number) => <fieldset className="flex flex-col gap-2">
+    <legend className="mb-2 text-body font-semibold">{label}</legend>
+    <div className="flex flex-wrap gap-2">{options.map(option => {
+      const estimated = key !== "days" && profile.estimatedFields?.includes(key);
+      const selected = profile[key] === option.value && Boolean(estimated) === Boolean(option.estimated);
+      return <button key={option.label} type="button" aria-pressed={selected} onClick={() => answer(key, option.value, option.estimated)} className={`press min-h-11 rounded-lg border px-3 py-2 text-left text-label ${selected ? "border-primary bg-primary/10 text-primary" : "border-border"}`}>{option.label}</button>;
+    })}</div>
+    <details className="text-label text-muted-foreground"><summary className="press cursor-pointer py-2">{l("Jeg vil angi selv", "Enter my own estimate")}</summary><OptionalNumber label={label} value={profile[key]} min={min} max={max} onChange={value => answer(key, value)} /></details>
+  </fieldset>;
   const next = saved?.state.week.sessions.find((s) => !s.feedback);
   const summary = !saved
     ? l("Kom i gang →", "Get started →")
@@ -281,53 +270,32 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
               )}
               {step === 1 && (
                 <>
-                  {field(
-                    l(
-                      "Hvor mange minutter kan du løpe rolig sammenhengende nå? (0 er helt greit)",
-                      "How many minutes can you run easily without stopping now? (0 is fine)",
-                    ),
-                    "continuousMinutes",
-                    0,
-                    180,
-                  )}
-                  {profile.mode !== "beginner" &&
-                    field(
-                      profile.mode === "returning"
-                        ? l(
-                            "Vanlig løping før oppholdet – minutter per uke",
-                            "Usual running before the break – minutes per week",
-                          )
-                        : l(
-                            "Omtrentlige løpeminutter per uke nå",
-                            "Approximate running minutes per week now",
-                          ),
-                      "weeklyMinutes",
-                      10,
-                      1200,
-                    )}
-                  {profile.mode === "returning" &&
-                    field(
-                      l(
-                        "Hvor mange uker har oppholdet vart?",
-                        "How many weeks has the break lasted?",
-                      ),
-                      "pauseWeeks",
-                      1,
-                      104,
-                    )}
+                  <p className="text-label text-muted-foreground">{l("Et grovt anslag holder. Velg «Vet ikke» hvis du er usikker – du trenger ikke teste deg først.", "A rough estimate is enough. Choose ‘Not sure’ if you are unsure — no test needed.")}</p>
+                  {choices(l("Hvor lenge føles rolig løping overkommelig nå?", "How long does easy running feel manageable now?"), "continuousMinutes", [
+                    { label: l("Vet ikke · start med løp/gange", "Not sure · start with run/walk"), value: 0, estimated: true },
+                    { label: l("Under 5 min", "Under 5 min"), value: 0 },
+                    { label: "5–10 min", value: 5 }, { label: "10–20 min", value: 10 }, { label: "20–30 min", value: 20 }, { label: "30+ min", value: 30 },
+                  ], 0, 180)}
+                  {profile.mode !== "beginner" && choices(profile.mode === "returning" ? l("Hvordan pleide du å løpe?", "What was your running routine?") : l("Hvordan løper du vanligvis?", "What is your usual running routine?"), "weeklyMinutes", [
+                    { label: l("Vet ikke · start forsiktig", "Not sure · start gently"), value: 30, estimated: true },
+                    { label: l("En kort tur i uken", "One short run a week"), value: 30 },
+                    { label: l("Et par halvtimesturer", "A couple of half-hour runs"), value: 60 },
+                    { label: l("Rundt 2 timer i uken", "Around 2 hours a week"), value: 120 },
+                    { label: l("3 timer eller mer", "3 hours or more"), value: 180 },
+                  ], 10, 1200)}
+                  {profile.mode === "returning" && choices(l("Omtrent hvor lenge har du hatt opphold?", "Roughly how long was your break?"), "pauseWeeks", [
+                    { label: l("Vet ikke", "Not sure"), value: 12, estimated: true },
+                    { label: l("Noen uker", "A few weeks"), value: 3 },
+                    { label: l("1–3 måneder", "1–3 months"), value: 12 },
+                    { label: l("3–6 måneder", "3–6 months"), value: 26 },
+                    { label: l("Over et halvt år", "Over half a year"), value: 52 },
+                  ], 1, 104)}
+                  <p className="text-micro text-muted-foreground">{l("Ved «Vet ikke» bruker vi et forsiktig startanslag, ikke en vurdering av formen din. Planen justeres etter hvordan øktene oppleves.", "‘Not sure’ uses a gentle starting assumption, not an assessment of your fitness. The plan adapts to how sessions feel.")}</p>
                 </>
               )}
               {step === 2 && (
                 <>
-                  {field(
-                    l(
-                      "Hvor mange dager i uken passer det å trene?",
-                      "How many days per week fit your schedule?",
-                    ),
-                    "days",
-                    1,
-                    5,
-                  )}
+                  {choices(l("Hvor mange dager passer i hverdagen din?", "How many days fit your routine?"), "days", [1,2,3,4,5].map(value => ({ value, label: value === 2 ? l("2 dager · foreslått start", "2 days · suggested start") : l(`${value} dager`, `${value} days`) })), 1, 5)}
                   <label className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -529,4 +497,15 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
       </BottomSheet>
     </>
   );
+}
+
+
+function OptionalNumber({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+  return <label className="flex flex-col gap-1">{label}<input required type="number" inputMode="numeric" min={min} max={max} value={text} className="rounded-md border bg-background p-3" onChange={event => {
+    const next = event.target.value;
+    setText(next);
+    if (next !== "" && event.target.validity.valid) onChange(Number(next));
+  }} /></label>;
 }

@@ -44,6 +44,14 @@ export function PlanJourney({ goalName, targetDate, weeks, statuses, currentInde
       <div><h2 className="text-title font-semibold">{l("Veien mot målet", "Your path to the goal")}</h2><p className="mt-1 text-label text-muted-foreground">{l("Én etappe om gangen. Hvile er en del av planen.", "One stage at a time. Rest is part of the plan.")}</p></div>
       {!archived && currentIndex >= 0 && currentIndex < weeks.length && <button className="press min-h-11 shrink-0 text-label font-semibold text-primary" onClick={() => current.current?.scrollIntoView?.({ block: "center" })}>{l("Du er her", "You are here")} ↓</button>}
     </div>
+    <div className="ml-5 flex items-center gap-3 text-label text-muted-foreground"><Footprints size={18} aria-hidden />{l("Start på denne blokken", "Start of this block")}</div>
+    <ol className="flex flex-col" aria-label={l("Etapper i denne blokken", "Stages in this block")}>
+      {weeks.map((week, i) => <li key={week.weekNumber} ref={i === currentIndex ? current : undefined} aria-current={!archived && i === currentIndex ? "step" : undefined} className="relative ml-5 border-l-2 border-border pb-6 pl-7 scroll-mt-20">
+        <span aria-hidden className={`absolute -left-[9px] top-5 size-4 rounded-full border-4 border-background ${i === currentIndex && !archived ? "bg-primary ring-2 ring-primary/30" : "bg-muted-foreground/40"}`} />
+        {i === currentIndex && !archived && <p className="mb-2 text-micro font-semibold text-primary">{l("DU ER HER", "YOU ARE HERE")}</p>}
+        {children[i]}
+      </li>)}
+    </ol>
     <div className="relative ml-5 border-l-2 border-dashed border-border pl-7 py-3">
       <Flag className="absolute -left-4 top-3 size-8 rounded-full bg-background p-1 text-primary" aria-hidden />
       <p className="text-micro font-semibold uppercase tracking-wider text-primary">{l("Målet ditt", "Your goal")}</p>
@@ -51,14 +59,7 @@ export function PlanJourney({ goalName, targetDate, weeks, statuses, currentInde
       <p className="text-label text-muted-foreground">{new Date(`${targetDate}T12:00:00`).toLocaleDateString(no ? "nb-NO" : "en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
       <p className="mt-2 text-micro text-muted-foreground">{l("Veien videre formes når neste blokk er klar.", "The path ahead takes shape when the next block is ready.")}</p>
     </div>
-    <ol reversed className="flex flex-col" aria-label={l("Etapper i denne blokken", "Stages in this block")}>
-      {weeks.map((week, i) => <li key={week.weekNumber} ref={i === currentIndex ? current : undefined} aria-current={!archived && i === currentIndex ? "step" : undefined} className="relative ml-5 border-l-2 border-border pb-6 pl-7 scroll-mt-20">
-        <span aria-hidden className={`absolute -left-[9px] top-5 size-4 rounded-full border-4 border-background ${i === currentIndex && !archived ? "bg-primary ring-2 ring-primary/30" : "bg-muted-foreground/40"}`} />
-        {i === currentIndex && !archived && <p className="mb-2 text-micro font-semibold text-primary">{l("DU ER HER", "YOU ARE HERE")}</p>}
-        {children[i]}
-      </li>).reverse()}
-    </ol>
-    <div className="ml-5 flex items-center gap-3 text-label text-muted-foreground"><Footprints size={18} aria-hidden />{l("Start på denne blokken", "Start of this block")}</div>
+
     <div className="border-t border-border pt-4" aria-live="polite">
       <p className="text-micro font-semibold text-muted-foreground">{l("Milepæler i denne blokken", "Milestones in this block")}</p>
       <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-3">{milestones.map(m => <li key={m.label} className={`flex items-center gap-2 text-label ${m.reached ? "text-success" : "text-muted-foreground"}`}><span className={`flex size-6 items-center justify-center rounded-full border ${m.reached ? "border-success bg-success/10 pop-in" : "border-border"}`} aria-hidden>{m.reached ? <Check size={14} /> : "·"}</span><span>{m.label}<span className="sr-only">{m.reached ? l(" – nådd", " – reached") : l(" – ikke nådd ennå", " – not reached yet")}</span></span></li>)}</ul>

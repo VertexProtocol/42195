@@ -9,6 +9,7 @@ export const starterProfileSchema = z
     weeklyMinutes: z.number().int().min(0).max(1200),
     pauseWeeks: z.number().int().min(0).max(104),
     hasPain: z.boolean(),
+    estimatedFields: z.array(z.enum(["continuousMinutes", "weeklyMinutes", "pauseWeeks"])).optional(),
   })
   .superRefine((p, ctx) => {
     if (p.mode !== "beginner" && p.weeklyMinutes < 10)
