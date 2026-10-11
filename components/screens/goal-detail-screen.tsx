@@ -22,7 +22,6 @@ import {
   Archive,
   CheckCircle2,
   Check,
-  X,
   ChevronRight,
 } from "lucide-react"
 import {
@@ -44,7 +43,6 @@ import type {
   GoalPreferences,
   TrainingFocus,
   AiTrainingPlan,
-  TrainingWeek,
   PlanSnapshot,
   MidBlockCheckpoint,
   PlanSessionStatus,
@@ -808,206 +806,6 @@ function PlanSkeleton({ blockWeeks, statusText }: { blockWeeks: number; statusTe
 
 // ---- Session status type ----
 type SessionStatus = PlanSessionStatus
-
-// ---- Training week card ----
-function WeekCard({
-  week,
-  isCurrent,
-  actualKm,
-  isPast,
-  sessionStatuses,
-  onToggleSession,
-  weekStart,
-  weekEnd,
-}: {
-  week: TrainingWeek
-  isCurrent: boolean
-  actualKm: number | null
-  isPast: boolean
-  sessionStatuses: SessionStatus[]
-  onToggleSession: (weekNumber: number, sessionIndex: number) => void
-  weekStart: Date
-  weekEnd: Date
-}) {
-  const { t, locale } = useI18n()
-  const [expanded, setExpanded] = useState(isCurrent)
-  const [selectedSession, setSelectedSession] = useState<number | null>(null)
-  const nextSession = isCurrent ? week.sessions.findIndex((_, i) => (sessionStatuses[i] ?? "planned") === "planned") : -1
-
-  const deltaPct = actualKm !== null && week.targetKm > 0
-    ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
-    : null
-
-  const completedCount = sessionStatuses.filter((s) => s === "completed").length
-  // Counted and shown the same way as the completed sessions. Skipping was
-  // already a state the runner could set, but the only trace of it was inside
-  // the expanded week — so a collapsed week that read "2/4 done" looked like
-  // two sessions still to come when in fact two had been written off.
-  const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
-  const totalSessions = week.sessions.length
-  const allCompleted = totalSessions > 0 && completedCount === totalSessions
-
-  const fmtDay = (d: Date) =>
-    d.toLocaleDateString(locale === "no" ? "nb-NO" : "en-GB", { day: "numeric", month: "short" })
-  const lastDay = new Date(weekEnd)
-  lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
-  const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
-
-  const matchingHint = locale === "no" ? "Kvalitetsøkter bekreftes manuelt. En rolig tur bekrefter ikke intervaller eller terskel." : "Confirm quality sessions manually. An easy run does not verify intervals or threshold work."
-
-  const nextStatusLabel = (status: SessionStatus) =>
-    status === "planned"
-      ? t("gp.markCompleted")
-      : status === "completed"
-        ? t("gp.markSkipped")
-        : t("gp.markPlanned")
-
-  return (
-    <div className={`overflow-hidden rounded-xl border ${isCurrent ? "border-primary/45 bg-primary/5" : "border-border bg-background"}`}>
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        title={matchingHint}
-        aria-expanded={expanded}
-        className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
-      >
-        {/* The week number in a medal: lit for this week, green once every
-            session in it is answered for, plain otherwise. */}
-        <span
-          className={`flex size-11 shrink-0 items-center justify-center rounded-full border text-lead font-extrabold ${
-            allCompleted && (isPast || isCurrent)
-              ? "border-[var(--success-edge)] bg-success text-success-foreground"
-              : isCurrent
-                ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
-                : "border-[var(--chunk-edge)] bg-surface-sunken text-foreground"
-          }`}
-          aria-hidden
-        >
-          {allCompleted && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-body font-semibold text-card-foreground">{locale === "no" ? "Etappe" : "Stage"} {week.weekNumber}</p>
-          <p className="mt-0.5 text-label text-muted-foreground">{week.theme}</p>
-          <p className="truncate text-micro font-semibold text-muted-foreground">
-            {dateLabel} · <span className="measure">~{week.targetKm} km</span>
-          </p>
-        </div>
-        {(isPast || isCurrent) && (completedCount > 0 || skippedCount > 0) && (
-          <div className="flex shrink-0 flex-col items-end gap-0.5">
-            {completedCount > 0 && (
-              <span className="text-micro font-bold text-success">
-                {t("gp.sessionsDone", { done: completedCount, total: totalSessions })}
-              </span>
-            )}
-            {skippedCount > 0 && (
-              <span className="text-micro font-bold text-muted-foreground">
-                {t("gp.sessionsSkipped", { skipped: skippedCount, total: totalSessions })}
-              </span>
-            )}
-          </div>
-        )}
-        <ChevronDown
-          size={18}
-          className={`shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-          aria-hidden
-        />
-      </button>
-
-      {expanded && (
-        <div className="flex flex-col gap-3 border-t border-border px-4 pb-4 pt-3.5">
-          <p className="text-micro text-muted-foreground">{matchingHint}</p>
-          {/* Planned vs actual, as the same meter the rest of the app uses. */}
-          {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-baseline justify-between text-micro font-semibold text-muted-foreground">
-                <span>{t("gp.planned", { km: week.targetKm })}</span>
-                <span className="text-muted-foreground">
-                  {t("gp.actual", { km: actualKm.toFixed(1) })}
-                  {deltaPct !== null && ` (${deltaPct >= 0 ? "+" : ""}${deltaPct}%)`}
-                </span>
-              </div>
-              <Meter
-                value={Math.min(100, (actualKm / week.targetKm) * 100)}
-                tone="quiet"
-                label={t("gp.actual", { km: actualKm.toFixed(1) })}
-              />
-            </div>
-          )}
-
-          <ul className="flex flex-col gap-2">
-            {week.sessions.map((session, i) => {
-              const status = sessionStatuses[i] ?? "planned"
-              const canToggle = isPast || isCurrent
-              return (
-                <li
-                  key={i}
-                  className={`flex items-center gap-3 border-b border-border py-3 last:border-b-0 ${
-                    i === nextSession ? "rounded-lg bg-primary/10 px-2 ring-1 ring-primary/20" : status === "skipped" ? "opacity-70" : ""
-                  }`}
-                >
-                  {canToggle && (
-                    <button
-                      onClick={() => onToggleSession(week.weekNumber, i)}
-                      className={`press flex size-11 shrink-0 items-center justify-center rounded-full border ${
-                        status === "completed"
-                          ? "pop-in border-[var(--success-edge)] bg-success text-success-foreground"
-                          : status === "skipped"
-                            ? "border-[var(--chunk-edge)] bg-muted text-muted-foreground"
-                            : "border-[var(--chunk-edge)] bg-card"
-                      }`}
-                      aria-label={`${session.type}: ${nextStatusLabel(status)}`}
-                    >
-                      {status === "completed" && <Check size={18} strokeWidth={3} />}
-                      {status === "skipped" && <span aria-hidden>–</span>}
-                    </button>
-                  )}
-                  <button onClick={() => setSelectedSession(i)} className="press min-h-11 min-w-0 flex-1 text-left">
-                    {i === nextSession && <span className="text-micro font-semibold text-primary">{locale === "no" ? "Neste steg" : "Next step"}</span>}
-                    <p
-                      className={`truncate text-label font-extrabold ${
-                        status === "completed" ? "text-success" : "text-card-foreground"
-                      }`}
-                    >
-                      {session.type}
-                    </p>
-                    {session.suggestedPace && (
-                      <p className="measure text-micro text-muted-foreground">{session.suggestedPace}</p>
-                    )}
-                  </button>
-                  <span className="measure shrink-0 text-body font-semibold text-foreground">{session.distance}</span>
-                </li>
-              )
-            })}
-          </ul>
-
-          <BottomSheet open={selectedSession !== null} onClose={() => setSelectedSession(null)} title={selectedSession !== null ? week.sessions[selectedSession].type : ""}>
-            {selectedSession !== null && <div className="flex flex-col gap-4 pb-4">
-              <p className="text-lead font-semibold">{week.sessions[selectedSession].distance}</p>
-              <p className="text-body">{week.sessions[selectedSession].effort}</p>
-              <p className="text-label text-muted-foreground">{week.sessions[selectedSession].purpose}</p>
-              {week.sessions[selectedSession].suggestedPace && <p className="text-label">{week.sessions[selectedSession].suggestedPace}</p>}
-              {(isCurrent || isPast) && <Button onClick={() => onToggleSession(week.weekNumber, selectedSession)}>{nextStatusLabel(sessionStatuses[selectedSession] ?? "planned")}</Button>}
-            </div>}
-          </BottomSheet>
-
-          {week.coachNote && (
-            <details className="group border-t border-border">
-              <summary className="press flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                <Lightbulb size={16} className="shrink-0 text-warning" aria-hidden />
-                <span className="flex-1 text-label font-bold text-foreground">{t("gp.coachNote")}</span>
-                <ChevronDown
-                  size={16}
-                  className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-                  aria-hidden
-                />
-              </summary>
-              <p className="px-3 pb-3 text-label leading-snug text-muted-foreground">{week.coachNote}</p>
-            </details>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ---- Phase colors & i18n keys ----
 const PHASE_COLORS: Record<TrainingPhaseType, { bg: string; text: string; ring: string; bar: string }> = {
@@ -1868,40 +1666,7 @@ export function GoalDetailScreen({
             )}
 
             {/* The generated block is one part of the path to the race. */}
-            <PlanJourney key={`${goal.id}:${aiPlan.block_start_date}`} goalName={goal.name} targetDate={goal.target_date} weeks={aiPlan.plan.weeks} statuses={sessionStatuses} currentIndex={currentWeekIndex} archived={!!aiPlan.archived_at}>
-            {aiPlan.plan.weeks.map((week, i) => {
-              const weekStart = mondayOf(new Date(aiPlan.block_start_date))
-              weekStart.setDate(weekStart.getDate() + i * 7)
-              const weekEnd = new Date(weekStart)
-              weekEnd.setDate(weekEnd.getDate() + 7)
-              const now = new Date()
-
-              const weekActivities = activities.filter((a) => {
-                const d = new Date(a.date)
-                return d >= weekStart && d < weekEnd
-              })
-              const actualKm = (i < currentWeekIndex || (i === currentWeekIndex))
-                ? weekActivities.reduce((sum, a) => sum + a.distance_km, 0)
-                : null
-
-              return (
-                <WeekCard
-                  key={week.weekNumber}
-                  week={week}
-                  isCurrent={i === currentWeekIndex}
-                  actualKm={actualKm}
-                  isPast={weekEnd <= now && i !== currentWeekIndex}
-                  sessionStatuses={week.sessions.map((_, si) =>
-                    sessionStatuses[`W${week.weekNumber}-${si}`] ?? "planned"
-                  )}
-                  onToggleSession={handleToggleSession}
-                  weekStart={weekStart}
-                  weekEnd={weekEnd}
-                />
-              )
-            })}
-
-            </PlanJourney>
+            <PlanJourney key={`${goal.id}:${aiPlan.block_start_date}`} goalName={goal.name} targetDate={goal.target_date} blockStartDate={aiPlan.block_start_date} weeks={aiPlan.plan.weeks} statuses={sessionStatuses} currentIndex={currentWeekIndex} archived={!!aiPlan.archived_at} onToggleSession={handleToggleSession} />
 
             {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
