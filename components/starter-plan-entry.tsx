@@ -137,6 +137,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
   }
   useEffect(() => { if (!loading) onExists?.(Boolean(saved)); }, [loading, saved, onExists]);
   if (loading) return presentation === "page" ? <p className="p-4 text-label">{l("Henter planen …", "Loading your plan …")}</p> : null;
+  if (presentation === "goal" && !saved) return error ? <p role="alert" className="text-label">{error} <button className="underline" onClick={() => { setError(""); void load(); }}>{l("Prøv igjen", "Try again")}</button></p> : null;
   if (!offer && !saved && !error) return null;
   const answer = (key: "continuousMinutes" | "weeklyMinutes" | "pauseWeeks" | "days", value: number, estimated = false) => {
     setProfile(p => ({ ...p, [key]: value, estimatedFields: key === "days" ? p.estimatedFields : [...(p.estimatedFields ?? []).filter(k => k !== key), ...(estimated ? [key] : [])] as StarterProfile["estimatedFields"] }));
@@ -173,7 +174,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
       >
         {presentation === "goal" ? <><Footprints size={24} className="shrink-0 text-primary" aria-hidden /><span className="flex-1"><span className="block text-title font-semibold">{l("Kom i gang med løping", "Start running")}</span><span className="mt-1 block text-label text-muted-foreground">{l("Startplan", "Starter plan")} · {l("Etappe", "Stage")} {saved?.state.week.number}</span><span className="mt-1 block text-label text-primary">{summary}</span></span><ChevronRight size={20} aria-hidden /></> : saved && onOpenPlan ? <span><span className="block text-title font-semibold">{l("Kom i gang med løping", "Start running")}</span><span className="mt-1 block text-label">{summary}</span></span> : summary}
       </button>}
-      {!sheetOpen && error && (
+      {presentation !== "page" && !sheetOpen && error && (
         <p role="alert" className="text-label text-muted-foreground">
           {error}
         </p>
