@@ -129,3 +129,44 @@ it("creates a returning runner plan without requiring remembered numbers", async
   expect(submitted.estimatedFields).toEqual(["continuousMinutes", "weeklyMinutes", "pauseWeeks"]);
   expect(submitted.mode).toBe("returning");
 });
+
+it("offers Strava before assessment and allows an explicit opt-out", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: "strava-choice" }) })));
+  const connect = vi.fn();
+  render(<I18nProvider><StarterPlanEntry autoPrompt syncFirst onConnectStrava={connect} /></I18nProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Strava" }));
+  expect(connect).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Continue without Strava" }));
+  expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
+});
+
+it("waits for syncing to finish before asking questions", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: "sync-wait" }) })));
+  const props = { autoPrompt: true, syncFirst: true, stravaConnected: true };
+  const view = render(<I18nProvider><StarterPlanEntry {...props} syncStatus={{ state: "syncing", last_sync_at: null, error_message: null }} /></I18nProvider>);
+  await screen.findByRole("dialog");
+  expect(screen.getByRole("status").textContent).toContain("Fetching your history");
+  expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  view.rerender(<I18nProvider><StarterPlanEntry {...props} syncStatus={{ state: "success", last_sync_at: new Date().toISOString(), error_message: null }} /></I18nProvider>);
+  expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
+});
+
+it.each(["error", "partial", "rate_limited"] as const)("does not treat %s as complete history", async state => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: `sync-${state}` }) })));
+  const retry = vi.fn();
+  render(<I18nProvider><StarterPlanEntry autoPrompt syncFirst stravaConnected onSync={retry} syncStatus={{ state, last_sync_at: null, error_message: null }} /></I18nProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Sync Strava" }));
+  expect(retry).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Continue without Strava" })).toBeTruthy();
+});
+
+it("closes the onboarding when imported history is sufficient", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: "enough-history" }) })));
+  const view = render(<I18nProvider><StarterPlanEntry autoPrompt syncFirst stravaConnected syncStatus={{ state: "syncing", last_sync_at: null, error_message: null }} /></I18nProvider>);
+  await screen.findByRole("dialog");
+  view.rerender(<I18nProvider><StarterPlanEntry offer={false} syncFirst stravaConnected syncStatus={{ state: "success", last_sync_at: new Date().toISOString(), error_message: null }} /></I18nProvider>);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+});

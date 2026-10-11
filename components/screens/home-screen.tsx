@@ -647,6 +647,8 @@ interface HomeScreenProps {
   planSessionStatuses?: Record<string, Record<string, PlanSessionStatus>>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
+  onConnectStrava?: () => void
+  onSync?: () => void
   onViewGoal: (goal: Goal) => void
   /** Unpins a goal from this screen. Offered only once its date has gone. */
   onUnpinGoal?: (goalId: string) => void
@@ -671,6 +673,10 @@ export function HomeScreen({
   warnings,
   currentPlanWeeks,
   planSessionStatuses,
+  stravaConnected,
+  syncStatus,
+  onConnectStrava,
+  onSync,
   onViewGoal,
   onViewGoals,
   onViewWeeklyGoals,
@@ -786,7 +792,7 @@ export function HomeScreen({
       {planPages.length === 0 && (
         <>
           {(hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
-          {!goalWithPlan && <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} />}
+          {!goalWithPlan && <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} syncFirst stravaConnected={stravaConnected} syncStatus={syncStatus} onConnectStrava={onConnectStrava} onSync={onSync} />}
         </>
       )}
       {/* ── What there is to run ──────────────────────────────────────── */}

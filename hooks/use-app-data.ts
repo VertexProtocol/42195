@@ -949,14 +949,14 @@ export function useAppData(initialData?: InitialData | null) {
           continue
         }
 
+        // Publish the imported activities before opening any post-sync onboarding.
+        setActivities(await fetchAllActivities(supabase))
         setSyncStatus({
           state: "success",
           last_sync_at: new Date().toISOString(),
           error_message: null,
         })
         // toast.success("Activities synced from Strava")
-
-        setActivities(await fetchAllActivities(supabase))
         return
       }
 

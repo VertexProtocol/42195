@@ -9,6 +9,8 @@ import type {
   StarterState,
 } from "@/lib/starter-plan";
 
+import type { SyncStatus } from "@/lib/types";
+
 type Saved = { state: StarterState; version: number };
 const initial: StarterProfile = {
   mode: "beginner",
@@ -20,10 +22,12 @@ const initial: StarterProfile = {
   estimatedFields: ["continuousMinutes", "weeklyMinutes", "pauseWeeks"],
   hasPain: false,
 };
-export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?: boolean; autoPrompt?: boolean }) {
+export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst = false, stravaConnected = false, syncStatus, onConnectStrava, onSync }: { offer?: boolean; autoPrompt?: boolean; syncFirst?: boolean; stravaConnected?: boolean; syncStatus?: SyncStatus; onConnectStrava?: () => void; onSync?: () => void }) {
   const { locale } = useI18n();
   const no = locale === "no";
   const l = (nb: string, en: string) => (no ? nb : en);
+  const [withoutStrava, setWithoutStrava] = useState(false);
+  const showSyncChoice = syncFirst && !withoutStrava && (!stravaConnected || syncStatus?.state !== "success");
   const [saved, setSaved] = useState<Saved | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -174,7 +178,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
         onClose={() => setSheetOpen(false)}
         title={
           open
-            ? l("Finn ditt utgangspunkt", "Find your starting point")
+            ? showSyncChoice ? l("Hent treningshistorikken din", "Bring in your training history") : l("Finn ditt utgangspunkt", "Find your starting point")
             : l("Startplan", "Starter plan")
         }
         closeLabel={l("Lukk", "Close")}
@@ -194,7 +198,18 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
               </button>
             </div>
           )}
-          {open ? (
+          {open && showSyncChoice ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-body">{l("Bruker du Strava? Vi kan hente historikken først, så du slipper å svare på det vi allerede vet.", "Use Strava? Bring in your history first so you do not have to answer what we already know.")}</p>
+              {syncStatus?.state === "syncing" ? <p role="status" className="text-label">{l("Henter historikken din … Vi venter med kartleggingen til synkroniseringen er ferdig.", "Fetching your history … We will wait until syncing finishes before asking any questions.")}</p> : <>
+                {stravaConnected && syncStatus?.state === "error" && <p role="alert" className="text-label">{l("Synkroniseringen lyktes ikke. Prøv igjen eller fortsett uten Strava.", "Sync did not finish successfully. Try again or continue without Strava.")}</p>}
+                {stravaConnected && (syncStatus?.state === "partial" || syncStatus?.state === "rate_limited") && <p role="status" className="text-label">{syncStatus.state === "rate_limited" ? l("Strava har satt en midlertidig grense. Prøv igjen senere, eller fortsett med egne opplysninger.", "Strava has temporarily limited syncing. Retry later or continue with your own answers.") : l("Vi har ikke hentet hele historikken ennå. Fortsett synkroniseringen eller bruk egne opplysninger.", "Some history is still missing. Continue syncing or use your own answers.")}</p>}
+                <Button onClick={() => stravaConnected ? onSync?.() : onConnectStrava?.()}>{stravaConnected ? l("Synkroniser Strava", "Sync Strava") : l("Koble til Strava", "Connect Strava")}</Button>
+                <Button variant="ghost" onClick={() => { setWithoutStrava(true); setStep(0); }}>{l("Fortsett uten Strava", "Continue without Strava")}</Button>
+              </>}
+              <button className="press min-h-11 text-label text-muted-foreground" onClick={() => setSheetOpen(false)}>{l("Se deg rundt først", "Explore first")}</button>
+            </div>
+          ) : open ? (
             <form
               className="flex flex-col gap-4"
               onSubmit={(e) => {
