@@ -622,6 +622,8 @@ function PlanSection({
 
 interface HomeScreenProps {
   starredGoals: Goal[]
+  /** All goals, including those that have not been favourited. */
+  goals?: Goal[]
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
@@ -659,6 +661,8 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   starredGoals,
+  goals = starredGoals,
+  planBadges,
   currentWeekGoals,
   activities,
   weeklySummary,
@@ -711,14 +715,19 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
-  // A race that has been run is not competing for attention with one that is
-  // 32 days out, so it sorts behind it. Pinned still means pinned — the card
-  // stays reachable, it just stops leading a screen whose whole job is "what
-  // is next".
+  // An existing plan belongs on Today regardless of its goal's star.
+  // Stars still keep other goals and past races within reach.
   const orderedGoals = useMemo(() => {
+    const selected = new Map(starredGoals.map(goal => [goal.id, goal]))
+    for (const goal of goals) {
+      if (!isDatePast(goal.target_date) && (planBadges[goal.id] || currentPlanWeeks?.[goal.id])) {
+        selected.set(goal.id, goal)
+      }
+    }
     const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
-    return [...starredGoals].sort((a, b) => past(a) - past(b))
-  }, [starredGoals])
+    return [...selected.values()].sort((a, b) => past(a) - past(b) || (a.display_order ?? 0) - (b.display_order ?? 0))
+  }, [starredGoals, goals, planBadges, currentPlanWeeks])
+  const nextGoal = goals.find(goal => !isDatePast(goal.target_date))
 
   // Every weekly goal is one lane, in one row, in the order the runner put
   // them in. There is no longer a split between goals that fit a stat column
@@ -748,7 +757,7 @@ export function HomeScreen({
     return currentWeekGoals.map((goal) => ({ goal, current: currentFor(goal) }))
   }, [currentWeekGoals, activities, currentMondayStr, weeklySummary])
 
-  // Every pinned race that has a plan running this week, nearest race first —
+  // Every race that has a plan running this week, nearest race first —
   // the same order the goal cards are in. A race already run is left out: its
   // block ended with it, and what is left to say about it is on its own card.
   const planPages = useMemo(
@@ -772,8 +781,8 @@ export function HomeScreen({
     <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {planPages.length === 0 && (
         <>
-          {hasRecentHistory && <div className="py-2"><h2 className="text-screen font-semibold">{t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t("home.startBody")}</p><Button className="mt-4" onClick={onViewGoals}>{t("home.setGoal")}</Button></div>}
-          <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} />
+          {(hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
+          <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory && !nextGoal} />
         </>
       )}
       {/* ── What there is to run ──────────────────────────────────────── */}
@@ -783,7 +792,7 @@ export function HomeScreen({
           plans={planPages}
           activities={activities}
           planSessionStatuses={planSessionStatuses ?? {}}
-          nameGoals={starredGoals.length > 1}
+          nameGoals={orderedGoals.length > 1}
           onViewGoal={onViewGoal}
           t={t}
         />

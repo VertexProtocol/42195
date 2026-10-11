@@ -411,6 +411,7 @@ export function AppShell({ initialData }: AppShellProps) {
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}
+            goals={data.goals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}

@@ -740,3 +740,42 @@ describe("HomeScreen — next steps and recent activity", () => {
     expect(onSelectActivity).toHaveBeenCalledWith(newer)
   })
 })
+
+
+describe("HomeScreen — goals do not require favourites", () => {
+  function show(goal: Goal, weeks: Record<string, CurrentPlanWeek> = {}, badges = {}, onViewGoal = vi.fn()) {
+    return render(<I18nProvider><HomeScreen goals={[goal]} starredGoals={[]} currentWeekGoals={[]} activities={[]} weeklySummary={summaryOf([])} warnings={[]} planBadges={badges} currentPlanWeeks={weeks} onViewGoal={onViewGoal} onViewGoals={() => {}} onViewInsights={() => {}} /></I18nProvider>)
+  }
+
+  it("shows the current plan and its goal without a star", () => {
+    const goal = makeRaceGoal({ id: "unstarred", is_starred: false })
+    show(goal, { [goal.id]: makePlanWeek() })
+    expect(screen.getByText("Long run")).toBeTruthy()
+    expect(screen.getByText(goal.name)).toBeTruthy()
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("opens an existing goal when there is no current plan week", () => {
+    const goal = makeRaceGoal({ is_starred: false })
+    const open = vi.fn()
+    show(goal, {}, {}, open)
+    fireEvent.click(screen.getByRole("button", { name: "Open plan" }))
+    expect(open).toHaveBeenCalledWith(goal)
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("keeps an unstarred goal with a completed block reachable", () => {
+    const goal = makeRaceGoal({ is_starred: false })
+    show(goal, {}, { [goal.id]: { checkpoint: false, blockCompleted: true } })
+    expect(screen.getAllByText(goal.name).length).toBeGreaterThan(0)
+    expect(screen.getByRole("button", { name: "Open plan" })).toBeTruthy()
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("does not bring an unstarred past race back onto Today", () => {
+    const goal = makeRaceGoal({ is_starred: false, target_date: daysFromNow(-10) })
+    show(goal, { [goal.id]: makePlanWeek() }, { [goal.id]: { checkpoint: false, blockCompleted: true } })
+    expect(screen.queryByText(goal.name)).toBeNull()
+    expect(screen.queryByText("Long run")).toBeNull()
+  })
+})
