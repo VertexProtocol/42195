@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, type ComponentProps } from "react";
+import { useStarterPlanCache, type StarterSnapshot } from "@/components/starter-plan-cache";
 import { useI18n } from "@/lib/i18n";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Smile, Meh, Frown, Clock, HeartPulse, Footprints, RotateCcw, Activity, Flag, Repeat, Sprout, ChevronRight } from "lucide-react";
@@ -23,25 +24,30 @@ const initial: StarterProfile = {
   hasPain: false,
 };
 export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst = false, stravaConnected = false, syncStatus, onConnectStrava, onSync, presentation = "entry", onOpenPlan, onExists }: { offer?: boolean; autoPrompt?: boolean; syncFirst?: boolean; stravaConnected?: boolean; syncStatus?: SyncStatus; onConnectStrava?: () => void; onSync?: () => void; presentation?: "entry" | "goal" | "page"; onOpenPlan?: () => void; onExists?: (exists: boolean) => void }) {
+  const cache = useStarterPlanCache();
   const { locale } = useI18n();
   const no = locale === "no";
   const l = (nb: string, en: string) => (no ? nb : en);
   const [withoutStrava, setWithoutStrava] = useState(false);
   const showSyncChoice = syncFirst && !withoutStrava && (!stravaConnected || syncStatus?.state !== "success");
-  const [saved, setSaved] = useState<Saved | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState<Saved | null>(cache?.snapshot?.plan ?? null);
+  const [loading, setLoading] = useState(cache?.snapshot === undefined);
   const [busy, setBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(presentation === "page" && cache?.snapshot !== undefined && !cache.snapshot.plan);
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(initial);
   const [error, setError] = useState("");
+  function remember(data: StarterSnapshot) {
+    setSaved(previous => (previous?.version ?? 0) > (data.plan?.version ?? 0) ? previous : data.plan);
+    cache?.update(data);
+  }
   async function load() {
     try {
       const res = await fetch("/api/starter-plan");
       if (!res.ok) throw new Error("load");
       const data = await res.json();
-      setSaved(data.plan);
+      remember(data);
       if (presentation === "page") setOpen(!data.plan);
     } catch {
       setError(
@@ -61,9 +67,9 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
         if (!res.ok) throw new Error("load");
         const data = await res.json();
         if (alive) {
-          setSaved(data.plan);
-          if (presentation === "page") setOpen(!data.plan);
-          if (autoPrompt && offer && !data.plan && data.userId) {
+          remember(data);
+          if (presentation === "page" && cache?.snapshot === undefined) setOpen(!data.plan);
+          if (autoPrompt && offer && !saved && !data.plan && data.userId) {
             const key = `42195:starter-intro:${data.userId}`;
             let seen = false;
             try { seen = sessionStorage.getItem(key) === "seen"; sessionStorage.setItem(key, "seen"); } catch { /* Intro still works if browser storage is unavailable. */ }
@@ -120,7 +126,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setSaved(data.plan);
+      remember(data);
       setOpen(false);
       if (body.action === "setup" && onOpenPlan) { setSheetOpen(false); onOpenPlan(); }
     } catch (e) {

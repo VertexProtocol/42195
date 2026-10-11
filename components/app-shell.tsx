@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useSyncExternalStore, lazy, 
 import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
 import { AppBar } from "@/components/app-bar"
+import { StarterPlanProvider } from "@/components/starter-plan-cache"
 import { StarterPlanScreen } from "@/components/screens/starter-plan-screen"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
@@ -390,6 +391,7 @@ export function AppShell({ initialData }: AppShellProps) {
           : "42195"
 
   return (
+    <StarterPlanProvider key={data.user?.id ?? "signed-out"}>
     <div className="mx-auto min-h-dvh max-w-2xl bg-background">
       {/* One app bar for every screen: where you are, whether the data is
           current, and the way to your account. Detail views swap the profile
@@ -641,5 +643,6 @@ export function AppShell({ initialData }: AppShellProps) {
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
+    </StarterPlanProvider>
   )
 }

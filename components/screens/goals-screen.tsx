@@ -1,5 +1,6 @@
 "use client"
 
+import { useStarterPlanCache } from "@/components/starter-plan-cache"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useState, useMemo, useEffect } from "react"
 import {
@@ -315,7 +316,9 @@ export function GoalsScreen({
   initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
-  const [hasStarterPlan, setHasStarterPlan] = useState(false)
+  const starterCache = useStarterPlanCache()
+  const [reportedStarterPlan, setHasStarterPlan] = useState(false)
+  const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
   const [tab, setTab] = useState<GoalTab>(initialTab)
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
   const toggleExpanded = (id: string) => {

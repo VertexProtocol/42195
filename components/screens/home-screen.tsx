@@ -10,6 +10,7 @@ import {
   useEffect,
 } from "react"
 import { ChevronRight, StarOff } from "lucide-react"
+import { useStarterPlanCache } from "@/components/starter-plan-cache"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { PoweredByStrava } from "@/components/strava-brand"
 import {
@@ -688,7 +689,9 @@ export function HomeScreen({
   onSelectActivity,
 }: HomeScreenProps) {
   const { t } = useI18n()
-  const [hasStarterPlan, setHasStarterPlan] = useState(false)
+  const starterCache = useStarterPlanCache()
+  const [reportedStarterPlan, setHasStarterPlan] = useState(false)
+  const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
 
   // Falls back to Plan's own default rather than doing nothing, so a caller
   // that has not wired the weekly route still opens something.
