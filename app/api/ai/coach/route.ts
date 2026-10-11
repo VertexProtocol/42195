@@ -1,3 +1,4 @@
+import { starterStateSchema } from "@/lib/starter-plan"
 import { NextRequest, NextResponse } from "next/server"
 import type Anthropic from "@anthropic-ai/sdk"
 import { anthropic } from "@/lib/anthropic"
@@ -671,6 +672,12 @@ export async function POST(req: NextRequest) {
     )
   } else {
     stateLines.push(`- Pause status: training recently (${comeback.pauseDays} days since last run)`)
+  }
+
+  const { data: starterRow } = await supabase.from("starter_plans").select("state").eq("user_id", user.id).maybeSingle()
+  const starter = starterStateSchema.safeParse(starterRow?.state)
+  if (starter.success) {
+    stateLines.push(`- Saved provisional starter plan (self-reported, NOT measured activities): ${JSON.stringify(starter.data)}. Explain the difference from measured history. Do not infer pace or race readiness, and do not add this plan on top of an active race plan.`)
   }
 
   const notesContextParts: string[] = []

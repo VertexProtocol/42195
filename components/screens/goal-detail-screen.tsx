@@ -1,5 +1,6 @@
 "use client"
 
+import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   ArrowLeft,
@@ -1199,6 +1200,7 @@ export function GoalDetailScreen({
   const [paceSource, setPaceSource] = useState<"test_run" | "prediction" | "historical" | "none" | null>(null)
   const [activeTab, setActiveTab] = useState<"plan" | "preferences">("plan")
   const [showAdjustForm, setShowAdjustForm] = useState(false)
+  const [needsStarter, setNeedsStarter] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1453,6 +1455,7 @@ export function GoalDetailScreen({
             setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
             return
           }
+          setNeedsStarter(data.code === "missing_history")
           setError(data.code === "missing_history" ? t("gp.missingHistory") : data.code === "race_budget_conflict" ? t("gp.raceBudgetConflict") : data.error ?? t("gp.generateFailed"))
           return
         }
@@ -1756,6 +1759,8 @@ export function GoalDetailScreen({
             <PlanNotice tone="danger" icon={AlertCircle} title={error} />
           </div>
         )}
+
+        {needsStarter && <StarterPlanEntry />}
 
         {/* No plan yet */}
         {!planResolved && !isGenerating && (

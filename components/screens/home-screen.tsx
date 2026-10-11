@@ -10,6 +10,7 @@ import {
   useEffect,
 } from "react"
 import { ChevronRight, StarOff } from "lucide-react"
+import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { PoweredByStrava } from "@/components/strava-brand"
 import {
   formatDuration,
@@ -760,6 +761,8 @@ export function HomeScreen({
     [orderedGoals, currentPlanWeeks],
   )
 
+  const hasRecentHistory = activities.filter(a => isRunActivity(a.type) && new Date(a.date).getTime() >= Date.now() - 84 * 86400000 && new Date(a.date).getTime() <= Date.now()).length >= 8
+
   const latestActivity = useMemo(() => activities.reduce<Activity | null>(
     (latest, activity) => !latest || activity.date > latest.date ? activity : latest,
     null,
@@ -768,11 +771,10 @@ export function HomeScreen({
   return (
     <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {planPages.length === 0 && (
-        <div className="py-2">
-          <h2 className="text-screen font-semibold">{t("home.startTitle")}</h2>
-          <p className="mt-2 max-w-prose text-body text-muted-foreground">{t("home.startBody")}</p>
-          <Button className="mt-4" onClick={onViewGoals}>{t("home.setGoal")}</Button>
-        </div>
+        <>
+          {hasRecentHistory && <div className="py-2"><h2 className="text-screen font-semibold">{t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t("home.startBody")}</p><Button className="mt-4" onClick={onViewGoals}>{t("home.setGoal")}</Button></div>}
+          <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} />
+        </>
       )}
       {/* ── What there is to run ──────────────────────────────────────── */}
       {/* Current training leads; historical goals stay below the week. */}
