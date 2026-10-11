@@ -609,7 +609,7 @@ describe("HomeScreen — this week of the training plan", () => {
     expect(screen.queryByText("Ghost session")).toBeNull()
     // With more than one race pinned, the plan page says which race its week
     // belongs to, on the same line as the week number.
-    expect(screen.getByText(/^Still ahead · Week 2/)).toBeTruthy()
+    expect(screen.getByText(/^Still ahead · Stage 2/)).toBeTruthy()
   })
 
   it("says nothing at all when the goal has no plan", () => {
@@ -662,8 +662,8 @@ describe("HomeScreen — several races, several plans", () => {
       goals: [oslo(), berlin()],
       planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
     })
-    expect(screen.getByText(/^Oslo · Week 2/)).toBeTruthy()
-    expect(screen.queryByText(/^Berlin · Week 2/)).toBeNull()
+    expect(screen.getByText(/^Oslo · Stage 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Berlin · Stage 2/)).toBeNull()
   })
 
   it("changes the name over to the race the runner has swiped to", async () => {
@@ -684,8 +684,8 @@ describe("HomeScreen — several races, several plans", () => {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
     })
 
-    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
-    expect(screen.queryByText(/^Oslo · Week 2/)).toBeNull()
+    expect(screen.getByText(/^Berlin · Stage 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Oslo · Stage 2/)).toBeNull()
   })
 
   it("makes the races swipeable down", () => {
@@ -713,7 +713,7 @@ describe("HomeScreen — several races, several plans", () => {
     expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
     // One race has a plan, so there is nothing to swipe between — but the page
     // still says whose week it is, because two races are pinned.
-    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
+    expect(screen.getByText(/^Berlin · Stage 2/)).toBeTruthy()
     expect(screen.queryByRole("group", { name: /Training plans for/ })).toBeNull()
   })
 

@@ -527,9 +527,9 @@ function PlanSection({
   // unpinned — while the rail is sitting on it.
   const current = pages[Math.min(pageIndex, pages.length - 1)] ?? pages[0]
 
-  // Skipped counts as settled, the same as it does in the plan's own week
-  // header: the runner has answered for it, so it is not still ahead of them.
-  const settled = current.done + current.skipped
+  // Completion progress counts completed sessions only. Skipped sessions are
+  // settled separately and never earn completion colour or progress.
+  const settled = current.done
   const filled = current.total > 0 ? Math.round((settled / current.total) * 100) : 0
   const countText =
     t("home.planSessionsDone", { done: current.done, total: current.total }) +
@@ -554,7 +554,7 @@ function PlanSection({
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-micro font-semibold text-primary">
             {isPaged || nameGoals ? `${current.goal.name} · ` : ""}
-            {t("home.planWeek", { week: current.week.weekNumber })}
+            {t("home.planStage", { week: current.week.weekNumber })}
             {current.week.theme ? ` · ${current.week.theme}` : ""}
           </span>
           <span className="measure shrink-0 text-micro text-muted-foreground">{countText}</span>
@@ -569,12 +569,14 @@ function PlanSection({
         >
           <div
             className={`grow-x h-full rounded-full ${
-              current.outstanding.length > 0 ? "bg-primary" : "bg-success"
+              current.done === current.total && current.total > 0 ? "bg-success" : "bg-primary"
             }`}
             style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
           />
         </div>
       </div>
+
+      <button onClick={() => onViewGoal(current.goal)} className="press min-h-11 text-left text-label font-semibold text-primary">{t("home.openJourney")} →</button>
 
       {/* The focus ring belongs out here rather than on the scroller: the mask
           that softens the scroller's ends would fade the ring along with the

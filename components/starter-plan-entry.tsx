@@ -421,9 +421,13 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false }: { offer?:
                   )}
                 </p>
               )}
-              <ol className="flex flex-col divide-y divide-border">
+              <p className="text-title font-semibold">{l("Din første sti", "Your starting path")} · {l("Etappe", "Stage")} {saved.state.week.number}</p>
+              <p className="text-label text-muted-foreground">{l("Hvile mellom stoppene er en del av reisen.", "Rest between stops is part of the journey.")}</p>
+              <ol className="ml-3 flex flex-col border-l-2 border-border">
                 {saved.state.week.sessions.map((session, i) => (
-                  <li key={session.id} className="flex flex-col gap-2 py-3">
+                  <li key={session.id} className="relative flex flex-col gap-2 py-4 pl-7">
+                    <span aria-hidden className={`absolute -left-3 top-4 flex size-6 items-center justify-center rounded-full border-4 border-background ${session.feedback && ["easy", "ok", "hard"].includes(session.feedback) ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>{session.feedback && ["easy", "ok", "hard"].includes(session.feedback) ? "✓" : "·"}</span>
+                    {!session.feedback && saved.state.week.reason !== "review" && i === saved.state.week.sessions.findIndex(s => !s.feedback) && <p className="text-micro font-semibold text-primary">{l("Neste steg", "Next step")}</p>}
                     <h3 className="font-semibold">
                       {l("Økt", "Session")} {i + 1} · {session.minutes} min ·{" "}
                       {new Date(
