@@ -1,5 +1,7 @@
 "use client"
 
+import { eventResult } from "@/lib/event-result"
+
 import { useStarterPlanCache } from "@/components/starter-plan-cache"
 import { isHistoricalGoal } from "@/lib/goal-lifecycle"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
@@ -1185,7 +1187,7 @@ export function GoalsScreen({
               </Button>
             </>
           )}
-          {historicalGoals.length > 0 && <details className="border-t border-border pt-3"><summary className="press min-h-12 cursor-pointer py-3 text-label font-semibold text-muted-foreground">{locale === "no" ? "Tidligere mål" : "Previous goals"} · {historicalGoals.length}</summary><ul className="divide-y divide-border">{historicalGoals.map(goal => <li key={goal.id}><button onClick={() => onSelectGoal(goal)} className="press flex min-h-16 w-full items-center justify-between gap-3 py-3 text-left"><span><span className="block text-body font-semibold">{goal.name}</span><span className="text-micro text-muted-foreground">{perfGoalStatuses.get(goal.id)?.reached ? t("plan.achieved") : t("plan.ended")} · {formatDateShort(goal.target_date)}</span></span><ChevronRight size={18} aria-hidden /></button></li>)}</ul></details>}
+          {historicalGoals.length > 0 && <details className="border-t border-border pt-3"><summary className="press min-h-12 cursor-pointer py-3 text-label font-semibold text-muted-foreground">{locale === "no" ? "Tidligere mål" : "Previous goals"} · {historicalGoals.length}</summary><ul className="divide-y divide-border">{historicalGoals.map(goal => <li key={goal.id}><button onClick={() => onSelectGoal(goal)} className="press flex min-h-16 w-full items-center justify-between gap-3 py-3 text-left"><span><span className="block text-body font-semibold">{goal.name}</span><span className="text-micro text-muted-foreground">{eventResult(goal, activities).activity ? (locale === "no" ? "Gjennomført" : "Completed") : perfGoalStatuses.get(goal.id)?.reached ? t("plan.achieved") : t("plan.ended")} · {formatDateShort(goal.target_date)}</span></span><ChevronRight size={18} aria-hidden /></button></li>)}</ul></details>}
 
         </div>
       )}

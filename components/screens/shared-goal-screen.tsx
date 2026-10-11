@@ -515,7 +515,9 @@ function MemberRow({
               "fell short" are different things and only one of them is about
               the running. */}
           {finished ? (
-            member.outcome === "reached" ? (
+            member.outcome === "completed" ? (
+              <Pill tone="positive">{t("plan.completed")}</Pill>
+            ) : member.outcome === "reached" ? (
               <Pill tone="positive">{t("plan.achieved")}</Pill>
             ) : member.outcome === "ended" ? (
               <Pill>{t("plan.ended")}</Pill>

@@ -33,7 +33,7 @@ export interface SharedGoalMemberView {
    * own goal screen shows them. Null until their sync has recorded one —
    * which is not the same as falling short, and must not read as it.
    */
-  outcome: "reached" | "ended" | null
+  outcome: "reached" | "completed" | "ended" | null
 }
 
 export interface SharedGoalView {
@@ -96,7 +96,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     adherence_done: number | null
     adherence_target: number | null
     updated_at: string | null
-    outcome: "reached" | "ended" | null
+    outcome: "reached" | "completed" | "ended" | null
   }>).map((m) => {
     const name = names.get(m.user_id) ?? null
     return {

@@ -433,6 +433,7 @@ const translations = {
     "plan.unpinFromToday": "Unpin from Today",
     "plan.achieved": "Achieved",
     "plan.ended": "Ended",
+    "plan.completed": "Completed",
     "plan.timeElapsed": "time elapsed",
     "plan.bestRun": "Best",
     // Insights screen
@@ -1479,6 +1480,7 @@ const translations = {
     "plan.unpinFromToday": "Løsne fra Today",
     "plan.achieved": "Oppnådd",
     "plan.ended": "Avsluttet",
+    "plan.completed": "Gjennomført",
     "plan.timeElapsed": "tid brukt",
     "plan.bestRun": "Beste",
     // Insights

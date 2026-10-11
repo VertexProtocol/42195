@@ -1,5 +1,7 @@
 "use client"
 
+import { EventResult } from "@/components/event-result"
+import { eventResult } from "@/lib/event-result"
 import { PlanJourney } from "@/components/plan-journey"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useEffect, useState, useCallback, useMemo } from "react"
@@ -70,26 +72,22 @@ import { Pill } from '@/components/ui/pill'
 import { Meter } from '@/components/ui/meter'
 import { TrackLoader } from '@/components/ui/track-mark'
 
-/**
- * How a goal that has run its course actually went.
- *
- * The verdict comes from the engine, not the calendar: a target whose day has
- * passed is finished, but only a target with a mark can be said to have been
- * reached. An event goal has no mark — a marathon is not passed or failed by
- * the app — so it reports what was logged toward it and leaves the judging
- * alone.
- */
+/** Calendar closure and evidence of race completion are separate outcomes. */
 function GoalResultCard({
   goal,
   activities,
   onUnpin,
+  onEventResultChange,
   t,
 }: {
   goal: Goal
   activities: Activity[]
   onUnpin?: (goalId: string) => void
+  onEventResultChange?: (patch: Partial<Goal> & { id: string }) => void
   t: (key: TranslationKey, params?: Record<string, string | number>) => string
 }) {
+  const { locale } = useI18n()
+  const completed = !!eventResult(goal, activities).activity
   const isPerformance = goal.goal_category === "performance"
   const status = isPerformance
     ? evaluatePerformanceGoal(activities, goal.target_distance_km, goal.target_time_seconds)
@@ -123,12 +121,12 @@ function GoalResultCard({
       <div className="flex items-center gap-3 px-5 py-4">
         <div
           className={`pop-in flex size-14 shrink-0 items-center justify-center rounded-full border ${
-            reached
+            (reached || completed)
               ? "border-[var(--success-edge)] bg-success text-success-foreground"
               : "border-[var(--chunk-edge)] bg-surface-sunken"
           }`}
         >
-          {reached ? (
+          {reached || completed ? (
             <Trophy size={26} aria-hidden />
           ) : (
             <Flag size={24} className="text-muted-foreground" aria-hidden />
@@ -137,10 +135,10 @@ function GoalResultCard({
         <div className="min-w-0 flex-1">
           <p
             className={`text-title font-extrabold ${
-              reached ? "text-success" : "text-card-foreground"
+              reached || completed ? "text-success" : "text-card-foreground"
             }`}
           >
-            {reached ? t("plan.achieved") : t("plan.ended")}
+            {completed ? (locale === "no" ? "Gjennomført" : "Completed") : reached ? t("plan.achieved") : !isDatePast(goal.target_date) ? (locale === "no" ? "Bekreft løpet" : "Confirm race") : t("plan.ended")}
           </p>
           <p className="mt-0.5 text-micro text-muted-foreground">
             {t("plan.resultOn", { date: formatDate(goal.target_date) })}
@@ -148,6 +146,7 @@ function GoalResultCard({
         </div>
       </div>
 
+      <EventResult goal={goal} activities={activities} onChange={onEventResultChange} />
       {isPerformance && (
         <div className="flex items-center justify-between gap-3 px-5 py-3.5">
           <span className="text-label text-muted-foreground">
@@ -220,6 +219,7 @@ interface GoalDetailScreenProps {
    * goal badges are derived from plans, and it no longer re-queries them on
    * every visit, so it needs telling.
    */
+  onEventResultChange?: (patch: Partial<Goal> & { id: string }) => void
   onPlanChange?: () => void
   /** Unpins the goal from Today. Offered once its date has gone. */
   onToggleStar?: (goalId: string) => void
@@ -988,6 +988,7 @@ export function GoalDetailScreen({
   activities,
   onBack,
   onEditGoal,
+  onEventResultChange,
   onPlanChange,
   onToggleStar,
   onOpenGroup,
@@ -1341,7 +1342,7 @@ export function GoalDetailScreen({
 
   // Derived values
   const days = daysUntil(goal.target_date)
-  const past = isDatePast(goal.target_date)
+  const past = isDatePast(goal.target_date) || !!eventResult(goal, activities).activity
   const effectiveStart = goal.start_date ?? goal.created_at
   const timeProgress = past ? 100 : timeElapsedPercentage(effectiveStart, goal.target_date)
   // Which week of the plan are we currently in? (Monday-aligned)
@@ -1476,11 +1477,12 @@ export function GoalDetailScreen({
           training am I" — that bar reads 100% for every past goal and says
           nothing. What is left to know is how it went, so the result leads and
           the plan section falls in behind it. */}
-      {past ? (
+      {past || eventResult(goal, activities).candidates.length > 0 ? (
         <GoalResultCard
           goal={goal}
           activities={activities}
           onUnpin={onToggleStar}
+          onEventResultChange={onEventResultChange}
           t={t}
         />
       ) : (

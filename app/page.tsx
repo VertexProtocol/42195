@@ -182,6 +182,8 @@ export default async function Page() {
       created_at: g.created_at,
       display_order: (g as any).display_order ?? 0, // [DND]
       is_starred: (g as any).is_starred ?? false, // [STAR]
+            event_activity_id: g.event_activity_id ?? null,
+            event_match_dismissed: g.event_match_dismissed ?? false,
     })),
     weeklyGoals: (weeklyGoalsRes.data ?? []).map((wg) => ({
       id: wg.id,

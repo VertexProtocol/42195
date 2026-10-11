@@ -1,5 +1,7 @@
 "use client"
 
+import { eventResult } from "@/lib/event-result"
+
 import {
   useMemo,
   lazy,
@@ -689,7 +691,7 @@ export function HomeScreen({
   onViewInsights,
   onSelectActivity,
 }: HomeScreenProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const starterCache = useStarterPlanCache()
   const [reportedStarterPlan, setHasStarterPlan] = useState(false)
   const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
@@ -903,7 +905,7 @@ export function HomeScreen({
               <div key={goal.id} className="flex items-center gap-2 py-2">
                 <button onClick={() => onViewGoal(goal)} className="press min-h-12 min-w-0 flex-1 text-left">
                   <h3 className="text-body font-semibold">{goal.name}</h3>
-                  <p className="text-label text-muted-foreground"><span>{t("home.finishedGoal")}</span> · {isDatePast(goal.target_date) ? <><span>{daysSince(goal.target_date)}</span> <span>{t("home.daysAgo")}</span></> : <span>{t("plan.achieved")}</span>}</p>
+                  <p className="text-label text-muted-foreground"><span>{eventResult(goal, activities).activity ? (locale === "no" ? "Gjennomført" : "Completed") : t("home.finishedGoal")}</span> · {isDatePast(goal.target_date) ? <><span>{daysSince(goal.target_date)}</span> <span>{t("home.daysAgo")}</span></> : <span>{eventResult(goal, activities).activity ? formatDateShort(goal.target_date) : t("plan.achieved")}</span>}</p>
                 </button>
                 {onUnpinGoal && <button onClick={() => onUnpinGoal(goal.id)} className="press flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-sunken" aria-label={t("home.unpinFinished")}><StarOff size={17} aria-hidden /></button>}
               </div>
