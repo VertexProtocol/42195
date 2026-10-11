@@ -316,6 +316,8 @@ export function useAppData(initialData?: InitialData | null) {
             created_at: g.created_at,
             display_order: g.display_order ?? 0, // [DND]
             is_starred: (g as any).is_starred ?? false, // [STAR]
+            event_activity_id: g.event_activity_id ?? null,
+            event_match_dismissed: g.event_match_dismissed ?? false,
           }))
         )
       }
@@ -451,7 +453,7 @@ export function useAppData(initialData?: InitialData | null) {
       const exists = goalsRef.current.find((g) => g.id === saved.id)
 
       if (exists) {
-        setGoals((prev) => prev.map((g) => (g.id === saved.id ? saved : g)))
+        setGoals((prev) => prev.map((g) => (g.id === saved.id ? { ...g, ...saved } : g)))
         const { error } = await supabase
           .from("goals")
           .update({
@@ -597,7 +599,7 @@ export function useAppData(initialData?: InitialData | null) {
 
       if (exists) {
         setWeeklyGoals((prev) =>
-          prev.map((g) => (g.id === saved.id ? saved : g))
+          prev.map((g) => (g.id === saved.id ? { ...g, ...saved } : g))
         )
         const { error } = await supabase
           .from("weekly_goals")
@@ -1035,6 +1037,7 @@ export function useAppData(initialData?: InitialData | null) {
     // Data
     activities,
     goals,
+    updateEventResult: (patch: Partial<Goal> & { id: string }) => setGoals(prev => prev.map(g => g.id === patch.id ? { ...g, ...patch } : g)),
     weeklyGoals,
     user,
     syncStatus,

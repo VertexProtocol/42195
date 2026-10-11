@@ -17,6 +17,8 @@ interface StravaActivity {
   type: string
   sport_type: string
   workout_type?: number // 0=default, 1=race, 2=long run, 3=workout
+  start_date_local?: string
+  elapsed_time?: number
   start_date: string
   distance: number // metres
   moving_time: number // seconds
@@ -133,13 +135,15 @@ function peakHeartRate(a: StravaActivity): number | null {
 }
 
 /** Maps a Strava activity onto an `activities` row. */
-function toActivityRow(userId: string, a: StravaActivity) {
+export function toActivityRow(userId: string, a: StravaActivity) {
   return {
     user_id: userId,
     strava_id: a.id,
     type: mapActivityType(a.sport_type, a.workout_type),
     name: a.name,
     date: a.start_date,
+    local_date: a.start_date_local?.slice(0, 10) ?? null,
+    elapsed_seconds: a.elapsed_time != null && a.elapsed_time > 0 ? Math.round(a.elapsed_time) : null,
     distance_km: a.distance / 1000,
     duration_seconds: Math.round(a.moving_time),
     pace_min_per_km: speedToPace(a.average_speed),
@@ -453,10 +457,12 @@ export async function syncUserActivities(
           ? batch
           : batch.filter((a) => toEpochSeconds(a.start_date) > stopAt)
 
-      if (fresh.length > 0) {
+      // Refresh metadata on the boundary page too, without extra Strava calls.
+      // Older imports gain local dates and elapsed time as history is resynced.
+      if (batch.length > 0) {
         const { error: upsertError } = await service
           .from("activities")
-          .upsert(fresh.map((a) => toActivityRow(userId, a)), {
+          .upsert(batch.map((a) => toActivityRow(userId, a)), {
             onConflict: "user_id,strava_id",
           })
         if (upsertError) throw upsertError

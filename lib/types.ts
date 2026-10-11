@@ -9,6 +9,8 @@ export interface Activity {
   name: string
   date: string
   distance_km: number
+  elapsed_seconds?: number | null
+  local_date?: string | null
   duration_seconds: number
   pace_min_per_km: number | null
   elevation_gain_m: number | null
@@ -47,6 +49,8 @@ export interface Goal {
   display_order?: number
   // [STAR] whether this goal is pinned to the home screen
   is_starred?: boolean
+  event_activity_id?: string | null
+  event_match_dismissed?: boolean
 }
 
 export type WeeklyGoalMetric = "distance_km" | "sessions" | "duration_minutes" | "elevation_m"

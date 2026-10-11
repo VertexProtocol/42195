@@ -267,3 +267,12 @@ it("opens the next step details from the journey", async () => {
   expect(screen.getByText("Relaxed surges")).toBeTruthy()
   expect(screen.getByText("Turnover")).toBeTruthy()
 })
+
+
+it("recognizes race completion separately from a missed time goal", () => {
+  const date = daysFromNow(-1)
+  renderDetail(makeGoal({ goal_category: "event_training", target_distance_km: 42.195, target_date: date, target_time_seconds: 14400 }), [{ ...makeActivity(42.3, 13800), strava_id: 123, date: date + "T08:00:00Z", local_date: date, elapsed_seconds: 14500 }])
+  expect(screen.getByText("Completed")).toBeTruthy()
+  expect(screen.getByText(/Above time target/)).toBeTruthy()
+  expect(screen.queryByText("Ended")).toBeNull()
+})

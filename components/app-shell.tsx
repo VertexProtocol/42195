@@ -501,6 +501,7 @@ export function AppShell({ initialData }: AppShellProps) {
               activities={data.activities}
               onBack={handleBackFromGoalDetail}
               onEditGoal={handleEditGoal}
+              onEventResultChange={data.updateEventResult}
               onPlanChange={data.refreshPlanBadges}
               onOpenGroup={handleOpenGroup}
               sharedGoal={data.sharedGoals[selectedGoal.id] ?? null}

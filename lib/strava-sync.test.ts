@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { syncStateFor, type SyncResult } from "./strava-sync"
+import { syncStateFor, toActivityRow, type SyncResult } from "./strava-sync"
 
 /**
  * The difference between "partial" and "rate_limited" is what decides whether
@@ -42,4 +42,10 @@ describe("syncStateFor", () => {
     )
     expect(state).toBe("success")
   })
+})
+
+
+it("preserves elapsed time and the local calendar date independently of moving time", () => {
+  const row = toActivityRow("owner", { id: 1, name: "Race", type: "Run", sport_type: "Run", workout_type: 1, start_date: "2026-09-19T23:00:00Z", start_date_local: "2026-09-20T01:00:00Z", distance: 42195, moving_time: 13800, elapsed_time: 14500, average_speed: 3, total_elevation_gain: 100 })
+  expect(row).toMatchObject({ type: "Race", duration_seconds: 13800, elapsed_seconds: 14500, local_date: "2026-09-20" })
 })

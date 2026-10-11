@@ -18,7 +18,7 @@ import type { Activity } from "@/lib/types"
 
 /** List columns. Deliberately no `map_polyline` — see above. */
 export const ACTIVITY_LIST_COLUMNS =
-  "id, user_id, strava_id, type, name, date, distance_km, duration_seconds, " +
+  "id, user_id, strava_id, type, name, date, distance_km, duration_seconds, elapsed_seconds, local_date, " +
   "pace_min_per_km, elevation_gain_m, avg_heart_rate, avg_cadence, calories, created_at"
 
 const PAGE_SIZE = 1000
@@ -41,6 +41,8 @@ export function mapActivityRow(a: any): Activity {
     date: a.date,
     distance_km: Number(a.distance_km),
     duration_seconds: a.duration_seconds,
+    elapsed_seconds: a.elapsed_seconds ?? null,
+    local_date: a.local_date ?? null,
     pace_min_per_km: a.pace_min_per_km ? Number(a.pace_min_per_km) : null,
     elevation_gain_m: a.elevation_gain_m ? Number(a.elevation_gain_m) : null,
     avg_heart_rate: a.avg_heart_rate,

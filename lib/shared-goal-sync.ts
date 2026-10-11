@@ -13,32 +13,33 @@
  * screen shows that as a dash: a zero would claim the runner has made no
  * progress, which is a different statement from not knowing yet.
  *
- * Once the race has been run the row settles. The first sync after the date
- * writes the verdict — the same one the runner's own goal screen shows — and
- * stamps settled_at, and a settled row is never recomputed again. A final
- * standing that keeps moving for months is not a final standing.
+ * Standings settle after the event; outcomes remain revisable for late uploads
+ * and explicit corrections.
  */
 
 import { createServiceClient } from "@/lib/supabase/service"
 import type { Activity, SharedGoalMetric, TrainingPlan } from "@/lib/types"
 import { goalFitness, memberPosition, blockAdherence } from "@/lib/shared-goal-progress"
+import { eventResult } from "@/lib/event-result"
 import { goalOutcome, isDatePast } from "@/lib/format"
 
 /** Activity columns the position needs — enough for the index and for week sums. */
-const ACTIVITY_COLUMNS = "date, distance_km, duration_seconds, elevation_gain_m"
+const ACTIVITY_COLUMNS = "id, strava_id, type, local_date, elapsed_seconds, date, distance_km, duration_seconds, elevation_gain_m"
 
 type ProgressActivity = Pick<
   Activity,
-  "date" | "distance_km" | "duration_seconds" | "elevation_gain_m"
+  "id" | "strava_id" | "type" | "local_date" | "elapsed_seconds" | "date" | "distance_km" | "duration_seconds" | "elevation_gain_m"
 >
 
 /** Shapes a partial row into a full Activity for the form index. */
 function asActivity(row: ProgressActivity): Activity {
   return {
-    id: "",
+    id: row.id,
+    local_date: row.local_date,
+    elapsed_seconds: row.elapsed_seconds,
     user_id: "",
-    strava_id: null,
-    type: "Run",
+    strava_id: row.strava_id,
+    type: row.type ?? "Run",
     name: "",
     date: row.date,
     distance_km: Number(row.distance_km),
@@ -108,7 +109,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
     const goalIds = Array.from(new Set(memberships.map((m) => m.goal_id)))
     const { data: goalRows } = await service
       .from("goals")
-      .select("id, target_time_seconds, target_distance_km, goal_category")
+      .select("id, target_date, event_activity_id, event_match_dismissed, target_time_seconds, target_distance_km, goal_category")
       .eq("user_id", userId)
       .in("id", goalIds)
 
@@ -129,7 +130,7 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
         // Settled means finished: the race has been run and the verdict is
         // written. Recomputing it would move a number somebody has already
         // read as final.
-        if (member.settled_at) return
+        // Re-evaluate outcomes after late Strava uploads and user corrections.
 
         const goal = goals.get(member.goal_id)
         if (!goal) return
@@ -165,13 +166,10 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
           adherence,
         })
 
-        // The verdict, in the same two words and by the same rule the
-        // runner's own goal screen uses: only a performance goal has a mark
-        // to be judged against, and an event goal simply ends. Saying more
-        // than their own screen says about them would be the group inventing
-        // a result nobody asked it for.
+        // Event completion is separate from achieving a benchmark.
+        const completed = !!eventResult(goal, asActivities).activity
         const outcome = raceRun
-          ? goalOutcome(
+          ? completed ? "completed" : goalOutcome(
               goal.goal_category as string | null,
               asActivities,
               Number(goal.target_distance_km),
@@ -182,11 +180,13 @@ export async function refreshSharedGoalPositions(userId: string): Promise<void> 
         const { error } = await service
           .from("shared_goal_members")
           .update({
-            position_pct: position.pct,
-            adherence_done: adherence.weeks > 0 ? adherence.doneKm : null,
-            adherence_target: adherence.weeks > 0 ? adherence.targetKm : null,
+            ...(!member.settled_at ? {
+              position_pct: position.pct,
+              adherence_done: adherence.weeks > 0 ? adherence.doneKm : null,
+              adherence_target: adherence.weeks > 0 ? adherence.targetKm : null,
+            } : {}),
             updated_at: now,
-            ...(raceRun ? { outcome, settled_at: now } : {}),
+            ...(raceRun ? { outcome, settled_at: member.settled_at ?? now } : {}),
           })
           .eq("shared_goal_id", member.shared_goal_id)
           .eq("user_id", userId)
