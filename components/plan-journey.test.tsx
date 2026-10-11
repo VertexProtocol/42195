@@ -43,3 +43,18 @@ it("updates the current stop through the existing session handler", () => {
   fireEvent.click(screen.getByRole("button", { name: /Mark as done/i }))
   expect(toggle).toHaveBeenCalledWith(1, 0)
 })
+
+it("collapses elapsed chapters and preserves their session details", () => {
+  const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{ "W1-0": "skipped" }} currentIndex={1} /></I18nProvider>)
+  const chapters = screen.getByRole("list", { name: "Chapters in this training block" }).children
+  const previous = chapters[0].querySelector("details")!
+  expect(previous.open).toBe(false)
+  expect(previous.querySelector("summary")?.textContent).toContain("Ended")
+  expect(previous.querySelector("summary")?.textContent).not.toContain("Completed")
+  expect(chapters[1].querySelector("details")).toBeNull()
+  expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(1)
+  fireEvent.click(previous.querySelector("summary")!)
+  expect(previous.open).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: /Easy · 5 km · Skipped/ }))
+  expect(screen.getByRole("dialog")).toBeTruthy()
+})

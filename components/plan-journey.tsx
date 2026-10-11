@@ -74,7 +74,7 @@ export function PlanJourney({ goalName, targetDate, blockStartDate, weeks, statu
         const lighter = wi > 0 && week.targetKm < weeks[wi-1].targetKm
         const height = Math.max(1, week.sessions.length) * STOP_HEIGHT + 30
         const coords = week.sessions.map((_, si) => ({ x: positions[(startOffset + si) % positions.length] * 3.2, y: si * STOP_HEIGHT + 70 }))
-        return <li key={week.weekNumber} ref={currentWeek ? current : undefined} aria-current={currentWeek ? "step" : undefined} className="scroll-mt-20">
+        const chapter = <>
           <div className="relative py-5 text-center">
             <p className="text-micro font-semibold uppercase tracking-widest text-primary">{l("Kapittel", "Chapter")} {week.weekNumber}{currentWeek ? ` · ${l("Du er her", "You are here")}` : ""}</p>
             <button onClick={() => setSelected({ wi, si: null })} className="press min-h-11 px-3"><h3 className="text-title font-semibold">{week.theme}</h3><span className="text-micro text-muted-foreground">{dateLabel(wi)} · ~{week.targetKm} km <ChevronRight className="inline" size={12} aria-hidden /></span></button>
@@ -108,6 +108,9 @@ export function PlanJourney({ goalName, targetDate, blockStartDate, weeks, statu
           <div className="mx-auto flex max-w-xs flex-col items-center gap-2 pb-7 text-center">
             {allDone ? <><Mountain size={30} className="text-success" aria-hidden /><p className="text-label font-semibold text-success">{l("Etappen gjennomført", "Stage completed")}</p><p className="text-micro text-muted-foreground">{l("Ta med deg denne erfaringen videre.", "Take this experience into the next stage.")}</p></> : <><Wind size={25} className="text-muted-foreground" aria-hidden /><p className="text-micro text-muted-foreground">{skipped > 0 ? l("Veien videre er fortsatt åpen. Du trenger ikke ta igjen økter.", "The path ahead is still open. No need to make up sessions.") : l("Pust mellom stoppene. Hvile er en del av reisen.", "Breathe between stops. Rest is part of the journey.")}</p></>}
           </div>
+        </>
+        return <li key={week.weekNumber} ref={currentWeek ? current : undefined} aria-current={currentWeek ? "step" : undefined} className="scroll-mt-20">
+          {wi < currentIndex || archived ? <details className="mb-3 border-b border-border"><summary className="press flex min-h-16 cursor-pointer items-center justify-between gap-3 py-3"><span><span className="block text-label font-semibold">{l("Kapittel", "Chapter")} {week.weekNumber} · {week.theme}</span><span className="text-micro text-muted-foreground">{allDone ? l("Gjennomført", "Completed") : l("Avsluttet", "Ended")} · {done}/{week.sessions.length} {l("økter", "sessions")}</span></span><ChevronRight size={17} aria-hidden /></summary>{chapter}</details> : chapter}
         </li>
       })}
     </ol>

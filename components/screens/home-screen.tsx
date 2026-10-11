@@ -11,6 +11,7 @@ import {
 } from "react"
 import { ChevronRight, StarOff } from "lucide-react"
 import { useStarterPlanCache } from "@/components/starter-plan-cache"
+import { isHistoricalGoal } from "@/lib/goal-lifecycle"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { PoweredByStrava } from "@/components/strava-brand"
 import {
@@ -734,14 +735,14 @@ export function HomeScreen({
   const orderedGoals = useMemo(() => {
     const selected = new Map(starredGoals.map(goal => [goal.id, goal]))
     for (const goal of goals) {
-      if (!isDatePast(goal.target_date) && (planBadges[goal.id] || currentPlanWeeks?.[goal.id])) {
+      if (!isHistoricalGoal(goal, activities) && (planBadges[goal.id] || currentPlanWeeks?.[goal.id])) {
         selected.set(goal.id, goal)
       }
     }
-    const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
+    const past = (g: Goal) => (isHistoricalGoal(g, activities) ? 1 : 0)
     return [...selected.values()].sort((a, b) => past(a) - past(b) || (a.display_order ?? 0) - (b.display_order ?? 0))
-  }, [starredGoals, goals, planBadges, currentPlanWeeks])
-  const upcomingGoals = goals.filter(goal => !isDatePast(goal.target_date))
+  }, [starredGoals, goals, planBadges, currentPlanWeeks, activities])
+  const upcomingGoals = goals.filter(goal => !isHistoricalGoal(goal, activities))
   const goalWithPlan = upcomingGoals.find(goal => planBadges[goal.id] || currentPlanWeeks?.[goal.id])
   const nextGoal = goalWithPlan ?? upcomingGoals[0]
 
@@ -779,11 +780,11 @@ export function HomeScreen({
   const planPages = useMemo(
     () =>
       orderedGoals.flatMap((goal) => {
-        if (isDatePast(goal.target_date)) return []
+        if (isHistoricalGoal(goal, activities)) return []
         const week = currentPlanWeeks?.[goal.id]
         return week ? [{ goal, week }] : []
       }),
-    [orderedGoals, currentPlanWeeks],
+    [orderedGoals, currentPlanWeeks, activities],
   )
 
   const hasRecentHistory = activities.filter(a => isRunActivity(a.type) && new Date(a.date).getTime() >= Date.now() - 84 * 86400000 && new Date(a.date).getTime() <= Date.now()).length >= 8
@@ -858,12 +859,12 @@ export function HomeScreen({
         </AppCard>
       </Section>
 
-      {orderedGoals.some((goal) => !isDatePast(goal.target_date)) && <Section>
-        {orderedGoals.some((goal) => !isDatePast(goal.target_date)) && (
+      {orderedGoals.some((goal) => !isHistoricalGoal(goal, activities)) && <Section>
+        {orderedGoals.some((goal) => !isHistoricalGoal(goal, activities)) && (
           <SectionHeader title={t("home.activeGoals")} action={<SectionAction onClick={onViewGoals}>{t("home.seeAll")}</SectionAction>} />
         )}
         <div className="flex flex-col gap-3">
-          {orderedGoals.filter((goal) => !isDatePast(goal.target_date)).map((goal, i) => {
+          {orderedGoals.filter((goal) => !isHistoricalGoal(goal, activities)).map((goal, i) => {
             return (
               <button key={goal.id} onClick={() => onViewGoal(goal)} className={`press flex w-full items-center justify-between gap-4 text-left ${i === 0 ? "surface p-5" : "border-b border-border py-3"}`}>
                 <div className="min-w-0">
@@ -894,15 +895,15 @@ export function HomeScreen({
         </Section>
       )}
 
-      {orderedGoals.some((goal) => isDatePast(goal.target_date)) && (
+      {orderedGoals.some((goal) => isHistoricalGoal(goal, activities)) && (
         <Section>
           <SectionHeader title={t("home.pastGoals")} />
           <div className="divide-y divide-border">
-            {orderedGoals.filter((goal) => isDatePast(goal.target_date)).map((goal) => (
+            {orderedGoals.filter((goal) => isHistoricalGoal(goal, activities)).map((goal) => (
               <div key={goal.id} className="flex items-center gap-2 py-2">
                 <button onClick={() => onViewGoal(goal)} className="press min-h-12 min-w-0 flex-1 text-left">
                   <h3 className="text-body font-semibold">{goal.name}</h3>
-                  <p className="text-label text-muted-foreground"><span>{t("home.finishedGoal")}</span> · <span>{daysSince(goal.target_date)}</span> <span>{t("home.daysAgo")}</span></p>
+                  <p className="text-label text-muted-foreground"><span>{t("home.finishedGoal")}</span> · {isDatePast(goal.target_date) ? <><span>{daysSince(goal.target_date)}</span> <span>{t("home.daysAgo")}</span></> : <span>{t("plan.achieved")}</span>}</p>
                 </button>
                 {onUnpinGoal && <button onClick={() => onUnpinGoal(goal.id)} className="press flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-sunken" aria-label={t("home.unpinFinished")}><StarOff size={17} aria-hidden /></button>}
               </div>

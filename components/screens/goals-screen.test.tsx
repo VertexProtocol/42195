@@ -782,3 +782,22 @@ describe("GoalsScreen — a recurring target that has changed", () => {
     ])
   })
 })
+
+describe("GoalsScreen — separate goal history", () => {
+  it("keeps expired goals collapsed while upcoming goals remain visible", () => {
+    const past = makeGoal({ name: "Old race", goal_category: "event_training", target_date: daysFromNow(-1) })
+    const future = makeGoal({ name: "Next race", goal_category: "event_training", target_date: daysFromNow(30) })
+    renderGoals([past, future], [])
+    const history = screen.getByText("Old race").closest("details") as HTMLDetailsElement
+    expect(history).toBeTruthy()
+    expect(history.open).toBe(false)
+    expect(screen.getByText("Next race").closest("details")).toBeNull()
+    fireEvent.click(history.querySelector("summary")!)
+    expect(history.open).toBe(true)
+  })
+  it("puts an achieved benchmark into history even before its deadline", () => {
+    renderGoals([makeGoal({ name: "Reached early", target_date: daysFromNow(30), target_distance_km: 5 })], [makeActivity(6)])
+    expect(screen.getByText("Reached early").closest("details")).toBeTruthy()
+    expect(screen.getByText(/Achieved/)).toBeTruthy()
+  })
+})

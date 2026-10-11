@@ -1,6 +1,7 @@
 "use client"
 
 import { useStarterPlanCache } from "@/components/starter-plan-cache"
+import { isHistoricalGoal } from "@/lib/goal-lifecycle"
 import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useState, useMemo, useEffect } from "react"
 import {
@@ -315,7 +316,7 @@ export function GoalsScreen({
   onSaveWeeklyGoal,
   initialTab = "race",
 }: GoalsScreenProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const starterCache = useStarterPlanCache()
   const [reportedStarterPlan, setHasStarterPlan] = useState(false)
   const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
@@ -395,10 +396,12 @@ export function GoalsScreen({
   const raceGoals = useMemo(
     () =>
       goals
-        .filter((g) => g.goal_category === "performance" || g.goal_category === "event_training")
+        .filter((g) => (g.goal_category === "performance" || g.goal_category === "event_training") && !isHistoricalGoal(g, activities))
         .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)),
-    [goals],
+    [goals, activities],
   )
+
+  const historicalGoals = goals.filter(goal => isHistoricalGoal(goal, activities)).sort((a, b) => b.target_date.localeCompare(a.target_date))
 
   const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor))
 
@@ -414,7 +417,7 @@ export function GoalsScreen({
     const newIndex = orderedRaceGoals.findIndex((g) => g.id === over.id)
     const reordered = arrayMove(orderedRaceGoals, oldIndex, newIndex)
     setOrderedRaceGoals(reordered)
-    onReorderGoals(reordered.map((g) => g.id))
+    onReorderGoals([...reordered.map((g) => g.id), ...historicalGoals.map(g => g.id)])
   }
 
   const [orderedWeeklyGoals, setOrderedWeeklyGoals] = useState(selectedWeekGoals)
@@ -837,7 +840,7 @@ export function GoalsScreen({
       {tab === "race" && (
         <div className="flex flex-col gap-4">
           <StarterPlanEntry presentation="goal" offer={false} onOpenPlan={onOpenStarterPlan} onExists={setHasStarterPlan} />
-          {orderedRaceGoals.length === 0 ? hasStarterPlan ? <Button variant="ghost" onClick={onAddGoal}><Plus size={16} />{t("goals.addGoal")}</Button> : (
+          {orderedRaceGoals.length === 0 ? hasStarterPlan || historicalGoals.length > 0 ? <Button variant="ghost" onClick={onAddGoal}><Plus size={16} />{t("goals.addGoal")}</Button> : (
             <EmptyState
               icon={<Trophy size={18} />}
               title={t("goals.noTargets")}
@@ -1182,6 +1185,8 @@ export function GoalsScreen({
               </Button>
             </>
           )}
+          {historicalGoals.length > 0 && <details className="border-t border-border pt-3"><summary className="press min-h-12 cursor-pointer py-3 text-label font-semibold text-muted-foreground">{locale === "no" ? "Tidligere mål" : "Previous goals"} · {historicalGoals.length}</summary><ul className="divide-y divide-border">{historicalGoals.map(goal => <li key={goal.id}><button onClick={() => onSelectGoal(goal)} className="press flex min-h-16 w-full items-center justify-between gap-3 py-3 text-left"><span><span className="block text-body font-semibold">{goal.name}</span><span className="text-micro text-muted-foreground">{perfGoalStatuses.get(goal.id)?.reached ? t("plan.achieved") : t("plan.ended")} · {formatDateShort(goal.target_date)}</span></span><ChevronRight size={18} aria-hidden /></button></li>)}</ul></details>}
+
         </div>
       )}
     </div>
