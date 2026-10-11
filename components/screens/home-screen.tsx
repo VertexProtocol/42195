@@ -733,18 +733,18 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
-  // An existing plan belongs on Today regardless of its goal's star.
-  // Stars still keep other goals and past races within reach.
+  // Active goals belong on Today even before a plan exists or a star is set.
+  // Stars also keep explicitly pinned historical goals within reach.
   const orderedGoals = useMemo(() => {
     const selected = new Map(starredGoals.map(goal => [goal.id, goal]))
     for (const goal of goals) {
-      if (!isHistoricalGoal(goal, activities) && (planBadges[goal.id] || currentPlanWeeks?.[goal.id])) {
+      if (!isHistoricalGoal(goal, activities)) {
         selected.set(goal.id, goal)
       }
     }
     const past = (g: Goal) => (isHistoricalGoal(g, activities) ? 1 : 0)
     return [...selected.values()].sort((a, b) => past(a) - past(b) || (a.display_order ?? 0) - (b.display_order ?? 0))
-  }, [starredGoals, goals, planBadges, currentPlanWeeks, activities])
+  }, [starredGoals, goals, activities])
   const upcomingGoals = goals.filter(goal => !isHistoricalGoal(goal, activities))
   const goalWithPlan = upcomingGoals.find(goal => planBadges[goal.id] || currentPlanWeeks?.[goal.id])
   const nextGoal = goalWithPlan ?? upcomingGoals[0]
