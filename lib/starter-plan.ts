@@ -51,6 +51,13 @@ export const starterStateSchema = z.object({
 });
 export type StarterState = z.infer<typeof starterStateSchema>;
 
+function sessionCount(profile: StarterProfile): number {
+  const runWalk = profile.estimatedFields?.includes("continuousMinutes") || profile.continuousMinutes < 10;
+  const gradual = runWalk || profile.mode === "beginner" || (profile.mode === "returning" && profile.pauseWeeks >= 4);
+  const knownVolume = profile.mode !== "beginner" && !profile.estimatedFields?.includes("weeklyMinutes");
+  return Math.min(profile.days, gradual ? 3 : 5, knownVolume ? Math.max(1, Math.floor(profile.weeklyMinutes / 10)) : 5);
+}
+
 function makeWeek(
   profile: StarterProfile,
   number: number,
@@ -58,16 +65,9 @@ function makeWeek(
   reason: StarterState["week"]["reason"],
   now: Date,
 ): StarterState["week"] {
-  const runWalk =
-    profile.mode === "beginner" ||
-    profile.continuousMinutes < 10 ||
-    (profile.mode === "returning" && profile.pauseWeeks >= 4);
-  const count = Math.min(
-    profile.days,
-    runWalk
-      ? 3
-      : Math.max(1, Math.min(5, Math.floor(profile.weeklyMinutes / 10))),
-  );
+  // Current reported capacity takes precedence over a beginner/comeback label.
+  const runWalk = profile.estimatedFields?.includes("continuousMinutes") || profile.continuousMinutes < 10;
+  const count = sessionCount(profile);
   const repeats = runWalk ? Math.max(1, Math.floor((minutes - 10) / 2.5)) : 0;
   const duration = runWalk
     ? 10 + repeats * 2.5
@@ -104,14 +104,19 @@ export function createStarterPlan(
           : p.pauseWeeks <= 4
             ? 0.4
             : 0.35;
-  const minutes =
-    p.mode === "beginner"
-      ? 20
-      : Math.min(
-          40,
-          Math.max(10, (p.weeklyMinutes / Math.min(p.days, 5)) * factor),
-          Math.max(10, p.continuousMinutes + 10),
-        );
+  const capacityKnown = !p.estimatedFields?.includes("continuousMinutes");
+  const volumeKnown = !p.estimatedFields?.includes("weeklyMinutes") && p.weeklyMinutes > 0;
+  // Unknown answers are uncertainty, not a measured zero or a historical
+  // volume to repeatedly discount. Preserve a 20-minute exploratory start.
+  const currentCapacity = capacityKnown && p.continuousMinutes >= 10
+    ? Math.min(40, p.continuousMinutes) : null;
+  const historicalBudget = p.mode !== "beginner" && volumeKnown
+    ? (p.weeklyMinutes / sessionCount(p)) * factor : null;
+  const minutes = currentCapacity !== null
+    ? Math.max(10, Math.min(currentCapacity, historicalBudget ?? currentCapacity))
+    : historicalBudget !== null
+      ? Math.min(40, Math.max(12.5, historicalBudget))
+      : 20;
   return {
     source: "self_reported",
     profile: p,

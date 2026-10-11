@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi } from "vitest"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { PlanJourney, journeyProgress } from "./plan-journey"
 import type { TrainingWeek } from "@/lib/types"
@@ -15,15 +15,31 @@ describe("plan journey", () => {
     expect(journeyProgress(weeks, {}, -1).recentTotal).toBe(0)
   })
   it("orders stages toward the goal and marks only the current one", () => {
-    const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={1}>{weeks.map(w => <div key={w.weekNumber}>Stage {w.weekNumber}</div>)}</PlanJourney></I18nProvider>)
-    expect(Array.from(container.querySelectorAll("ol > li")).map(li => li.textContent)).toEqual(["Stage 1", "YOU ARE HEREStage 2", "Stage 3"])
+    const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={1} /></I18nProvider>)
+    expect(Array.from(screen.getByRole("list", { name: "Chapters in this training block" }).children).map(li => li.textContent?.match(/Chapter \d/)?.[0])).toEqual(["Chapter 1", "Chapter 2", "Chapter 3"])
     expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(1)
     expect(screen.getByText("Oslo")).toBeTruthy()
-    expect(screen.getByText("Stage 3").compareDocumentPosition(screen.getByText("Oslo")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText("Chapter 3").compareDocumentPosition(screen.getByText("Oslo")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole("button", { name: /You are here/ })).toBeTruthy()
   })
   it("does not claim the user is on an archived path", () => {
-    const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={1} archived>{weeks.map(w => <div key={w.weekNumber}>Stage {w.weekNumber}</div>)}</PlanJourney></I18nProvider>)
+    const { container } = render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={1} archived /></I18nProvider>)
     expect(container.querySelector('[aria-current="step"]')).toBeNull()
   })
+})
+
+
+it("opens future stops for details without enabling completion", () => {
+  render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={0} onToggleSession={vi.fn()} /></I18nProvider>)
+  fireEvent.click(screen.getAllByRole("button", { name: /Easy · 5 km · Planned/ })[2])
+  expect(screen.getByRole("dialog")).toBeTruthy()
+  expect(screen.queryByRole("button", { name: /Mark as done/i })).toBeNull()
+})
+
+it("updates the current stop through the existing session handler", () => {
+  const toggle = vi.fn()
+  render(<I18nProvider><PlanJourney goalName="Oslo" targetDate="2027-05-01" weeks={weeks} statuses={{}} currentIndex={0} onToggleSession={toggle} /></I18nProvider>)
+  fireEvent.click(screen.getByRole("button", { name: /Next step: Easy/ }))
+  fireEvent.click(screen.getByRole("button", { name: /Mark as done/i }))
+  expect(toggle).toHaveBeenCalledWith(1, 0)
 })

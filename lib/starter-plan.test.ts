@@ -138,3 +138,18 @@ describe("starter plan", () => {
     expect(s.week.sessions[0].feedback).toBeNull();
   });
 });
+
+
+it("uses current ability even when the runner calls themselves a beginner", () => {
+  const result = createStarterPlan({ ...p, continuousMinutes: 20 });
+  expect(result.week.sessions).toHaveLength(2);
+  expect(result.week.sessions[0]).toMatchObject({ minutes: 20, repeats: 0 });
+});
+it("does not compound unknown volume, capacity and break into a tiny session", () => {
+  const result = createStarterPlan({ ...p, mode: "returning", weeklyMinutes: 30, pauseWeeks: 12, estimatedFields: ["weeklyMinutes", "continuousMinutes", "pauseWeeks"] });
+  expect(result.week.sessions[0]).toMatchObject({ minutes: 20, repeats: 4 });
+});
+it("does not let an estimated weekly volume override known current ability", () => {
+  const result = createStarterPlan({ ...p, mode: "experienced", weeklyMinutes: 30, continuousMinutes: 30, estimatedFields: ["weeklyMinutes"] });
+  expect(result.week.sessions[0]).toMatchObject({ minutes: 30, repeats: 0 });
+});

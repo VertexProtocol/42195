@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useMemo, useSyncExternalStore, lazy, 
 import { useI18n, type Locale } from "@/lib/i18n"
 import { TabBar } from "@/components/tab-bar"
 import { AppBar } from "@/components/app-bar"
+import { StarterPlanProvider } from "@/components/starter-plan-cache"
+import { StarterPlanScreen } from "@/components/screens/starter-plan-screen"
 import { HomeScreen } from "@/components/screens/home-screen"
 import { ActivitiesScreen } from "@/components/screens/activities-screen"
 import { GoalsScreen, type GoalTab } from "@/components/screens/goals-screen"
@@ -116,6 +118,7 @@ export function AppShell({ initialData }: AppShellProps) {
   const activeTab: TabId = urlTab && VALID_TABS.has(urlTab) ? urlTab : "home"
   const activityId = searchParams.get("activity")
   const goalId = searchParams.get("goal")
+  const isStarterPlan = goalId === "starter"
   // A group is reached from the goal it hangs off, so it lives inside the Plan
   // tab rather than becoming a fifth destination in the tab bar.
   const groupId = searchParams.get("group")
@@ -375,7 +378,7 @@ export function AppShell({ initialData }: AppShellProps) {
   // must not put a second one above it.
   const isDetail = Boolean(
     (activeTab === "activities" && selectedActivity) ||
-      (activeTab === "goals" && (selectedGoal || groupId)),
+      (activeTab === "goals" && (selectedGoal || groupId || isStarterPlan)),
   )
 
   const barTitle =
@@ -388,6 +391,7 @@ export function AppShell({ initialData }: AppShellProps) {
           : "42195"
 
   return (
+    <StarterPlanProvider key={data.user?.id ?? "signed-out"}>
     <div className="mx-auto min-h-dvh max-w-2xl bg-background">
       {/* One app bar for every screen: where you are, whether the data is
           current, and the way to your account. Detail views swap the profile
@@ -421,6 +425,7 @@ export function AppShell({ initialData }: AppShellProps) {
             planSessionStatuses={data.planSessionStatuses}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
+            onOpenStarterPlan={() => navigate({ ...STACKED_VIEWS, tab: "goals", goal: "starter" })}
             onConnectStrava={handleConnectStrava}
             onSync={data.sync}
             onViewGoal={(goal) => { navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id }) }}
@@ -464,8 +469,10 @@ export function AppShell({ initialData }: AppShellProps) {
         {/* One Plan screen at a time. The group sits on top of both the list
             and the goal it hangs off, so it is excluded from each of them
             rather than merely ordered after. */}
-        {activeTab === "goals" && !groupId && !selectedGoal && (
+        {activeTab === "goals" && !groupId && isStarterPlan && <StarterPlanScreen onBack={() => navigate({ ...STACKED_VIEWS, tab: "goals" })} />}
+        {activeTab === "goals" && !groupId && !selectedGoal && !isStarterPlan && (
           <GoalsScreen
+            onOpenStarterPlan={() => navigate({ ...STACKED_VIEWS, tab: "goals", goal: "starter" })}
             goals={data.goals}
             activities={data.activities}
             weeklyGoals={data.weeklyGoals}
@@ -636,5 +643,6 @@ export function AppShell({ initialData }: AppShellProps) {
       {/* Bottom Tab Bar */}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
+    </StarterPlanProvider>
   )
 }
