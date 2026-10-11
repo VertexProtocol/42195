@@ -51,3 +51,10 @@ describe("starter plan across navigation", () => {
     expect(screen.getAllByRole("button", { name: "Manageable" })[0].getAttribute("aria-pressed")).toBe("true")
   })
 })
+
+it.each(["entry", "goal"] as const)("renders the server-seeded starter immediately in %s before the background fetch resolves", presentation => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})))
+  render(<I18nProvider><StarterPlanProvider initialSnapshot={{ plan: { state, version: 3 }, userId: "first" }}><StarterPlanEntry presentation={presentation} /></StarterPlanProvider></I18nProvider>)
+  expect(screen.getByRole("button", { name: presentation === "entry" ? /Next session/ : /Start running/ })).toBeTruthy()
+  expect(screen.queryByText(/Loading your plan/)).toBeNull()
+})

@@ -39,6 +39,8 @@ const supabase = createClient()
 const MAX_SYNC_CHUNKS = 25
 
 export interface InitialData {
+  /** undefined means the server read failed, not that no starter plan exists. */
+  starterSnapshot?: import("@/components/starter-plan-cache").StarterSnapshot
   activities: Activity[]
   goals: Goal[]
   weeklyGoals: WeeklyGoal[]

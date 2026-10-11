@@ -391,7 +391,7 @@ export function AppShell({ initialData }: AppShellProps) {
           : "42195"
 
   return (
-    <StarterPlanProvider key={data.user?.id ?? "signed-out"}>
+    <StarterPlanProvider key={data.user?.id ?? "signed-out"} initialSnapshot={initialData?.user.id === data.user?.id ? initialData?.starterSnapshot : undefined}>
     <div className="mx-auto min-h-dvh max-w-2xl bg-background">
       {/* One app bar for every screen: where you are, whether the data is
           current, and the way to your account. Detail views swap the profile

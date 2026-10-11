@@ -694,6 +694,7 @@ export function HomeScreen({
   const { t, locale } = useI18n()
   const starterCache = useStarterPlanCache()
   const [reportedStarterPlan, setHasStarterPlan] = useState(false)
+  const starterResolved = !starterCache || starterCache.snapshot !== undefined
   const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
 
   // Falls back to Plan's own default rather than doing nothing, so a caller
@@ -800,7 +801,7 @@ export function HomeScreen({
     <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {planPages.length === 0 && (
         <>
-          {!hasStarterPlan && (hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
+          {starterResolved && !hasStarterPlan && (hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
           {!goalWithPlan && <StarterPlanEntry onExists={setHasStarterPlan} onOpenPlan={onOpenStarterPlan} offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} syncFirst stravaConnected={stravaConnected} syncStatus={syncStatus} onConnectStrava={onConnectStrava} onSync={onSync} />}
         </>
       )}

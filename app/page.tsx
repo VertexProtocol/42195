@@ -44,7 +44,7 @@ export default async function Page() {
 
   const service = createServiceClient()
 
-  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sessionStatusRes, goalPrefsRes, dismissalsRes, sharedRes, stravaTokenRes, syncStatusRes] =
+  const [activitiesRes, goalsRes, weeklyGoalsRes, profileRes, testRunsRes, planRowsRes, sessionStatusRes, goalPrefsRes, dismissalsRes, sharedRes, stravaTokenRes, syncStatusRes, starterRes] =
     await Promise.all([
       fetchAllActivities(supabase),
       supabase
@@ -111,6 +111,7 @@ export default async function Page() {
         .eq("user_id", authUser.id),
       service.from("strava_tokens").select("user_id").eq("user_id", authUser.id).maybeSingle(),
       supabase.from("sync_status").select("state, last_sync_at, error_message").eq("user_id", authUser.id).maybeSingle(),
+      supabase.from("starter_plans").select("state, version").eq("user_id", authUser.id).maybeSingle(),
     ])
 
   // Proactive training warnings. Today fetched these on mount, and it unmounts
@@ -151,6 +152,7 @@ export default async function Page() {
   }
 
   const initialData = {
+    starterSnapshot: starterRes.error ? undefined : { plan: starterRes.data, userId: authUser.id },
     activities: activitiesRes,
     warnings: newWarnings,
     planBadges: derivePlanBadges((planRowsRes.data ?? []) as PlanBadgeRow[]),

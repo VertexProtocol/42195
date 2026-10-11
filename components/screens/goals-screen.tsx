@@ -321,6 +321,7 @@ export function GoalsScreen({
   const { t, locale } = useI18n()
   const starterCache = useStarterPlanCache()
   const [reportedStarterPlan, setHasStarterPlan] = useState(false)
+  const starterResolved = !starterCache || starterCache.snapshot !== undefined
   const hasStarterPlan = starterCache ? Boolean(starterCache.snapshot?.plan) : reportedStarterPlan
   const [tab, setTab] = useState<GoalTab>(initialTab)
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
@@ -842,7 +843,7 @@ export function GoalsScreen({
       {tab === "race" && (
         <div className="flex flex-col gap-4">
           <StarterPlanEntry presentation="goal" offer={false} onOpenPlan={onOpenStarterPlan} onExists={setHasStarterPlan} />
-          {orderedRaceGoals.length === 0 ? hasStarterPlan || historicalGoals.length > 0 ? <Button variant="ghost" onClick={onAddGoal}><Plus size={16} />{t("goals.addGoal")}</Button> : (
+          {orderedRaceGoals.length === 0 ? !starterResolved ? null : hasStarterPlan || historicalGoals.length > 0 ? <Button variant="ghost" onClick={onAddGoal}><Plus size={16} />{t("goals.addGoal")}</Button> : (
             <EmptyState
               icon={<Trophy size={18} />}
               title={t("goals.noTargets")}
