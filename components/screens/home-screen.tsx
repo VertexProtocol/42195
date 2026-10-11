@@ -727,7 +727,9 @@ export function HomeScreen({
     const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
     return [...selected.values()].sort((a, b) => past(a) - past(b) || (a.display_order ?? 0) - (b.display_order ?? 0))
   }, [starredGoals, goals, planBadges, currentPlanWeeks])
-  const nextGoal = goals.find(goal => !isDatePast(goal.target_date))
+  const upcomingGoals = goals.filter(goal => !isDatePast(goal.target_date))
+  const goalWithPlan = upcomingGoals.find(goal => planBadges[goal.id] || currentPlanWeeks?.[goal.id])
+  const nextGoal = goalWithPlan ?? upcomingGoals[0]
 
   // Every weekly goal is one lane, in one row, in the order the runner put
   // them in. There is no longer a split between goals that fit a stat column
@@ -782,7 +784,7 @@ export function HomeScreen({
       {planPages.length === 0 && (
         <>
           {(hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
-          <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory && !nextGoal} />
+          {!goalWithPlan && <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} />}
         </>
       )}
       {/* ── What there is to run ──────────────────────────────────────── */}

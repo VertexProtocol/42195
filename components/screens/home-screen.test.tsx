@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi } from "vitest"
+import { afterEach, describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
@@ -777,5 +777,35 @@ describe("HomeScreen — goals do not require favourites", () => {
     show(goal, { [goal.id]: makePlanWeek() }, { [goal.id]: { checkpoint: false, blockCompleted: true } })
     expect(screen.queryByText(goal.name)).toBeNull()
     expect(screen.queryByText("Long run")).toBeNull()
+  })
+})
+
+
+describe("HomeScreen — onboarding and plans between blocks", () => {
+  afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear() })
+
+  function show(goals: Goal[], badges: Record<string, { checkpoint: boolean; blockCompleted: boolean }> = {}, onViewGoal = vi.fn()) {
+    return render(<I18nProvider><HomeScreen goals={goals} starredGoals={[]} currentWeekGoals={[]} activities={[]} weeklySummary={summaryOf([])} warnings={[]} planBadges={badges} onViewGoal={onViewGoal} onViewGoals={() => {}} onViewInsights={() => {}} /></I18nProvider>)
+  }
+
+  it("still opens the assessment when a new runner already has a goal", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: "new-with-goal" }) })))
+    show([makeRaceGoal({ is_starred: false })])
+    expect(await screen.findByRole("dialog")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Explore first" })).toBeTruthy()
+  })
+
+  it.each([true, false])("opens the existing plan without starter onboarding when blockCompleted=%s", (blockCompleted) => {
+    const fetch = vi.fn()
+    vi.stubGlobal("fetch", fetch)
+    const unrelated = makeRaceGoal({ id: "no-plan", name: "Another race", is_starred: false })
+    const planned = makeRaceGoal({ id: "with-plan", name: "Planned race", is_starred: false })
+    const open = vi.fn()
+    show([unrelated, planned], { [planned.id]: { checkpoint: false, blockCompleted } }, open)
+    fireEvent.click(screen.getByRole("button", { name: "Open plan" }))
+    expect(open).toHaveBeenCalledWith(planned)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(screen.queryByText("Set a goal")).toBeNull()
   })
 })
