@@ -120,7 +120,7 @@ it("creates a returning runner plan without requiring remembered numbers", async
   }));
   render(<I18nProvider><StarterPlanEntry /></I18nProvider>);
   fireEvent.click(await screen.findByRole("button", { name: "Get started →" }));
-  fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "returning" } });
+  fireEvent.click(screen.getByRole("button", { name: "Returning after a break" }));
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   expect(screen.getByRole("button", { name: "Not sure · start gently" }).getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -169,4 +169,39 @@ it("closes the onboarding when imported history is sufficient", async () => {
   view.rerender(<I18nProvider><StarterPlanEntry offer={false} syncFirst stravaConnected syncStatus={{ state: "success", last_sync_at: new Date().toISOString(), error_message: null }} /></I18nProvider>);
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+});
+
+
+it("opens a saved starter plan as a goal and shows it on its own page", async () => {
+  const plan = { state: createStarterPlan({ mode: "beginner", aim: "start", days: 2, continuousMinutes: 0, weeklyMinutes: 0, pauseWeeks: 0, hasPain: false }), version: 1 };
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan }) })));
+  const open = vi.fn();
+  const view = render(<I18nProvider><StarterPlanEntry presentation="goal" offer={false} onOpenPlan={open} /></I18nProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: /Start running/ }));
+  expect(open).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  view.unmount();
+  render(<I18nProvider><StarterPlanEntry presentation="page" /></I18nProvider>);
+  await screen.findByText(/Provisional · Self-reported/);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(screen.getAllByRole("button", { name: "Easy" })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "Felt pain" })).toHaveLength(2);
+});
+
+it("persists icon feedback and reflects only confirmed answers", async () => {
+  let plan = { state: createStarterPlan({ mode: "beginner", aim: "start", days: 2, continuousMinutes: 0, weeklyMinutes: 0, pauseWeeks: 0, hasPain: false }), version: 1 };
+  let payload: any;
+  vi.stubGlobal("fetch", vi.fn(async (_url, options) => {
+    if (options?.method === "POST") {
+      payload = JSON.parse(options.body);
+      plan = { ...plan, version: 2, state: { ...plan.state, week: { ...plan.state.week, sessions: plan.state.week.sessions.map(s => s.id === payload.sessionId ? { ...s, feedback: payload.feedback } : s) } } };
+    }
+    return { ok: true, json: async () => ({ plan }) };
+  }));
+  render(<I18nProvider><StarterPlanEntry presentation="page" /></I18nProvider>);
+  fireEvent.click((await screen.findAllByRole("button", { name: "Manageable" }))[0]);
+  await waitFor(() => expect(screen.getAllByRole("button", { name: "Manageable" })[0].getAttribute("aria-pressed")).toBe("true"));
+  expect(payload.feedback).toBe("ok");
+  expect(payload.version).toBe(1);
 });

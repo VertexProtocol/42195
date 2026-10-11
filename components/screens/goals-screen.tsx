@@ -1,5 +1,6 @@
 "use client"
 
+import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useState, useMemo, useEffect } from "react"
 import {
   Check,
@@ -85,6 +86,7 @@ import { Segmented } from "@/components/ui/segmented"
 export type GoalTab = "weekly" | "race"
 
 interface GoalsScreenProps {
+  onOpenStarterPlan?: () => void
   goals: Goal[]
   activities: Activity[]
   weeklyGoals: WeeklyGoal[]
@@ -292,6 +294,7 @@ function SuggestionCard({
 // ---- component ----
 
 export function GoalsScreen({
+  onOpenStarterPlan,
   goals,
   activities,
   weeklyGoals,
@@ -312,6 +315,7 @@ export function GoalsScreen({
   initialTab = "race",
 }: GoalsScreenProps) {
   const { t } = useI18n()
+  const [hasStarterPlan, setHasStarterPlan] = useState(false)
   const [tab, setTab] = useState<GoalTab>(initialTab)
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set())
   const toggleExpanded = (id: string) => {
@@ -829,7 +833,8 @@ export function GoalsScreen({
       {/* ── Race targets ───────────────────────────────────────────────── */}
       {tab === "race" && (
         <div className="flex flex-col gap-4">
-          {orderedRaceGoals.length === 0 ? (
+          <StarterPlanEntry presentation="goal" offer={false} onOpenPlan={onOpenStarterPlan} onExists={setHasStarterPlan} />
+          {orderedRaceGoals.length === 0 ? hasStarterPlan ? <Button variant="ghost" onClick={onAddGoal}><Plus size={16} />{t("goals.addGoal")}</Button> : (
             <EmptyState
               icon={<Trophy size={18} />}
               title={t("goals.noTargets")}

@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { useI18n } from "@/lib/i18n";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Smile, Meh, Frown, Clock, HeartPulse, Footprints, RotateCcw, Activity, Flag, Repeat, Sprout, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
-  StarterFeedback,
   StarterProfile,
   StarterState,
 } from "@/lib/starter-plan";
@@ -22,7 +22,7 @@ const initial: StarterProfile = {
   estimatedFields: ["continuousMinutes", "weeklyMinutes", "pauseWeeks"],
   hasPain: false,
 };
-export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst = false, stravaConnected = false, syncStatus, onConnectStrava, onSync }: { offer?: boolean; autoPrompt?: boolean; syncFirst?: boolean; stravaConnected?: boolean; syncStatus?: SyncStatus; onConnectStrava?: () => void; onSync?: () => void }) {
+export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst = false, stravaConnected = false, syncStatus, onConnectStrava, onSync, presentation = "entry", onOpenPlan, onExists }: { offer?: boolean; autoPrompt?: boolean; syncFirst?: boolean; stravaConnected?: boolean; syncStatus?: SyncStatus; onConnectStrava?: () => void; onSync?: () => void; presentation?: "entry" | "goal" | "page"; onOpenPlan?: () => void; onExists?: (exists: boolean) => void }) {
   const { locale } = useI18n();
   const no = locale === "no";
   const l = (nb: string, en: string) => (no ? nb : en);
@@ -42,6 +42,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
       if (!res.ok) throw new Error("load");
       const data = await res.json();
       setSaved(data.plan);
+      if (presentation === "page") setOpen(!data.plan);
     } catch {
       setError(
         l(
@@ -61,6 +62,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
         const data = await res.json();
         if (alive) {
           setSaved(data.plan);
+          if (presentation === "page") setOpen(!data.plan);
           if (autoPrompt && offer && !data.plan && data.userId) {
             const key = `42195:starter-intro:${data.userId}`;
             let seen = false;
@@ -84,7 +86,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
     return () => {
       alive = false;
     };
-  }, [autoPrompt, offer]);
+  }, [autoPrompt, offer, presentation]);
   const errors: Record<string, string> = {
     conflict: l(
       "Planen er endret på en annen enhet. Last inn på nytt før du fortsetter.",
@@ -120,6 +122,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
       if (!res.ok) throw new Error(data.error);
       setSaved(data.plan);
       setOpen(false);
+      if (body.action === "setup" && onOpenPlan) { setSheetOpen(false); onOpenPlan(); }
     } catch (e) {
       setError(
         errors[e instanceof Error ? e.message : ""] ??
@@ -132,7 +135,8 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
       setBusy(false);
     }
   }
-  if (loading) return null;
+  useEffect(() => { if (!loading) onExists?.(Boolean(saved)); }, [loading, saved, onExists]);
+  if (loading) return presentation === "page" ? <p className="p-4 text-label">{l("Henter planen …", "Loading your plan …")}</p> : null;
   if (!offer && !saved && !error) return null;
   const answer = (key: "continuousMinutes" | "weeklyMinutes" | "pauseWeeks" | "days", value: number, estimated = false) => {
     setProfile(p => ({ ...p, [key]: value, estimatedFields: key === "days" ? p.estimatedFields : [...(p.estimatedFields ?? []).filter(k => k !== key), ...(estimated ? [key] : [])] as StarterProfile["estimatedFields"] }));
@@ -156,9 +160,10 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
         : l("Oppsummer uken →", "Review your week →");
   return (
     <>
-      <button
-        className="press w-fit py-2 text-left text-label font-semibold text-primary"
+      {presentation !== "page" && <button
+        className={presentation === "goal" ? "press flex w-full items-center justify-between gap-4 border-b border-border py-5 text-left" : "press w-fit py-2 text-left text-label font-semibold text-primary"}
         onClick={() => {
+          if (saved && onOpenPlan) { onOpenPlan(); return; }
           setSheetOpen(true);
           if (!saved) {
             setOpen(true);
@@ -166,14 +171,15 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
           }
         }}
       >
-        {summary}
-      </button>
+        {presentation === "goal" ? <><Footprints size={24} className="shrink-0 text-primary" aria-hidden /><span className="flex-1"><span className="block text-title font-semibold">{l("Kom i gang med løping", "Start running")}</span><span className="mt-1 block text-label text-muted-foreground">{l("Startplan", "Starter plan")} · {l("Etappe", "Stage")} {saved?.state.week.number}</span><span className="mt-1 block text-label text-primary">{summary}</span></span><ChevronRight size={20} aria-hidden /></> : saved && onOpenPlan ? <span><span className="block text-title font-semibold">{l("Kom i gang med løping", "Start running")}</span><span className="mt-1 block text-label">{summary}</span></span> : summary}
+      </button>}
       {!sheetOpen && error && (
         <p role="alert" className="text-label text-muted-foreground">
           {error}
         </p>
       )}
-      <BottomSheet
+      <StarterSurface
+        page={presentation === "page"}
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         title={
@@ -223,64 +229,12 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
               </p>
               {step === 0 && (
                 <>
-                  <label className="flex flex-col gap-2">
-                    {l(
-                      "Hva er utgangspunktet ditt?",
-                      "Where are you starting?",
-                    )}
-                    <select
-                      className="rounded-md border bg-background p-3"
-                      value={profile.mode}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          mode: e.target.value as StarterProfile["mode"],
-                        })
-                      }
-                    >
-                      <option value="beginner">
-                        {l("Jeg er ny til løping", "I am new to running")}
-                      </option>
-                      <option value="experienced">
-                        {l(
-                          "Jeg trener, men historikken er ikke her",
-                          "I train, but my history is not here",
-                        )}
-                      </option>
-                      <option value="returning">
-                        {l(
-                          "Jeg kommer tilbake etter et opphold",
-                          "I am returning after a break",
-                        )}
-                      </option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-2">
-                    {l("Hva ønsker du å få til?", "What would you like to do?")}
-                    <select
-                      className="rounded-md border bg-background p-3"
-                      value={profile.aim}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          aim: e.target.value as StarterProfile["aim"],
-                        })
-                      }
-                    >
-                      <option value="start">
-                        {l("Komme i gang", "Get started")}
-                      </option>
-                      <option value="habit">
-                        {l("Trene jevnlig", "Build a habit")}
-                      </option>
-                      <option value="race">
-                        {l(
-                          "Etter hvert forberede et løp",
-                          "Eventually prepare for a race",
-                        )}
-                      </option>
-                    </select>
-                  </label>
+                  <fieldset className="flex flex-col gap-2"><legend className="mb-2 font-semibold">{l("Hva er utgangspunktet ditt?", "Where are you starting?")}</legend>
+                    {([{ value: "beginner", icon: Sprout, label: l("Ny til løping", "New to running") }, { value: "experienced", icon: Activity, label: l("Trener allerede", "Already training") }, { value: "returning", icon: RotateCcw, label: l("Tilbake etter pause", "Returning after a break") }] as const).map(({ value, icon: Icon, label }) => <button key={value} type="button" aria-pressed={profile.mode === value} onClick={() => setProfile({ ...profile, mode: value })} className={`press flex min-h-14 items-center gap-3 rounded-lg border px-4 py-3 text-left ${profile.mode === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={23} aria-hidden />{label}</button>)}
+                  </fieldset>
+                  <fieldset className="flex flex-col gap-2"><legend className="mb-2 font-semibold">{l("Hva ønsker du å få til?", "What would you like to do?")}</legend>
+                    {([{ value: "start", icon: Footprints, label: l("Komme i gang", "Get started") }, { value: "habit", icon: Repeat, label: l("Finne en rutine", "Build a habit") }, { value: "race", icon: Flag, label: l("Forberede et løp", "Prepare for a race") }] as const).map(({ value, icon: Icon, label }) => <button key={value} type="button" aria-pressed={profile.aim === value} onClick={() => setProfile({ ...profile, aim: value })} className={`press flex min-h-12 items-center gap-3 rounded-lg border px-4 py-3 text-left ${profile.aim === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={22} aria-hidden />{label}</button>)}
+                  </fieldset>
                 </>
               )}
               {step === 1 && (
@@ -437,48 +391,10 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
                               "Easy conversational effort. Start and finish gently; walk as needed.",
                             )}
                     </p>
-                    <label className="flex flex-col gap-1 text-label">
-                      {l("Hvordan gikk økten?", "How did it go?")}
-                      <select
-                        className="rounded-md border bg-background p-2"
-                        disabled={busy}
-                        value={session.feedback ?? ""}
-                        onChange={(e) =>
-                          void save({
-                            action: "feedback",
-                            sessionId: session.id,
-                            feedback: e.target.value as StarterFeedback,
-                          })
-                        }
-                      >
-                        <option value="" disabled>
-                          {l("Ikke svart ennå", "Not answered yet")}
-                        </option>
-                        {(["easy", "ok", "hard", "time", "pain"] as const).map(
-                          (v, j) => (
-                            <option key={v} value={v}>
-                              {
-                                (no
-                                  ? [
-                                      "Gjennomført – lett",
-                                      "Gjennomført – passe",
-                                      "Gjennomført – for krevende",
-                                      "Ikke gjennomført – tidsmangel",
-                                      "Plager / smerte",
-                                    ]
-                                  : [
-                                      "Completed – easy",
-                                      "Completed – manageable",
-                                      "Completed – too hard",
-                                      "Missed – lack of time",
-                                      "Discomfort / pain",
-                                    ])[j]
-                              }
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    </label>
+                    <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-label">{l("Hvordan gikk økten?", "How did it go?")}</legend>
+                      <div className="grid grid-cols-3 gap-2">{([{ value: "easy", icon: Smile, label: l("Lett", "Easy") }, { value: "ok", icon: Meh, label: l("Passe", "Manageable") }, { value: "hard", icon: Frown, label: l("Tungt", "Hard") }] as const).map(({ value, icon: Icon, label }) => <button key={value} disabled={busy} aria-pressed={session.feedback === value} onClick={() => void save({ action: "feedback", sessionId: session.id, feedback: value })} className={`press flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border text-label ${session.feedback === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={28} aria-hidden />{label}</button>)}</div>
+                      <div className="flex flex-wrap gap-2">{([{ value: "time", icon: Clock, label: l("Hoppet over · tidsmangel", "Skipped · lack of time") }, { value: "pain", icon: HeartPulse, label: l("Kjente smerte", "Felt pain") }] as const).map(({ value, icon: Icon, label }) => <button key={value} disabled={busy} aria-pressed={session.feedback === value} onClick={() => void save({ action: "feedback", sessionId: session.id, feedback: value })} className={`press flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-label ${session.feedback === value ? "border-primary bg-primary/10 text-primary" : "border-border"}`}><Icon size={18} aria-hidden />{label}</button>)}</div>
+                    </fieldset>
                   </li>
                 ))}
               </ol>
@@ -488,6 +404,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
                   "Feedback informs next week and does not create measured activities. Move sessions as needed; keep rest days between run/walk sessions.",
                 )}
               </p>
+              {saved.state.history.length > 0 && <details className="border-t border-border py-3"><summary className="press min-h-11 cursor-pointer text-label font-semibold">{l("Tidligere etapper", "Previous stages")} · {saved.state.history.length}</summary><ol className="flex flex-col gap-3 pt-3">{saved.state.history.map((week, index) => <li key={`${week.startsAt}:${index}`} className="text-label"><span className="font-semibold">{l("Etappe", "Stage")} {week.number}</span><span className="ml-2 text-muted-foreground">{week.sessions.filter(s => s.feedback && ["easy", "ok", "hard"].includes(s.feedback)).length}/{week.sessions.length} {l("økter gjennomført", "sessions completed")}</span></li>)}</ol></details>}
               <div className="flex flex-wrap gap-2">
                 <Button
                   disabled={busy || !saved.state.week.sessions.length}
@@ -509,7 +426,7 @@ export function StarterPlanEntry({ offer = true, autoPrompt = false, syncFirst =
             </>
           ) : null}
         </div>
-      </BottomSheet>
+      </StarterSurface>
     </>
   );
 }
@@ -523,4 +440,10 @@ function OptionalNumber({ label, value, min, max, onChange }: { label: string; v
     setText(next);
     if (next !== "" && event.target.validity.valid) onChange(Number(next));
   }} /></label>;
+}
+
+
+function StarterSurface({ page, ...props }: ComponentProps<typeof BottomSheet> & { page: boolean }) {
+  if (page) return <section className="px-4 pb-8 pt-2" aria-label={props.title}>{props.children}</section>;
+  return <BottomSheet {...props} />;
 }

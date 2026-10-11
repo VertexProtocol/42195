@@ -62,6 +62,7 @@ vi.mock("@/hooks/use-get-started", () => ({
 // The screens themselves are tested on their own. Here they only need to say
 // which one is mounted — named the way the shell imports them, since the lazy
 // ones are picked off the module by name.
+vi.mock("@/components/screens/starter-plan-screen", () => ({ StarterPlanScreen: ({ onBack }: { onBack: () => void }) => <div>STARTER PLAN<button onClick={onBack}>Back to plans</button></div> }))
 vi.mock("@/components/screens/home-screen", () => ({ HomeScreen: () => <div>HOME</div> }))
 vi.mock("@/components/screens/activities-screen", () => ({
   ActivitiesScreen: () => <div>ACTIVITIES</div>,
@@ -125,3 +126,13 @@ describe("AppShell — Plan navigation", () => {
     expect(screen.queryByText("PLAN LIST")).toBeNull()
   })
 })
+
+
+it("opens the starter plan directly and returns to the plan list", async () => {
+  setUrl("tab=goals&goal=starter");
+  renderShell();
+  expect(screen.getByText("STARTER PLAN")).toBeTruthy();
+  expect(screen.queryByText("PLAN LIST")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Back to plans" }));
+  await waitFor(() => expect(screen.getByText("PLAN LIST")).toBeTruthy());
+});
