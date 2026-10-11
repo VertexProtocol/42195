@@ -400,6 +400,7 @@ export function AppShell({ initialData }: AppShellProps) {
         <AppBar
           title={barTitle}
           brand={activeTab === "home"}
+          showMark={activeTab !== "profile"}
           action={activeTab === "profile" ? undefined : <StreakChip streak={streak} />}
           syncStatus={data.syncStatus}
           stravaConnected={data.stravaConnected}

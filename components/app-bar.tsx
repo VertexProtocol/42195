@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react"
 import { ArrowLeft, CheckCircle2, TriangleAlert, User } from "lucide-react"
-import { TrackLoader } from "@/components/ui/track-mark"
+import { TrackLoader, TrackMark } from "@/components/ui/track-mark"
 import { useI18n } from "@/lib/i18n"
 import type { SyncStatus, UserProfile } from "@/lib/types"
 
@@ -36,6 +36,8 @@ interface AppBarProps {
   title: string
   /** Rendered instead of the title when the screen has a wordmark of its own. */
   brand?: boolean
+  /** Small identity mark beside titles on the main navigation screens. */
+  showMark?: boolean
   subtitle?: string
   syncStatus?: SyncStatus
   stravaConnected?: boolean
@@ -86,6 +88,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
 export function AppBar({
   title,
   brand = false,
+  showMark = false,
   subtitle,
   syncStatus,
   stravaConnected,
@@ -118,18 +121,24 @@ export function AppBar({
         <div className="min-w-0 flex-1">
           {brand ? (
             <>
-              <p className="measure text-lead font-bold leading-none tracking-[-0.03em] text-foreground">
-                42195
-              </p>
+              <div className="flex items-center gap-2 text-foreground">
+                <TrackMark size={20} />
+                <p className="measure whitespace-nowrap text-lead font-bold leading-none tracking-[-0.03em]">
+                  42195
+                </p>
+              </div>
               {subtitle && (
                 <p className="mt-1 truncate text-micro text-muted-foreground">{subtitle}</p>
               )}
             </>
           ) : (
             <>
-              <h1 className="truncate text-lead font-semibold leading-tight text-foreground">
-                {title}
-              </h1>
+              <div className="flex min-w-0 items-center gap-2 text-foreground">
+                {showMark && <TrackMark size={15} />}
+                <h1 className="truncate text-lead font-semibold leading-tight">
+                  {title}
+                </h1>
+              </div>
               {subtitle && (
                 <p className="mt-0.5 truncate text-micro text-muted-foreground">{subtitle}</p>
               )}
