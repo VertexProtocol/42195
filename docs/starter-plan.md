@@ -1,0 +1,13 @@
+# Starter onboarding without imported history
+
+The home screen adds no card. The shared BottomSheet opens automatically for a runner without sufficient history, once per user per browser session. "Explore first" dismisses it; the personal plan still requires completed answers. A single inline action reopens the editor. After onboarding it becomes a next-session row. The full plan and feedback controls appear only in the sheet. Existing race-plan entry points remain available for runners with measured history. The missing-history response in race planning offers the same starter entry.
+
+Three starting points: beginner, self-reported current training, or return after a break. Answers include intention, available days, current continuous running time, usual weekly running time where relevant, break length, and discomfort. An event intention does not imply race readiness or a promised completion date.
+
+State lives in `starter_plans`, separate from measured activities. Ownership RLS and optimistic version checks protect cross-account isolation and concurrent feedback. The additive migration does not rewrite existing plans. The coach receives explicitly labelled self-reported context.
+
+The first plan is a provisional seven-day schedule with time and effort rather than inferred pace or race predictions. Run/walk sessions use rest days. The starter template's 60-second running / 90-second walking alternation and walking warm-up/cool-down are informed by [NHS Couch to 5K](https://www.nhs.uk/better-health/get-active/get-running-with-couch-to-5k/). This is not the NHS nine-week programme. Return factors, duration caps and adaptation rules are app heuristics, not clinically validated personal prescriptions.
+
+Feedback distinguishes completed-easy, manageable, too-hard, missed-for-time, and discomfort. Next week requires a completed seven-day period and all session responses. Time pressure does not reduce assumed capacity. Two consecutive easy weeks permit a small time increase; difficulty reduces or maintains time. Pain pauses pending sessions and blocks automatic progression until the starting point is reviewed. Updating answers restarts a provisional week and retains prior feedback history (up to 12 weeks).
+
+Verification: unit tests cover all starting modes, low-volume bounds, rest days, feedback, progression and pain. Component tests create and reload a plan and check failed persistence. API tests cover auth, ownership and version conflicts. `supabase/tests/starter_plans_rls.sql` checks live ownership rules with synthetic fixtures inside a rolled-back transaction. No real activity history is created by feedback.

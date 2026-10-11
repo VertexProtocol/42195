@@ -89,7 +89,7 @@ describe("TrainingLoadIndicator — no baseline", () => {
     renderCard(<TrainingLoadIndicator activities={lapsedBase()} />)
 
     expect(screen.getByText("Building Baseline")).toBeTruthy()
-    expect(screen.getByText(/no runs in four weeks/i)).toBeTruthy()
+    expect(screen.getByText(/not enough recent running history/i)).toBeTruthy()
     // The three values that used to be defaults dressed as findings.
     expect(meter()).toBeNull()
     expect(screen.queryByText("Fatigue")).toBeNull()
@@ -109,7 +109,7 @@ describe("TrainingLoadIndicator — unknown vs measured", () => {
     // fatigue comparison needs.
     const acts = [
       ...Array.from({ length: 5 }, (_, i) =>
-        makeActivity({ date: daysAgo(i * 4 + 1), distance_km: 8 }),
+        makeActivity({ date: daysAgo(i * 6 + 1), distance_km: 8 }),
       ),
     ]
     renderCard(<TrainingLoadIndicator activities={acts} />)
@@ -121,7 +121,7 @@ describe("TrainingLoadIndicator — unknown vs measured", () => {
 
   it("reports a genuine 'Normal' once the comparison actually ran", () => {
     const acts = Array.from({ length: 12 }, (_, i) =>
-      makeActivity({ date: daysAgo(i + 1), distance_km: 8, avg_heart_rate: 140 }),
+      makeActivity({ date: daysAgo(i * 2 + 1), distance_km: 8, avg_heart_rate: 140 }),
     )
     renderCard(<TrainingLoadIndicator activities={acts} />)
     expect(screen.getByText("Normal")).toBeTruthy()
@@ -137,7 +137,7 @@ describe("TrainingLoadIndicator — unknown vs measured", () => {
     ]
     renderCard(<TrainingLoadIndicator activities={acts} />)
     expect(screen.queryByText("Beginner")).toBeNull()
-    expect(screen.getAllByText("Not enough data").length).toBeGreaterThan(0)
+    expect(screen.getByText("Building Baseline")).toBeTruthy()
   })
 })
 

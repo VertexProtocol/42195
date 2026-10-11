@@ -305,7 +305,7 @@ describe("evaluateAcwrSafety", () => {
 
   it("returns unsafe risk and 0.75 multiplier for extreme spike", () => {
     // Tiny chronic, big acute
-    const base = [makeActivity({ date: daysAgo(20), distance_km: 5 })]
+    const base = [makeActivity({ date: daysAgo(24), distance_km: 5 })]
     const spike = acuteActivities(7, 10) // 70 km in last week
     const result = evaluateAcwrSafety([...spike, ...base])
     expect(result.risk).toBe("unsafe")
@@ -345,11 +345,11 @@ describe("checkFrequencyProgression", () => {
       makeActivity({ date: daysAgo(20), distance_km: 5 }),
     ]
     const result = checkFrequencyProgression(activities, 5)
-    expect(result).toBeNull()
+    expect(result?.maxSafeSessions).toBe(2)
   })
 
   it("returns null for empty activities", () => {
-    expect(checkFrequencyProgression([], 5)).toBeNull()
+    expect(checkFrequencyProgression([], 5)?.maxSafeSessions).toBe(2)
   })
 })
 

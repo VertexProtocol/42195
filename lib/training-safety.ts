@@ -249,7 +249,7 @@ export function evaluateAcwrSafety(
   // No chronic load = no baseline to compare against. Distinct from "low"
   // because the runner needs to ramp UP cautiously, not because they're
   // "fine" — the message must reflect "build a base first", not "all good".
-  if (chronicLoad <= 0) {
+  if (chronicLoad <= 0 || !activities.some(a => { const age = referenceDate.getTime() - new Date(a.date).getTime(); return age >= 21 * 86400000 && age <= 28 * 86400000 })) {
     return {
       ratio: 0,
       risk: "no_baseline",
@@ -317,17 +317,17 @@ export function checkFrequencyProgression(
 ): FrequencyWarning | null {
   const fourWeeksMs = 28 * 24 * 60 * 60 * 1000
   const cutoff = now - fourWeeksMs
-  const recent = activities.filter((a) => new Date(a.date).getTime() >= cutoff)
+  const recent = activities.filter((a) => new Date(a.date).getTime() >= cutoff && new Date(a.date).getTime() <= now)
   const avgSessions = recent.length / 4  // sessions per week over last 4 weeks
 
   // Allow at most +1 session/week vs recent average (floor to nearest integer)
   const maxSafe = Math.floor(avgSessions) + 1
 
-  if (requestedSessionsPerWeek > maxSafe && avgSessions >= 1) {
+  if (requestedSessionsPerWeek > Math.max(2, maxSafe)) {
     return {
       currentAvgSessions: Math.round(avgSessions * 10) / 10,
       requestedSessions: requestedSessionsPerWeek,
-      maxSafeSessions: maxSafe,
+      maxSafeSessions: Math.max(2, maxSafe),
     }
   }
   return null

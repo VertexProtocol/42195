@@ -17,7 +17,7 @@ describe("matchSessionsToActivities", () => {
     const matched = matchSessionsToActivities(SAME_DISTANCE_WEEK, [
       { distance_km: 7, pace_min_per_km: 4.5 },
     ])
-    expect(matched).toEqual([false, true])
+    expect(matched).toEqual([false, false])
   })
 
   it("gives an easy run to the easy session", () => {
@@ -32,7 +32,7 @@ describe("matchSessionsToActivities", () => {
       { distance_km: 7.1, pace_min_per_km: 4.4 },
       { distance_km: 6.9, pace_min_per_km: 5.8 },
     ])
-    expect(matched).toEqual([true, true])
+    expect(matched).toEqual([true, false])
   })
 
   it("lets pace override a closer distance, within reason", () => {
@@ -48,7 +48,7 @@ describe("matchSessionsToActivities", () => {
         { distance_km: 7.0, pace_min_per_km: 4.4 },
       ],
     )
-    expect(matched).toEqual([true, true])
+    expect(matched).toEqual([true, false])
   })
 
   it("does not let pace overrule the distance gate", () => {
@@ -69,12 +69,12 @@ describe("matchSessionsToActivities", () => {
     expect(matched).toEqual([true])
   })
 
-  it("counts running further than planned", () => {
+  it("requires confirmation for substantially longer runs", () => {
     const matched = matchSessionsToActivities(
       [{ type: "Base run", distance: "6 km" }],
       [{ distance_km: 9 }],
     )
-    expect(matched).toEqual([true])
+    expect(matched).toEqual([false])
   })
 
   it("falls back to distance when the session carries no pace target", () => {
@@ -90,7 +90,7 @@ describe("matchSessionsToActivities", () => {
         { distance_km: 6.1, pace_min_per_km: 5.4 },
       ],
     )
-    expect(matched).toEqual([true, true])
+    expect(matched).toEqual([false, true])
   })
 
   it("falls back to distance when the run has no pace of its own", () => {
@@ -104,7 +104,7 @@ describe("matchSessionsToActivities", () => {
     const matched = matchSessionsToActivities(SAME_DISTANCE_WEEK, [
       { distance_km: 7, duration_seconds: 7 * 4.5 * 60 },
     ])
-    expect(matched).toEqual([false, true])
+    expect(matched).toEqual([false, false])
   })
 
   it("spends each run once", () => {

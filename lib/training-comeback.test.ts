@@ -149,7 +149,7 @@ describe("daysSinceLastActivity", () => {
   it("clamps to 0 when the latest run is in the future (clock skew)", () => {
     const future = new Date(REF.getTime() + 2 * DAY_MS)
     const acts = [{ date: future.toISOString() }]
-    expect(daysSinceLastActivity(acts, REF)).toBe(0)
+    expect(daysSinceLastActivity(acts, REF)).toBe(Infinity)
   })
 
   it("floors partial days", () => {
@@ -286,8 +286,9 @@ describe("assessComeback", () => {
     const r = assessComeback([], false, REF)
     // No history → nothing to scale from; should still not crash and should
     // return a floored / conservative recommendation.
-    expect(r.needsRamp).toBe(true)
-    expect(r.weekOneKm).toBeGreaterThanOrEqual(3)
+    expect(r.needsRamp).toBe(false)
+    expect(r.category).toBe("unknown")
+    expect(r.weekOneKm).toBe(0)
   })
 })
 

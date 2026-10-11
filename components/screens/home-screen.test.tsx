@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi } from "vitest"
+import { afterEach, describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import { I18nProvider } from "@/lib/i18n"
 import { HomeScreen } from "./home-screen"
@@ -609,7 +609,7 @@ describe("HomeScreen — this week of the training plan", () => {
     expect(screen.queryByText("Ghost session")).toBeNull()
     // With more than one race pinned, the plan page says which race its week
     // belongs to, on the same line as the week number.
-    expect(screen.getByText(/^Still ahead · Week 2/)).toBeTruthy()
+    expect(screen.getByText(/^Still ahead · Stage 2/)).toBeTruthy()
   })
 
   it("says nothing at all when the goal has no plan", () => {
@@ -662,8 +662,8 @@ describe("HomeScreen — several races, several plans", () => {
       goals: [oslo(), berlin()],
       planWeeks: { oslo: weekFor("oslo", "OSLO LONG RUN"), berlin: weekFor("berlin", "BERLIN TEMPO") },
     })
-    expect(screen.getByText(/^Oslo · Week 2/)).toBeTruthy()
-    expect(screen.queryByText(/^Berlin · Week 2/)).toBeNull()
+    expect(screen.getByText(/^Oslo · Stage 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Berlin · Stage 2/)).toBeNull()
   })
 
   it("changes the name over to the race the runner has swiped to", async () => {
@@ -684,8 +684,8 @@ describe("HomeScreen — several races, several plans", () => {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
     })
 
-    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
-    expect(screen.queryByText(/^Oslo · Week 2/)).toBeNull()
+    expect(screen.getByText(/^Berlin · Stage 2/)).toBeTruthy()
+    expect(screen.queryByText(/^Oslo · Stage 2/)).toBeNull()
   })
 
   it("makes the races swipeable down", () => {
@@ -713,7 +713,7 @@ describe("HomeScreen — several races, several plans", () => {
     expect(screen.getByText("BERLIN TEMPO")).toBeTruthy()
     // One race has a plan, so there is nothing to swipe between — but the page
     // still says whose week it is, because two races are pinned.
-    expect(screen.getByText(/^Berlin · Week 2/)).toBeTruthy()
+    expect(screen.getByText(/^Berlin · Stage 2/)).toBeTruthy()
     expect(screen.queryByRole("group", { name: /Training plans for/ })).toBeNull()
   })
 
@@ -738,5 +738,74 @@ describe("HomeScreen — next steps and recent activity", () => {
     expect(onViewCoach).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole("button", { name: /latest run/i }))
     expect(onSelectActivity).toHaveBeenCalledWith(newer)
+  })
+})
+
+
+describe("HomeScreen — goals do not require favourites", () => {
+  function show(goal: Goal, weeks: Record<string, CurrentPlanWeek> = {}, badges = {}, onViewGoal = vi.fn()) {
+    return render(<I18nProvider><HomeScreen goals={[goal]} starredGoals={[]} currentWeekGoals={[]} activities={[]} weeklySummary={summaryOf([])} warnings={[]} planBadges={badges} currentPlanWeeks={weeks} onViewGoal={onViewGoal} onViewGoals={() => {}} onViewInsights={() => {}} /></I18nProvider>)
+  }
+
+  it("shows the current plan and its goal without a star", () => {
+    const goal = makeRaceGoal({ id: "unstarred", is_starred: false })
+    show(goal, { [goal.id]: makePlanWeek() })
+    expect(screen.getByText("Long run")).toBeTruthy()
+    expect(screen.getByText(goal.name)).toBeTruthy()
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("opens an existing goal when there is no current plan week", () => {
+    const goal = makeRaceGoal({ is_starred: false })
+    const open = vi.fn()
+    show(goal, {}, {}, open)
+    fireEvent.click(screen.getByRole("button", { name: "Open plan" }))
+    expect(open).toHaveBeenCalledWith(goal)
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("keeps an unstarred goal with a completed block reachable", () => {
+    const goal = makeRaceGoal({ is_starred: false })
+    show(goal, {}, { [goal.id]: { checkpoint: false, blockCompleted: true } })
+    expect(screen.getAllByText(goal.name).length).toBeGreaterThan(0)
+    expect(screen.getByRole("button", { name: "Open plan" })).toBeTruthy()
+    expect(screen.queryByText("Set a goal")).toBeNull()
+  })
+
+  it("does not bring an unstarred past race back onto Today", () => {
+    const goal = makeRaceGoal({ is_starred: false, target_date: daysFromNow(-10) })
+    show(goal, { [goal.id]: makePlanWeek() }, { [goal.id]: { checkpoint: false, blockCompleted: true } })
+    expect(screen.queryByText(goal.name)).toBeNull()
+    expect(screen.queryByText("Long run")).toBeNull()
+  })
+})
+
+
+describe("HomeScreen — onboarding and plans between blocks", () => {
+  afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear() })
+
+  function show(goals: Goal[], badges: Record<string, { checkpoint: boolean; blockCompleted: boolean }> = {}, onViewGoal = vi.fn()) {
+    return render(<I18nProvider><HomeScreen goals={goals} starredGoals={[]} currentWeekGoals={[]} activities={[]} weeklySummary={summaryOf([])} warnings={[]} planBadges={badges} onViewGoal={onViewGoal} onViewGoals={() => {}} onViewInsights={() => {}} /></I18nProvider>)
+  }
+
+  it("still opens the assessment when a new runner already has a goal", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ plan: null, userId: "new-with-goal" }) })))
+    show([makeRaceGoal({ is_starred: false })])
+    expect(await screen.findByRole("dialog")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Explore first" })).toBeTruthy()
+  })
+
+  it.each([true, false])("opens the existing plan without starter onboarding when blockCompleted=%s", (blockCompleted) => {
+    const fetch = vi.fn()
+    vi.stubGlobal("fetch", fetch)
+    const unrelated = makeRaceGoal({ id: "no-plan", name: "Another race", is_starred: false })
+    const planned = makeRaceGoal({ id: "with-plan", name: "Planned race", is_starred: false })
+    const open = vi.fn()
+    show([unrelated, planned], { [planned.id]: { checkpoint: false, blockCompleted } }, open)
+    fireEvent.click(screen.getByRole("button", { name: "Open plan" }))
+    expect(open).toHaveBeenCalledWith(planned)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(screen.queryByText("Set a goal")).toBeNull()
   })
 })

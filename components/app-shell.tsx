@@ -411,6 +411,7 @@ export function AppShell({ initialData }: AppShellProps) {
         {activeTab === "home" && (
           <HomeScreen
             starredGoals={data.starredGoals}
+            goals={data.goals}
             currentWeekGoals={data.currentWeekGoals}
             activities={data.activities}
             weeklySummary={data.weeklySummary}
@@ -420,6 +421,8 @@ export function AppShell({ initialData }: AppShellProps) {
             planSessionStatuses={data.planSessionStatuses}
             syncStatus={data.syncStatus}
             stravaConnected={data.stravaConnected}
+            onConnectStrava={handleConnectStrava}
+            onSync={data.sync}
             onViewGoal={(goal) => { navigate({ ...STACKED_VIEWS, tab: "goals", goal: goal.id }) }}
             onViewGoals={() => handleTabChange("goals")}
             onViewWeeklyGoals={handleViewWeeklyGoals}

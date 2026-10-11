@@ -435,6 +435,7 @@ export function InsightsScreen({
         <div className="stagger flex flex-col gap-3">
           {activeTab === "records" && (
           <AppCard variant="rows">
+            <p className="px-4 py-3 text-micro text-muted-foreground">{t("insights.recordNote")}</p>
             {personalRecords.map((pr) => {
               const row = (
                 <>
@@ -478,6 +479,7 @@ export function InsightsScreen({
 
           {activeTab === "predictions" && (
             <>
+          <p className="text-label text-muted-foreground">{t("insights.estimateNote")}</p>
           <AppCard variant="rows">
             {racePredictions.predictions.map((pred) => (
               <CardRow key={pred.distance_label} className="flex items-baseline gap-3">

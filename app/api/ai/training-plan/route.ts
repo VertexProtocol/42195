@@ -1,3 +1,4 @@
+import { preservePlanProgress } from "@/lib/plan-revision"
 import { NextRequest, NextResponse } from "next/server"
 import { anthropic } from "@/lib/anthropic"
 import { logAiUsage } from "@/lib/ai-usage"
@@ -537,6 +538,7 @@ export async function POST(req: NextRequest) {
   // Running activities only, so cycling and hiking weeks do not inflate the
   // weekly km this block is built from.
   const runHistory = (activities ?? []).filter((a) => RUN_TYPES.has(a.type))
+  if (runHistory.length === 0) return NextResponse.json({ code: "missing_history", error: "We need recent running history before creating a personalised plan. Sync your activities or log recent training first; missing history is not assumed to be a training break." }, { status: 422 })
   const weeklySummaries = groupActivitiesByWeek(runHistory)
 
   /**
@@ -862,7 +864,7 @@ export async function POST(req: NextRequest) {
   // suggestion that three later passes revised, leaving summary and coach notes
   // talking about volumes that no longer existed.
   const maxWeeksUntilRace = Math.max(1, Math.floor(daysUntilRace / 7))
-  const blockWeeks = Math.min(prefs.block_weeks ?? 4, maxWeeksUntilRace)
+  let blockWeeks = Math.min(prefs.block_weeks ?? 4, maxWeeksUntilRace)
 
   // When this block runs. Settled here rather than after the model call, where
   // it used to live: a block that does not know its own dates cannot be told
@@ -874,16 +876,20 @@ export async function POST(req: NextRequest) {
   const blockStartDate = computeBlockStartDate({
     prevBlockStartDate: previousBlock?.block_start_date as string | undefined,
     prevWeekCount: (previousBlock?.plan as TrainingPlan | undefined)?.weeks?.length,
+    adjustCurrent: Boolean(adjustNote),
   })
 
   // The runner's other races inside this block. The block is built for `goal`,
   // which makes that the A race; these are the ones it has to work around
   // rather than aim at.
-  const blockRaces = racesInBlock(allGoals ?? [], goalId, blockStartDate, blockWeeks)
+  const revising = Boolean(adjustNote && previousBlock?.block_start_date === blockStartDate)
+  if (revising) blockWeeks = (previousBlock!.plan as TrainingPlan).weeks.length
+  const elapsedWeeks = revising ? Math.max(0, Math.min(blockWeeks - 1, Math.floor((Date.now() - new Date(blockStartDate).getTime()) / (7 * 86400000)))) : 0
+  const blockRaces = racesInBlock(allGoals ?? [], goalId, blockStartDate, blockWeeks).filter(r => r.weekIndex >= elapsedWeeks)
 
-  const { targets: rawWeekTargets, notes: volumeNotes } = computeWeeklyTargets({
+  const { targets: remainingTargets, notes: volumeNotes } = computeWeeklyTargets({
     avgWeeklyKm: currentAvgWeeklyKm,
-    blockWeeks,
+    blockWeeks: blockWeeks - elapsedWeeks,
     sessionsPerWeek: prefs.sessions_per_week,
     longestRecentRun,
     increasePct: prefs.weekly_increase_pct ?? 10,
@@ -897,8 +903,13 @@ export async function POST(req: NextRequest) {
   // A race week is not also a build week, and it has to be big enough to hold
   // the race. Applied after the volume engine so the ramp is computed on its
   // own terms first and then bent around what is actually on the calendar.
-  const { targets: weekTargets, notes: raceWeekNotes } = holdRaceWeeks(rawWeekTargets, blockRaces)
+  const rawWeekTargets = [...(revising ? (previousBlock!.plan as TrainingPlan).weeks.slice(0, elapsedWeeks).map(w => w.targetKm) : []), ...remainingTargets]
+  const maxSessions = Math.min(prefs.sessions_per_week, frequencyWarning?.maxSafeSessions ?? prefs.sessions_per_week)
+  const sessionCaps = rawWeekTargets.map((_, i) => longestRecentRun > 0 ? Math.floor(longestRecentRun * (1 + (prefs.weekly_increase_pct ?? 10) / 100) ** (Math.max(0, i - elapsedWeeks) + 1) * 2) / 2 : 2)
+  const feasibleTargets = rawWeekTargets.map((km, i) => Math.min(km, supportedSessionCount(km, maxSessions, prefs.focus) * sessionCaps[i]))
+  const { targets: weekTargets, notes: raceWeekNotes } = holdRaceWeeks(feasibleTargets, blockRaces)
   volumeNotes.push(...raceWeekNotes)
+  if (raceWeekNotes.some(n => n.startsWith("Race conflict:"))) return NextResponse.json({ code: "race_budget_conflict", error: "A race in this block exceeds your current training budget. Review the race date or goal before generating a plan." }, { status: 422 })
 
   if (volumeNotes.length > 0) {
     console.log(`[plan-volume] goal ${goalId} (${athleteLevel}):`, volumeNotes)
@@ -908,7 +919,7 @@ export async function POST(req: NextRequest) {
   // requested count in "volume" focus, where a week too small for the count
   // trades sessions for length rather than prescribing runs too short to matter.
   const weekSessionCounts = sessionCountsForBlock(weekTargets, blockRaces, (km) =>
-    supportedSessionCount(km, prefs.sessions_per_week, prefs.focus),
+    supportedSessionCount(km, Math.min(prefs.sessions_per_week, frequencyWarning?.maxSafeSessions ?? prefs.sessions_per_week), prefs.focus),
   )
   const reducedWeeks = weekSessionCounts.filter((n) => n < prefs.sessions_per_week).length
   if (reducedWeeks > 0) {
@@ -1013,9 +1024,7 @@ export async function POST(req: NextRequest) {
         const draft: PlanDraft = parsed.data
 
         if (draft.weeks.length !== weekTargets.length) {
-          console.warn(
-            `[plan-validation] Claude returned ${draft.weeks.length} weeks, expected ${weekTargets.length}`,
-          )
+          throw new Error("The generated plan did not cover the requested period. Please retry.")
         }
 
         // Assemble the plan: Claude's weekly shape, the volume computed before
@@ -1024,6 +1033,7 @@ export async function POST(req: NextRequest) {
         let safePlan: TrainingPlan = {
           ...draft,
           weeks: draft.weeks.slice(0, weekTargets.length).map((week, wi) => {
+            if (week.sessions.length !== weekSessionCounts[wi]) throw new Error("The generated session count differs from the training budget. Please retry.")
             const targetKm = weekTargets[wi]
             // The races in this week are runs the runner is already committed
             // to. They come out of the week's volume before the training is
@@ -1031,7 +1041,8 @@ export async function POST(req: NextRequest) {
             const raceKm = raceKmInWeek(blockRaces, wi)
             const { distances, belowMinimum } = allocateSessionDistances(
               Math.max(0, targetKm - raceKm),
-              week.sessions.map((s) => s.type),
+              week.sessions.slice(0, weekSessionCounts[wi]).map((s) => s.type),
+              sessionCaps[wi],
             )
             if (belowMinimum) {
               console.warn(
@@ -1051,7 +1062,7 @@ export async function POST(req: NextRequest) {
               coachNote: week.coachNote,
               sessions: [
                 ...raceSessions,
-                ...week.sessions.map((session, si) => ({
+                ...week.sessions.slice(0, distances.length).map((session, si) => ({
                   ...session,
                   distance: formatSessionDistance(distances[si] ?? 0),
                 })),
@@ -1072,6 +1083,12 @@ export async function POST(req: NextRequest) {
           fatigueSignal: fatigue.signal as FatigueSignal,
           athleteLevel,
         })
+
+        if (adjustNote && previousBlock?.block_start_date === blockStartDate) {
+          const elapsedWeeks = Math.max(0, Math.floor((Date.now() - new Date(blockStartDate).getTime()) / (7 * 86400000)))
+          const oldWeeks = (previousBlock.plan as TrainingPlan).weeks
+          safePlan.weeks = safePlan.weeks.map((week, i) => i < elapsedWeeks && oldWeeks[i] ? oldWeeks[i] : week)
+        }
 
         // Signals worth surfacing, none of which change the plan's volume — that
         // was already settled before the prompt.
@@ -1135,6 +1152,11 @@ export async function POST(req: NextRequest) {
           })
           // Keep at most 5 previous plans
           if (previousPlans.length > 5) previousPlans.length = 5
+        }
+
+        if (adjustNote && currentPlan?.block_start_date === blockStartDate && currentPlan?.plan) {
+          const statuses = Object.fromEntries((currentPlan.session_completions ?? []).map((s: {session_key: string; status: string}) => [s.session_key, s.status]))
+          safePlan = preservePlanProgress(currentPlan.plan as TrainingPlan, safePlan, statuses, blockStartDate)
         }
 
         const { error: upsertError } = await service
@@ -1364,7 +1386,7 @@ export async function GET(req: NextRequest) {
   // once and written back, so the plan settles at the new numbers rather than
   // being recomputed against a moving history on every read.
   const storedPlan = planRow.plan as TrainingPlan | null
-  const needsPaces = planNeedsPaces(storedPlan) || planPacesStale(storedPlan)
+  const needsPaces = !planRow.archived_at && (planNeedsPaces(storedPlan) || planPacesStale(storedPlan))
 
   const runActs = (activities ?? []).filter((a) => RUN_TYPES.has((a as { type?: string }).type ?? ""))
   const paceGuide = (() => {
@@ -1387,6 +1409,11 @@ export async function GET(req: NextRequest) {
       fatigueSignal: detectFatigue(runActs as unknown as SafetyActivity[]).signal as FatigueSignal,
       athleteLevel: classifyAthleteLevel(runActs as unknown as SafetyActivity[]),
     })
+
+    if (planRow.block_start_date) {
+      const elapsed = Math.max(0, Math.floor((Date.now() - new Date(planRow.block_start_date).getTime()) / (7 * 86400000)))
+      enrichedPlan.weeks = enrichedPlan.weeks.map((week: TrainingWeek, i: number) => i < elapsed ? storedPlan.weeks[i] : week)
+    }
 
     // Written back so the plan settles here. Without this the re-pace would run
     // against a history that grows every day, and the runner would find

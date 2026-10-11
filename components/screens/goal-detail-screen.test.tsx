@@ -209,7 +209,7 @@ describe("GoalDetailScreen — how a week reports itself", () => {
     renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
 
     expect(await screen.findByText("1/4 done")).toBeTruthy()
-    expect(screen.queryByText(/skipped/)).toBeNull()
+    expect(screen.queryByText(/\d+\/\d+ skipped/)).toBeNull()
   })
 })
 
@@ -255,4 +255,15 @@ describe("GoalDetailScreen — setting up a plan", () => {
       expect(generate).toBeGreaterThan(save)
     })
   })
+})
+
+
+it("opens the next step details from the journey", async () => {
+  stubPlanFetch({ "W1-0": "completed", "W1-1": "skipped" })
+  renderDetail(makeGoal({ target_date: daysFromNow(60) }), [])
+  const next = await screen.findByRole("button", { name: /Next step.*Fartlek/ })
+  fireEvent.click(next)
+  expect(screen.getByRole("dialog")).toBeTruthy()
+  expect(screen.getByText("Relaxed surges")).toBeTruthy()
+  expect(screen.getByText("Turnover")).toBeTruthy()
 })

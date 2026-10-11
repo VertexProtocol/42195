@@ -10,6 +10,7 @@ import {
   useEffect,
 } from "react"
 import { ChevronRight, StarOff } from "lucide-react"
+import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { PoweredByStrava } from "@/components/strava-brand"
 import {
   formatDuration,
@@ -526,9 +527,9 @@ function PlanSection({
   // unpinned — while the rail is sitting on it.
   const current = pages[Math.min(pageIndex, pages.length - 1)] ?? pages[0]
 
-  // Skipped counts as settled, the same as it does in the plan's own week
-  // header: the runner has answered for it, so it is not still ahead of them.
-  const settled = current.done + current.skipped
+  // Completion progress counts completed sessions only. Skipped sessions are
+  // settled separately and never earn completion colour or progress.
+  const settled = current.done
   const filled = current.total > 0 ? Math.round((settled / current.total) * 100) : 0
   const countText =
     t("home.planSessionsDone", { done: current.done, total: current.total }) +
@@ -553,7 +554,7 @@ function PlanSection({
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-micro font-semibold text-primary">
             {isPaged || nameGoals ? `${current.goal.name} · ` : ""}
-            {t("home.planWeek", { week: current.week.weekNumber })}
+            {t("home.planStage", { week: current.week.weekNumber })}
             {current.week.theme ? ` · ${current.week.theme}` : ""}
           </span>
           <span className="measure shrink-0 text-micro text-muted-foreground">{countText}</span>
@@ -568,12 +569,14 @@ function PlanSection({
         >
           <div
             className={`grow-x h-full rounded-full ${
-              current.outstanding.length > 0 ? "bg-primary" : "bg-success"
+              current.done === current.total && current.total > 0 ? "bg-success" : "bg-primary"
             }`}
             style={{ width: `${filled}%`, transition: "width var(--dur-state) var(--ease-out)" }}
           />
         </div>
       </div>
+
+      <button onClick={() => onViewGoal(current.goal)} className="press min-h-11 text-left text-label font-semibold text-primary">{t("home.openJourney")} →</button>
 
       {/* The focus ring belongs out here rather than on the scroller: the mask
           that softens the scroller's ends would fade the ring along with the
@@ -621,6 +624,8 @@ function PlanSection({
 
 interface HomeScreenProps {
   starredGoals: Goal[]
+  /** All goals, including those that have not been favourited. */
+  goals?: Goal[]
   currentWeekGoals: WeeklyGoal[]
   activities: Activity[]
   weeklySummary: WeeklySummary
@@ -642,6 +647,8 @@ interface HomeScreenProps {
   planSessionStatuses?: Record<string, Record<string, PlanSessionStatus>>
   syncStatus?: SyncStatus
   stravaConnected?: boolean
+  onConnectStrava?: () => void
+  onSync?: () => void
   onViewGoal: (goal: Goal) => void
   /** Unpins a goal from this screen. Offered only once its date has gone. */
   onUnpinGoal?: (goalId: string) => void
@@ -658,12 +665,18 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   starredGoals,
+  goals = starredGoals,
+  planBadges,
   currentWeekGoals,
   activities,
   weeklySummary,
   warnings,
   currentPlanWeeks,
   planSessionStatuses,
+  stravaConnected,
+  syncStatus,
+  onConnectStrava,
+  onSync,
   onViewGoal,
   onViewGoals,
   onViewWeeklyGoals,
@@ -710,14 +723,21 @@ export function HomeScreen({
     return `${mon.getFullYear()}-${p(mon.getMonth() + 1)}-${p(mon.getDate())}`
   }, [])
 
-  // A race that has been run is not competing for attention with one that is
-  // 32 days out, so it sorts behind it. Pinned still means pinned — the card
-  // stays reachable, it just stops leading a screen whose whole job is "what
-  // is next".
+  // An existing plan belongs on Today regardless of its goal's star.
+  // Stars still keep other goals and past races within reach.
   const orderedGoals = useMemo(() => {
+    const selected = new Map(starredGoals.map(goal => [goal.id, goal]))
+    for (const goal of goals) {
+      if (!isDatePast(goal.target_date) && (planBadges[goal.id] || currentPlanWeeks?.[goal.id])) {
+        selected.set(goal.id, goal)
+      }
+    }
     const past = (g: Goal) => (isDatePast(g.target_date) ? 1 : 0)
-    return [...starredGoals].sort((a, b) => past(a) - past(b))
-  }, [starredGoals])
+    return [...selected.values()].sort((a, b) => past(a) - past(b) || (a.display_order ?? 0) - (b.display_order ?? 0))
+  }, [starredGoals, goals, planBadges, currentPlanWeeks])
+  const upcomingGoals = goals.filter(goal => !isDatePast(goal.target_date))
+  const goalWithPlan = upcomingGoals.find(goal => planBadges[goal.id] || currentPlanWeeks?.[goal.id])
+  const nextGoal = goalWithPlan ?? upcomingGoals[0]
 
   // Every weekly goal is one lane, in one row, in the order the runner put
   // them in. There is no longer a split between goals that fit a stat column
@@ -747,7 +767,7 @@ export function HomeScreen({
     return currentWeekGoals.map((goal) => ({ goal, current: currentFor(goal) }))
   }, [currentWeekGoals, activities, currentMondayStr, weeklySummary])
 
-  // Every pinned race that has a plan running this week, nearest race first —
+  // Every race that has a plan running this week, nearest race first —
   // the same order the goal cards are in. A race already run is left out: its
   // block ended with it, and what is left to say about it is on its own card.
   const planPages = useMemo(
@@ -760,6 +780,8 @@ export function HomeScreen({
     [orderedGoals, currentPlanWeeks],
   )
 
+  const hasRecentHistory = activities.filter(a => isRunActivity(a.type) && new Date(a.date).getTime() >= Date.now() - 84 * 86400000 && new Date(a.date).getTime() <= Date.now()).length >= 8
+
   const latestActivity = useMemo(() => activities.reduce<Activity | null>(
     (latest, activity) => !latest || activity.date > latest.date ? activity : latest,
     null,
@@ -768,11 +790,10 @@ export function HomeScreen({
   return (
     <div className="stagger flex flex-col gap-7 px-4 pb-8 screen-body">
       {planPages.length === 0 && (
-        <div className="py-2">
-          <h2 className="text-screen font-semibold">{t("home.startTitle")}</h2>
-          <p className="mt-2 max-w-prose text-body text-muted-foreground">{t("home.startBody")}</p>
-          <Button className="mt-4" onClick={onViewGoals}>{t("home.setGoal")}</Button>
-        </div>
+        <>
+          {(hasRecentHistory || nextGoal) && <div className="py-2"><h2 className="text-screen font-semibold">{nextGoal ? nextGoal.name : t("home.startTitle")}</h2><p className="mt-2 text-body text-muted-foreground">{t(nextGoal ? "home.continueGoalBody" : "home.startBody")}</p><Button className="mt-4" onClick={() => nextGoal ? onViewGoal(nextGoal) : onViewGoals()}>{t(nextGoal ? "home.startPlan" : "home.setGoal")}</Button></div>}
+          {!goalWithPlan && <StarterPlanEntry offer={!hasRecentHistory} autoPrompt={!hasRecentHistory} syncFirst stravaConnected={stravaConnected} syncStatus={syncStatus} onConnectStrava={onConnectStrava} onSync={onSync} />}
+        </>
       )}
       {/* ── What there is to run ──────────────────────────────────────── */}
       {/* Current training leads; historical goals stay below the week. */}
@@ -781,7 +802,7 @@ export function HomeScreen({
           plans={planPages}
           activities={activities}
           planSessionStatuses={planSessionStatuses ?? {}}
-          nameGoals={starredGoals.length > 1}
+          nameGoals={orderedGoals.length > 1}
           onViewGoal={onViewGoal}
           t={t}
         />

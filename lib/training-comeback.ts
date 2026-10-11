@@ -33,6 +33,7 @@ import { scaleSessionDistance } from "@/lib/training-checkpoint"
 import type { TrainingPlan, TrainingWeek } from "@/lib/types"
 
 export type ComebackCategory =
+  | "unknown"   // No observed history; never invent a pause duration
   | "none"      // no meaningful pause, plan as usual
   | "short"     // 7–10 days
   | "moderate"  // 11–14 days
@@ -94,7 +95,7 @@ export function calculateComebackVolume(
     COMEBACK_TABLE.find((e) => safePauseDays >= e.minDays && safePauseDays <= e.maxDays) ??
     COMEBACK_TABLE[COMEBACK_TABLE.length - 1]
 
-  if (safePauseDays < COMEBACK_PAUSE_THRESHOLD_DAYS) {
+  if (safePauseDays < COMEBACK_PAUSE_THRESHOLD_DAYS && !hasActiveInjury) {
     return {
       needsRamp: false,
       pauseDays: safePauseDays,
@@ -153,7 +154,7 @@ export function daysSinceLastActivity(
   let latestMs = -Infinity
   for (const a of activities) {
     const t = new Date(a.date).getTime()
-    if (t > latestMs) latestMs = t
+    if (t <= referenceDate.getTime() && t > latestMs) latestMs = t
   }
   const diffMs = referenceDate.getTime() - latestMs
   if (diffMs <= 0) return 0
@@ -266,7 +267,8 @@ export function assessComeback(
       )
     : 0
   const chronicWeekly = chronicLoadWeeklyKm(activities, referenceDate)
-  const finitePauseDays = Number.isFinite(pauseDays) ? pauseDays : 365
+  if (!Number.isFinite(pauseDays)) return { needsRamp: false, pauseDays: 0, category: "unknown", weekOneKm: 0, tablePercent: 0, limitingFactor: null }
+  const finitePauseDays = pauseDays
   return calculateComebackVolume(
     finitePauseDays,
     prePauseWeekly,

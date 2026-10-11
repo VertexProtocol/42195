@@ -1,5 +1,7 @@
 "use client"
 
+import { PlanJourney } from "@/components/plan-journey"
+import { StarterPlanEntry } from "@/components/starter-plan-entry"
 import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   ArrowLeft,
@@ -319,7 +321,7 @@ function PreferencesForm({
     meta?: { shouldRegenerate: boolean; regenerateReason: string | null },
   ) => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
@@ -404,11 +406,14 @@ function PreferencesForm({
   }
 
   const sessionsField = (
+    <div className="flex flex-col gap-2">
     <ChoiceRow
-      options={[2, 3, 4, 5].map((n) => [n, String(n)] as const)}
+      options={Array.from({ length: 14 }, (_, i) => i + 1).map((n) => [n, String(n)] as const)}
       value={sessions}
       onChange={setSessions}
     />
+    <p className="text-micro text-muted-foreground">{locale === "no" ? "Antall økter, ikke treningsdager. Over 7 betyr doble økter enkelte dager. Historikken kan begrense antallet." : "Sessions, not training days. More than 7 means doubles on some days. Your history may limit the count."}</p>
+    </div>
   )
 
   const focusOptions: [TrainingFocus, string, string][] = [
@@ -742,14 +747,14 @@ function ChoiceRow<T extends number>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       {options.map(([v, label]) => (
         <button
           key={v}
           type="button"
           aria-pressed={value === v}
           onClick={() => onChange(v)}
-          className={`press h-11 flex-1 rounded-md border text-label font-extrabold ${
+          className={`press h-11 min-w-11 flex-1 rounded-md border text-label font-extrabold ${
             value === v
               ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
               : "border-[var(--chunk-edge)] bg-card text-foreground"
@@ -826,6 +831,8 @@ function WeekCard({
 }) {
   const { t, locale } = useI18n()
   const [expanded, setExpanded] = useState(isCurrent)
+  const [selectedSession, setSelectedSession] = useState<number | null>(null)
+  const nextSession = isCurrent ? week.sessions.findIndex((_, i) => (sessionStatuses[i] ?? "planned") === "planned") : -1
 
   const deltaPct = actualKm !== null && week.targetKm > 0
     ? Math.round(((actualKm - week.targetKm) / week.targetKm) * 100)
@@ -838,13 +845,15 @@ function WeekCard({
   // two sessions still to come when in fact two had been written off.
   const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
   const totalSessions = week.sessions.length
-  const allSettled = totalSessions > 0 && completedCount + skippedCount === totalSessions
+  const allCompleted = totalSessions > 0 && completedCount === totalSessions
 
   const fmtDay = (d: Date) =>
     d.toLocaleDateString(locale === "no" ? "nb-NO" : "en-GB", { day: "numeric", month: "short" })
   const lastDay = new Date(weekEnd)
   lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
   const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
+
+  const matchingHint = locale === "no" ? "Kvalitetsøkter bekreftes manuelt. En rolig tur bekrefter ikke intervaller eller terskel." : "Confirm quality sessions manually. An easy run does not verify intervals or threshold work."
 
   const nextStatusLabel = (status: SessionStatus) =>
     status === "planned"
@@ -854,9 +863,10 @@ function WeekCard({
         : t("gp.markPlanned")
 
   return (
-    <div className={`surface overflow-hidden ${isCurrent ? "border-primary/45" : ""}`}>
+    <div className={`overflow-hidden rounded-xl border ${isCurrent ? "border-primary/45 bg-primary/5" : "border-border bg-background"}`}>
       <button
         onClick={() => setExpanded((v) => !v)}
+        title={matchingHint}
         aria-expanded={expanded}
         className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
       >
@@ -864,7 +874,7 @@ function WeekCard({
             session in it is answered for, plain otherwise. */}
         <span
           className={`flex size-11 shrink-0 items-center justify-center rounded-full border text-lead font-extrabold ${
-            allSettled && (isPast || isCurrent)
+            allCompleted && (isPast || isCurrent)
               ? "border-[var(--success-edge)] bg-success text-success-foreground"
               : isCurrent
                 ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
@@ -872,10 +882,10 @@ function WeekCard({
           }`}
           aria-hidden
         >
-          {allSettled && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
+          {allCompleted && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-body font-semibold text-card-foreground">{t("gp.weekNumber", { count: week.weekNumber })}</p>
+          <p className="text-body font-semibold text-card-foreground">{locale === "no" ? "Etappe" : "Stage"} {week.weekNumber}</p>
           <p className="mt-0.5 text-label text-muted-foreground">{week.theme}</p>
           <p className="truncate text-micro font-semibold text-muted-foreground">
             {dateLabel} · <span className="measure">~{week.targetKm} km</span>
@@ -904,19 +914,20 @@ function WeekCard({
 
       {expanded && (
         <div className="flex flex-col gap-3 border-t border-border px-4 pb-4 pt-3.5">
+          <p className="text-micro text-muted-foreground">{matchingHint}</p>
           {/* Planned vs actual, as the same meter the rest of the app uses. */}
           {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between text-micro font-semibold text-muted-foreground">
                 <span>{t("gp.planned", { km: week.targetKm })}</span>
-                <span className={deltaPct !== null && deltaPct >= 0 ? "text-primary" : "text-warning"}>
+                <span className="text-muted-foreground">
                   {t("gp.actual", { km: actualKm.toFixed(1) })}
                   {deltaPct !== null && ` (${deltaPct >= 0 ? "+" : ""}${deltaPct}%)`}
                 </span>
               </div>
               <Meter
                 value={Math.min(100, (actualKm / week.targetKm) * 100)}
-                tone={(deltaPct ?? 0) >= 0 ? "action" : "caution"}
+                tone="quiet"
                 label={t("gp.actual", { km: actualKm.toFixed(1) })}
               />
             </div>
@@ -930,7 +941,7 @@ function WeekCard({
                 <li
                   key={i}
                   className={`flex items-center gap-3 border-b border-border py-3 last:border-b-0 ${
-                    status === "skipped" ? "opacity-55" : ""
+                    i === nextSession ? "rounded-lg bg-primary/10 px-2 ring-1 ring-primary/20" : status === "skipped" ? "opacity-70" : ""
                   }`}
                 >
                   {canToggle && (
@@ -946,10 +957,11 @@ function WeekCard({
                       aria-label={`${session.type}: ${nextStatusLabel(status)}`}
                     >
                       {status === "completed" && <Check size={18} strokeWidth={3} />}
-                      {status === "skipped" && <X size={16} strokeWidth={3} />}
+                      {status === "skipped" && <span aria-hidden>–</span>}
                     </button>
                   )}
-                  <div className="min-w-0 flex-1">
+                  <button onClick={() => setSelectedSession(i)} className="press min-h-11 min-w-0 flex-1 text-left">
+                    {i === nextSession && <span className="text-micro font-semibold text-primary">{locale === "no" ? "Neste steg" : "Next step"}</span>}
                     <p
                       className={`truncate text-label font-extrabold ${
                         status === "completed" ? "text-success" : "text-card-foreground"
@@ -960,12 +972,22 @@ function WeekCard({
                     {session.suggestedPace && (
                       <p className="measure text-micro text-muted-foreground">{session.suggestedPace}</p>
                     )}
-                  </div>
+                  </button>
                   <span className="measure shrink-0 text-body font-semibold text-foreground">{session.distance}</span>
                 </li>
               )
             })}
           </ul>
+
+          <BottomSheet open={selectedSession !== null} onClose={() => setSelectedSession(null)} title={selectedSession !== null ? week.sessions[selectedSession].type : ""}>
+            {selectedSession !== null && <div className="flex flex-col gap-4 pb-4">
+              <p className="text-lead font-semibold">{week.sessions[selectedSession].distance}</p>
+              <p className="text-body">{week.sessions[selectedSession].effort}</p>
+              <p className="text-label text-muted-foreground">{week.sessions[selectedSession].purpose}</p>
+              {week.sessions[selectedSession].suggestedPace && <p className="text-label">{week.sessions[selectedSession].suggestedPace}</p>}
+              {(isCurrent || isPast) && <Button onClick={() => onToggleSession(week.weekNumber, selectedSession)}>{nextStatusLabel(sessionStatuses[selectedSession] ?? "planned")}</Button>}
+            </div>}
+          </BottomSheet>
 
           {week.coachNote && (
             <details className="group border-t border-border">
@@ -1192,6 +1214,7 @@ export function GoalDetailScreen({
   const [paceSource, setPaceSource] = useState<"test_run" | "prediction" | "historical" | "none" | null>(null)
   const [activeTab, setActiveTab] = useState<"plan" | "preferences">("plan")
   const [showAdjustForm, setShowAdjustForm] = useState(false)
+  const [needsStarter, setNeedsStarter] = useState(false)
   const [adjustNote, setAdjustNote] = useState("")
   const [showPreviousPlans, setShowPreviousPlans] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1446,7 +1469,8 @@ export function GoalDetailScreen({
             setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
             return
           }
-          setError(data.error ?? t("gp.generateFailed"))
+          setNeedsStarter(data.code === "missing_history")
+          setError(data.code === "missing_history" ? t("gp.missingHistory") : data.code === "race_budget_conflict" ? t("gp.raceBudgetConflict") : data.error ?? t("gp.generateFailed"))
           return
         }
 
@@ -1750,6 +1774,8 @@ export function GoalDetailScreen({
           </div>
         )}
 
+        {needsStarter && <StarterPlanEntry />}
+
         {/* No plan yet */}
         {!planResolved && !isGenerating && (
           <PlanSkeleton blockWeeks={prefs.block_weeks ?? 4} statusText={t("gp.loading")} />
@@ -1841,7 +1867,8 @@ export function GoalDetailScreen({
               </PlanNotice>
             )}
 
-            {/* Weekly blocks */}
+            {/* The generated block is one part of the path to the race. */}
+            <PlanJourney key={`${goal.id}:${aiPlan.block_start_date}`} goalName={goal.name} targetDate={goal.target_date} weeks={aiPlan.plan.weeks} statuses={sessionStatuses} currentIndex={currentWeekIndex} archived={!!aiPlan.archived_at}>
             {aiPlan.plan.weeks.map((week, i) => {
               const weekStart = mondayOf(new Date(aiPlan.block_start_date))
               weekStart.setDate(weekStart.getDate() + i * 7)
@@ -1873,6 +1900,8 @@ export function GoalDetailScreen({
                 />
               )
             })}
+
+            </PlanJourney>
 
             {/* Watch out - collapsible */}
             {aiPlan.plan.watchOut && (
@@ -1963,7 +1992,7 @@ export function GoalDetailScreen({
                 </div>
               )}
 
-              <Button variant="ghost" block onClick={() => handleGenerate()} className="text-muted-foreground">
+              <Button variant="ghost" block onClick={() => handleGenerate("Adjust the remaining active weeks using my current preferences.")} className="text-muted-foreground">
                 <RefreshCw size={16} />
                 {t("gp.regenerateFresh")}
               </Button>

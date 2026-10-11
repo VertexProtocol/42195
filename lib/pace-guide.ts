@@ -33,7 +33,7 @@ export interface PaceGuide {
  * base run came out at the same pace and the long run came out slower than
  * both.
  */
-export const PACE_ASSIGNMENT_VERSION = 2
+export const PACE_ASSIGNMENT_VERSION = 3
 
 interface TestRunRow {
   derived_metrics: Record<string, number | null> | null
@@ -53,10 +53,13 @@ export function buildPaceGuide(
   testRuns: TestRunRow[],
   goalDistanceKm: number,
   recentEasyPace: number | null,
+  asOf = Date.now(),
 ): PaceGuide {
   // --- Step 1: threshold pace from most recent test run with valid derived metrics ---
   let thresholdPace: number | null = null
   for (const tr of testRuns) {
+    const age = asOf - new Date(tr.created_at).getTime()
+    if (!Number.isFinite(age) || age < 0 || age > 90 * 86400000) continue
     const m = tr.derived_metrics
     if (m?.threshold_pace && m.threshold_pace > 0) {
       thresholdPace = m.threshold_pace
@@ -101,9 +104,9 @@ export function buildPaceGuide(
     ? (predMarathon.predicted_seconds / 60 / predMarathon.distance_km) * 1.15
     : null
 
-  // Easy: take the faster of historical easy pace and fitness-derived estimate, or fall back to threshold
+  // Easy: use the slower estimate when sources disagree, or fall back to threshold
   const easyPaceRaw = recentEasyPace != null && fitnessEasyPace != null
-    ? Math.min(recentEasyPace, fitnessEasyPace)  // lower min/km = faster
+    ? Math.max(recentEasyPace, fitnessEasyPace)  // higher min/km = slower
     : (recentEasyPace ?? fitnessEasyPace)
   const easyPace = easyPaceRaw ?? (thresholdPace ? thresholdPace * 1.22 : null)
 
@@ -120,7 +123,7 @@ export function buildPaceGuide(
   const tempoPace =
     thresholdPace ??
     (pred10k ? (pred10k.predicted_seconds / 60 / 10) * 1.04 : null) ??
-    (easyPace ? easyPace * 0.88 : null)
+    null
 
   // Interval: 5K prediction > tempo-derived estimate
   const intervalPace = pred5k
@@ -223,7 +226,7 @@ export type SessionZone = "recovery" | "easy" | "long" | "tempo" | "interval" | 
  */
 export function detectZone(sessionType: string): SessionZone | null {
   const t = sessionType.toLowerCase()
-  if (/hill/.test(t)) return null
+  if (/hill|bakke/.test(t)) return null
   // An actual race the runner has entered, written into the block as `Race: name`.
   // Also pace-less, for a different reason than the hills: how hard a runner
   // takes a B race is a decision they make — goal-pace rehearsal, hard tempo,
@@ -231,14 +234,14 @@ export function detectZone(sessionType: string): SessionZone | null {
   // the race-pace zone below, which is a training session run *at* race pace
   // and does get a number.
   if (/^race:/.test(t)) return null
-  if (/recovery|shake.?out|shakeout/.test(t)) return "recovery"
-  if (/long/.test(t)) return "long"
+  if (/recovery|restitusjon|shake.?out|shakeout/.test(t)) return "recovery"
+  if (/long|langtur/.test(t)) return "long"
   if (/race.?pace|goal.?pace|specific|marathon.?pace|half.?marathon.?pace/.test(t)) return "race"
   // Fartlek belongs here, not with the intervals. Its surges are Z3 — the same
   // sustained-but-controlled effort as a tempo — and pricing them at 5K
   // interval pace turned "relaxed surges" into a session two zones harder than
   // the effort line beside it described.
-  if (/tempo|threshold|lactate|cruise|steady.?state|progression|fartlek/.test(t)) return "tempo"
+  if (/tempo|terskel|fartslek|threshold|lactate|cruise|steady.?state|progression|fartlek/.test(t)) return "tempo"
   if (/interval|track|speed|repeat|strides|vo2/.test(t)) return "interval"
   return "easy"
 }

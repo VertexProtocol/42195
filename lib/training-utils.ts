@@ -100,15 +100,12 @@ export function detectPersonalRecords(activities: Activity[]): PersonalRecord[] 
     )
     if (qualifying.length === 0) continue
 
-    // Best = smallest flat-equivalent time for exactly the standard distance.
-    // Grade-adjusting prevents a hilly slow run from ranking below a faster flat run.
+    // Rank by the same distance-normalised actual time displayed to the runner.
     let best = qualifying[0]
-    let bestFlatTime = (km / best.distance_km) * best.duration_seconds /
-      elevationEffortMultiplier(best.distance_km, best.elevation_gain_m)
+    let bestFlatTime = (km / best.distance_km) * best.duration_seconds
 
     for (const a of qualifying.slice(1)) {
-      const flatTime = (km / a.distance_km) * a.duration_seconds /
-        elevationEffortMultiplier(a.distance_km, a.elevation_gain_m)
+      const flatTime = (km / a.distance_km) * a.duration_seconds
       if (flatTime < bestFlatTime) {
         best = a
         bestFlatTime = flatTime
@@ -157,11 +154,11 @@ export function computeACWR(
   const day28 = now - ACWR_CHRONIC_DAYS * 24 * 60 * 60 * 1000
 
   const acuteLoad = activities
-    .filter((a) => new Date(a.date).getTime() >= day7)
+    .filter((a) => new Date(a.date).getTime() >= day7 && new Date(a.date).getTime() <= now)
     .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
 
   const chronicTotal = activities
-    .filter((a) => new Date(a.date).getTime() >= day28)
+    .filter((a) => new Date(a.date).getTime() >= day28 && new Date(a.date).getTime() <= now)
     .reduce((s, a) => s + effortAdjustedKm(a.distance_km, a.elevation_gain_m), 0)
 
   const chronicLoad = chronicTotal / ACWR_CHRONIC_WEEKS
@@ -321,16 +318,19 @@ export function predictRaceTimes(
   const exponentHigh = RIEGEL_EXPONENT_CONSERVATIVE
 
   // Use flat-equivalent reference time so hilly reference runs project correctly to flat races
-  const refFlatSeconds = bestRef.duration_seconds / elevationEffortMultiplier(bestRef.distance_km, bestRef.elevation_gain_m)
+  const daysOld = (asOf - new Date(bestRef.date).getTime()) / 86400000
+  const recencyPenalty = 1 + Math.min(1, Math.max(0, (daysOld - RACE_PREDICTION_RECENCY_THRESHOLD_DAYS) / RACE_PREDICTION_RECENCY_FADE_DAYS)) * RACE_PREDICTION_MAX_RECENCY_PENALTY
+  const refFlatSeconds = bestRef.duration_seconds / elevationEffortMultiplier(bestRef.distance_km, bestRef.elevation_gain_m) * recencyPenalty
 
-  const predictions: RacePrediction[] = PREDICTION_DISTANCES.map(({ label, km }) => {
+  const longest = Math.max(...recent.map(a => a.distance_km))
+  const predictions: RacePrediction[] = PREDICTION_DISTANCES.filter(d => d.km <= longest * 2 && (d.km <= 10 || recent.length >= 8)).map(({ label, km }) => {
     const ratio = km / bestRef.distance_km
     return {
       distance_label: label,
       distance_km: km,
       predicted_seconds: Math.round(refFlatSeconds * ratio ** exponent),
-      low_seconds: Math.round(refFlatSeconds * ratio ** exponentLow),
-      high_seconds: Math.round(refFlatSeconds * ratio ** exponentHigh),
+      low_seconds: Math.round(refFlatSeconds * Math.min(ratio ** exponentLow, ratio ** exponentHigh, ratio ** exponent)),
+      high_seconds: Math.round(refFlatSeconds * Math.max(ratio ** exponentLow, ratio ** exponentHigh, ratio ** exponent)),
     }
   })
 
