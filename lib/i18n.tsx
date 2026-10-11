@@ -48,7 +48,11 @@ const translations = {
     "gp.adjustHint": "E.g. “fewer but longer runs” or “weekends only”.",
     "gp.adjustPlaceholder": "What should change?",
     "gp.regenerateWith": "Make new plan",
-    "gp.regenerateFresh": "Start over",
+    "gp.regenerateFresh": "Update remaining weeks",
+    "gp.missingHistory": "Sync or log recent running first. We need training history to create a personalised plan; missing data does not mean you have taken a break.",
+    "gp.raceBudgetConflict": "A race in this period exceeds the training budget. Review the race date or goal before creating the plan.",
+    "insights.estimateNote": "Estimates, not race results. Longer distances are hidden when the running history is too limited.",
+    "insights.recordNote": "Times are normalised to the stated distance from runs within 5%. Elevation does not change the ranking.",
     "gp.previousPlans": "Previous plans ({count})",
     "gp.sessionsShort": "{done}/{total} sessions",
     "gp.weeksKm": "{weeks} wk · {km} km",
@@ -190,7 +194,7 @@ const translations = {
     "loadIndicator.ratioHelp":
       "Your last 7 days of running compared with your 4-week average. Around 1× means you are training at your usual level.",
     "loadIndicator.baselineEmptyBody":
-      "No runs in four weeks. Back after a few runs.",
+      "Not enough recent running history to compare training load yet.",
     "loadIndicator.lastRun": "Last run",
     "loadIndicator.unknown": "Not enough data",
     "loadIndicator.fatigueSustained": "Sustained ({weeks} wks)",
@@ -986,7 +990,11 @@ const translations = {
     "gp.adjustHint": "F.eks. «færre, men lengre turer» eller «bare i helgene».",
     "gp.adjustPlaceholder": "Hva skal endres?",
     "gp.regenerateWith": "Lag ny plan",
-    "gp.regenerateFresh": "Start på nytt",
+    "gp.regenerateFresh": "Oppdater gjenstående uker",
+    "gp.missingHistory": "Synkroniser eller registrer nyere løpeturer først. Vi trenger treningshistorikk for en personlig plan; manglende data betyr ikke at du har hatt et opphold.",
+    "gp.raceBudgetConflict": "Et løp i perioden overstiger treningsrammen. Se gjennom løpsdatoen eller målet før du lager planen.",
+    "insights.estimateNote": "Estimater, ikke løpsresultater. Lengre distanser skjules når løpshistorikken er for begrenset.",
+    "insights.recordNote": "Tidene er omregnet til oppgitt distanse fra turer innenfor 5 %. Høydemeter endrer ikke rangeringen.",
     "gp.previousPlans": "Tidligere planer ({count})",
     "gp.sessionsShort": "{done}/{total} økter",
     "gp.weeksKm": "{weeks} u · {km} km",
@@ -1126,7 +1134,7 @@ const translations = {
     "loadIndicator.ratioHelp":
       "De siste 7 dagene med løping sammenlignet med snittet ditt de siste 4 ukene. Rundt 1× betyr at du trener som du pleier.",
     "loadIndicator.baselineEmptyBody":
-      "Ingen løp på fire uker. Kommer tilbake etter noen turer.",
+      "For lite nyere løpshistorikk til å sammenligne treningsbelastningen ennå.",
     "loadIndicator.lastRun": "Siste løpetur",
     "loadIndicator.unknown": "For lite data",
     "loadIndicator.fatigueSustained": "Vedvarende ({weeks} uker)",

@@ -100,6 +100,9 @@ export function matchSessionsToActivities(
       const actualKm = Number(activities[ai].distance_km)
       if (!(actualKm >= target.km * MIN_DISTANCE_FRACTION)) continue
 
+      // Hard sessions need explicit confirmation: whole-run pace cannot verify intervals.
+      if (/threshold|tempo|interval|fartlek|hill|repeat|bakke|terskel|intervall/i.test(sessions[target.index].type)) continue
+      if (actualKm > target.km * 1.3) continue
       const distanceCost = Math.abs(actualKm - target.km) / target.km
 
       // Neutral when either side is unknown, which leaves the pair ranked on
@@ -110,6 +113,7 @@ export function matchSessionsToActivities(
           ? Math.abs(actualPace - target.pace) / target.pace
           : 0
 
+      if (paceCost > 0.15) continue
       candidates.push({
         sessionIndex: target.index,
         activityIndex: ai,

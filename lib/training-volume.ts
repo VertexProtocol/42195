@@ -41,7 +41,7 @@ const RECOVERY_WEEK_FRACTION = 0.8
 const REDUCTION_GRADUATION = [1.0, 0.5, 0.25]
 
 /** Default weekly volume for a runner with no usable history. */
-const DEFAULT_BASELINE_KM = 15
+const DEFAULT_BASELINE_KM = 3
 
 /** Ceiling on the baseline, as a multiple of the runner's current average. */
 const MAX_WEEK_MULTIPLE_OF_BASELINE = 1.5
@@ -170,10 +170,8 @@ export function calcWeekTargets(
   if (blockWeeks <= 0) return []
 
   const baseline = avgWeeklyKm > 0 ? avgWeeklyKm : DEFAULT_BASELINE_KM
-  // Enforce a minimum weekly volume so the session length rules can be satisfied.
-  // Without this, a 10 km week with 2 sessions can't support a >= 8 km long run
-  // plus a >= 5 km base run.
-  const base = Math.max(baseline, calcMinWeeklyKm(sessionsPerWeek, longestRecentRun))
+  // Session preferences never raise the runner's measured starting volume.
+  const base = baseline
   const maxWeeklyKm = Math.max(baseline, base) * MAX_WEEK_MULTIPLE_OF_BASELINE
   const multiplier = 1 + pct / 100
 

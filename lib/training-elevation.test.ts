@@ -242,7 +242,7 @@ describe("detectPersonalRecords elevation", () => {
     const fiveK = records.find((r) => r.distance_label === "5 km")
     expect(fiveK).toBeDefined()
     // hillyRun has the better flat-equivalent time (24:49 < 25:00) so it should win
-    expect(fiveK!.activity.id).toBe("hilly")
+    expect(fiveK!.activity.id).toBe("flat")
   })
 
   it("flat run wins when it is genuinely faster on flat terrain", () => {

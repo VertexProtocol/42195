@@ -39,6 +39,7 @@ export interface BlockStartInput {
   prevWeekCount?: number | null
   /** Defaults to now; injectable so the behaviour is testable. */
   today?: Date
+  adjustCurrent?: boolean
 }
 
 /**
@@ -53,6 +54,11 @@ export interface BlockStartInput {
 export function computeBlockStartDate(input: BlockStartInput = {}): string {
   const today = input.today ?? new Date()
   const todayMonday = mondayOf(today)
+  if (input.adjustCurrent && input.prevBlockStartDate && input.prevWeekCount) {
+    const start = mondayOf(new Date(input.prevBlockStartDate))
+    const end = new Date(start); end.setDate(end.getDate() + input.prevWeekCount * 7)
+    if (today >= start && today < end) return toDateKey(start)
+  }
 
   if (input.prevBlockStartDate && input.prevWeekCount && input.prevWeekCount > 0) {
     const next = mondayOf(new Date(input.prevBlockStartDate))
@@ -159,14 +165,9 @@ export function racesInBlock(
  * target is held at the previous week's level or below — never raised into a
  * start line.
  *
- * **It has to fit.** A 21 km race inside an 18 km week is not a week the runner
- * can run: the race alone overruns it. Where that happens the target rises to
- * hold the race plus one short recovery run, because the alternative — silently
- * allocating the other sessions negative distance — produces a week that looks
- * fine and is not.
- *
- * Later weeks are left alone. They ramp from whatever the race week became,
- * which is the honest base to continue from.
+ * A calendar race must fit the existing budget. Report a conflict instead of
+ * increasing volume after the progression caps. The caller blocks generation
+ * until the runner reviews the goal.
  */
 export function holdRaceWeeks(targets: number[], races: RaceInBlock[]): {
   targets: number[]
@@ -197,8 +198,8 @@ export function holdRaceWeeks(targets: number[], races: RaceInBlock[]): {
     }
 
     // And it has to hold the race itself with something left over.
-    const floor = Math.round(km + RECOVERY_RUN_KM)
-    if (held[weekIndex] < floor) held[weekIndex] = floor
+    const floor = km + 1
+    if (held[weekIndex] < floor) notes.push(`Race conflict: ${names.join(" and ")} exceeds the training budget in week ${weekIndex + 1}.`)
 
     if (held[weekIndex] !== before) {
       notes.push(

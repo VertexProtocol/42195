@@ -3,7 +3,7 @@ import { applySessionPaces } from "./plan-pacing"
 import { PACE_ASSIGNMENT_VERSION, buildPaceGuide, parsePaceRange } from "./pace-guide"
 import type { TrainingPlan, TrainingSession } from "./types"
 
-const guide = buildPaceGuide([], [], 42.195, 5.75) // easy pace 5:45 /km
+const guide = buildPaceGuide([], [{created_at: new Date().toISOString(), derived_metrics: {threshold_pace: 5}}], 42.195, 5.75) // easy pace 5:45 /km
 
 function session(overrides: Partial<TrainingSession> = {}): TrainingSession {
   return {

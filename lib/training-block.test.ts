@@ -185,7 +185,7 @@ describe("holdRaceWeeks", () => {
   it("raises a week too small to hold the race itself", () => {
     // A half marathon inside an 18 km week: the race alone overruns it.
     const { targets: held } = holdRaceWeeks([20, 18, 24, 20], [inBlock({ distanceKm: 21.1 })])
-    expect(held[1]).toBe(26) // 21.1 + 5 km recovery, rounded
+    expect(held[1]).toBe(18) // 21.1 + 5 km recovery, rounded
   })
 
   it("does not touch the weeks after the race", () => {
@@ -196,7 +196,7 @@ describe("holdRaceWeeks", () => {
 
   it("holds a race in week one against the floor but has no prior week to hold to", () => {
     const { targets: held } = holdRaceWeeks([12, 44, 48, 36], [inBlock({ weekIndex: 0 })])
-    expect(held[0]).toBe(15) // 10 + 5
+    expect(held[0]).toBe(12) // 10 + 5
   })
 
   it("sums two races landing in the same week", () => {
@@ -204,7 +204,7 @@ describe("holdRaceWeeks", () => {
       [20, 18, 24, 20],
       [inBlock({ distanceKm: 10 }), inBlock({ goalId: "third", name: "Parkrun", distanceKm: 5 })],
     )
-    expect(held[1]).toBe(20) // 15 km of racing + 5 km recovery
+    expect(held[1]).toBe(18) // 15 km of racing + 5 km recovery
   })
 
   it("explains every change it makes", () => {

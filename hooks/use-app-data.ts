@@ -1,5 +1,6 @@
 "use client"
 
+import { RUN_TYPES } from "@/lib/training-constants"
 import { useState, useCallback, useEffect, useTransition, useMemo, useRef } from "react"
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/client"
@@ -395,7 +396,7 @@ export function useAppData(initialData?: InitialData | null) {
     monday.setHours(0, 0, 0, 0)
 
     const weekActivities = activities.filter(
-      (a) => new Date(a.date) >= monday
+      (a) => RUN_TYPES.has(a.type) && new Date(a.date) >= monday && new Date(a.date) <= now
     )
     return {
       currentWeekMonday: monday,

@@ -48,9 +48,9 @@ describe("calcWeekTargets", () => {
     expect(t[3]).toBeLessThan(t[2])
   })
 
-  it("floors the baseline so session length rules stay satisfiable", () => {
+  it("keeps the baseline independent of minimum session lengths", () => {
     const t = calcWeekTargets(4, 10, 4, 3, 8)
-    expect(t[0]).toBeGreaterThanOrEqual(calcMinWeeklyKm(3, 8))
+    expect(t[0]).toBe(4)
   })
 
   it("returns nothing for a zero-week block", () => {

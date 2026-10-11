@@ -319,7 +319,7 @@ function PreferencesForm({
     meta?: { shouldRegenerate: boolean; regenerateReason: string | null },
   ) => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [sessions, setSessions] = useState(initial.sessions_per_week)
   const [focus, setFocus] = useState<TrainingFocus>(initial.focus)
   const [notes, setNotes] = useState(initial.notes ?? "")
@@ -404,11 +404,14 @@ function PreferencesForm({
   }
 
   const sessionsField = (
+    <div className="flex flex-col gap-2">
     <ChoiceRow
-      options={[2, 3, 4, 5].map((n) => [n, String(n)] as const)}
+      options={Array.from({ length: 14 }, (_, i) => i + 1).map((n) => [n, String(n)] as const)}
       value={sessions}
       onChange={setSessions}
     />
+    <p className="text-micro text-muted-foreground">{locale === "no" ? "Antall økter, ikke treningsdager. Over 7 betyr doble økter enkelte dager. Historikken kan begrense antallet." : "Sessions, not training days. More than 7 means doubles on some days. Your history may limit the count."}</p>
+    </div>
   )
 
   const focusOptions: [TrainingFocus, string, string][] = [
@@ -742,14 +745,14 @@ function ChoiceRow<T extends number>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       {options.map(([v, label]) => (
         <button
           key={v}
           type="button"
           aria-pressed={value === v}
           onClick={() => onChange(v)}
-          className={`press h-11 flex-1 rounded-md border text-label font-extrabold ${
+          className={`press h-11 min-w-11 flex-1 rounded-md border text-label font-extrabold ${
             value === v
               ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
               : "border-[var(--chunk-edge)] bg-card text-foreground"
@@ -838,13 +841,15 @@ function WeekCard({
   // two sessions still to come when in fact two had been written off.
   const skippedCount = sessionStatuses.filter((s) => s === "skipped").length
   const totalSessions = week.sessions.length
-  const allSettled = totalSessions > 0 && completedCount + skippedCount === totalSessions
+  const allCompleted = totalSessions > 0 && completedCount === totalSessions
 
   const fmtDay = (d: Date) =>
     d.toLocaleDateString(locale === "no" ? "nb-NO" : "en-GB", { day: "numeric", month: "short" })
   const lastDay = new Date(weekEnd)
   lastDay.setDate(lastDay.getDate() - 1) // weekEnd is exclusive (Monday next week)
   const dateLabel = `${fmtDay(weekStart)} – ${fmtDay(lastDay)}`
+
+  const matchingHint = locale === "no" ? "Kvalitetsøkter bekreftes manuelt. En rolig tur bekrefter ikke intervaller eller terskel." : "Confirm quality sessions manually. An easy run does not verify intervals or threshold work."
 
   const nextStatusLabel = (status: SessionStatus) =>
     status === "planned"
@@ -857,6 +862,7 @@ function WeekCard({
     <div className={`surface overflow-hidden ${isCurrent ? "border-primary/45" : ""}`}>
       <button
         onClick={() => setExpanded((v) => !v)}
+        title={matchingHint}
         aria-expanded={expanded}
         className="press flex w-full items-center gap-3 px-4 py-3.5 text-left"
       >
@@ -864,7 +870,7 @@ function WeekCard({
             session in it is answered for, plain otherwise. */}
         <span
           className={`flex size-11 shrink-0 items-center justify-center rounded-full border text-lead font-extrabold ${
-            allSettled && (isPast || isCurrent)
+            allCompleted && (isPast || isCurrent)
               ? "border-[var(--success-edge)] bg-success text-success-foreground"
               : isCurrent
                 ? "border-[var(--primary-edge)] bg-primary text-primary-foreground"
@@ -872,7 +878,7 @@ function WeekCard({
           }`}
           aria-hidden
         >
-          {allSettled && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
+          {allCompleted && (isPast || isCurrent) ? <Check size={20} strokeWidth={3} /> : week.weekNumber}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-body font-semibold text-card-foreground">{t("gp.weekNumber", { count: week.weekNumber })}</p>
@@ -904,6 +910,7 @@ function WeekCard({
 
       {expanded && (
         <div className="flex flex-col gap-3 border-t border-border px-4 pb-4 pt-3.5">
+          <p className="text-micro text-muted-foreground">{matchingHint}</p>
           {/* Planned vs actual, as the same meter the rest of the app uses. */}
           {(isPast || isCurrent) && actualKm !== null && week.targetKm > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -1446,7 +1453,7 @@ export function GoalDetailScreen({
             setSupersedeConflict({ blocks: data.conflict.blocks, note: note ?? "" })
             return
           }
-          setError(data.error ?? t("gp.generateFailed"))
+          setError(data.code === "missing_history" ? t("gp.missingHistory") : data.code === "race_budget_conflict" ? t("gp.raceBudgetConflict") : data.error ?? t("gp.generateFailed"))
           return
         }
 
@@ -1963,7 +1970,7 @@ export function GoalDetailScreen({
                 </div>
               )}
 
-              <Button variant="ghost" block onClick={() => handleGenerate()} className="text-muted-foreground">
+              <Button variant="ghost" block onClick={() => handleGenerate("Adjust the remaining active weeks using my current preferences.")} className="text-muted-foreground">
                 <RefreshCw size={16} />
                 {t("gp.regenerateFresh")}
               </Button>

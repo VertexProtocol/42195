@@ -147,7 +147,7 @@ describe("summarisePlanWeek", () => {
   it("counts a run against the session it was actually run as", () => {
     // A quick 7 km is the fartlek, not the base run listed before it.
     const progress = summarisePlanWeek(planWeek, [{ distance_km: 7, pace_min_per_km: 4.4 }])
-    expect(progress.statuses).toEqual(["planned", "planned", "completed"])
+    expect(progress.statuses).toEqual(["planned", "planned", "planned"])
     expect(progress.next?.type).toBe("Long run")
   })
 

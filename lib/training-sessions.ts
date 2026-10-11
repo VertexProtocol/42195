@@ -68,22 +68,8 @@ export function formatSessionDistance(km: number): string {
 /** What the runner asked the plan to optimise for. Mirrors GoalPreferences.focus. */
 export type SessionFocus = "volume" | "workouts" | "balanced"
 
-/**
- * How many sessions a week's volume can actually carry.
- *
- * The preference is what makes this differ. A runner who picked "hit the km"
- * said sessions are flexible and the weekly total is the point — so when the
- * volume cannot give every requested session a useful length, the honest answer
- * is fewer and longer ones. Two 7 km runs build more aerobic fitness than three
- * 4 km runs, and a 4 km run is barely half an hour.
- *
- * A runner who picked "structured sessions" asked for the opposite: the session
- * count *is* the structure they wanted, and quietly dropping one would break the
- * thing they chose. There they keep the count, and allocateSessionDistances
- * reports `belowMinimum` so the caller can say so rather than silently reshaping
- * the week.
- *
- * Never returns less than 1 — a week with volume is a week with at least one run.
+/** Fit session count to available volume; never increase volume to fit a preference.
+ * Volume focus favours fewer longer sessions; other focuses allow short sessions.
  */
 export function supportedSessionCount(
   targetKm: number,
@@ -91,13 +77,13 @@ export function supportedSessionCount(
   focus: SessionFocus,
 ): number {
   if (requestedSessions <= 1) return Math.max(1, requestedSessions)
-  if (focus !== "volume") return requestedSessions
+  if (focus !== "volume") return Math.max(1, Math.min(requestedSessions, Math.floor(targetKm)))
 
   // Ask the allocator rather than dividing by the minimum. Dividing gives the
   // count at which the *average* session clears the minimum, but the long run
   // takes a larger share than average, so the others can still land under it:
   // 20 km across 4 sessions averages 5 km, yet allocates 7 / 4.5 / 4.5 / 4.
-  for (let n = requestedSessions; n > 1; n--) {
+  for (let n = Math.min(requestedSessions, Math.floor(targetKm / SESSION_DISTANCE_STEP_KM)); n > 1; n--) {
     const types = ["Long run", ...Array<string>(n - 1).fill("Base run")]
     if (!allocateSessionDistances(targetKm, types).belowMinimum) return n
   }
@@ -107,7 +93,7 @@ export function supportedSessionCount(
 // ── Allocation ───────────────────────────────────────────────────────────────
 
 export interface SessionAllocation {
-  /** One distance per input session, in the same order. Sums exactly to the target. */
+  /** One distance per input session. May sum below target when session capacity is limited. */
   distances: number[]
   /**
    * True when the week's volume cannot give every session the minimum useful
@@ -119,7 +105,7 @@ export interface SessionAllocation {
 
 /** True when a session type reads as the week's long run. */
 export function isLongRunType(sessionType: string): boolean {
-  return /long/i.test(sessionType)
+  return /long|langtur/i.test(sessionType)
 }
 
 /**
@@ -161,8 +147,10 @@ function distributeEvenly(totalSteps: number, count: number): number[] {
 export function allocateSessionDistances(
   targetKm: number,
   sessionTypes: string[],
+  maxSessionKm = Infinity,
 ): SessionAllocation {
   const count = sessionTypes.length
+  if (targetKm > 0 && count > 0 && targetKm < count * SESSION_DISTANCE_STEP_KM) throw new Error("Reduce session count before allocating this volume")
   if (count === 0) return { distances: [], belowMinimum: false }
 
   const step = SESSION_DISTANCE_STEP_KM
@@ -196,8 +184,16 @@ export function allocateSessionDistances(
     }
   }
 
-  const distances = stepsPerSession.map(toKm)
-  const belowMinimum = stepsPerSession.some((s) => s < minSteps)
+  const distances = stepsPerSession.map(s => Math.min(toKm(s), Math.floor(maxSessionKm / step) * step))
+  let remaining = Math.round((targetKm - distances.reduce((s, km) => s + km, 0)) / step)
+  while (remaining > 0) {
+    const candidates = distances.map((km, i) => ({km, i})).filter(({km, i}) => km + step <= maxSessionKm && (i !== longIdx || km + step <= targetKm * longRunMaxFraction(count)))
+    candidates.sort((a, b) => a.km - b.km)
+    if (!candidates.length) break
+    distances[candidates[0].i] += step
+    remaining--
+  }
+  const belowMinimum = distances.some(km => km < minSessionKm(targetKm))
 
   return { distances, belowMinimum }
 }

@@ -1,0 +1,650 @@
+{
+  "No history": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 0,
+      "longestRecentRun": 0,
+      "activeWeeks": 0
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "unknown",
+      "weekOneKm": 0,
+      "tablePercent": 0,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "no_baseline",
+      "weekOneMultiplier": 0.85,
+      "message": "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+    },
+    "frequency": {
+      "currentAvgSessions": 0,
+      "requestedSessions": 3,
+      "maxSafeSessions": 2
+    },
+    "targets": {
+      "targets": [
+        3,
+        3,
+        3,
+        2
+      ],
+      "notes": [
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+        "Week 3: 4 -> 3 km (progression caps, beginner)"
+      ]
+    },
+    "sessionCount": 2,
+    "allocation": {
+      "distances": [
+        1.5,
+        1.5
+      ],
+      "belowMinimum": true
+    }
+  },
+  "One first run": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 0.5,
+      "longestRecentRun": 2,
+      "activeWeeks": 1
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 1,
+      "category": "none",
+      "weekOneKm": 0,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "no_baseline",
+      "weekOneMultiplier": 0.85,
+      "message": "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+    },
+    "frequency": {
+      "currentAvgSessions": 0.3,
+      "requestedSessions": 3,
+      "maxSafeSessions": 2
+    },
+    "targets": {
+      "targets": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "notes": [
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+      ]
+    },
+    "sessionCount": 1,
+    "allocation": {
+      "distances": [
+        1
+      ],
+      "belowMinimum": true
+    }
+  },
+  "Novice 4km/week": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 4,
+      "longestRecentRun": 2,
+      "activeWeeks": 8
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 4,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        4,
+        4,
+        4,
+        3
+      ],
+      "notes": [
+        "Week 3: 5 -> 4 km (progression caps, beginner)"
+      ]
+    },
+    "sessionCount": 3,
+    "allocation": {
+      "distances": [
+        1.5,
+        1.5,
+        1
+      ],
+      "belowMinimum": true
+    }
+  },
+  "Recreational 21km/week": {
+    "athleteLevel": "intermediate",
+    "baseline": {
+      "avgWeeklyKm": 21,
+      "longestRecentRun": 7,
+      "activeWeeks": 12
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 21,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        21,
+        23,
+        25,
+        20
+      ],
+      "notes": []
+    },
+    "sessionCount": 3,
+    "allocation": {
+      "distances": [
+        7.5,
+        7,
+        6.5
+      ],
+      "belowMinimum": false
+    }
+  },
+  "Advanced 60km/week": {
+    "athleteLevel": "advanced",
+    "baseline": {
+      "avgWeeklyKm": 60,
+      "longestRecentRun": 12,
+      "activeWeeks": 12
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 60,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        60,
+        66,
+        73,
+        58
+      ],
+      "notes": []
+    },
+    "sessionCount": 5,
+    "allocation": {
+      "distances": [
+        13,
+        12,
+        12,
+        11.5,
+        11.5
+      ],
+      "belowMinimum": false
+    }
+  },
+  "Pro 120km/week": {
+    "athleteLevel": "advanced",
+    "baseline": {
+      "avgWeeklyKm": 120,
+      "longestRecentRun": 12,
+      "activeWeeks": 12
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 120,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        120,
+        132,
+        145,
+        116
+      ],
+      "notes": []
+    },
+    "sessionCount": 10,
+    "allocation": {
+      "distances": [
+        13,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        12,
+        11.5,
+        11.5
+      ],
+      "belowMinimum": false
+    }
+  },
+  "Experienced but one week imported": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 15,
+      "longestRecentRun": 12,
+      "activeWeeks": 1
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 15,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "no_baseline",
+      "weekOneMultiplier": 0.85,
+      "message": "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+    },
+    "frequency": {
+      "currentAvgSessions": 1.3,
+      "requestedSessions": 5,
+      "maxSafeSessions": 2
+    },
+    "targets": {
+      "targets": [
+        13,
+        14,
+        15,
+        12
+      ],
+      "notes": [
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+        "Week 2: 16 -> 14 km (progression caps, beginner)",
+        "Week 3: 17 -> 15 km (progression caps, beginner)",
+        "Week 4: 14 -> 12 km (closing recovery week)"
+      ]
+    },
+    "sessionCount": 2,
+    "allocation": {
+      "distances": [
+        7,
+        6
+      ],
+      "belowMinimum": false
+    }
+  },
+  "14-day break": {
+    "athleteLevel": "intermediate",
+    "baseline": {
+      "avgWeeklyKm": 34,
+      "longestRecentRun": 10,
+      "activeWeeks": 8
+    },
+    "comeback": {
+      "needsRamp": true,
+      "pauseDays": 14,
+      "category": "moderate",
+      "weekOneKm": 26,
+      "tablePercent": 0.65,
+      "limitingFactor": "table"
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "detraining",
+      "weekOneMultiplier": 1,
+      "message": "You're running well below your own baseline (ACWR 0.00). Fitness fades from here — a steady week back at your usual volume is the way out."
+    },
+    "frequency": {
+      "currentAvgSessions": 2,
+      "requestedSessions": 4,
+      "maxSafeSessions": 3
+    },
+    "targets": {
+      "targets": [
+        26,
+        29,
+        32,
+        25
+      ],
+      "notes": [
+        "Comeback cap: week 1 34 km -> 26 km (moderate, 14-day pause)",
+        "Week 2: 37 -> 29 km (progression caps, intermediate)",
+        "Week 3: 41 -> 32 km (progression caps, intermediate)",
+        "Week 4: 32 -> 25 km (closing recovery week)"
+      ]
+    },
+    "sessionCount": 3,
+    "allocation": {
+      "distances": [
+        9.5,
+        8.5,
+        8
+      ],
+      "belowMinimum": false
+    }
+  },
+  "50-day break": {
+    "athleteLevel": "intermediate",
+    "baseline": {
+      "avgWeeklyKm": 34,
+      "longestRecentRun": 10,
+      "activeWeeks": 4
+    },
+    "comeback": {
+      "needsRamp": true,
+      "pauseDays": 50,
+      "category": "rebuild",
+      "weekOneKm": 14,
+      "tablePercent": 0.35,
+      "limitingFactor": "table"
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "no_baseline",
+      "weekOneMultiplier": 0.85,
+      "message": "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+    },
+    "frequency": {
+      "currentAvgSessions": 0,
+      "requestedSessions": 4,
+      "maxSafeSessions": 2
+    },
+    "targets": {
+      "targets": [
+        14,
+        15,
+        17,
+        13
+      ],
+      "notes": [
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+        "Comeback cap: week 1 29 km -> 14 km (rebuild, 50-day pause)",
+        "Week 2: 34 -> 15 km (progression caps, intermediate)",
+        "Week 3: 39 -> 17 km (progression caps, intermediate)",
+        "Week 4: 32 -> 18 km (progression caps, intermediate)",
+        "Week 4: 18 -> 13 km (closing recovery week)"
+      ]
+    },
+    "sessionCount": 2,
+    "allocation": {
+      "distances": [
+        7.5,
+        6.5
+      ],
+      "belowMinimum": false
+    }
+  },
+  "100-day break outside query": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 0,
+      "longestRecentRun": 0,
+      "activeWeeks": 0
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "unknown",
+      "weekOneKm": 0,
+      "tablePercent": 0,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 0,
+      "risk": "no_baseline",
+      "weekOneMultiplier": 0.85,
+      "message": "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet."
+    },
+    "frequency": {
+      "currentAvgSessions": 0,
+      "requestedSessions": 4,
+      "maxSafeSessions": 2
+    },
+    "targets": {
+      "targets": [
+        3,
+        3,
+        3,
+        2
+      ],
+      "notes": [
+        "No recent training baseline detected. Start conservatively this week and build volume gradually — there's nothing to compare your acute load against yet.",
+        "Week 3: 4 -> 3 km (progression caps, beginner)"
+      ]
+    },
+    "sessionCount": 2,
+    "allocation": {
+      "distances": [
+        1.5,
+        1.5
+      ],
+      "belowMinimum": true
+    }
+  },
+  "Recent active injury": {
+    "athleteLevel": "intermediate",
+    "baseline": {
+      "avgWeeklyKm": 40,
+      "longestRecentRun": 10,
+      "activeWeeks": 12
+    },
+    "comeback": {
+      "needsRamp": true,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 32,
+      "tablePercent": 1,
+      "limitingFactor": "injury"
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        32,
+        35,
+        39,
+        31
+      ],
+      "notes": [
+        "Comeback cap: week 1 40 km -> 32 km (none, 0-day pause)",
+        "Week 2: 44 -> 35 km (progression caps, intermediate)",
+        "Week 3: 48 -> 39 km (progression caps, intermediate)",
+        "Week 4: 38 -> 31 km (closing recovery week)"
+      ]
+    },
+    "sessionCount": 4,
+    "allocation": {
+      "distances": [
+        11,
+        7,
+        7,
+        7
+      ],
+      "belowMinimum": false
+    }
+  },
+  "Novice requesting 5 sessions": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 4,
+      "longestRecentRun": 2,
+      "activeWeeks": 8
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 4,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": {
+      "currentAvgSessions": 2,
+      "requestedSessions": 5,
+      "maxSafeSessions": 3
+    },
+    "targets": {
+      "targets": [
+        4,
+        4,
+        4,
+        3
+      ],
+      "notes": [
+        "Week 3: 5 -> 4 km (progression caps, beginner)"
+      ]
+    },
+    "sessionCount": 3,
+    "allocation": {
+      "distances": [
+        1.5,
+        1.5,
+        1
+      ],
+      "belowMinimum": true
+    }
+  },
+  "Pro using UI limit of 5 sessions": {
+    "athleteLevel": "advanced",
+    "baseline": {
+      "avgWeeklyKm": 120,
+      "longestRecentRun": 12,
+      "activeWeeks": 12
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 120,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": null,
+    "targets": {
+      "targets": [
+        120,
+        132,
+        145,
+        116
+      ],
+      "notes": []
+    },
+    "sessionCount": 5,
+    "allocation": {
+      "distances": [
+        13,
+        13,
+        13,
+        13,
+        13
+      ],
+      "belowMinimum": false
+    }
+  },
+  "Novice requesting 7 sessions": {
+    "athleteLevel": "beginner",
+    "baseline": {
+      "avgWeeklyKm": 4,
+      "longestRecentRun": 2,
+      "activeWeeks": 8
+    },
+    "comeback": {
+      "needsRamp": false,
+      "pauseDays": 0,
+      "category": "none",
+      "weekOneKm": 4,
+      "tablePercent": 1,
+      "limitingFactor": null
+    },
+    "acwr": {
+      "ratio": 1,
+      "risk": "low",
+      "weekOneMultiplier": 1,
+      "message": null
+    },
+    "frequency": {
+      "currentAvgSessions": 2,
+      "requestedSessions": 7,
+      "maxSafeSessions": 3
+    },
+    "targets": {
+      "targets": [
+        4,
+        4,
+        4,
+        3
+      ],
+      "notes": [
+        "Week 3: 5 -> 4 km (progression caps, beginner)"
+      ]
+    },
+    "sessionCount": 3,
+    "allocation": {
+      "distances": [
+        1.5,
+        1.5,
+        1
+      ],
+      "belowMinimum": true
+    }
+  }
+}

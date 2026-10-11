@@ -85,13 +85,9 @@ describe("buildPaceGuide — zone ordering", () => {
     expect(long).toBeGreaterThan(easy)
   })
 
-  it("runs the quality zones faster than easy, in order", () => {
-    const easy = paceOf("Base run", guide)
-    const tempo = paceOf("Tempo run", guide)
-    const interval = paceOf("Intervals", guide)
-
-    expect(tempo).toBeLessThan(easy)
-    expect(interval).toBeLessThan(tempo)
+  it("does not infer quality zones from easy pace alone", () => {
+    expect(assignSessionPace("Tempo run", guide)).toBeNull()
+    expect(assignSessionPace("Intervals", guide)).toBeNull()
   })
 
   it("keeps a fast threshold test from landing behind easy pace", () => {
@@ -100,7 +96,7 @@ describe("buildPaceGuide — zone ordering", () => {
     // Here the runner's easy runs are far slower than their threshold test.
     const crossed = buildPaceGuide(
       [],
-      [{ derived_metrics: { threshold_pace: 7.0 }, created_at: "2026-01-01" }],
+      [{ derived_metrics: { threshold_pace: 7.0 }, created_at: new Date().toISOString() }],
       10,
       5.0,
     )
