@@ -17,6 +17,7 @@ export default [
       'next-env.d.ts',
       'public/**',
       'scripts/**',
+      'showreel/**',
       'supabase/**',
       'coverage/**',
     ],

@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>42195 Launch Film</title>
+<style>
+@font-face { font-family: Figtree; src: url(fonts/figtree.woff2) format('woff2'); font-weight: 300 900; }
+@font-face { font-family: JBM; src: url(fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2'); font-weight: 500; }
+@font-face { font-family: JBM; src: url(fonts/jetbrains-mono-latin-700-normal.woff2) format('woff2'); font-weight: 700; }
+@font-face { font-family: JBM; src: url(fonts/jetbrains-mono-latin-800-normal.woff2) format('woff2'); font-weight: 800; }
+
+/* "Tartan", from DESIGN.md and app/globals.css, oklch converted to sRGB.
+   Dark is the evening after the run; clay is the track itself. */
+:root {
+  --ground: #17110e;     /* --background, dark */
+  --sunken: #0f0a07;     /* --surface-sunken, dark */
+  --card: #28211c;       /* --card, dark */
+  --secondary: #352d28;  /* --secondary, dark */
+  --border: #3f3832;     /* --border, dark */
+  --chalk: #f0ece7;      /* --foreground, dark */
+  --mute: #b2a79e;       /* --muted-foreground, dark */
+  --ember: #ef8052;      /* --primary, dark */
+  --ember-ink: #1f0f09;  /* --primary-foreground, dark */
+  --go: #6fc884;         /* --success, dark */
+  --clay: #ded6ce;       /* the light ground */
+  --clay-sunk: #d3cac1;
+  --ink: #261b16;        /* --foreground, light */
+  --ink-mute: #66574f;   /* --muted-foreground, light */
+  --ember-l: #b03105;    /* --primary, light */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+#stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+  transform-origin: 0 0; overflow: hidden; background: var(--ground);
+  font-family: Figtree, sans-serif; color: var(--chalk);
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+}
+#cam { position: absolute; inset: 0; transform-origin: 960px 540px; }
+.layer { position: absolute; inset: 0; overflow: hidden; display: none; }
+.anchor { position: absolute; width: 0; height: 0; }
+.center { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); white-space: nowrap; }
+.display { font-family: Figtree; font-weight: 800; line-height: 1; letter-spacing: -0.026em; }
+.measure { font-family: JBM; font-weight: 800; letter-spacing: -0.02em; }
+.mask { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.08em 0.03em 0.14em; margin: -0.08em -0.03em -0.14em; }
+.mask > span { display: inline-block; }
+
+/* digit rollers */
+.rollwrap { display: inline-flex; align-items: flex-start; line-height: 1.1; }
+.roll { display: inline-block; height: 1.1em; overflow: hidden; }
+.strip { display: flex; flex-direction: column; will-change: transform; }
+.strip > span { height: 1.1em; display: block; text-align: center; }
+.rollwrap .ch { display: inline-block; height: 1.1em; }
+.rollwrap .sp { width: 0.32em; }
+
+/* 1 · the distance */
+#rule { position: absolute; left: 0; height: 30px; border-radius: 15px; background: var(--ember); transform-origin: 0 50%; }
+.lede { font-size: 54px; font-weight: 600; color: var(--mute); letter-spacing: -0.01em; }
+
+/* 2 · the straight */
+#s2 { background: var(--clay); color: var(--ink); }
+.laneLine { position: absolute; left: -100px; width: 2200px; height: 5px; background: var(--chalk); }
+.laneNum { position: absolute; font-family: JBM; font-weight: 800; font-size: 64px; color: var(--chalk); }
+.hash { position: absolute; width: 5px; height: 70px; background: var(--chalk); }
+.line2 { font-size: 224px; color: var(--ink); }
+#pill { position: absolute; left: -0.1em; right: -0.1em; top: 0.03em; bottom: -0.03em; background: var(--ember-l); border-radius: 0.22em; transform-origin: 0 50%; z-index: -1; }
+.slat { position: absolute; left: 0; width: 1920px; height: 92px; background: var(--ground); }
+
+/* 3 / 7 · the mark */
+.part { position: absolute; left: 0; top: 0; }
+.wordmark { white-space: nowrap; font-size: 236px; color: var(--chalk); letter-spacing: -0.03em; }
+.tagline { font-family: JBM; font-weight: 500; font-size: 32px; color: var(--mute); letter-spacing: 0; }
+.tagline b { color: var(--chalk); font-weight: 700; }
+.caret { display: inline-block; width: 0.55em; height: 1.05em; background: var(--ember); vertical-align: -0.18em; margin-left: 4px; }
+
+/* 4 · Today */
+#floorRig { position: absolute; inset: 0; perspective: 900px; perspective-origin: 50% 28%; }
+#floor { position: absolute; left: -1040px; top: 600px; width: 4000px; height: 1700px; transform-origin: 50% 0; transform: rotateX(78deg);
+  background-image: linear-gradient(90deg, rgba(240,236,231,0.16) 4px, transparent 4px); background-size: 250px 100%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 55%, transparent); }
+#floorHash { position: absolute; inset: 0; background-image: linear-gradient(rgba(240,236,231,0.12) 4px, transparent 4px); background-size: 100% 320px; }
+#phoneRig { position: absolute; left: 960px; top: 560px; width: 0; height: 0; perspective: 2400px; }
+#phone { position: absolute; width: 440px; height: 900px; left: -220px; top: -450px; transform-style: preserve-3d; }
+.slab { position: absolute; inset: 0; border-radius: 74px; background: linear-gradient(135deg, #4a3f37, #1d1612 45%, #2c241f); }
+.face { position: absolute; inset: 0; border-radius: 74px; background: #120d0b; box-shadow: inset 0 0 0 2px #5a4d44, inset 0 0 0 9px #0a0705; }
+#shadow { position: absolute; left: -260px; top: 380px; width: 520px; height: 120px; border-radius: 50%; background: rgba(0,0,0,0.55); filter: blur(30px); }
+#screen { position: absolute; left: 14px; top: 14px; width: 412px; height: 872px; border-radius: 60px; overflow: hidden; background: var(--ground); }
+.island { position: absolute; left: 50%; top: 16px; width: 124px; height: 36px; margin-left: -62px; background: #000; border-radius: 20px; }
+.ui { position: absolute; }
+.card { position: absolute; left: 16px; right: 16px; background: var(--card); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--border); }
+.sect { position: absolute; left: 22px; font-size: 16px; font-weight: 650; color: var(--chalk); }
+.pillq { display: inline-block; font-size: 13px; font-weight: 650; padding: 5px 11px; border-radius: 999px; background: var(--secondary); color: var(--mute); }
+.meter { position: absolute; height: 10px; border-radius: 5px; background: var(--sunken); overflow: hidden; }
+.meter i { position: absolute; inset: 0; border-radius: 5px; background: var(--ember); transform-origin: 0 50%; }
+#scrim { position: absolute; inset: 0; background: rgba(8,5,4,0.72); }
+#party { position: absolute; left: -10px; width: 460px; top: 250px; height: 380px; border-radius: 22px; background: var(--card); box-shadow: inset 0 0 0 1px var(--border), 0 30px 70px rgba(0,0,0,0.6); text-align: center; box-sizing: border-box; padding-top: 34px; }
+.btn { display: inline-block; font-weight: 800; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; background: var(--ember); color: var(--ember-ink); border-radius: 12px; padding: 15px 0; width: 380px; }
+.callout { position: absolute; }
+.callout .num { font-family: JBM; font-weight: 700; font-size: 24px; color: var(--ember); }
+.callout .ttl { font-weight: 800; font-size: 62px; line-height: 1; letter-spacing: -0.026em; color: var(--chalk); margin-top: 10px; }
+.callout .sub { font-size: 27px; color: var(--mute); margin-top: 12px; font-weight: 500; }
+#leaders { position: absolute; inset: 0; overflow: visible; }
+
+/* 5 · the year */
+#feedRig { position: absolute; left: 1380px; top: 130px; width: 0; height: 0; perspective: 1800px; }
+#feed { position: absolute; left: -330px; top: 0; width: 660px; transform-style: preserve-3d; }
+.ncard { position: absolute; left: 0; top: 0; width: 660px; height: 124px; border-radius: 20px; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--border); display: flex; align-items: center; padding: 0 28px; box-sizing: border-box; gap: 20px; }
+.ncard .ic { width: 72px; height: 72px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex: none; background: var(--secondary); }
+.ncard .tx { flex: 1; min-width: 0; }
+.ncard .t1 { font-weight: 700; font-size: 30px; color: var(--chalk); }
+.ncard .t2 { font-family: JBM; font-weight: 500; font-size: 20px; color: var(--mute); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ncard .rt { font-family: JBM; font-weight: 800; font-size: 34px; color: var(--chalk); text-align: right; }
+#s6a { background: var(--clay); }
+#s6b { background: var(--ground); }
+.slam { font-size: 236px; letter-spacing: -0.035em; }
+
+/* 7 · launch */
+.marker { position: absolute; left: 0; top: 0; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-family: JBM; font-weight: 800; font-size: 19px; }
+.launch { display: inline-flex; align-items: center; gap: 14px; font-weight: 700; font-size: 30px; color: var(--chalk); padding: 14px 28px 14px 22px; border-radius: 999px; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--border); }
+.launch i { width: 14px; height: 14px; border-radius: 50%; background: var(--ember); display: inline-block; }
+.cta { font-size: 34px; color: var(--mute); font-weight: 500; }
+.cta b { font-weight: 700; color: var(--chalk); }
+
+#grain { position: absolute; inset: 0; width: 1920px; height: 1080px; mix-blend-mode: overlay; opacity: 0.1; pointer-events: none; }
+#hud { position: fixed; left: 12px; bottom: 10px; font: 12px JBM, monospace; color: #888; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam"></div>
+  <canvas id="grain" width="960" height="540"></canvas>
+</div>
+<svg width="0" height="0" style="position:absolute">
+  <defs id="fx">
+    <filter id="hblur" x="-20%" y="0" width="140%" height="100%"><feGaussianBlur id="hblurG" stdDeviation="0 0"/></filter>
+  </defs>
+</svg>
+<div id="hud"></div>
+<audio id="music" src="soundtrack.wav" preload="auto"></audio>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   42195 — a 15 s launch film in the app's own world ("Tartan").
+   Every frame is a pure function of time: draw(t) sets each element's
+   state from t alone, so the renderer can seek to any sub-frame and the
+   browser preview plays the identical film in real time.
+   120 BPM: one beat = 0.5 s, one bar = 2 s. Cuts land on beats.
+   The lane runs anticlockwise everywhere, as it does in the app.
+   ════════════════════════════════════════════════════════════════════ */
+
+const DURATION = 15;
+const C = {
+  ground: '#17110e', sunken: '#0f0a07', card: '#28211c', secondary: '#352d28', border: '#3f3832',
+  chalk: '#f0ece7', mute: '#b2a79e', ember: '#ef8052', emberInk: '#1f0f09', go: '#6fc884',
+  clay: '#ded6ce', ink: '#261b16', emberL: '#b03105', c2: '#73bf88', c3: '#ebb25f', c4: '#60a4cb', c5: '#d686bc',
+};
+
+// ── math ──────────────────────────────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const E = {
+  lin: t => t,
+  outCubic: t => 1 - Math.pow(1 - t, 3),
+  inCubic: t => t * t * t,
+  inOutCubic: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  outQuint: t => 1 - Math.pow(1 - t, 5),
+  outExpo: t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t),
+  inExpo: t => t <= 0 ? 0 : Math.pow(2, 10 * t - 10),
+  inOutExpo: t => t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2,
+};
+// the app's own curve, cubic-bezier(0.16, 1, 0.3, 1), solved numerically
+const bez = (x1, y1, x2, y2) => x => {
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  let lo = 0, hi = 1, s = 0.5;
+  for (let i = 0; i < 24; i++) {
+    s = (lo + hi) / 2;
+    const bx = 3 * x1 * s * (1 - s) ** 2 + 3 * x2 * s * s * (1 - s) + s ** 3;
+    if (bx < x) lo = s; else hi = s;
+  }
+  return 3 * y1 * s * (1 - s) ** 2 + 3 * y2 * s * s * (1 - s) + s ** 3;
+};
+E.app = bez(0.16, 1, 0.3, 1);
+const P = (t, a, b, e = E.lin) => e(clamp((t - a) / (b - a)));
+const rnd = (i, s = 0) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+const mix = (a, b, t) => {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return '#' + A.map((v, i) => Math.round(lerp(v, B[i], t)).toString(16).padStart(2, '0')).join('');
+};
+
+// ── dom ───────────────────────────────────────────────────────────────
+function h(tag, attrs, parent, html) {
+  const el = document.createElement(tag);
+  for (const k in attrs || {}) {
+    if (k === 'class') el.className = attrs[k];
+    else if (k === 'style') el.style.cssText = attrs[k];
+    else el.setAttribute(k, attrs[k]);
+  }
+  if (html != null) el.innerHTML = html;
+  if (parent) parent.appendChild(el);
+  return el;
+}
+function T(el, o) {
+  const { x = 0, y = 0, z = 0, s = 1, sx = 1, sy = 1, r = 0, rx = 0, ry = 0, skx = 0 } = o;
+  el.style.transform = (o.pre || '') + `translate3d(${x}px,${y}px,${z}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${r}deg) skewX(${skx}deg) scale(${s * sx},${s * sy})`;
+  if (o.o !== undefined) el.style.opacity = clamp(o.o);
+  if (o.blur !== undefined) el.style.filter = o.blur > 0.05 ? `blur(${o.blur}px)` : 'none';
+}
+const show = (el, on) => { el.style.display = on ? 'block' : 'none'; };
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs, parent) => {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(el);
+  return el;
+};
+
+// lucide paths, as the tab bar draws them
+const ICON = {
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  feet: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+};
+const icon = (name, size, color, sw = 2) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
+
+// vertical-blur filters for spinning digits
+let blurId = 0;
+function vblurFilter() {
+  const id = 'vb' + (blurId++);
+  const f = svgEl('filter', { id, x: '-10%', y: '-50%', width: '120%', height: '200%' }, document.getElementById('fx'));
+  const g = svgEl('feGaussianBlur', { stdDeviation: '0 0' }, f);
+  return { id, g };
+}
+function roller(parent, text, fontPx) {
+  const wrap = h('span', { class: 'rollwrap' }, parent);
+  const cols = [];
+  for (const ch of text) {
+    if (/\d/.test(ch)) {
+      const c = h('span', { class: 'roll' }, wrap);
+      const strip = h('span', { class: 'strip' }, c, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => `<span>${d}</span>`).join(''));
+      cols.push({ c, strip, d: +ch, fx: vblurFilter() });
+    } else if (ch === ' ') h('span', { class: 'ch sp' }, wrap);
+    else h('span', { class: 'ch' }, wrap, ch);
+  }
+  return { wrap, cols, fontPx };
+}
+function driveRoller(R, t, fn) {
+  const dt = 1 / 240;
+  R.cols.forEach((col, i) => {
+    const pos = fn(i, t);
+    const vel = (fn(i, t + dt) - fn(i, t - dt)) / (2 * dt);
+    const m = ((pos % 10) + 10) % 10;
+    col.strip.style.transform = `translateY(${-m * 1.1}em)`;
+    const blur = Math.min(Math.abs(vel) * R.fontPx * 1.1 / 60 * 0.3, R.fontPx * 0.09);
+    if (blur > 0.6) { col.fx.g.setAttribute('stdDeviation', `0 ${blur.toFixed(2)}`); col.strip.style.filter = `url(#${col.fx.id})`; }
+    else col.strip.style.filter = 'none';
+  });
+}
+const slot = (R, t0, dur, spins, stagger = 0.06) => (i, t) => {
+  const d = R.cols[i].d;
+  const p = P(t, t0 + i * stagger, t0 + i * stagger + dur, E.outQuint);
+  return lerp(d - spins * 10 - 3, d, p);
+};
+
+// ── the lane ────────────────────────────────────────────────────────────
+// A stadium, and a point `s` (0–1) along it, measured the way an SVG rect's
+// path runs: from the left end of the top straight, clockwise. Running the
+// lane means s going down.
+function stadium(x, y, w, hgt) {
+  const r = hgt / 2, st = w - 2 * r, arc = Math.PI * r;
+  const per = 2 * st + 2 * arc;
+  return {
+    x, y, w, h: hgt, r, st, per, start: st / per,
+    at(s) {
+      let d = (((s % 1) + 1) % 1) * per;
+      if (d < st) return [x + r + d, y];
+      d -= st;
+      if (d < arc) { const a = -Math.PI / 2 + d / r; return [x + w - r + r * Math.cos(a), y + r + r * Math.sin(a)]; }
+      d -= arc;
+      if (d < st) return [x + w - r - d, y + hgt];
+      d -= st;
+      const a = Math.PI / 2 + d / r; return [x + r + r * Math.cos(a), y + r + r * Math.sin(a)];
+    },
+  };
+}
+
+// The mark: TrackMark's 48×30 box, a 42×24 lane, a quarter of it lit.
+function trackMark(parent, height, laneColor = C.chalk) {
+  const w = height * 48 / 30;
+  const box = h('div', { style: `position:absolute;width:${w}px;height:${height}px;left:${-w / 2}px;top:${-height / 2}px` }, parent);
+  const svg = svgEl('svg', { viewBox: '0 0 48 30', width: w, height, style: 'overflow:visible' }, box);
+  const lane = { x: 3, y: 3, width: 42, height: 24, rx: 12, fill: 'none', 'stroke-width': 4 };
+  const laneEl = svgEl('rect', { ...lane, stroke: laneColor, pathLength: 100, 'stroke-dasharray': '100 0' }, svg);
+  const trail = [0.18, 0.32, 0.5].map(o => svgEl('rect', { ...lane, stroke: C.ember, 'stroke-linecap': 'round', pathLength: 100, 'stroke-dasharray': '25 75', 'stroke-dashoffset': -5, opacity: 0 }, svg));
+  const lead = svgEl('rect', { ...lane, stroke: C.ember, 'stroke-linecap': 'round', pathLength: 100, 'stroke-dasharray': '25 75', 'stroke-dashoffset': -5 }, svg);
+  return { box, svg, laneEl, lead, trail, w, h: height };
+}
+// draw: how much of the lane is drawn (0–1); lap: laps run (the lead sits
+// at rest on whole numbers); speed: laps per second, for the trail.
+function markState(M, draw, lap, speed = 0, leadOn = 1) {
+  const d = clamp(draw) * 100;
+  M.laneEl.setAttribute('stroke-dasharray', `${d} ${100 - d}`);
+  M.laneEl.setAttribute('stroke-dashoffset', d - 16);
+  M.lead.setAttribute('stroke-dashoffset', -5 + lap * 100);
+  M.lead.style.opacity = leadOn;
+  M.trail.forEach((el, k) => {
+    const lag = (k + 1) * 0.045 * Math.min(1, Math.abs(speed));
+    el.setAttribute('stroke-dashoffset', -5 + (lap - lag) * 100);
+    el.setAttribute('opacity', (Math.min(1, Math.abs(speed) * 0.8) * [0.45, 0.25, 0.12][k] * leadOn).toFixed(3));
+  });
+}
+
+// mark + wordmark, centred on the anchor
+function lockup(parent, fontPx) {
+  const root = h('div', { class: 'anchor', style: 'left:960px;top:540px' }, parent);
+  const markA = h('div', { class: 'anchor' }, root);
+  const M = trackMark(markA, fontPx * 0.78);
+  const wordA = h('div', { class: 'anchor' }, root);
+  const word = h('div', { class: 'display wordmark', style: `position:absolute;left:0;top:0;font-size:${fontPx}px;transform:translateY(-52%)` }, wordA);
+  const R = roller(word, '42195', fontPx);
+  return { root, markA, M, wordA, word, R, fontPx };
+}
+function layoutLockup(K) {
+  const ww = K.word.getBoundingClientRect().width;
+  const mw = K.M.w;
+  const gap = K.fontPx * 0.2;
+  const total = mw + gap + ww;
+  K.markX = -total / 2 + mw / 2;
+  K.wordX = -total / 2 + mw + gap;
+}
+
+// ═════════════════════════════ BUILD ═══════════════════════════════════
+const stage = document.getElementById('stage');
+const cam = document.getElementById('cam');
+const S = {};
+const layer = id => h('div', { class: 'layer', id }, cam);
+
+function build() {
+  // ── 1 · the distance ─────────────────────────────────────────────────
+  S.s1 = layer('s1');
+  S.s1w = h('div', { class: 'layer', style: 'display:block;overflow:visible' }, S.s1);
+  S.numA = h('div', { class: 'anchor', style: 'left:960px;top:500px' }, S.s1w);
+  S.numC = h('div', { class: 'center' }, S.numA);
+  const row = h('div', { class: 'measure', style: 'position:relative;font-size:300px;display:flex;align-items:flex-end;color:var(--chalk)' }, S.numC);
+  S.numR = roller(row, '42 195', 300);
+  S.unit = h('span', { class: 'measure', style: 'font-size:130px;color:var(--mute);margin:0 0 34px 34px' }, row, 'm');
+  S.rule = h('div', { id: 'rule' }, S.numC);
+  S.ledeA = h('div', { class: 'anchor', style: 'left:960px;top:740px' }, S.s1w);
+  S.lede = h('div', { class: 'center lede' }, S.ledeA, '<span class="mask"><span>Et maraton, i meter.</span></span>');
+  S.wipe = h('div', { style: 'position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0' }, S.s1);
+
+  // ── 2 · the straight ─────────────────────────────────────────────────
+  S.s2 = layer('s2');
+  S.track = h('div', { class: 'layer', style: 'display:block' }, S.s2);
+  S.laneLines = [];
+  for (let i = 0; i <= 8; i++) S.laneLines.push(h('div', { class: 'laneLine', style: `top:${i * 135 - 2}px` }, S.track));
+  S.hashes = [];
+  for (let i = 0; i < 8; i++) {
+    for (let k = 0; k < 6; k++) S.hashes.push({ el: h('div', { class: 'hash', style: `top:${i * 135 + 32}px` }, S.track), lane: i, k });
+    S.hashes.push({ el: h('div', { class: 'laneNum', style: `top:${i * 135 + 26}px` }, S.track, String(8 - i)), lane: i, k: -1 });
+  }
+  S.lines = [];
+  [['Ett', 'tall.'], ['Én', 'beslutning.'], ['Hver', 'dag.']].forEach((words, li) => {
+    const A = h('div', { class: 'anchor', style: `left:960px;top:${292 + li * 250}px` }, S.s2);
+    const Cc = h('div', { class: 'center display line2' }, A);
+    const ws = words.map((w, wi) => {
+      const holder = h('span', { style: `position:relative;display:inline-block;${wi ? 'margin-left:0.24em' : ''}` }, Cc);
+      const m = h('span', { class: 'mask' }, holder);
+      return { holder, inner: h('span', {}, m, w) };
+    });
+    S.lines.push({ A, Cc, ws });
+  });
+  S.pill = h('div', { id: 'pill' }, S.lines[2].ws[1].holder);
+  S.slats = [];
+  for (let i = 0; i < 12; i++) S.slats.push(h('div', { class: 'slat', style: `top:${i * 90}px` }, S.s2));
+
+  // ── 3 · the mark ─────────────────────────────────────────────────────
+  S.s3 = layer('s3');
+  S.lanesA = h('div', { class: 'anchor', style: 'left:960px;top:540px' }, S.s3);
+  S.lanes3 = [];
+  for (let i = 0; i < 7; i++) {
+    const s = svgEl('svg', { width: 1920, height: 1080, style: 'position:absolute;left:-960px;top:-540px;overflow:visible' }, S.lanesA);
+    S.lanes3.push(svgEl('rect', { fill: 'none', stroke: C.chalk, 'stroke-width': 4, pathLength: 100 }, s));
+  }
+  S.partA = h('div', { class: 'anchor', style: 'left:960px;top:540px' }, S.s3);
+  S.parts = [];
+  for (let i = 0; i < 42; i++) {
+    const kind = i % 7 === 3 ? 1 : i % 2 ? 2 : 0;
+    const col = i % 4 === 0 ? C.ember : C.chalk;
+    let el;
+    if (kind === 0) el = h('div', { class: 'part', style: `width:${26 + rnd(i, 3) * 30}px;height:6px;background:${col};border-radius:3px` }, S.partA);
+    else if (kind === 1) el = h('div', { class: 'part measure', style: `font-size:${22 + rnd(i, 5) * 16}px;color:${col};font-weight:700` }, S.partA, ['5 km', '10 km', '21,1', '42,2', '4:35', 'km'][i % 6]);
+    else el = h('div', { class: 'part', style: `width:14px;height:14px;border:3px solid ${col};border-radius:50%` }, S.partA);
+    S.parts.push({ el, a: (i / 42) * Math.PI * 2 + rnd(i, 1) * 0.4, v: 900 + rnd(i, 7) * 1300, spin: (rnd(i, 8) - 0.5) * 500 });
+  }
+  S.zoom3 = h('div', { class: 'layer', style: 'display:block;overflow:visible' }, S.s3);
+  S.K3 = lockup(S.zoom3, 236);
+  S.tagA = h('div', { class: 'anchor', style: 'left:960px;top:770px' }, S.zoom3);
+  S.tagC = h('div', { class: 'center tagline' }, S.tagA);
+  S.tagText = 'Hver økt. <b>Målt mot målet ditt.</b>';
+
+  // ── 4 · Today ────────────────────────────────────────────────────────
+  S.s4 = layer('s4');
+  S.world4 = h('div', { class: 'layer', style: 'display:block;overflow:visible' }, S.s4);
+  S.floorRig = h('div', { id: 'floorRig' }, S.world4);
+  S.floor = h('div', { id: 'floor' }, S.floorRig);
+  S.floorHash = h('div', { id: 'floorHash' }, S.floor);
+  S.phoneRig = h('div', { id: 'phoneRig' }, S.world4);
+  S.shadow = h('div', { id: 'shadow' }, S.phoneRig);
+  S.phone = h('div', { id: 'phone' }, S.phoneRig);
+  for (let i = 0; i < 12; i++) h('div', { class: 'slab', style: `transform:translateZ(${-2 - i * 2.2}px)` }, S.phone);
+  h('div', { class: 'face' }, S.phone);
+  S.screen = h('div', { id: 'screen' }, S.phone);
+  buildToday(S.screen);
+  S.party = h('div', { id: 'party' }, S.phone);
+  S.partyFlame = h('div', { style: 'display:inline-block' }, S.party, icon('flame', 74, C.ember, 2.2));
+  h('div', { class: 'display', style: 'font-size:40px;margin-top:14px' }, S.party, 'Uka er i boks!');
+  h('div', { style: 'font-size:19px;color:var(--mute);margin-top:10px;font-weight:500' }, S.party, 'Du nådde alle ukemålene.');
+  S.partyStreak = h('div', { style: 'display:inline-flex;align-items:center;gap:8px;margin-top:22px;padding:8px 16px;border-radius:999px;background:var(--secondary)' }, S.party,
+    `${icon('flame', 20, C.ember, 2.4)}<span class="measure" style="font-size:20px">7 uker på rad</span>`);
+  h('div', { style: 'margin-top:30px' }, S.party, '<span class="btn">Fortsett</span>');
+  S.leaders = svgEl('svg', { id: 'leaders', width: 1920, height: 1080 }, S.world4);
+  const calloutDefs = [
+    { n: '01', t: 'Nedtelling', s: 'Løpet, dagene igjen og målet', x: 150, y: 330, ax: 760, ay: 360, t0: 6.6 },
+    { n: '02', t: 'Ukemål', s: 'Hvor uka står, på et blikk', x: 1310, y: 640, ax: 1158, ay: 690, t0: 7.45 },
+    { n: '03', t: 'Uka er i boks', s: 'En rekke å holde i live', x: 1310, y: 330, ax: 1186, ay: 430, t0: 8.75 },
+  ];
+  S.callouts = calloutDefs.map(d => {
+    const el = h('div', { class: 'callout', style: `left:${d.x}px;top:${d.y}px` }, S.world4);
+    const parts = [['num', d.n], ['ttl', d.t], ['sub', d.s]].map(([c, txt]) => h('div', { class: c }, el, `<span class="mask"><span>${txt}</span></span>`).querySelector('.mask > span'));
+    const path = svgEl('path', { fill: 'none', stroke: C.mute, 'stroke-width': 2.5, pathLength: 1, 'stroke-dasharray': '1 1' }, S.leaders);
+    const dot = svgEl('circle', { r: 8, fill: C.ember }, S.leaders);
+    return { ...d, el, parts, path, dot };
+  });
+
+  // ── 5 · the year ─────────────────────────────────────────────────────
+  S.s5 = layer('s5');
+  S.world5 = h('div', { class: 'layer', style: 'display:block;overflow:visible' }, S.s5);
+  S.cntA = h('div', { class: 'anchor', style: 'left:130px;top:540px' }, S.world5);
+  S.cntC = h('div', { style: 'position:absolute;left:0;top:0;transform:translateY(-50%);white-space:nowrap' }, S.cntA);
+  S.cntLab = h('div', { style: 'font-size:38px;font-weight:650;color:var(--mute);margin-bottom:6px' }, S.cntC, 'Løpt i år');
+  const cntRow = h('div', { class: 'measure', style: 'font-size:236px;display:flex;align-items:flex-end' }, S.cntC);
+  S.cntR = roller(cntRow, '1 248', 236);
+  h('span', { class: 'measure', style: 'font-size:100px;color:var(--mute);margin:0 0 28px 24px' }, cntRow, 'km');
+  S.cntSub = h('div', { style: 'font-size:30px;font-weight:600;color:var(--chalk);margin-top:10px;display:flex;align-items:center;gap:12px' }, S.cntC,
+    `${icon('flame', 34, C.ember, 2.4)}<span>7 uker på rad</span><span style="color:var(--mute);font-weight:500">· 142 økter</span>`);
+  S.feedRig = h('div', { id: 'feedRig' }, S.world5);
+  S.feed = h('div', { id: 'feed' }, S.feedRig);
+  const items = [
+    ['feet', 'Morgenløp', '10,2 km · 4:52 /km', '49:36'],
+    ['trophy', 'Nytt merke', 'Halvmaraton', '21,1'],
+    ['feet', 'Intervaller', '8,0 km · 4:21 /km', '34:48'],
+    ['chat', 'Treneren', 'Belastningen er jevn. Hold farten.', ''],
+    ['feet', 'Rolig tur', '6,4 km · 5:40 /km', '36:16'],
+    ['flame', 'Uka er i boks', 'Alle ukemålene nådd', '7 u'],
+    ['feet', 'Langtur', '24,0 km · 5:18 /km', '2:07:12'],
+    ['trophy', 'Nytt merke', '1000 km totalt', '1000'],
+    ['feet', 'Terskel', '9,5 km · 4:35 /km', '43:36'],
+    ['chat', 'Treneren', 'Du er i rute mot 3:29.', ''],
+    ['feet', 'Restitusjon', '5,0 km · 5:55 /km', '29:35'],
+    ['trophy', 'Nytt merke', '12 uker på rad', '12'],
+  ];
+  S.ncards = items.map(([ic, name, sub, rt], i) => {
+    const tone = ic === 'feet' ? C.chalk : ic === 'chat' ? C.c4 : ic === 'flame' ? C.ember : C.c3;
+    const el = h('div', { class: 'ncard' }, S.feed, `
+      <div class="ic">${icon(ic, 38, tone, 2.2)}</div>
+      <div class="tx"><div class="t1">${name}</div><div class="t2">${sub}</div></div>
+      <div class="rt">${rt}</div>`);
+    return { el, t0: 10.62 + i * 0.115, warm: ic === 'flame' || ic === 'trophy' };
+  });
+  S.s6a = layer('s6a');
+  S.slamA1 = h('div', { class: 'anchor', style: 'left:960px;top:540px' }, S.s6a);
+  S.slam1 = h('div', { class: 'center display slam', style: 'color:var(--ink)' }, S.slamA1, 'Sett et mål.');
+  S.s6b = layer('s6b');
+  S.slamA2 = h('div', { class: 'anchor', style: 'left:960px;top:540px' }, S.s6b);
+  S.slam2 = h('div', { class: 'center display slam', style: 'color:var(--chalk)' }, S.slamA2, 'Hver meter <span style="color:var(--ember)">teller.</span>');
+  S.slamBar = h('div', { style: 'position:absolute;left:0;right:0;bottom:-0.08em;height:0.11em;border-radius:0.055em;background:var(--ember);transform-origin:100% 50%' }, S.slam2);
+
+  // ── 7 · launch ───────────────────────────────────────────────────────
+  S.s7 = layer('s7');
+  S.ring7 = svgEl('svg', { width: 1920, height: 1080, style: 'position:absolute;left:0;top:0' }, S.s7);
+  S.lanes7 = [];
+  for (let i = 0; i < 8; i++) {
+    const g = stadium(960 - (560 + i * 64), 520 - (250 + i * 64), 2 * (560 + i * 64), 2 * (250 + i * 64));
+    const el = svgEl('rect', { x: g.x, y: g.y, width: g.w, height: g.h, rx: g.r, fill: 'none', stroke: C.chalk, 'stroke-width': 3, pathLength: 100, opacity: 0.09 }, S.ring7);
+    S.lanes7.push({ el, g });
+  }
+  const runners = [['S', C.ember, true, 1, 0.13], ['M', C.c2, false, 3, 0.11], ['A', C.c3, false, 5, 0.1], ['J', C.c4, false, 2, 0.12], ['K', C.c5, false, 6, 0.09], ['E', C.c2, false, 7, 0.115]];
+  S.runners = runners.map(([ini, col, self, lane, sp], i) => {
+    const el = h('div', { class: 'marker', style: `background:${self ? col : C.card};box-shadow:inset 0 0 0 3px ${col};color:${self ? C.emberInk : col}` }, S.s7, ini);
+    return { el, lane, sp, s0: 0.62 + i * 0.13 };
+  });
+  S.K7 = lockup(S.s7, 220);
+  S.K7.root.style.top = '520px';
+  S.launchA = h('div', { class: 'anchor', style: 'left:960px;top:330px' }, S.s7);
+  S.launch = h('div', { class: 'center launch' }, S.launchA, '<i></i>Nå tilgjengelig');
+  S.ctaA = h('div', { class: 'anchor', style: 'left:960px;top:720px' }, S.s7);
+  S.cta = h('div', { class: 'center cta' }, S.ctaA, 'Installer på mobilen · <b>norsk og engelsk</b>');
+}
+
+// Today, as the app draws it in the dark theme
+function buildToday(scr) {
+  h('div', { class: 'island' }, scr);
+  h('div', { class: 'ui measure', style: 'left:40px;top:22px;font-size:17px;font-weight:700' }, scr, '9:41');
+  h('div', { class: 'ui', style: 'right:36px;top:26px;display:flex;gap:6px;align-items:flex-end' }, scr,
+    '<i style="width:4px;height:7px;background:#ddd;border-radius:1px"></i><i style="width:4px;height:10px;background:#ddd;border-radius:1px"></i><i style="width:4px;height:13px;background:#ddd;border-radius:1px"></i><i style="width:26px;height:13px;border:1.5px solid #ccc;border-radius:4px;margin-left:6px;box-sizing:border-box;padding:1.5px"><b style="display:block;width:70%;height:100%;background:#ddd;border-radius:1.5px"></b></i>');
+  // app bar: title, sync, streak, avatar
+  h('div', { class: 'ui display', style: 'left:24px;top:70px;font-size:30px;font-weight:750' }, scr, 'I dag');
+  S.syncA = h('div', { class: 'ui', style: 'left:118px;top:80px;width:0;height:0' }, scr);
+  S.syncM = trackMark(S.syncA, 15, C.mute);
+  S.syncA.style.left = '134px'; S.syncA.style.top = '89px';
+  h('div', { class: 'ui', style: 'right:76px;top:72px;display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;background:var(--secondary)' }, scr,
+    `${icon('flame', 18, C.ember, 2.4)}<span class="measure" id="streakN" style="font-size:17px">6</span>`);
+  h('div', { class: 'ui', style: 'right:24px;top:70px;width:40px;height:40px;border-radius:50%;background:var(--secondary);color:var(--chalk);display:flex;align-items:center;justify-content:center;font-weight:750;font-size:17px' }, scr, 'S');
+  // the race
+  const rc = h('div', { class: 'card', style: 'top:128px;height:276px' }, scr);
+  h('div', { class: 'ui', style: 'left:20px;top:18px;font-size:19px;font-weight:700' }, rc, 'Høstmaraton');
+  h('div', { class: 'ui measure', style: 'right:20px;top:20px;font-size:15px;font-weight:500;color:var(--mute)' }, rc, 'Mål 3:29:00');
+  const lapW = 280, lapH = 175, sw = 13;
+  const lapSvg = svgEl('svg', { width: lapW, height: lapH, style: 'position:absolute;left:50px;top:62px;overflow:visible' }, rc);
+  const geo = { x: sw / 2, y: sw / 2, width: lapW - sw, height: lapH - sw, rx: (lapH - sw) / 2, fill: 'none', 'stroke-width': sw };
+  svgEl('rect', { ...geo, stroke: C.sunken }, lapSvg);
+  S.lapFill = svgEl('rect', { ...geo, stroke: C.ember, pathLength: 100, 'stroke-linecap': 'round', 'stroke-dasharray': '0 100' }, lapSvg);
+  S.lapGeo = stadium(geo.x, geo.y, geo.width, geo.height);
+  const mid = h('div', { class: 'ui', style: `left:50px;top:62px;width:${lapW}px;height:${lapH}px;display:flex;flex-direction:column;align-items:center;justify-content:center` }, rc);
+  const dRow = h('div', { class: 'measure', style: 'font-size:58px;line-height:1' }, mid);
+  S.daysR = roller(dRow, '38', 58);
+  h('div', { style: 'font-size:15px;color:var(--mute);margin-top:2px;font-weight:500' }, mid, 'dager igjen');
+  // next run
+  h('div', { class: 'sect', style: 'top:424px' }, scr, 'Neste økt');
+  const nr = h('div', { class: 'card', style: 'top:454px;height:92px' }, scr);
+  h('div', { class: 'ui', style: 'left:20px;top:18px;font-size:19px;font-weight:700' }, nr, 'Terskel · 5 × 1 km');
+  h('div', { class: 'ui measure', style: 'left:20px;top:52px;font-size:16px;font-weight:500;color:var(--mute)' }, nr, '9,5 km · 4:35 /km');
+  h('div', { class: 'ui', style: 'right:18px;top:30px' }, nr, '<span class="pillq">Etappe 3</span>');
+  // weekly targets
+  h('div', { class: 'sect', style: 'top:566px' }, scr, 'Ukemål');
+  const wt = h('div', { class: 'card', style: 'top:596px;height:162px' }, scr);
+  S.weekly = [['Distanse', 32.4, 42.6, 40, 'km'], ['Økter', 3, 4, 4, '']].map(([lab, a, b, goal, unit], i) => {
+    const y = 18 + i * 76;
+    h('div', { class: 'ui', style: `left:20px;top:${y}px;font-size:16px;font-weight:650` }, wt, lab);
+    const val = h('div', { class: 'ui measure', style: `right:20px;top:${y}px;font-size:16px;font-weight:700` }, wt);
+    const m = h('div', { class: 'meter', style: `left:20px;right:20px;top:${y + 32}px` }, wt);
+    const fill = h('i', {}, m);
+    if (i === 0) h('div', { class: 'ui', style: `left:0;right:0;top:${y + 60}px;height:1px;background:var(--border)` }, wt);
+    return { val, fill, a, b, goal, unit };
+  });
+  // tab bar
+  const tb = h('div', { class: 'ui', style: 'left:0;right:0;bottom:0;height:96px;background:var(--ground);border-top:1px solid var(--border);display:flex;gap:8px;padding:8px 16px 26px;box-sizing:border-box' }, scr);
+  [['flame', 'I dag', true], ['feet', 'Løp', false], ['trophy', 'Mål', false]].forEach(([ic, lab, on]) => {
+    h('div', { style: `flex:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;${on ? 'background:rgba(239,128,82,0.1)' : ''}` }, tb,
+      `${icon(ic, 23, on ? C.ember : C.mute, on ? 2.5 : 2)}<span style="font-size:12px;font-weight:650;color:${on ? C.ember : C.mute}">${lab}</span>`);
+  });
+  S.scrim = h('div', { id: 'scrim' }, scr);
+  S.streakN = scr.querySelector('#streakN');
+}
+
+// ═════════════════════════════ DRAW ════════════════════════════════════
+const HITS = [[0.5, 9], [4.0, 18], [8.6, 7], [12.0, 12], [12.5, 15], [13.0, 16]];
+function shake(t) {
+  let x = 0, y = 0;
+  for (const [h0, a] of HITS) {
+    const d = t - h0;
+    if (d < 0 || d > 0.5) continue;
+    const k = a * Math.exp(-d * 11);
+    x += k * Math.sin(d * 83 + h0); y += k * Math.sin(d * 71 + h0 * 2.3);
+  }
+  return { x, y };
+}
+
+function draw(t) {
+  const sh = shake(t);
+  cam.style.transform = `translate(${sh.x}px,${sh.y}px)`;
+  const on = (el, a, b, fn) => { const v = t >= a && t < b; show(el, v); if (v) fn(t); };
+  on(S.s1, -1, 2.0, scene1);
+  on(S.s2, 2.0, 4.0, scene2);
+  on(S.s3, 4.0, 6.0, scene3);
+  on(S.s4, 6.0, 10.55, scene4);
+  on(S.s5, 10.3, 12.0, scene5);
+  on(S.s6a, 12.0, 12.5, t => slam(S.slam1, t, 12.0));
+  on(S.s6b, 12.5, 13.0, scene6b);
+  on(S.s7, 13.0, 99, scene7);
+  grain(t);
+}
+
+// ── 1 ── 0.0 → 2.0: the name is the distance
+function scene1(t) {
+  driveRoller(S.numR, t, slot(S.numR, -0.08, 0.5, 2, 0.03));
+  T(S.numA, { s: 1 + 0.035 * P(t, 0, 1.7, E.inOutCubic), y: lerp(0, -40, P(t, 0.6, 1.0, E.app)) });
+  T(S.unit, { o: P(t, 0.42, 0.55), x: lerp(-30, 0, P(t, 0.42, 0.75, E.app)) });
+  T(S.lede.firstChild.firstChild, { y: lerp(70, 0, P(t, 0.62, 1.05, E.app)) });
+  T(S.ledeA, { y: lerp(0, -40, P(t, 0.6, 1.0, E.app)), o: 1 - P(t, 1.62, 1.75) });
+  // the ember lane rule under the number, as on the 42 mark
+  S.rule.style.width = S.numC.offsetWidth + 'px';
+  S.rule.style.top = (S.numC.offsetHeight + 12) + 'px';
+  S.rule.style.transform = `scaleX(${P(t, 1.25, 1.5, E.app)})`;
+  // the rule becomes the ground of the next scene
+  const g = P(t, 1.68, 2.0, E.inExpo);
+  S.wipe.style.background = mix(C.ember, C.clay, P(t, 1.85, 1.98));
+  const sr = stage.getBoundingClientRect(), k = sr.width / 1920, r = S.rule.getBoundingClientRect();
+  const left = (r.left - sr.left) / k, top = (r.top - sr.top) / k, rw = r.width / k, rh = r.height / k;
+  S.wipe.style.opacity = t >= 1.68 ? 1 : 0;
+  S.wipe.style.borderRadius = lerp(15, 0, g) + 'px';
+  S.wipe.style.transform = `translate(${lerp(left, 0, g)}px,${lerp(top, 0, g)}px) scale(${lerp(rw / 1920, 1, g)},${lerp(rh / 1080, 1, g)})`;
+  T(S.numC, { pre: 'translate(-50%,-50%) ', o: 1 });
+}
+
+// ── 2 ── 2.0 → 4.0: on the straight
+function scene2(t) {
+  const lt = t - 2;
+  const accel = P(t, 3.4, 4.0, E.inCubic);
+  const run = lt * 700 + accel * 3200;
+  S.hashes.forEach(({ el, lane, k }) => {
+    const stagger = lane * 90;
+    const x = k < 0 ? 1700 - stagger - run * 0.9 : ((k * 360 + stagger - run) % 2160 + 2160) % 2160 - 120;
+    T(el, { x: k < 0 ? x : x, o: 1 });
+    if (k < 0) el.style.left = '0px';
+  });
+  const starts = [[2.0, 2.25], [2.5, 2.75], [3.0, 3.25]];
+  S.lines.forEach((L, li) => {
+    L.ws.forEach((w, wi) => {
+      const t0 = starts[li][wi];
+      const p = P(t, t0, t0 + 0.38, E.outExpo);
+      T(w.inner, { y: lerp(250, 0, p) });
+      w.inner.style.fontWeight = Math.round(lerp(300, 800, P(t, t0, t0 + 0.5, E.app)));
+    });
+    const squash = P(t, 3.55, 3.85, E.inOutExpo);
+    T(L.Cc, { pre: 'translate(-50%,-50%) ', skx: -12 * squash * (li % 2 ? -1 : 1) });
+  });
+  const pill = P(t, 3.5, 3.68, E.outExpo);
+  S.pill.style.transform = `scaleX(${pill})`;
+  S.lines[2].ws[1].inner.style.color = pill > 0.35 ? C.chalk : C.ink;
+  S.slats.forEach((el, i) => {
+    const p = P(t, 3.7 + i * 0.012, 3.92 + i * 0.012, E.inOutExpo);
+    T(el, { x: (i % 2 ? 1 : -1) * 1920 * (1 - p) });
+  });
+}
+
+// ── 3 ── 4.0 → 6.0: the mark
+function drawLockup(K, t, t0, o = {}) {
+  const lt = t - t0;
+  const inP = P(t, t0, t0 + 0.45, E.app);
+  const slide = P(t, t0 + 0.45, t0 + 0.9, E.inOutExpo);
+  T(K.markA, { x: lerp(0, K.markX, slide), s: lerp(1.9, 1.35, inP) * lerp(1, 1 / 1.35, slide) });
+  // the lane draws, the lead runs one lap anticlockwise and settles on its mark
+  const lapP = P(t, t0, t0 + 0.95, E.app);
+  const lapF = tt => (o.laps || 1) * P(tt, t0, t0 + 0.95, E.app) - (o.laps || 1);
+  let lap = lapF(t), speed = (lapF(t + 0.01) - lapF(t - 0.01)) / 0.02;
+  for (const [a, b] of o.extra || []) {
+    const f = tt => P(tt, a, b, E.app);
+    lap += f(t); speed += (f(t + 0.01) - f(t - 0.01)) / 0.02;
+  }
+  markState(K.M, P(t, t0, t0 + 0.35, E.app), lap, speed * 0.6, lapP > 0 ? 1 : 0);
+  T(K.wordA, { x: K.wordX });
+  driveRoller(K.R, t, slot(K.R, t0 + 0.62, 0.5, 1, 0.07));
+  T(K.word, { pre: 'translateY(-52%) ', o: P(t, t0 + 0.6, t0 + 0.68) });
+}
+function scene3(t) {
+  const lt = t - 4;
+  // lanes spread outward from the mark like a stadium's lanes
+  S.lanes3.forEach((r, i) => {
+    const p = P(t, 4 + i * 0.045, 4.8 + i * 0.045, E.outExpo);
+    const w = 380 + p * (500 + i * 210), hh = w * 30 / 48 * 0.58;
+    r.setAttribute('x', 960 - w / 2); r.setAttribute('y', 540 - hh / 2); r.setAttribute('width', w); r.setAttribute('height', hh); r.setAttribute('rx', hh / 2);
+    r.setAttribute('opacity', (t >= 4 + i * 0.045 ? (1 - p) * 0.7 : 0).toFixed(3));
+  });
+  S.parts.forEach((q, i) => {
+    const d = Math.max(0, lt - 0.01 * (i % 5));
+    const k = 4.4;
+    const dist = 230 + q.v * (1 - Math.exp(-k * d)) / k;
+    T(q.el, { x: Math.cos(q.a) * dist, y: Math.sin(q.a) * dist * 0.62, r: q.spin * d, o: (1 - P(d, 0.45, 1.2)) * P(d, 0, 0.06) });
+  });
+  drawLockup(S.K3, t, 4.0);
+  const n = Math.floor(P(t, 5.15, 5.55) * 30);
+  let shown = 0, out = '', inTag = false;
+  for (const ch of S.tagText) {
+    if (ch === '<') inTag = true;
+    if (inTag) { out += ch; if (ch === '>') inTag = false; continue; }
+    if (shown < n) { out += ch; shown++; }
+  }
+  const caretOn = t < 5.55 || Math.floor(t * 6) % 2 === 0;
+  S.tagC.innerHTML = out + (t > 5.12 ? `<span class="caret" style="opacity:${caretOn ? 1 : 0}"></span>` : '');
+  T(S.tagA, { o: t > 5.12 ? 1 - P(t, 5.68, 5.78) : 0 });
+  // into the infield: the lane opens round the camera
+  const z = P(t, 5.62, 6.0, E.inExpo);
+  S.zoom3.style.transform = 'none';
+  const zr = S.zoom3.getBoundingClientRect(), pr = S.K3.M.svg.getBoundingClientRect();
+  const k = zr.width / 1920;
+  const ox = (pr.left + pr.width / 2 - zr.left) / k, oy = (pr.top + pr.height / 2 - zr.top) / k;
+  const pan = P(t, 5.5, 5.92, E.inOutCubic);
+  S.zoom3.style.transformOrigin = `${ox}px ${oy}px`;
+  S.zoom3.style.transform = `translate(${(960 - ox) * pan}px,${(540 - oy) * pan}px) scale(${1 + z * 30})`;
+}
+
+// ── 4 ── 6.0 → 10.5: Today
+function scene4(t) {
+  const lt = t - 6;
+  const whip = P(t, 9.95, 10.5, E.inExpo);
+  T(S.world4, { x: -whip * 2700, s: 1 + 0.05 * P(t, 6, 9.9, E.inOutCubic) });
+  const vb = whip > 0 ? Math.min(80, (E.inExpo(clamp((t + 0.01 - 9.95) / 0.55)) - whip) * 2700 / 0.01 / 60 * 0.6) : 0;
+  setHBlur(S.s4, vb);
+  S.floorHash.style.backgroundPosition = `0 ${lt * 260}px`;
+  S.floorRig.style.opacity = P(t, 6.1, 6.8);
+  // the phone arrives on the app's ease-out and floats
+  const fly = P(t, 6.0, 6.9, E.app);
+  const haptic = t > 8.6 ? Math.sin((t - 8.6) * 90) * 5 * Math.exp(-(t - 8.6) * 10) : 0;
+  const pose = {
+    x: lerp(260, 0, fly) + haptic, y: lerp(900, 0, fly) + Math.sin(lt * 1.6) * 8,
+    rx: lerp(48, 7, fly) + Math.sin(lt * 1.1) * 2, ry: lerp(-50, -16, fly) + Math.sin(lt * 0.8) * 4, r: lerp(-12, 2, fly), s: 0.98,
+  };
+  T(S.phone, pose);
+  T(S.shadow, { x: pose.x * 0.6, y: pose.y * 0.2, sx: 1 + 0.1 * Math.sin(lt * 1.6), o: fly * 0.9 });
+  // the race lap: the app's one authored moment, anticlockwise from the start line
+  const lapTo = 72 * P(t, 6.45, 7.35, E.app);
+  S.lapFill.setAttribute('stroke-dasharray', `${lapTo} ${100 - lapTo}`);
+  S.lapFill.setAttribute('stroke-dashoffset', lapTo - S.lapGeo.start * 100);
+  S.lapFill.setAttribute('stroke-linecap', lapTo > 0.1 ? 'round' : 'butt');
+  driveRoller(S.daysR, t, slot(S.daysR, 6.45, 0.7, 2, 0.08));
+  // weekly targets fill, then the run syncs in and the week is won
+  const sync = t > 8.0 && t < 8.42;
+  markState(S.syncM, 1, sync ? (t - 8.0) / 0.3 * 0.999 : 0, sync ? 3 : 0, sync ? 1 : 0);
+  S.syncM.box.style.opacity = sync ? 1 : 0;
+  S.weekly.forEach((w, i) => {
+    const fillIn = P(t, 7.45 + i * 0.1, 8.0 + i * 0.1, E.app);
+    const jump = P(t, 8.42 + i * 0.05, 8.75 + i * 0.05, E.app);
+    const v = lerp(0, w.a, fillIn) + (w.b - w.a) * jump;
+    const done = v >= w.goal - 1e-6;
+    w.fill.style.transform = `scaleX(${Math.min(1, v / w.goal)})`;
+    w.fill.style.background = done ? C.go : C.ember;
+    const fmtv = w.unit ? v.toFixed(1).replace('.', ',') : String(Math.round(v));
+    w.val.innerHTML = `<span style="color:${done ? C.go : C.chalk}">${fmtv}</span><span style="color:var(--mute);font-weight:500"> / ${w.goal}${w.unit ? ' ' + w.unit : ''}</span>`;
+  });
+  S.streakN.textContent = t > 8.7 ? '7' : '6';
+  // the celebration: one full-screen moment, and it breaks the frame
+  const pop = P(t, 8.6, 8.95, E.app);
+  S.scrim.style.opacity = P(t, 8.55, 8.75) * 1;
+  T(S.party, { z: 60, s: t > 8.6 ? lerp(0.86, 1, pop) : 0, y: lerp(30, 0, pop), o: t > 8.6 ? clamp(pop * 3) : 0 });
+  T(S.partyFlame, { s: 1 + 0.12 * Math.sin(P(t, 8.75, 9.15) * Math.PI), y: -6 * Math.sin(P(t, 8.75, 9.15) * Math.PI) });
+  // callouts
+  S.callouts.forEach(c => {
+    const lp = P(t, c.t0, c.t0 + 0.35, E.inOutCubic);
+    if (!c.w) c.w = c.el.getBoundingClientRect().width / (stage.getBoundingClientRect().width / 1920);
+    const right = c.x > 960;
+    const bx = right ? c.x - 28 : c.x + c.w + 28, by = c.y + 22;
+    c.path.setAttribute('d', `M${c.ax},${c.ay} L${lerp(c.ax, bx, 0.45)},${by} L${bx},${by}`);
+    c.path.setAttribute('stroke-dashoffset', 1 - lp);
+    c.path.style.opacity = t > c.t0 ? 1 : 0;
+    c.dot.setAttribute('cx', c.ax); c.dot.setAttribute('cy', c.ay);
+    c.dot.setAttribute('r', 8 * P(t, c.t0, c.t0 + 0.2, E.app));
+    c.parts.forEach((el, k) => T(el, { y: lerp(110, 0, P(t, c.t0 + 0.2 + k * 0.07, c.t0 + 0.65 + k * 0.07, E.outExpo)) }));
+  });
+}
+function setHBlur(el, px) {
+  if (px > 0.5) { document.getElementById('hblurG').setAttribute('stdDeviation', `${px.toFixed(1)} 0`); el.style.filter = 'url(#hblur)'; }
+  else el.style.filter = 'none';
+}
+
+// ── 5 ── 10.5 → 12.0: a year of it
+function scene5(t) {
+  const arrive = P(t, 10.5, 10.95, E.outExpo);
+  T(S.world5, { x: t < 10.5 ? 2700 : 2700 * (1 - arrive) });
+  setHBlur(S.s5, t >= 10.5 ? Math.min(80, (arrive - P(t - 0.01, 10.5, 10.95, E.outExpo)) * 2700 / 0.01 / 60 * 0.6) : 0);
+  const Vf = tt => 1248 * P(tt, 10.62, 11.85, E.outQuint);
+  driveRoller(S.cntR, t, (i, tt) => {
+    const k = S.cntR.cols.length - 1 - i;
+    const v = Vf(tt) / Math.pow(10, k);
+    if (k === 0) return v;
+    return Math.floor(v) + clamp((Vf(tt) / Math.pow(10, k - 1)) % 10 - 9);
+  });
+  S.cntC.style.transform = `translateY(-50%) translateX(${lerp(-60, 0, P(t, 10.55, 11.0, E.outExpo))}px)`;
+  T(S.cntLab, { o: P(t, 10.6, 10.8) });
+  T(S.cntSub, { o: P(t, 11.3, 11.5), y: lerp(20, 0, P(t, 11.3, 11.6, E.outExpo)) });
+  T(S.feed, { rx: 16, ry: -24, r: 4 });
+  S.ncards.forEach((c, i) => {
+    let y = 0;
+    for (let j = i + 1; j < S.ncards.length; j++) y += 138 * P(t, S.ncards[j].t0, S.ncards[j].t0 + 0.3, E.app);
+    const inP = P(t, c.t0, c.t0 + 0.35, E.app);
+    const lit = t > c.t0 ? Math.exp(-(t - c.t0) * 4) : 0;
+    T(c.el, { y: y + lerp(-160, 0, inP), z: lerp(200, 0, inP), s: lerp(0.9, 1, inP), o: (t > c.t0 ? clamp(inP * 2) : 0) * (1 - clamp((y - 600) / 300)) });
+    // state on a card tints its border
+    c.el.style.boxShadow = `inset 0 0 0 ${1.5 + lit * 1.5}px ${mix(C.border, c.warm ? C.ember : C.mute, lit)}`;
+  });
+  T(S.feedRig, { y: -P(t, 10.6, 12.0) * 40 });
+}
+function slam(el, t, t0) {
+  const p = P(t, t0, t0 + 0.3, E.outExpo);
+  T(el, { pre: 'translate(-50%,-50%) ', s: lerp(1.6, 1, p), blur: lerp(16, 0, p) });
+  el.style.fontWeight = Math.round(lerp(300, 800, P(t, t0, t0 + 0.32, E.app)));
+}
+function scene6b(t) {
+  slam(S.slam2, t, 12.5);
+  S.slamBar.style.transform = `scaleX(${P(t, 12.62, 12.82, E.outExpo)})`;
+  const out = P(t, 12.84, 13.0, E.inExpo);
+  T(S.slamA2, { s: 1 + out * 5, o: 1 - out });
+}
+
+// ── 7 ── 13.0 → 15.0: launch
+function scene7(t) {
+  const lt = t - 13;
+  S.lanes7.forEach(({ el }, i) => {
+    const d = 100 * P(t, 13.0 + i * 0.05, 13.7 + i * 0.05, E.app);
+    el.setAttribute('stroke-dasharray', `${d} ${100 - d}`);
+    el.setAttribute('stroke-dashoffset', d - 16);
+  });
+  // runners on their own lanes, anticlockwise; the reader's marker is filled
+  S.runners.forEach(rn => {
+    const g = S.lanes7[rn.lane].g;
+    const s = rn.s0 - lt * rn.sp - 0.08 * (1 - P(t, 13.0, 13.8, E.app));
+    const [x, y] = g.at(s);
+    T(rn.el, { x, y, o: P(t, 13.25 + rn.lane * 0.03, 13.5 + rn.lane * 0.03), s: lerp(0.6, 1, P(t, 13.25, 13.6, E.app)) });
+  });
+  drawLockup(S.K7, t, 11.85, { extra: [[13.0, 13.85], [14.05, 14.6]] });
+  const sl = P(t, 13.0, 13.35, E.outExpo);
+  T(S.K7.root, { s: lerp(1.2, 1, sl), blur: lerp(12, 0, sl) });
+  T(S.launchA, { y: lerp(30, 0, P(t, 13.4, 13.75, E.app)), o: P(t, 13.4, 13.55) });
+  T(S.ctaA, { y: lerp(30, 0, P(t, 13.6, 14.0, E.app)), o: P(t, 13.6, 13.85) });
+}
+
+// film grain: the texture of the tartan, deterministic per frame
+const gctx = document.getElementById('grain').getContext('2d');
+const gimg = gctx.createImageData(960, 540);
+function grain(t) {
+  let seed = (Math.floor(t * 60) * 2654435761) >>> 0;
+  const d = gimg.data;
+  for (let i = 0; i < d.length; i += 4) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    d[i] = d[i + 1] = d[i + 2] = seed >>> 24; d[i + 3] = 255;
+  }
+  gctx.putImageData(gimg, 0, 0);
+}
+
+// ═════════════════════════════ RUN ═════════════════════════════════════
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `translate(${(innerWidth - 1920 * s) / 2}px,${(innerHeight - 1080 * s) / 2}px) scale(${s})`;
+}
+async function boot() {
+  await Promise.all([
+    document.fonts.load('800 100px Figtree'), document.fonts.load('500 20px Figtree'), document.fonts.load('300 20px Figtree'),
+    document.fonts.load('500 20px JBM'), document.fonts.load('700 20px JBM'), document.fonts.load('800 20px JBM'),
+  ]);
+  await document.fonts.ready;
+  build();
+  for (const [K, L] of [[S.K3, S.s3], [S.K7, S.s7]]) { show(L, true); layoutLockup(K); show(L, false); }
+  const q = new URLSearchParams(location.search);
+  window.__seek = t => { draw(t); return true; };
+  window.__ready = true;
+  if (q.has('render')) return;
+  fit(); addEventListener('resize', fit);
+  if (q.has('t')) { draw(+q.get('t')); return; }
+  const music = document.getElementById('music');
+  let t0 = null;
+  const start = () => { music.currentTime = 0; music.play().catch(() => {}); t0 = performance.now(); };
+  document.body.addEventListener('click', start);
+  start();
+  const hud = document.getElementById('hud');
+  (function loop() {
+    const t = Math.min(DURATION, music.paused || !music.duration ? (performance.now() - t0) / 1000 : music.currentTime);
+    draw(t);
+    hud.textContent = `${t.toFixed(2)}s · click to replay`;
+    requestAnimationFrame(loop);
+  })();
+}
+boot();
+</script>
+</body>
+</html>
