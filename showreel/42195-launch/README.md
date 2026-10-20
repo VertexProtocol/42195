@@ -33,8 +33,12 @@ ember never decorates; state tints a card's border; motion is the app's
   Open it through any static server to watch it in real time with sound
   (`npx http-server .`, then click to replay); `?t=8.8` freezes a single moment.
 - `audio.py` synthesises `soundtrack.wav` from oscillators and noise: kick, clap,
-  hats, side-chained bass and supersaw stabs on Am–F–C–G, risers, whooshes,
-  FM bells, convolution reverb. `python3 audio.py` (needs numpy).
+  hats, side-chained bass, supersaw stabs and a plucked Karplus-Strong arpeggio on
+  Am–F–C–G, risers, whooshes, FM bells. Each bus and the master go through
+  Spotify's open-source [pedalboard](https://github.com/spotify/pedalboard)
+  (compression, saturation, chorus, reverb, limiting), then ffmpeg's two-pass
+  `loudnorm` to −14 LUFS / −1 dBTP. `pip install numpy scipy pedalboard`, then
+  `python3 audio.py`.
 - `render.mjs` drives headless Chromium with Playwright and pipes frames to
   ffmpeg. Each frame averages four sub-frames across a 180° shutter, so the
   motion blur is real. `node render.mjs`, or `node render.mjs --stills 4.6,8.8`

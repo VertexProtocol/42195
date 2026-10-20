@@ -4,10 +4,20 @@ Everything is generated from oscillators and noise, no samples. 120 BPM,
 A minor, so every hit lands on the same grid the picture is cut to:
 Am | F | C | G, then F G and a resolve to C on the end card.
 
+Instruments are written to four buses (drums, bass, music, fx) plus a reverb
+send; each bus and the master are processed with Spotify's open-source
+pedalboard, and the result is normalised to -14 LUFS / -1 dBTP with ffmpeg.
+
+    pip install numpy scipy pedalboard
     python3 audio.py
 """
+import json
+import subprocess
 import wave
 import numpy as np
+from scipy.signal import lfilter
+from pedalboard import (Pedalboard, Chorus, Compressor, Distortion, HighpassFilter,
+                        Limiter, LowpassFilter, Reverb, Gain)
 
 SR = 48000
 DUR = 15.0
@@ -15,8 +25,7 @@ N = int(SR * DUR)
 BEAT = 0.5
 rng = np.random.default_rng(42195)
 
-L = np.zeros(N)
-R = np.zeros(N)
+BUS = {k: np.zeros((2, N)) for k in ('drums', 'bass', 'music', 'fx')}
 send = np.zeros((2, N))   # reverb send
 duck_src = []             # kick times for sidechain
 
@@ -25,24 +34,20 @@ def hz(m):
     return 440.0 * 2 ** ((m - 69) / 12)
 
 
-def place(sig, t, gain=1.0, pan=0.0, verb=0.0, duck=False, buses=None):
-    """Mix a mono signal in at time t with equal-power pan."""
+def place(sig, t, gain=1.0, pan=0.0, verb=0.0, bus='fx'):
+    """Mix a mono signal onto a bus at time t with equal-power pan."""
     i = int(t * SR)
     if i >= N:
         return
     sig = sig[: N - i]
     a = (pan + 1) * np.pi / 4
     gl, gr = np.cos(a) * gain, np.sin(a) * gain
-    tgt = buses if buses is not None else (DUCKED if duck else DRY)
+    tgt = BUS[bus]
     tgt[0][i:i + len(sig)] += sig * gl
     tgt[1][i:i + len(sig)] += sig * gr
     if verb:
         send[0][i:i + len(sig)] += sig * gl * verb
         send[1][i:i + len(sig)] += sig * gr * verb
-
-
-DRY = (L, R)
-DUCKED = (np.zeros(N), np.zeros(N))
 
 
 def tt(d):
@@ -79,7 +84,7 @@ def kick(gain=1.0, t=0.0, punch=1.0):
     body = np.sin(ph) * np.exp(-d * 6.5)
     click = fft_filter(rng.standard_normal(len(d)), 1500, 9000) * np.exp(-d * 300) * 0.35
     sig = np.tanh((body + click) * 1.6)
-    place(sig, t, 0.95 * gain)
+    place(sig, t, 0.95 * gain, bus='drums')
     duck_src.append(t)
 
 
@@ -89,29 +94,29 @@ def clap(t, gain=1.0, verb=0.35):
     env = np.zeros_like(d)
     for k, o in enumerate([0, 0.011, 0.022]):
         env += (d >= o) * np.exp(-np.maximum(d - o, 0) * (180 if k < 2 else 18))
-    place(n * env * 0.5, t, gain, 0.05, verb)
+    place(n * env * 0.5, t, gain, 0.05, verb, bus='drums')
 
 
 def hat(t, gain=1.0, open_=False, pan=0.3):
     d = tt(0.25 if open_ else 0.06)
     n = fft_filter(rng.standard_normal(len(d)), 7000, None)
-    place(n * np.exp(-d * (14 if open_ else 70)) * 0.22, t, gain, pan, 0.05)
+    place(n * np.exp(-d * (14 if open_ else 70)) * 0.22, t, gain, pan, 0.05, bus='drums')
 
 
 def snare(t, gain=1.0):
     d = tt(0.22)
     tone = np.sin(2 * np.pi * 190 * d) * np.exp(-d * 30)
     n = fft_filter(rng.standard_normal(len(d)), 1200, 8000) * np.exp(-d * 22)
-    place((tone * 0.5 + n * 0.6) * 0.5, t, gain, -0.05, 0.25)
+    place((tone * 0.5 + n * 0.6) * 0.5, t, gain, -0.05, 0.25, bus='drums')
 
 
 def crash(t, gain=1.0, dur=2.5):
     d = tt(dur)
     n = fft_filter(rng.standard_normal(len(d)), 3500, 14000)
     env = np.exp(-d * 2.2) * (1 - np.exp(-d * 400))
-    place(n * env * 0.22, t, gain, -0.25, 0.4)
+    place(n * env * 0.22, t, gain, -0.25, 0.4, bus='drums')
     n2 = fft_filter(rng.standard_normal(len(d)), 3500, 14000)
-    place(n2 * env * 0.22, t, gain, 0.25, 0.4)
+    place(n2 * env * 0.22, t, gain, 0.25, 0.4, bus='drums')
 
 
 def impact(t, gain=1.0, dur=2.2):
@@ -175,7 +180,7 @@ def bell(t, m, gain=1.0, pan=0.0, dur=1.2, verb=0.45):
     mod = np.sin(2 * np.pi * f * 3.5 * d) * idx
     sig = np.sin(2 * np.pi * f * d + mod) * np.exp(-d * 4) * (1 - np.exp(-d * 2000))
     sig += 0.35 * np.sin(2 * np.pi * f * 2 * d) * np.exp(-d * 9)
-    place(sig * 0.32, t, gain, pan, verb)
+    place(sig * 0.32, t, gain, pan, verb, bus='music')
 
 
 def tick(t, gain=1.0, pan=0.0, hi=True):
@@ -205,7 +210,7 @@ def bass_note(t, m, dur, gain=1.0, cutoff=900):
     env = (1 - np.exp(-d * 400)) * np.exp(-d * 3) * (1 - np.clip((d - dur + 0.02) / 0.02, 0, 1))
     cut = cutoff * (0.35 + 0.65 * np.exp(-d * 10))
     sig = saw(hz(m), d, cut) * 0.6 + np.sin(2 * np.pi * hz(m) * d) * 0.7
-    place(np.tanh(sig * env * 1.3) * 0.45, t, gain, 0, 0, duck=True)
+    place(np.tanh(sig * env * 1.3) * 0.45, t, gain, 0, 0, bus='bass')
 
 
 def stab(t, notes, dur=0.32, gain=1.0, cutoff=3500, verb=0.35):
@@ -215,8 +220,7 @@ def stab(t, notes, dur=0.32, gain=1.0, cutoff=3500, verb=0.35):
     for j, m in enumerate(notes):
         for v, det in enumerate([-0.011, -0.004, 0.0, 0.005, 0.012]):
             sig = saw(hz(m), d, cut, det, phase=rng.random() * 6.28)
-            place(sig * env * 0.06, t, gain, (v - 2) * 0.35, verb, duck=True,
-                  buses=DUCKED)
+            place(sig * env * 0.06, t, gain, (v - 2) * 0.35, verb, bus='music')
 
 
 def pad(t, notes, dur, gain=1.0, attack=0.6, cutoff=2200):
@@ -225,7 +229,28 @@ def pad(t, notes, dur, gain=1.0, attack=0.6, cutoff=2200):
     for j, m in enumerate(notes):
         for v, det in enumerate([-0.006, 0.0, 0.007]):
             sig = saw(hz(m), d, cutoff, det, phase=rng.random() * 6.28)
-            place(sig * env * 0.035, t, gain, (v - 1) * 0.6, 0.6, duck=True, buses=DUCKED)
+            place(sig * env * 0.035, t, gain, (v - 1) * 0.6, 0.6, bus='music')
+
+
+def pluck(t, m, gain=1.0, pan=0.0, dur=0.9, bright=0.6, verb=0.3):
+    """Karplus-Strong string: a noise burst through a damped comb."""
+    n = int(dur * SR)
+    period = SR / hz(m)
+    p = int(period)
+    frac = period - p
+    exc = np.zeros(n)
+    burst = rng.standard_normal(p) * np.hanning(p)
+    burst = lfilter([bright, 1 - bright], [1], burst)
+    exc[:p] = burst
+    g = 0.996
+    a = np.zeros(p + 2)
+    a[0] = 1
+    a[p] = -g * (1 - frac) * 0.5
+    a[p + 1] = -g * 0.5
+    y = lfilter([1], a, exc)
+    y *= np.exp(-np.arange(n) / SR * 3.2)
+    y /= np.max(np.abs(y)) + 1e-9
+    place(y * 0.22, t, gain, pan, verb, bus='music')
 
 
 # A minor world: Am F C G
@@ -351,6 +376,20 @@ for k in range(8):
     snare(12.75 + k * 0.03, 0.2 + 0.08 * k)
 reverse_cymbal(13.0, 0.4, 1.0)
 
+# ── melody: a plucked arpeggio through the groove, and the motif ──────────
+ARP = [0, 2, 1, 3, 2, 1, 3, 2]
+for t0, t1, ch in [(4.0, 5.5, 'Am'), (6.0, 8.0, 'F'), (8.0, 9.9, 'C'), (10.5, 12.0, 'G')]:
+    tones = CH[ch]
+    for k, b in enumerate(np.arange(t0, t1 - 1e-6, 0.125)):
+        m = tones[ARP[k % 8]] + 12
+        pluck(b, m, 0.45 + 0.25 * (k % 4 == 0), -0.45 + 0.9 * ((k // 2) % 2), 0.5, 0.5, 0.25)
+for i, m in enumerate([76, 74, 72, 69]):                        # the drop: down and round
+    pluck(4.0 + i * 0.25, m, 1.0, 0.0, 1.2, 0.75, 0.4)
+    pluck(4.0 + i * 0.25, m - 12, 0.6, 0.0, 1.2, 0.5, 0.4)
+for i, m in enumerate([72, 76, 79, 84]):                        # the launch: up and home
+    pluck(13.0 + i * 0.25, m, 1.0, -0.2 + 0.13 * i, 1.6, 0.75, 0.5)
+    pluck(13.0 + i * 0.25, m - 12, 0.55, 0.0, 1.6, 0.5, 0.5)
+
 # 13 – 15  launch: resolve to C, let it ring
 impact(13.0, 1.1, 2.0)
 crash(13.0, 1.1, 2.0)
@@ -372,32 +411,55 @@ duck = np.ones(N)
 for k in duck_src:
     d = t_axis - k
     m = d >= 0
-    duck[m] = np.minimum(duck[m], 1 - 0.7 * np.exp(-d[m] / 0.11))
-L += DUCKED[0] * duck
-R += DUCKED[1] * duck
+    duck[m] = np.minimum(duck[m], 1 - 0.65 * np.exp(-d[m] / 0.12))
 
-# convolution reverb from a synthetic stereo tail
-ir_len = int(2.2 * SR)
-d = np.arange(ir_len) / SR
-for ch, out in ((0, L), (1, R)):
-    ir = rng.standard_normal(ir_len) * np.exp(-d * 3.2)
-    ir = fft_filter(ir, 200, 7000)
-    ir[: int(0.012 * SR)] = 0
-    ir /= np.sqrt(np.sum(ir ** 2))
-    n = 1 << int(np.ceil(np.log2(N + ir_len)))
-    wet = np.fft.irfft(np.fft.rfft(send[ch], n) * np.fft.rfft(ir, n), n)[:N]
-    out += wet * 0.55
 
-mix = np.stack([L, R])
-mix = fft_filter(mix[0], 25, None), fft_filter(mix[1], 25, None)
-mix = np.stack(mix)
-mix = np.tanh(mix / (np.max(np.abs(mix)) * 0.55)) * 0.89          # glue + ceiling
-fade = np.clip((DUR - t_axis) / 0.35, 0, 1)
-mix *= fade
-pcm = (mix.T * 32767).astype('<i2')
-with wave.open('soundtrack.wav', 'wb') as w:
-    w.setnchannels(2)
-    w.setsampwidth(2)
-    w.setframerate(SR)
-    w.writeframes(pcm.tobytes())
-print('wrote soundtrack.wav', pcm.shape, 'peak', np.max(np.abs(mix)))
+# arrangement: hold the build back so the drop at 4.0 lands
+arr = np.interp(t_axis, [0, 1.95, 2.0, 3.6, 3.98, 4.0, 15], [0.75, 0.75, 0.5, 0.62, 0.8, 1.0, 1.0])
+for k in BUS:
+    BUS[k] *= arr
+send *= arr
+
+
+def fx(board, x):
+    return board(x.astype(np.float32), SR)
+
+
+drums = fx(Pedalboard([Compressor(threshold_db=-14, ratio=4, attack_ms=4, release_ms=90),
+                       Distortion(drive_db=2.5), Gain(gain_db=1.5)]), BUS['drums'])
+bass = fx(Pedalboard([Distortion(drive_db=7), LowpassFilter(cutoff_frequency_hz=1900),
+                      Compressor(threshold_db=-16, ratio=3, attack_ms=10, release_ms=120)]), BUS['bass']) * duck
+music = fx(Pedalboard([HighpassFilter(cutoff_frequency_hz=140), Chorus(rate_hz=0.5, depth=0.18, mix=0.35),
+                       Compressor(threshold_db=-18, ratio=2.5, attack_ms=15, release_ms=150)]), BUS['music']) * duck
+sfx = fx(Pedalboard([HighpassFilter(cutoff_frequency_hz=40)]), BUS['fx'])
+verb = fx(Pedalboard([HighpassFilter(cutoff_frequency_hz=250), Reverb(room_size=0.82, damping=0.45, wet_level=1.0,
+                      dry_level=0.0, width=1.0), LowpassFilter(cutoff_frequency_hz=8500)]), send) * (0.6 + 0.4 * duck)
+
+mix = drums * 1.0 + bass * 0.9 + music * 1.1 + sfx * 0.9 + verb * 0.5
+mix = fx(Pedalboard([HighpassFilter(cutoff_frequency_hz=28),
+                     Compressor(threshold_db=-12, ratio=2, attack_ms=12, release_ms=140),
+                     Limiter(threshold_db=-3.0, release_ms=120)]), mix / (np.max(np.abs(mix)) + 1e-9))
+mix *= np.clip((DUR - t_axis) / 0.35, 0, 1)
+
+
+def write(path, x):
+    pcm = (np.clip(x, -1, 1).T * 32767).astype('<i2')
+    with wave.open(path, 'wb') as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm.tobytes())
+
+
+# loudness: two-pass ffmpeg loudnorm to -14 LUFS integrated, -1 dBTP
+write('.premaster.wav', mix)
+target = 'I=-14:TP=-1.0:LRA=11'
+probe = subprocess.run(['ffmpeg', '-hide_banner', '-i', '.premaster.wav', '-af', f'loudnorm={target}:print_format=json',
+                        '-f', 'null', '-'], capture_output=True, text=True).stderr
+m = json.loads(probe[probe.rindex('{'):probe.rindex('}') + 1])
+subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', '.premaster.wav', '-af',
+                f"loudnorm={target}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
+                f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true",
+                '-ar', str(SR), '-c:a', 'pcm_s16le', 'soundtrack.wav'], check=True)
+subprocess.run(['rm', '-f', '.premaster.wav'])
+print('wrote soundtrack.wav; pre-master loudness', m['input_i'], 'LUFS')
