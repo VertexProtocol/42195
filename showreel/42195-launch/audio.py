@@ -196,6 +196,14 @@ def blip(t, f0, f1, dur=0.12, gain=1.0, pan=0.0):
     place(sig * 0.3, t, gain, pan, 0.2)
 
 
+def snap(t, gain=1.0, pan=0.0):
+    """A muted, pitchless card landing: a short noise snap over a low thump."""
+    d = tt(0.12)
+    n = fft_filter(rng.standard_normal(len(d)), 700, 4500) * np.exp(-d * 90)
+    thump = np.sin(2 * np.pi * (70 + 60 * np.exp(-d * 60)) * d) * np.exp(-d * 35)
+    place((n * 0.35 + thump * 0.4) * 0.6, t, gain, pan, 0.08, bus='drums')
+
+
 def glide(t, dur, f0, f1, gain=1.0, pan=0.0):
     d = tt(dur)
     f = f0 * (f1 / f0) ** (d / dur)
@@ -269,8 +277,7 @@ impact(0.5, 0.55, 1.4)
 clap(0.5, 0.8, 0.5)
 for i in range(40):
     tick(0.86 + i * 0.014 * (1 + i / 30), 0.45, -0.2 + 0.4 * (i % 2))
-blip(1.3, 500, 1500, 0.14, 1.0)
-bell(1.32, 81, 0.6, 0.3, 0.8)
+whoosh(1.2, 0.3, 3000, 700, 0.6, -0.5, 0.5, 0.2)                # the rule draws
 pad(0.0, [45, 52], 2.0, 0.8, attack=1.5, cutoff=500)
 whoosh(1.6, 0.42, 200, 7000, 1.0, 0.4, -0.2, 0.25)
 
@@ -302,7 +309,6 @@ for b in np.arange(4.0, 5.5, 0.25):
 for k in range(12):
     bass_note(4.0 + k * 0.125 + 0.0625 * 0, ROOT['Am'] + (12 if k % 4 == 2 else 0), 0.11, 1.0, 1100)
 pad(4.0, CH['Am'], 2.0, 1.0)
-bell(4.95, 76, 0.55, -0.3)                                     # the lead settles after its lap
 for i in range(5):
     tick(4.62 + 0.5 + i * 0.07, 0.6, -0.4 + 0.2 * i)            # wordmark digits land
 for i in range(38):
@@ -328,7 +334,7 @@ for bar, ch, t0 in [(0, 'F', 6.0), (1, 'C', 8.0), (2, 'G', 10.0)]:
     for b in np.arange(t0, end - 1e-6, 1.0):
         stab(b + 0.75, CH[ch], 0.18, 0.55, 3000)
 for c, tc in [(-0.5, 6.6), (0.5, 7.45), (0.5, 8.75)]:
-    blip(tc, 700, 1400, 0.09, 0.7, c)                          # callouts
+    whoosh(tc, 0.18, 1500, 5000, 0.35, c, c, 0.1)              # callouts
     tick(tc + 0.2, 0.5, c)
 glide(6.45, 0.9, 300, 620, 0.8, -0.2)                           # the race lap draws
 glide(7.45, 0.6, 420, 840, 0.9, 0.2)                            # weekly targets fill
@@ -336,8 +342,7 @@ for i in range(6):
     tick(8.0 + i * 0.06, 0.4, 0.3)                              # sync
 glide(8.25, 0.4, 520, 1500, 1.2, 0.0)                           # the run lands, the week is won
 impact(8.6, 0.7, 1.4)
-bell(8.6, 88, 1.1, 0.15)                                        # Uka er i boks!
-bell(8.72, 95, 0.9, -0.15)
+clap(8.6, 0.8, 0.5)                                             # Uka er i boks!
 crash(8.6, 0.5, 1.6)
 for i in range(18):
     tick(8.6 + i * 0.022 * (1 + i / 12), 0.4, 0.3)
@@ -355,9 +360,8 @@ for b in np.arange(10.5, 12.0, BEAT):
 for b in [11.0, 11.5]:
     clap(b, 0.7)
 pad(10.5, CH['G'], 1.5, 1.0)
-arp = [67, 71, 74, 79, 83, 86, 91, 86, 83, 79, 83, 86]
-for i, m in enumerate(arp):
-    bell(10.62 + i * 0.115, m, 0.55, -0.6 + 1.2 * (i % 2), 0.6, 0.35)
+for i in range(12):
+    snap(10.62 + i * 0.115, 0.7, -0.5 + 1.0 * (i % 2))             # a card lands
 vel_t = 10.62
 while vel_t < 11.85:                                            # odometer ticks slowing down
     p = (vel_t - 10.62) / 1.23
@@ -400,10 +404,8 @@ for b in [13.5, 14.0]:
     kick(0.7, b)
     hat(b + 0.25, 0.6, True)
 clap(13.5, 0.5)
-bell(13.4, 84, 0.6, -0.3)                                       # Nå tilgjengelig
-for i, m in enumerate([72, 76, 79, 84]):
-    bell(14.05 + i * 0.06, m, 0.35, -0.4 + 0.27 * i, 1.0)      # a last lap
-bell(14.62, 91, 0.5, 0.0, 0.4)
+whoosh(13.35, 0.25, 1200, 4000, 0.4, 0, 0, 0.15)                # Nå tilgjengelig
+whoosh(14.0, 0.6, 300, 3000, 0.55, -0.6, 0.6, 0.25)             # a last lap
 
 # ── mix ──────────────────────────────────────────────────────────────────
 t_axis = np.arange(N) / SR

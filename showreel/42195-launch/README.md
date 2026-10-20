@@ -18,7 +18,7 @@ everywhere, as `TrackMark`, `TrackLoader` and `ProgressLap` do in the app.
 | 2.0–4.0 | The straight | "Ett tall. Én beslutning. Hver dag." word by word on the beat over running-track lanes, the weight easing from 300 to 800; "dag." takes the ember pill; slats shut |
 | 4.0–6.0 | The mark | Lanes spread out from the track mark, the lead arc runs one lap anticlockwise and settles where the icon draws it, the wordmark rolls in, the tagline types on, the camera flies into the infield |
 | 6.0–10.5 | Today | The phone, dark theme: the race lap fills from the start line, the days roll in, the weekly targets fill, a run syncs, the week is won and "Uka er i boks!" breaks out of the frame; three callouts; whip-pan out |
-| 10.5–12.0 | The year | "Løpt i år" counts up to 1 248 km while a feed of runs, badges and coach notes stacks in, each one a note in a rising arpeggio |
+| 10.5–12.0 | The year | "Løpt i år" counts up to 1 248 km while a feed of runs, badges and coach notes stacks in |
 | 12.0–13.0 | Slams | "Sett et mål." on clay, "Hver meter teller." on espresso |
 | 13.0–15.0 | Launch | The lockup over eight lanes, runners as lane markers going round anticlockwise, "Nå tilgjengelig" |
 
@@ -34,7 +34,7 @@ ember never decorates; state tints a card's border; motion is the app's
   (`npx http-server .`, then click to replay); `?t=8.8` freezes a single moment.
 - `audio.py` synthesises `soundtrack.wav` from oscillators and noise: kick, clap,
   hats, side-chained bass, supersaw stabs and a plucked Karplus-Strong arpeggio on
-  Am–F–C–G, risers, whooshes, FM bells. Each bus and the master go through
+  Am–F–C–G, risers, whooshes. Each bus and the master go through
   Spotify's open-source [pedalboard](https://github.com/spotify/pedalboard)
   (compression, saturation, chorus, reverb, limiting), then ffmpeg's two-pass
   `loudnorm` to −14 LUFS / −1 dBTP. `pip install numpy scipy pedalboard`, then
