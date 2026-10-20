@@ -1,6 +1,6 @@
 // Renders index.html to video, frame by frame.
 //
-//   node render.mjs                     → prisvakt-launch.mp4 (1080p60, with soundtrack.wav)
+//   node render.mjs                     → 42195-launch.mp4 (1080p60, with soundtrack.wav)
 //   node render.mjs --stills 0.4,4.6    → stills/t-0.40.png, stills/t-4.60.png
 //
 // Each output frame averages SUB sub-frames spread across a 180° shutter,
@@ -22,7 +22,7 @@ catch { ({ chromium } = require(join(process.execPath, '../../lib/node_modules/p
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const FPS = 60, DURATION = 15, SUB = Number(process.env.SUB || 4), SHUTTER = 0.5;
 const WORKERS = Number(process.env.WORKERS || 4);
-const OUT = join(ROOT, process.env.OUT || 'prisvakt-launch.mp4');
+const OUT = join(ROOT, process.env.OUT || '42195-launch.mp4');
 
 const TYPES = { '.html': 'text/html', '.woff2': 'font/woff2', '.wav': 'audio/wav', '.js': 'text/javascript' };
 const server = createServer(async (req, res) => {
@@ -100,7 +100,7 @@ await writeFile(join(tmp, 'list.txt'), segs.map(s => `file '${s}'`).join('\n'));
 const audio = join(ROOT, 'soundtrack.wav');
 await new Promise((res, rej) => {
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(tmp, 'list.txt'), '-i', audio,
-    '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'slow', '-crf', '15', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+    '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
     '-tune', 'film', '-movflags', '+faststart', '-c:a', 'aac', '-b:a', '320k', '-shortest', OUT], { stdio: 'inherit' });
   ff.on('close', c => c ? rej(new Error('ffmpeg ' + c)) : res());
 });

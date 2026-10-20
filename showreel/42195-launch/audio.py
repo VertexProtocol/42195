@@ -1,4 +1,4 @@
-"""Synthesises soundtrack.wav for the Prisvakt launch film.
+"""Synthesises soundtrack.wav for the 42195 launch film.
 
 Everything is generated from oscillators and noise, no samples. 120 BPM,
 A minor, so every hit lands on the same grid the picture is cut to:
@@ -277,14 +277,13 @@ for b in np.arange(4.0, 5.5, 0.25):
 for k in range(12):
     bass_note(4.0 + k * 0.125 + 0.0625 * 0, ROOT['Am'] + (12 if k % 4 == 2 else 0), 0.11, 1.0, 1100)
 pad(4.0, CH['Am'], 2.0, 1.0)
-bell(4.2, 76, 0.5, -0.3)                                       # eye opens
-for lk, pan in [(4.62, -0.5), (4.95, 0.5), (5.3, 0.0)]:
-    blip(lk, 1200, 1700, 0.05, 0.5, pan)
+bell(4.95, 76, 0.55, -0.3)                                     # the lead settles after its lap
+for i in range(5):
+    tick(4.62 + 0.5 + i * 0.07, 0.6, -0.4 + 0.2 * i)            # wordmark digits land
 for i in range(38):
     tick(5.15 + i * 0.0118, 0.35, 0.1, hi=False)               # tagline types
-blip(5.42, 900, 400, 0.08, 0.5)                                # blink
 reverse_cymbal(6.0, 0.5, 1.0)
-whoosh(5.6, 0.42, 120, 3000, 1.2, 0, 0, 0.4)                    # into the pupil
+whoosh(5.6, 0.42, 120, 3000, 1.2, 0, 0, 0.4)                    # into the infield
 
 # 6 – 10.5  product: F then C then G
 whoosh(6.0, 0.6, 2000, 200, 0.9, 0.6, -0.1, 0.3)                # phone flies in
@@ -306,10 +305,13 @@ for bar, ch, t0 in [(0, 'F', 6.0), (1, 'C', 8.0), (2, 'G', 10.0)]:
 for c, tc in [(-0.5, 6.6), (0.5, 7.45), (0.5, 8.75)]:
     blip(tc, 700, 1400, 0.09, 0.7, c)                          # callouts
     tick(tc + 0.2, 0.5, c)
-glide(7.6, 0.5, 900, 520, 1.0, 0.2)                             # dragging the target
-glide(8.2, 0.42, 1400, 260, 1.4, 0.0)                           # the price falls
+glide(6.45, 0.9, 300, 620, 0.8, -0.2)                           # the race lap draws
+glide(7.45, 0.6, 420, 840, 0.9, 0.2)                            # weekly targets fill
+for i in range(6):
+    tick(8.0 + i * 0.06, 0.4, 0.3)                              # sync
+glide(8.25, 0.4, 520, 1500, 1.2, 0.0)                           # the run lands, the week is won
 impact(8.6, 0.7, 1.4)
-bell(8.6, 88, 1.1, 0.15)                                        # notification
+bell(8.6, 88, 1.1, 0.15)                                        # Uka er i boks!
 bell(8.72, 95, 0.9, -0.15)
 crash(8.6, 0.5, 1.6)
 for i in range(18):
@@ -359,10 +361,9 @@ for b in [13.5, 14.0]:
     kick(0.7, b)
     hat(b + 0.25, 0.6, True)
 clap(13.5, 0.5)
-bell(13.4, 84, 0.6, -0.3)                                       # LANSERES I DAG
+bell(13.4, 84, 0.6, -0.3)                                       # Nå tilgjengelig
 for i, m in enumerate([72, 76, 79, 84]):
-    bell(14.0 + i * 0.06, m, 0.35, -0.4 + 0.27 * i, 1.0)       # glint
-blip(14.55, 900, 400, 0.08, 0.5)                               # final blink
+    bell(14.05 + i * 0.06, m, 0.35, -0.4 + 0.27 * i, 1.0)      # a last lap
 bell(14.62, 91, 0.5, 0.0, 0.4)
 
 # ── mix ──────────────────────────────────────────────────────────────────
